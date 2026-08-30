@@ -1,0 +1,2 @@
+[      58ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/checkout/confirmation?session_id=cs_test_QA000000000000000000000000000000000bogus:0
+[     483ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://www.wallplace.co.uk/api/checkout/session?id=cs_test_QA000000000000000000000000000000000bogus:0

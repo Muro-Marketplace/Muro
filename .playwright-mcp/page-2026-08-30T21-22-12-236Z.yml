@@ -1,0 +1,128 @@
+- generic [active] [ref=f67e1]:
+  - generic [ref=f67e2]:
+    - link "Skip to content" [ref=f67e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f67e4]:
+      - generic [ref=f67e6]:
+        - link "Wallplace" [ref=f67e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f67e8]:
+          - link "Marketplace" [ref=f67e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f67e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f67e12] [cursor=pointer]
+        - generic [ref=f67e15]:
+          - link "Saved" [ref=f67e16] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f67e20] [cursor=pointer]
+          - generic [ref=f67e24]:
+            - link "My Account" [ref=f67e25] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f67e26] [cursor=pointer]
+          - button "Logout" [ref=f67e29] [cursor=pointer]
+          - 'link "Shopping cart: 1 item" [ref=f67e30] [cursor=pointer]':
+            - /url: /checkout
+            - generic [ref=f67e34]: "1"
+    - main [ref=f67e35]:
+      - generic [ref=f67e37]:
+        - heading "No order found" [level=1] [ref=f67e38]
+        - paragraph [ref=f67e39]: It looks like you haven't placed an order yet.
+        - link "Discover Art" [ref=f67e40] [cursor=pointer]:
+          - /url: /browse
+    - contentinfo "Site footer" [ref=f67e41]:
+      - generic [ref=f67e42]:
+        - generic [ref=f67e43]:
+          - generic [ref=f67e44]:
+            - link "Wallplace" [ref=f67e45] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f67e46]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f67e47]:
+              - paragraph [ref=f67e48]: Be first to see new works
+              - paragraph [ref=f67e49]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f67e51]:
+                - textbox "your@email.com" [ref=f67e52]
+                - button "Subscribe" [ref=f67e53] [cursor=pointer]
+            - link "Instagram" [ref=f67e54] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f67e59]:
+            - heading "For Artists" [level=4] [ref=f67e60]
+            - list [ref=f67e61]:
+              - listitem [ref=f67e62]:
+                - link "Apply to Join" [ref=f67e63] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f67e64]:
+                - link "Pricing" [ref=f67e65] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f67e66]:
+                - link "Browse Venues" [ref=f67e67] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f67e68]:
+                - link "FAQs" [ref=f67e69] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f67e70]:
+            - heading "For Venues" [level=4] [ref=f67e71]
+            - list [ref=f67e72]:
+              - listitem [ref=f67e73]:
+                - link "Discover Art" [ref=f67e74] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f67e75]:
+                - link "Register Your Venue" [ref=f67e76] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f67e77]:
+                - link "Wallplace Curated" [ref=f67e78] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f67e79]:
+                - link "How It Works" [ref=f67e80] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f67e81]:
+                - link "FAQs" [ref=f67e82] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f67e83]:
+            - heading "Company" [level=4] [ref=f67e84]
+            - list [ref=f67e85]:
+              - listitem [ref=f67e86]:
+                - link "About" [ref=f67e87] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f67e88]:
+                - link "Blog" [ref=f67e89] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f67e90]:
+                - link "How It Works" [ref=f67e91] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f67e92]:
+                - link "Sustainability" [ref=f67e93] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f67e94]:
+                - link "Partner with us" [ref=f67e95] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f67e96]:
+                - link "Contact" [ref=f67e97] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f67e98]:
+                - link "Complaints" [ref=f67e99] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f67e100]:
+                - link "Terms" [ref=f67e101] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f67e102]:
+                - link "Artist Agreement" [ref=f67e103] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f67e104]:
+                - link "Venue Agreement" [ref=f67e105] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f67e106]:
+                - link "Privacy" [ref=f67e107] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f67e108]:
+                - link "Cookies" [ref=f67e109] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f67e110]:
+                - link "Returns & Refunds" [ref=f67e111] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f67e112]:
+                - link "IP Policy" [ref=f67e113] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f67e115]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f67e116] [cursor=pointer]: Feedback
+  - alert [ref=f67e119]

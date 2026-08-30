@@ -1,0 +1,321 @@
+- generic [active] [ref=f79e1]:
+  - generic [ref=f79e2]:
+    - link "Skip to content" [ref=f79e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f79e4]:
+      - generic [ref=f79e6]:
+        - link "Wallplace" [ref=f79e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f79e8]:
+          - link "Galleries" [ref=f79e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Portfolios" [ref=f79e10] [cursor=pointer]:
+            - /url: /browse?view=portfolios
+          - link "Collections" [ref=f79e11] [cursor=pointer]:
+            - /url: /browse?view=collections
+          - link "Spaces" [ref=f79e12] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f79e14] [cursor=pointer]
+        - generic [ref=f79e17]:
+          - link "Saved" [ref=f79e18] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f79e22] [cursor=pointer]
+          - generic [ref=f79e26]:
+            - link "My Account" [ref=f79e27] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f79e28] [cursor=pointer]
+          - button "Logout" [ref=f79e31] [cursor=pointer]
+          - 'link "Shopping cart: 1 item" [ref=f79e32] [cursor=pointer]':
+            - /url: /checkout
+            - generic [ref=f79e36]: "1"
+    - main [ref=f79e37]:
+      - generic [ref=f79e38]:
+        - generic [ref=f79e40]:
+          - navigation "Breadcrumb" [ref=f79e41]:
+            - list [ref=f79e42]:
+              - listitem [ref=f79e43]:
+                - link "Portfolios" [ref=f79e44] [cursor=pointer]:
+                  - /url: /browse?view=portfolios
+                - generic [ref=f79e45]: ›
+              - listitem [ref=f79e46]:
+                - generic [ref=f79e47]: Mark Smith
+          - link "Back to Marketplace" [ref=f79e48] [cursor=pointer]:
+            - /url: /browse
+          - generic [ref=f79e51]:
+            - generic [ref=f79e52]:
+              - img "Mark Smith" [ref=f79e54]
+              - generic [ref=f79e56]:
+                - button "Message" [ref=f79e57] [cursor=pointer]
+                - link "Host this artist? Register your venue" [ref=f79e58] [cursor=pointer]:
+                  - /url: /register-venue
+            - generic [ref=f79e59]:
+              - paragraph [ref=f79e60]: Painting
+              - heading "Mark Smith" [level=1] [ref=f79e61]
+              - generic [ref=f79e62]:
+                - paragraph [ref=f79e63]: London
+                - generic [ref=f79e64]: ·
+                - link "@jeremysmithtest" [ref=f79e65] [cursor=pointer]:
+                  - /url: https://instagram.com/jeremysmithtest
+              - generic [ref=f79e70]:
+                - generic [ref=f79e71]: Portrait
+                - generic [ref=f79e72]: Minimalist
+              - paragraph [ref=f79e73]: My work explores the relationship between structure and spontaneity — the tension between what is controlled and what is left to unfold. Working primarily with layered textures and restrained palette
+              - generic [ref=f79e74]:
+                - generic [ref=f79e75]: Portrait
+                - generic [ref=f79e76]: Minimalist
+                - generic [ref=f79e77]: Office Collection
+            - complementary [ref=f79e78]:
+              - generic [ref=f79e79]:
+                - generic [ref=f79e80]:
+                  - paragraph [ref=f79e81]: Location
+                  - paragraph [ref=f79e82]: London
+                - generic [ref=f79e83]:
+                  - paragraph [ref=f79e84]: Delivery
+                  - paragraph [ref=f79e85]: Nationwide
+                - generic [ref=f79e86]:
+                  - paragraph [ref=f79e87]: Suited for
+                  - paragraph [ref=f79e88]: Any venue type
+              - generic [ref=f79e90]:
+                - paragraph [ref=f79e91]: "21"
+                - paragraph [ref=f79e92]: Views
+              - generic [ref=f79e93]:
+                - paragraph [ref=f79e94]: Sells
+                - generic [ref=f79e95]:
+                  - generic "Sells originals" [ref=f79e96]: Originals
+                  - generic "Sells prints" [ref=f79e97]: Prints
+                  - generic "Sells framed" [ref=f79e98]: Framed
+              - generic [ref=f79e99]:
+                - paragraph [ref=f79e100]: Terms
+                - generic [ref=f79e101]:
+                  - generic [ref=f79e102]: Revenue share · 10%
+                  - generic [ref=f79e105]: Paid loan
+                  - generic [ref=f79e108]: Direct purchase
+        - generic [ref=f79e111]:
+          - generic [ref=f79e113]:
+            - generic [ref=f79e114]:
+              - heading "Portfolio" [level=2] [ref=f79e115]
+              - combobox [ref=f79e116] [cursor=pointer]:
+                - option "All" [selected]
+                - option "Office collection"
+            - generic [ref=f79e117]:
+              - generic [ref=f79e119] [cursor=pointer]:
+                - generic [ref=f79e120]:
+                  - generic [ref=f79e122]:
+                    - img "Still motion"
+                  - generic:
+                    - generic:
+                      - heading "Still motion" [level=3]
+                      - paragraph: Oil on canvas · 5 sizes available
+                      - paragraph: Placed at The Mayfield
+                      - generic:
+                        - paragraph: From £500
+                        - generic:
+                          - button "Quick view"
+                          - link "Open":
+                            - /url: /browse/mark-smith/still-motion
+                          - button "Buy now"
+                  - button "Save" [ref=f79e125]
+                  - generic: Available
+                  - generic [ref=f79e128]:
+                    - button "Quick look" [ref=f79e129]
+                    - link "Full artwork page" [ref=f79e133]:
+                      - /url: /browse/mark-smith/still-motion
+                - generic [ref=f79e138]:
+                  - paragraph [ref=f79e139]: Still motion
+                  - paragraph [ref=f79e140]: Oil on canvas · 5 sizes
+                  - paragraph [ref=f79e141]: From £500
+              - generic [ref=f79e143] [cursor=pointer]:
+                - generic [ref=f79e144]:
+                  - generic [ref=f79e146]:
+                    - img "The final moment"
+                  - generic:
+                    - generic:
+                      - heading "The final moment" [level=3]
+                      - paragraph: Acrylic on board · 5 sizes available
+                      - paragraph: Placed at The Mayfield
+                      - generic:
+                        - paragraph: From £500
+                        - generic:
+                          - button "Quick view"
+                          - link "Open":
+                            - /url: /browse/mark-smith/the-final-moment
+                          - button "Buy now"
+                  - button "Save" [ref=f79e149]
+                  - generic: Available
+                  - generic [ref=f79e152]:
+                    - button "Quick look" [ref=f79e153]
+                    - link "Full artwork page" [ref=f79e157]:
+                      - /url: /browse/mark-smith/the-final-moment
+                - generic [ref=f79e162]:
+                  - paragraph [ref=f79e163]: The final moment
+                  - paragraph [ref=f79e164]: Acrylic on board · 5 sizes
+                  - paragraph [ref=f79e165]: From £500
+              - generic [ref=f79e167] [cursor=pointer]:
+                - generic [ref=f79e168]:
+                  - generic [ref=f79e170]:
+                    - img "The Random Time"
+                  - generic:
+                    - generic:
+                      - heading "The Random Time" [level=3]
+                      - paragraph: Watercolour on paper · 5 sizes available
+                      - generic:
+                        - paragraph: From £80
+                        - generic:
+                          - button "Quick view"
+                          - link "Open":
+                            - /url: /browse/mark-smith/the-random-time
+                          - button "Buy now"
+                  - button "Save" [ref=f79e173]
+                  - generic: Available
+                  - generic [ref=f79e176]:
+                    - button "Quick look" [ref=f79e177]
+                    - link "Full artwork page" [ref=f79e181]:
+                      - /url: /browse/mark-smith/the-random-time
+                - generic [ref=f79e186]:
+                  - paragraph [ref=f79e187]: The Random Time
+                  - paragraph [ref=f79e188]: Watercolour on paper · 5 sizes
+                  - paragraph [ref=f79e189]: From £80
+          - generic [ref=f79e192]:
+            - heading "About the Artist" [level=2] [ref=f79e193]
+            - paragraph [ref=f79e195]: My work explores the relationship between structure and spontaneity — the tension between what is controlled and what is left to unfold. Working primarily with layered textures and restrained palettes, I’m interested in how subtle shifts in form, tone, and space can evoke emotion without relying on explicit narrative. Each piece begins with a loose framework, but the final outcome is guided by instinct — allowing imperfections, movement, and disruption to shape the composition. I’m particularly drawn to the way art exists within environments. A piece is never isolated; it interacts with the architecture, the light, and the people moving around it. This dialogue between artwork and space is central to my practice. Ultimately, my work invites a slower way of looking — encouraging the viewer to pause, reflect, and find their own meaning within the layers.
+            - button "Read more" [ref=f79e196] [cursor=pointer]
+          - generic [ref=f79e201]:
+            - generic [ref=f79e202]:
+              - img "The Random Time, Watercolour on paper" [ref=f79e203]
+              - button [ref=f79e205] [cursor=pointer]
+            - generic [ref=f79e208]:
+              - button [ref=f79e209] [cursor=pointer]
+              - generic [ref=f79e212]:
+                - paragraph [ref=f79e213]: Mark Smith
+                - button "Message Mark Smith" [ref=f79e214] [cursor=pointer]: Message
+              - heading "The Random Time" [level=3] [ref=f79e217]
+              - generic [ref=f79e219]:
+                - generic [ref=f79e220]: Medium
+                - generic [ref=f79e221]: Watercolour on paper
+              - generic [ref=f79e222]:
+                - generic [ref=f79e223]: Available
+                - button "Save" [ref=f79e225] [cursor=pointer]
+              - generic [ref=f79e228]:
+                - paragraph [ref=f79e229]: Size & Price
+                - combobox [ref=f79e230] [cursor=pointer]:
+                  - option "8×10\" (20×25 cm), £80" [selected]
+                  - option "16×20\" (41×51 cm), £160"
+                  - option "11×14\" (28×36 cm), £250"
+                  - option "6×8\" (15×20 cm), £400"
+                  - option "12×16\" (30×41 cm), £500"
+              - generic [ref=f79e231]:
+                - paragraph [ref=f79e232]: Frame
+                - combobox [ref=f79e233] [cursor=pointer]:
+                  - option "Black oak frame, +£80" [selected]
+                  - option "White wooden frame, +£160"
+              - generic [ref=f79e234]:
+                - button "Buy Now, £160" [ref=f79e235] [cursor=pointer]
+                - button "Add to Basket" [ref=f79e236] [cursor=pointer]
+              - link "View full artwork page" [ref=f79e238] [cursor=pointer]:
+                - /url: /browse/mark-smith/the-random-time
+              - paragraph [ref=f79e241]: 3 of 3
+        - generic [ref=f79e244]:
+          - heading "Interested in Mark Smith’s work?" [level=2] [ref=f79e245]
+          - paragraph [ref=f79e246]: Get in touch to discuss pricing, availability, and how this artist’s work could transform your venue.
+          - generic [ref=f79e247]:
+            - link "Host this artist? Register your venue" [ref=f79e248] [cursor=pointer]:
+              - /url: /register-venue
+            - button "Message" [ref=f79e249] [cursor=pointer]
+            - link "Browse More Artists" [ref=f79e250] [cursor=pointer]:
+              - /url: /browse
+    - contentinfo "Site footer" [ref=f79e251]:
+      - generic [ref=f79e252]:
+        - generic [ref=f79e253]:
+          - generic [ref=f79e254]:
+            - link "Wallplace" [ref=f79e255] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f79e256]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f79e257]:
+              - paragraph [ref=f79e258]: Be first to see new works
+              - paragraph [ref=f79e259]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f79e261]:
+                - textbox "your@email.com" [ref=f79e262]
+                - button "Subscribe" [ref=f79e263] [cursor=pointer]
+            - link "Instagram" [ref=f79e264] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f79e269]:
+            - heading "For Artists" [level=4] [ref=f79e270]
+            - list [ref=f79e271]:
+              - listitem [ref=f79e272]:
+                - link "Apply to Join" [ref=f79e273] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f79e274]:
+                - link "Pricing" [ref=f79e275] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f79e276]:
+                - link "Browse Venues" [ref=f79e277] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f79e278]:
+                - link "FAQs" [ref=f79e279] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f79e280]:
+            - heading "For Venues" [level=4] [ref=f79e281]
+            - list [ref=f79e282]:
+              - listitem [ref=f79e283]:
+                - link "Discover Art" [ref=f79e284] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f79e285]:
+                - link "Register Your Venue" [ref=f79e286] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f79e287]:
+                - link "Wallplace Curated" [ref=f79e288] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f79e289]:
+                - link "How It Works" [ref=f79e290] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f79e291]:
+                - link "FAQs" [ref=f79e292] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f79e293]:
+            - heading "Company" [level=4] [ref=f79e294]
+            - list [ref=f79e295]:
+              - listitem [ref=f79e296]:
+                - link "About" [ref=f79e297] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f79e298]:
+                - link "Blog" [ref=f79e299] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f79e300]:
+                - link "How It Works" [ref=f79e301] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f79e302]:
+                - link "Sustainability" [ref=f79e303] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f79e304]:
+                - link "Partner with us" [ref=f79e305] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f79e306]:
+                - link "Contact" [ref=f79e307] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f79e308]:
+                - link "Complaints" [ref=f79e309] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f79e310]:
+                - link "Terms" [ref=f79e311] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f79e312]:
+                - link "Artist Agreement" [ref=f79e313] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f79e314]:
+                - link "Venue Agreement" [ref=f79e315] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f79e316]:
+                - link "Privacy" [ref=f79e317] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f79e318]:
+                - link "Cookies" [ref=f79e319] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f79e320]:
+                - link "Returns & Refunds" [ref=f79e321] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f79e322]:
+                - link "IP Policy" [ref=f79e323] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f79e325]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f79e326] [cursor=pointer]: Feedback
+  - alert [ref=f79e329]

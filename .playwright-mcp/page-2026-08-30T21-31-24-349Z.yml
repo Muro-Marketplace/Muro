@@ -1,0 +1,762 @@
+- generic [active] [ref=f75e1]:
+  - generic [ref=f75e2]:
+    - link "Skip to content" [ref=f75e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f75e4]:
+      - generic [ref=f75e6]:
+        - link "Wallplace" [ref=f75e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f75e8]:
+          - link "Galleries" [ref=f75e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Portfolios" [ref=f75e10] [cursor=pointer]:
+            - /url: /browse?view=portfolios
+          - link "Collections" [ref=f75e11] [cursor=pointer]:
+            - /url: /browse?view=collections
+          - link "Spaces" [ref=f75e12] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f75e14] [cursor=pointer]
+        - generic [ref=f75e17]:
+          - link "Saved" [ref=f75e18] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f75e22] [cursor=pointer]
+          - generic [ref=f75e26]:
+            - link "My Account" [ref=f75e27] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f75e28] [cursor=pointer]
+          - button "Logout" [ref=f75e31] [cursor=pointer]
+    - main [ref=f75e32]:
+      - generic [ref=f75e33]:
+        - generic [ref=f75e36]:
+          - button "All" [ref=f75e37] [cursor=pointer]
+          - button "Photography" [ref=f75e38] [cursor=pointer]
+          - button "Painting" [ref=f75e39] [cursor=pointer]
+          - button "Drawing & Illustration" [ref=f75e40] [cursor=pointer]
+          - button "Sketching" [ref=f75e41] [cursor=pointer]
+          - button "Sculpture" [ref=f75e42] [cursor=pointer]
+          - button "Mixed / Other" [ref=f75e43] [cursor=pointer]
+        - generic [ref=f75e46]:
+          - complementary [ref=f75e47]:
+            - generic [ref=f75e48]: Filters
+            - generic [ref=f75e50]:
+              - generic [ref=f75e51]:
+                - paragraph [ref=f75e52]: Location
+                - generic [ref=f75e53]:
+                  - paragraph [ref=f75e54]: Enter your postcode to filter by distance
+                  - generic [ref=f75e55]:
+                    - generic [ref=f75e56]:
+                      - textbox "Postcode" [ref=f75e57]:
+                        - /placeholder: e.g. EC1A 1BB
+                      - button "Go" [disabled] [ref=f75e58] [cursor=pointer]
+                    - button "Use my current location" [ref=f75e59] [cursor=pointer]
+              - generic [ref=f75e63]:
+                - paragraph [ref=f75e64]: Arrangement
+                - generic [ref=f75e65]:
+                  - button [ref=f75e66] [cursor=pointer]:
+                    - generic [ref=f75e72]:
+                      - paragraph [ref=f75e73]: Revenue Share
+                      - paragraph [ref=f75e74]: Free on wall, split on QR sales
+                  - button "£ Paid Loan Monthly fee to display the work" [ref=f75e75] [cursor=pointer]:
+                    - generic [ref=f75e76]: £
+                    - generic [ref=f75e77]:
+                      - paragraph [ref=f75e78]: Paid Loan
+                      - paragraph [ref=f75e79]: Monthly fee to display the work
+                  - button [ref=f75e80] [cursor=pointer]:
+                    - generic [ref=f75e83]:
+                      - paragraph [ref=f75e84]: Direct Purchase
+                      - paragraph [ref=f75e85]: Buy artwork outright
+              - generic [ref=f75e86]:
+                - paragraph [ref=f75e87]: Availability
+                - generic [ref=f75e88]:
+                  - button "Originals available" [ref=f75e89] [cursor=pointer]
+                  - button "Prints available" [ref=f75e92] [cursor=pointer]
+                  - button "Framing available" [ref=f75e95] [cursor=pointer]
+              - generic [ref=f75e98]:
+                - paragraph [ref=f75e99]: Size
+                - generic [ref=f75e100]:
+                  - button "Small up to 30cm" [ref=f75e101] [cursor=pointer]:
+                    - generic [ref=f75e102]:
+                      - generic [ref=f75e103]: Small
+                      - generic [ref=f75e104]: up to 30cm
+                  - button "Medium 30 to 60cm" [ref=f75e105] [cursor=pointer]:
+                    - generic [ref=f75e106]:
+                      - generic [ref=f75e107]: Medium
+                      - generic [ref=f75e108]: 30 to 60cm
+                  - button "Large 60 to 100cm" [ref=f75e109] [cursor=pointer]:
+                    - generic [ref=f75e110]:
+                      - generic [ref=f75e111]: Large
+                      - generic [ref=f75e112]: 60 to 100cm
+                  - button "Extra-large 100cm+" [ref=f75e113] [cursor=pointer]:
+                    - generic [ref=f75e114]:
+                      - generic [ref=f75e115]: Extra-large
+                      - generic [ref=f75e116]: 100cm+
+              - generic [ref=f75e117]:
+                - paragraph [ref=f75e118]: "Price: £0 to £1000+"
+                - generic [ref=f75e119]:
+                  - generic [ref=f75e120]:
+                    - text: Min
+                    - slider [ref=f75e121] [cursor=pointer]: "0"
+                  - generic [ref=f75e122]:
+                    - text: Max
+                    - slider [ref=f75e123] [cursor=pointer]: "1000"
+              - generic [ref=f75e124]:
+                - paragraph [ref=f75e125]: Style
+                - combobox [ref=f75e126] [cursor=pointer]:
+                  - option "All styles" [selected]
+                  - option "Abstract Painting"
+                  - option "Abstract Photography"
+                  - option "Acrylic & Collage"
+                  - option "Acrylic Painting"
+                  - option "Architectural Photography"
+                  - option "Botanical Illustration"
+                  - option "Ceramic Wall Art"
+                  - option "Charcoal Drawing"
+                  - option "Digital Illustration"
+                  - option "Documentary Photography"
+                  - option "Encaustic Painting"
+                  - option "Fine Art Photography"
+                  - option "Gouache Painting"
+                  - option "Ink & Wash"
+                  - option "Landscape Photography"
+                  - option "Linocut Printmaking"
+                  - option "Mixed Media"
+                  - option "Nature Photography"
+                  - option "Oil Painting"
+                  - option "Portrait Photography"
+                  - option "Risograph Printing"
+                  - option "Screen Printing"
+                  - option "Still Life Photography"
+                  - option "Street Photography"
+                  - option "Textile Art"
+                  - option "Urban Photography"
+                  - option "Watercolour"
+                  - option "Woodcut Printmaking"
+              - generic [ref=f75e127]:
+                - paragraph [ref=f75e128]: Theme
+                - combobox [ref=f75e129] [cursor=pointer]:
+                  - option "All themes" [selected]
+                  - option "Landscapes"
+                  - option "Black and White"
+                  - option "Urban"
+                  - option "Coastal"
+                  - option "Nature"
+                  - option "Abstract"
+                  - option "Hospitality-friendly"
+                  - option "Office collection"
+                  - option "Large-format prints"
+                  - option "Portraits"
+                  - option "Still Life"
+                  - option "Architectural"
+                  - option "Documentary"
+                  - option "Fine Art"
+                  - option "Minimalist"
+                  - option "Colour"
+                  - option "Monochrome"
+                  - option "Street"
+          - generic [ref=f75e130]:
+            - generic [ref=f75e131]:
+              - generic [ref=f75e132]:
+                - searchbox "Search works or artists" [ref=f75e135]
+                - paragraph [ref=f75e136]: …
+              - generic [ref=f75e137]:
+                - generic [ref=f75e138]:
+                  - button "Galleries" [ref=f75e139] [cursor=pointer]
+                  - button "Portfolios" [ref=f75e140] [cursor=pointer]
+                  - button "Collections" [ref=f75e141] [cursor=pointer]
+                - combobox [ref=f75e142] [cursor=pointer]:
+                  - 'option "Sort: Featured" [selected]'
+                  - 'option "Sort: Recently listed"'
+                  - 'option "Sort: A-Z"'
+                  - 'option "Sort: Price (low to high)"'
+                  - 'option "Sort: Price (high to low)"'
+                  - 'option "Sort: Revenue Share %"'
+                  - 'option "Sort: Nearest (enable location)" [disabled]'
+            - generic [ref=f75e143]:
+              - generic [ref=f75e144]:
+                - generic [ref=f75e146]:
+                  - generic [ref=f75e147]:
+                    - link "Open Barbican, Study No. 7 in new tab" [ref=f75e148] [cursor=pointer]:
+                      - /url: /browse/james-okafor/barbican-study-no-7
+                      - generic [ref=f75e150]:
+                        - img "Barbican, Study No. 7"
+                    - button "Save" [ref=f75e152] [cursor=pointer]
+                    - generic [ref=f75e155]:
+                      - link "Quick look" [ref=f75e156] [cursor=pointer]:
+                        - /url: /browse/james-okafor?work=barbican-study-no-7
+                      - link "Open full artwork page" [ref=f75e160] [cursor=pointer]:
+                        - /url: /browse/james-okafor/barbican-study-no-7
+                  - generic [ref=f75e165]:
+                    - link [ref=f75e166] [cursor=pointer]:
+                      - /url: /browse/james-okafor/barbican-study-no-7
+                      - heading "Barbican, Study No. 7" [level=3] [ref=f75e167]
+                    - paragraph [ref=f75e168]:
+                      - link "James Okafor" [ref=f75e169] [cursor=pointer]:
+                        - /url: /browse/james-okafor
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e170]: £280 to £784
+                    - paragraph [ref=f75e171]: Paid loan · Direct purchase
+                    - paragraph [ref=f75e172]
+                - generic [ref=f75e174]:
+                  - generic [ref=f75e175]:
+                    - link "Open The Shard from Below in new tab" [ref=f75e176] [cursor=pointer]:
+                      - /url: /browse/james-okafor/the-shard-from-below
+                      - generic [ref=f75e178]:
+                        - img "The Shard from Below"
+                    - button "Save" [ref=f75e180] [cursor=pointer]
+                    - generic [ref=f75e183]:
+                      - link "Quick look" [ref=f75e184] [cursor=pointer]:
+                        - /url: /browse/james-okafor?work=the-shard-from-below
+                      - link "Open full artwork page" [ref=f75e188] [cursor=pointer]:
+                        - /url: /browse/james-okafor/the-shard-from-below
+                  - generic [ref=f75e193]:
+                    - link [ref=f75e194] [cursor=pointer]:
+                      - /url: /browse/james-okafor/the-shard-from-below
+                      - heading "The Shard from Below" [level=3] [ref=f75e195]
+                    - paragraph [ref=f75e196]:
+                      - link "James Okafor" [ref=f75e197] [cursor=pointer]:
+                        - /url: /browse/james-okafor
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e198]: £280 to £784
+                    - paragraph [ref=f75e199]: Paid loan · Direct purchase
+                    - paragraph [ref=f75e200]
+                - generic [ref=f75e202]:
+                  - generic [ref=f75e203]:
+                    - link "Open Tideline, Holkham in new tab" [ref=f75e204] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/tideline-holkham
+                      - generic [ref=f75e206]:
+                        - img "Tideline, Holkham"
+                    - button "Save" [ref=f75e208] [cursor=pointer]
+                    - generic [ref=f75e211]:
+                      - link "Quick look" [ref=f75e212] [cursor=pointer]:
+                        - /url: /browse/marcus-webb?work=tideline-holkham
+                      - link "Open full artwork page" [ref=f75e216] [cursor=pointer]:
+                        - /url: /browse/marcus-webb/tideline-holkham
+                  - generic [ref=f75e221]:
+                    - link [ref=f75e222] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/tideline-holkham
+                      - heading "Tideline, Holkham" [level=3] [ref=f75e223]
+                    - paragraph [ref=f75e224]:
+                      - link "Marcus Webb" [ref=f75e225] [cursor=pointer]:
+                        - /url: /browse/marcus-webb
+                      - text: · Cotton Rag Print
+                    - paragraph [ref=f75e226]: £300 to £840
+                    - paragraph [ref=f75e227]: Revenue share · Paid loan · Direct purchase
+                    - paragraph [ref=f75e228]: 12% Revenue Share
+                - generic [ref=f75e230]:
+                  - generic [ref=f75e231]:
+                    - link "Open Estuary at Low Tide in new tab" [ref=f75e232] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/estuary-at-low-tide
+                      - generic [ref=f75e234]:
+                        - img "Estuary at Low Tide"
+                    - generic [ref=f75e235]: Sold
+                    - button "Save" [ref=f75e237] [cursor=pointer]
+                    - generic [ref=f75e240]:
+                      - link "Quick look" [ref=f75e241] [cursor=pointer]:
+                        - /url: /browse/marcus-webb?work=estuary-at-low-tide
+                      - link "Open full artwork page" [ref=f75e245] [cursor=pointer]:
+                        - /url: /browse/marcus-webb/estuary-at-low-tide
+                  - generic [ref=f75e250]:
+                    - link [ref=f75e251] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/estuary-at-low-tide
+                      - heading "Estuary at Low Tide" [level=3] [ref=f75e252]
+                    - paragraph [ref=f75e253]:
+                      - link "Marcus Webb" [ref=f75e254] [cursor=pointer]:
+                        - /url: /browse/marcus-webb
+                      - text: · Cotton Rag Print
+                    - paragraph [ref=f75e255]: £300 to £840
+                    - paragraph [ref=f75e256]: Revenue share · Paid loan · Direct purchase
+                    - paragraph [ref=f75e257]: 12% Revenue Share
+                - generic [ref=f75e259]:
+                  - generic [ref=f75e260]:
+                    - link "Open Fallen Petal in new tab" [ref=f75e261] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/fallen-petal
+                      - generic [ref=f75e263]:
+                        - img "Fallen Petal"
+                    - button "Save" [ref=f75e265] [cursor=pointer]
+                    - generic [ref=f75e268]:
+                      - link "Quick look" [ref=f75e269] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka?work=fallen-petal
+                      - link "Open full artwork page" [ref=f75e273] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka/fallen-petal
+                  - generic [ref=f75e278]:
+                    - link [ref=f75e279] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/fallen-petal
+                      - heading "Fallen Petal" [level=3] [ref=f75e280]
+                    - paragraph [ref=f75e281]:
+                      - link "Yuki Tanaka" [ref=f75e282] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e283]: £260 to £728
+                    - paragraph [ref=f75e284]: Direct purchase
+                    - paragraph [ref=f75e285]
+                - generic [ref=f75e287]:
+                  - generic [ref=f75e288]:
+                    - link "Open The Last Leaf in new tab" [ref=f75e289] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/the-last-leaf
+                      - generic [ref=f75e291]:
+                        - img "The Last Leaf"
+                    - generic [ref=f75e292]: Sold
+                    - button "Save" [ref=f75e294] [cursor=pointer]
+                    - generic [ref=f75e297]:
+                      - link "Quick look" [ref=f75e298] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka?work=the-last-leaf
+                      - link "Open full artwork page" [ref=f75e302] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka/the-last-leaf
+                  - generic [ref=f75e307]:
+                    - link [ref=f75e308] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/the-last-leaf
+                      - heading "The Last Leaf" [level=3] [ref=f75e309]
+                    - paragraph [ref=f75e310]:
+                      - link "Yuki Tanaka" [ref=f75e311] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e312]: £260 to £728
+                    - paragraph [ref=f75e313]: Direct purchase
+                    - paragraph [ref=f75e314]
+                - generic [ref=f75e316]:
+                  - generic [ref=f75e317]:
+                    - link "Open Peonies and Linen in new tab" [ref=f75e318] [cursor=pointer]:
+                      - /url: /browse/mia-lindstrom/peonies-and-linen
+                      - generic [ref=f75e320]:
+                        - img "Peonies and Linen"
+                    - button "Save" [ref=f75e322] [cursor=pointer]
+                    - generic [ref=f75e325]:
+                      - link "Quick look" [ref=f75e326] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom?work=peonies-and-linen
+                      - link "Open full artwork page" [ref=f75e330] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom/peonies-and-linen
+                  - generic [ref=f75e335]:
+                    - link [ref=f75e336] [cursor=pointer]:
+                      - /url: /browse/mia-lindstrom/peonies-and-linen
+                      - heading "Peonies and Linen" [level=3] [ref=f75e337]
+                    - paragraph [ref=f75e338]:
+                      - link "Mia Lindström" [ref=f75e339] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e340]: £220 to £616
+                    - paragraph [ref=f75e341]: Revenue share · Direct purchase
+                    - paragraph [ref=f75e342]: 10% Revenue Share
+              - generic [ref=f75e343]:
+                - generic [ref=f75e345]:
+                  - generic [ref=f75e346]:
+                    - link "Open Trellis Tower, Morning in new tab" [ref=f75e347] [cursor=pointer]:
+                      - /url: /browse/james-okafor/trellis-tower-morning
+                      - generic [ref=f75e349]:
+                        - img "Trellis Tower, Morning"
+                    - button "Save" [ref=f75e351] [cursor=pointer]
+                    - generic [ref=f75e354]:
+                      - link "Quick look" [ref=f75e355] [cursor=pointer]:
+                        - /url: /browse/james-okafor?work=trellis-tower-morning
+                      - link "Open full artwork page" [ref=f75e359] [cursor=pointer]:
+                        - /url: /browse/james-okafor/trellis-tower-morning
+                  - generic [ref=f75e364]:
+                    - link [ref=f75e365] [cursor=pointer]:
+                      - /url: /browse/james-okafor/trellis-tower-morning
+                      - heading "Trellis Tower, Morning" [level=3] [ref=f75e366]
+                    - paragraph [ref=f75e367]:
+                      - link "James Okafor" [ref=f75e368] [cursor=pointer]:
+                        - /url: /browse/james-okafor
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e369]: £220 to £616
+                    - paragraph [ref=f75e370]: Paid loan · Direct purchase
+                    - paragraph [ref=f75e371]
+                - generic [ref=f75e373]:
+                  - generic [ref=f75e374]:
+                    - link "Open Balfron Tower, Dusk in new tab" [ref=f75e375] [cursor=pointer]:
+                      - /url: /browse/james-okafor/balfron-tower-dusk
+                      - generic [ref=f75e377]:
+                        - img "Balfron Tower, Dusk"
+                    - generic [ref=f75e378]: Sold
+                    - button "Save" [ref=f75e380] [cursor=pointer]
+                    - generic [ref=f75e383]:
+                      - link "Quick look" [ref=f75e384] [cursor=pointer]:
+                        - /url: /browse/james-okafor?work=balfron-tower-dusk
+                      - link "Open full artwork page" [ref=f75e388] [cursor=pointer]:
+                        - /url: /browse/james-okafor/balfron-tower-dusk
+                  - generic [ref=f75e393]:
+                    - link [ref=f75e394] [cursor=pointer]:
+                      - /url: /browse/james-okafor/balfron-tower-dusk
+                      - heading "Balfron Tower, Dusk" [level=3] [ref=f75e395]
+                    - paragraph [ref=f75e396]:
+                      - link "James Okafor" [ref=f75e397] [cursor=pointer]:
+                        - /url: /browse/james-okafor
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e398]: £220 to £616
+                    - paragraph [ref=f75e399]: Paid loan · Direct purchase
+                    - paragraph [ref=f75e400]
+                - generic [ref=f75e402]:
+                  - generic [ref=f75e403]:
+                    - link "Open Dawn Mist, Richmond Park in new tab" [ref=f75e404] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/dawn-mist-richmond-park
+                      - generic [ref=f75e406]:
+                        - img "Dawn Mist, Richmond Park"
+                    - button "Save" [ref=f75e408] [cursor=pointer]
+                    - generic [ref=f75e411]:
+                      - link "Quick look" [ref=f75e412] [cursor=pointer]:
+                        - /url: /browse/marcus-webb?work=dawn-mist-richmond-park
+                      - link "Open full artwork page" [ref=f75e416] [cursor=pointer]:
+                        - /url: /browse/marcus-webb/dawn-mist-richmond-park
+                  - generic [ref=f75e421]:
+                    - link [ref=f75e422] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/dawn-mist-richmond-park
+                      - heading "Dawn Mist, Richmond Park" [level=3] [ref=f75e423]
+                    - paragraph [ref=f75e424]:
+                      - link "Marcus Webb" [ref=f75e425] [cursor=pointer]:
+                        - /url: /browse/marcus-webb
+                      - text: · Cotton Rag Print
+                    - paragraph [ref=f75e426]: £220 to £616
+                    - paragraph [ref=f75e427]: Revenue share · Paid loan · Direct purchase
+                    - paragraph [ref=f75e428]: 12% Revenue Share
+                - generic [ref=f75e430]:
+                  - generic [ref=f75e431]:
+                    - link "Open Oak and Sky in new tab" [ref=f75e432] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/oak-and-sky
+                      - generic [ref=f75e434]:
+                        - img "Oak and Sky"
+                    - button "Save" [ref=f75e436] [cursor=pointer]
+                    - generic [ref=f75e439]:
+                      - link "Quick look" [ref=f75e440] [cursor=pointer]:
+                        - /url: /browse/marcus-webb?work=oak-and-sky
+                      - link "Open full artwork page" [ref=f75e444] [cursor=pointer]:
+                        - /url: /browse/marcus-webb/oak-and-sky
+                  - generic [ref=f75e449]:
+                    - link [ref=f75e450] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/oak-and-sky
+                      - heading "Oak and Sky" [level=3] [ref=f75e451]
+                    - paragraph [ref=f75e452]:
+                      - link "Marcus Webb" [ref=f75e453] [cursor=pointer]:
+                        - /url: /browse/marcus-webb
+                      - text: · Cotton Rag Print
+                    - paragraph [ref=f75e454]: £140 to £392
+                    - paragraph [ref=f75e455]: Revenue share · Paid loan · Direct purchase
+                    - paragraph [ref=f75e456]: 12% Revenue Share
+                - generic [ref=f75e458]:
+                  - generic [ref=f75e459]:
+                    - link "Open Empty Vessel in new tab" [ref=f75e460] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/empty-vessel
+                      - generic [ref=f75e462]:
+                        - img "Empty Vessel"
+                    - button "Save" [ref=f75e464] [cursor=pointer]
+                    - generic [ref=f75e467]:
+                      - link "Quick look" [ref=f75e468] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka?work=empty-vessel
+                      - link "Open full artwork page" [ref=f75e472] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka/empty-vessel
+                  - generic [ref=f75e477]:
+                    - link [ref=f75e478] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/empty-vessel
+                      - heading "Empty Vessel" [level=3] [ref=f75e479]
+                    - paragraph [ref=f75e480]:
+                      - link "Yuki Tanaka" [ref=f75e481] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e482]: £220 to £616
+                    - paragraph [ref=f75e483]: Direct purchase
+                    - paragraph [ref=f75e484]
+                - generic [ref=f75e486]:
+                  - generic [ref=f75e487]:
+                    - link "Open Impermanence Study No. 3 in new tab" [ref=f75e488] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/impermanence-study-no-3
+                      - generic [ref=f75e490]:
+                        - img "Impermanence Study No. 3"
+                    - button "Save" [ref=f75e492] [cursor=pointer]
+                    - generic [ref=f75e495]:
+                      - link "Quick look" [ref=f75e496] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka?work=impermanence-study-no-3
+                      - link "Open full artwork page" [ref=f75e500] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka/impermanence-study-no-3
+                  - generic [ref=f75e505]:
+                    - link [ref=f75e506] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/impermanence-study-no-3
+                      - heading "Impermanence Study No. 3" [level=3] [ref=f75e507]
+                    - paragraph [ref=f75e508]:
+                      - link "Yuki Tanaka" [ref=f75e509] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e510]: £120 to £336
+                    - paragraph [ref=f75e511]: Direct purchase
+                    - paragraph [ref=f75e512]
+                - generic [ref=f75e514]:
+                  - generic [ref=f75e515]:
+                    - link "Open Bread and Butter in new tab" [ref=f75e516] [cursor=pointer]:
+                      - /url: /browse/mia-lindstrom/bread-and-butter
+                      - generic [ref=f75e518]:
+                        - img "Bread and Butter"
+                    - button "Save" [ref=f75e520] [cursor=pointer]
+                    - generic [ref=f75e523]:
+                      - link "Quick look" [ref=f75e524] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom?work=bread-and-butter
+                      - link "Open full artwork page" [ref=f75e528] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom/bread-and-butter
+                  - generic [ref=f75e533]:
+                    - link [ref=f75e534] [cursor=pointer]:
+                      - /url: /browse/mia-lindstrom/bread-and-butter
+                      - heading "Bread and Butter" [level=3] [ref=f75e535]
+                    - paragraph [ref=f75e536]:
+                      - link "Mia Lindström" [ref=f75e537] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e538]: £180 to £504
+                    - paragraph [ref=f75e539]: Revenue share · Direct purchase
+                    - paragraph [ref=f75e540]: 10% Revenue Share
+              - generic [ref=f75e541]:
+                - generic [ref=f75e543]:
+                  - generic [ref=f75e544]:
+                    - link "Open Southwark Geometry in new tab" [ref=f75e545] [cursor=pointer]:
+                      - /url: /browse/james-okafor/southwark-geometry
+                      - generic [ref=f75e547]:
+                        - img "Southwark Geometry"
+                    - button "Save" [ref=f75e549] [cursor=pointer]
+                    - generic [ref=f75e552]:
+                      - link "Quick look" [ref=f75e553] [cursor=pointer]:
+                        - /url: /browse/james-okafor?work=southwark-geometry
+                      - link "Open full artwork page" [ref=f75e557] [cursor=pointer]:
+                        - /url: /browse/james-okafor/southwark-geometry
+                  - generic [ref=f75e562]:
+                    - link [ref=f75e563] [cursor=pointer]:
+                      - /url: /browse/james-okafor/southwark-geometry
+                      - heading "Southwark Geometry" [level=3] [ref=f75e564]
+                    - paragraph [ref=f75e565]:
+                      - link "James Okafor" [ref=f75e566] [cursor=pointer]:
+                        - /url: /browse/james-okafor
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e567]: £200 to £560
+                    - paragraph [ref=f75e568]: Paid loan · Direct purchase
+                    - paragraph [ref=f75e569]
+                - generic [ref=f75e571]:
+                  - generic [ref=f75e572]:
+                    - link "Open Concrete Poem No. 14 in new tab" [ref=f75e573] [cursor=pointer]:
+                      - /url: /browse/james-okafor/concrete-poem-no-14
+                      - generic [ref=f75e575]:
+                        - img "Concrete Poem No. 14"
+                    - button "Save" [ref=f75e577] [cursor=pointer]
+                    - generic [ref=f75e580]:
+                      - link "Quick look" [ref=f75e581] [cursor=pointer]:
+                        - /url: /browse/james-okafor?work=concrete-poem-no-14
+                      - link "Open full artwork page" [ref=f75e585] [cursor=pointer]:
+                        - /url: /browse/james-okafor/concrete-poem-no-14
+                  - generic [ref=f75e590]:
+                    - link [ref=f75e591] [cursor=pointer]:
+                      - /url: /browse/james-okafor/concrete-poem-no-14
+                      - heading "Concrete Poem No. 14" [level=3] [ref=f75e592]
+                    - paragraph [ref=f75e593]:
+                      - link "James Okafor" [ref=f75e594] [cursor=pointer]:
+                        - /url: /browse/james-okafor
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e595]: £200 to £560
+                    - paragraph [ref=f75e596]: Paid loan · Direct purchase
+                    - paragraph [ref=f75e597]
+                - generic [ref=f75e599]:
+                  - generic [ref=f75e600]:
+                    - link "Open The Jurassic Coast, Winter in new tab" [ref=f75e601] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/the-jurassic-coast-winter
+                      - generic [ref=f75e603]:
+                        - img "The Jurassic Coast, Winter"
+                    - button "Save" [ref=f75e605] [cursor=pointer]
+                    - generic [ref=f75e608]:
+                      - link "Quick look" [ref=f75e609] [cursor=pointer]:
+                        - /url: /browse/marcus-webb?work=the-jurassic-coast-winter
+                      - link "Open full artwork page" [ref=f75e613] [cursor=pointer]:
+                        - /url: /browse/marcus-webb/the-jurassic-coast-winter
+                  - generic [ref=f75e618]:
+                    - link [ref=f75e619] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/the-jurassic-coast-winter
+                      - heading "The Jurassic Coast, Winter" [level=3] [ref=f75e620]
+                    - paragraph [ref=f75e621]:
+                      - link "Marcus Webb" [ref=f75e622] [cursor=pointer]:
+                        - /url: /browse/marcus-webb
+                      - text: · Cotton Rag Print
+                    - paragraph [ref=f75e623]: £200 to £560
+                    - paragraph [ref=f75e624]: Revenue share · Paid loan · Direct purchase
+                    - paragraph [ref=f75e625]: 12% Revenue Share
+                - generic [ref=f75e627]:
+                  - generic [ref=f75e628]:
+                    - link "Open Cornish Headland in new tab" [ref=f75e629] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/cornish-headland
+                      - generic [ref=f75e631]:
+                        - img "Cornish Headland"
+                    - button "Save" [ref=f75e633] [cursor=pointer]
+                    - generic [ref=f75e636]:
+                      - link "Quick look" [ref=f75e637] [cursor=pointer]:
+                        - /url: /browse/marcus-webb?work=cornish-headland
+                      - link "Open full artwork page" [ref=f75e641] [cursor=pointer]:
+                        - /url: /browse/marcus-webb/cornish-headland
+                  - generic [ref=f75e646]:
+                    - link [ref=f75e647] [cursor=pointer]:
+                      - /url: /browse/marcus-webb/cornish-headland
+                      - heading "Cornish Headland" [level=3] [ref=f75e648]
+                    - paragraph [ref=f75e649]:
+                      - link "Marcus Webb" [ref=f75e650] [cursor=pointer]:
+                        - /url: /browse/marcus-webb
+                      - text: · Cotton Rag Print
+                    - paragraph [ref=f75e651]: £220 to £616
+                    - paragraph [ref=f75e652]: Revenue share · Paid loan · Direct purchase
+                    - paragraph [ref=f75e653]: 12% Revenue Share
+                - generic [ref=f75e655]:
+                  - generic [ref=f75e656]:
+                    - link "Open Frost on Branch in new tab" [ref=f75e657] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/frost-on-branch
+                      - generic [ref=f75e659]:
+                        - img "Frost on Branch"
+                    - button "Save" [ref=f75e661] [cursor=pointer]
+                    - generic [ref=f75e664]:
+                      - link "Quick look" [ref=f75e665] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka?work=frost-on-branch
+                      - link "Open full artwork page" [ref=f75e669] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka/frost-on-branch
+                  - generic [ref=f75e674]:
+                    - link [ref=f75e675] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/frost-on-branch
+                      - heading "Frost on Branch" [level=3] [ref=f75e676]
+                    - paragraph [ref=f75e677]:
+                      - link "Yuki Tanaka" [ref=f75e678] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e679]: £160 to £448
+                    - paragraph [ref=f75e680]: Direct purchase
+                    - paragraph [ref=f75e681]
+                - generic [ref=f75e683]:
+                  - generic [ref=f75e684]:
+                    - link "Open Stone and Water in new tab" [ref=f75e685] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/stone-and-water
+                      - generic [ref=f75e687]:
+                        - img "Stone and Water"
+                    - button "Save" [ref=f75e689] [cursor=pointer]
+                    - generic [ref=f75e692]:
+                      - link "Quick look" [ref=f75e693] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka?work=stone-and-water
+                      - link "Open full artwork page" [ref=f75e697] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka/stone-and-water
+                  - generic [ref=f75e702]:
+                    - link [ref=f75e703] [cursor=pointer]:
+                      - /url: /browse/yuki-tanaka/stone-and-water
+                      - heading "Stone and Water" [level=3] [ref=f75e704]
+                    - paragraph [ref=f75e705]:
+                      - link "Yuki Tanaka" [ref=f75e706] [cursor=pointer]:
+                        - /url: /browse/yuki-tanaka
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e707]: £220 to £616
+                    - paragraph [ref=f75e708]: Direct purchase
+                    - paragraph [ref=f75e709]
+                - generic [ref=f75e711]:
+                  - generic [ref=f75e712]:
+                    - link "Open Nordic Light No. 5 in new tab" [ref=f75e713] [cursor=pointer]:
+                      - /url: /browse/mia-lindstrom/nordic-light-no-5
+                      - generic [ref=f75e715]:
+                        - img "Nordic Light No. 5"
+                    - button "Save" [ref=f75e717] [cursor=pointer]
+                    - generic [ref=f75e720]:
+                      - link "Quick look" [ref=f75e721] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom?work=nordic-light-no-5
+                      - link "Open full artwork page" [ref=f75e725] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom/nordic-light-no-5
+                  - generic [ref=f75e730]:
+                    - link [ref=f75e731] [cursor=pointer]:
+                      - /url: /browse/mia-lindstrom/nordic-light-no-5
+                      - heading "Nordic Light No. 5" [level=3] [ref=f75e732]
+                    - paragraph [ref=f75e733]:
+                      - link "Mia Lindström" [ref=f75e734] [cursor=pointer]:
+                        - /url: /browse/mia-lindstrom
+                      - text: · Archival Pigment Print
+                    - paragraph [ref=f75e735]: £200 to £560
+                    - paragraph [ref=f75e736]: Revenue share · Direct purchase
+                    - paragraph [ref=f75e737]: 10% Revenue Share
+            - generic [ref=f75e738]:
+              - button "Show 21 more" [ref=f75e739] [cursor=pointer]
+              - paragraph [ref=f75e740]: Showing 21 of 234
+    - contentinfo "Site footer" [ref=f75e743]:
+      - generic [ref=f75e744]:
+        - generic [ref=f75e745]:
+          - generic [ref=f75e746]:
+            - link "Wallplace" [ref=f75e747] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f75e748]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f75e749]:
+              - paragraph [ref=f75e750]: Be first to see new works
+              - paragraph [ref=f75e751]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f75e753]:
+                - textbox "your@email.com" [ref=f75e754]
+                - button "Subscribe" [ref=f75e755] [cursor=pointer]
+            - link "Instagram" [ref=f75e756] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f75e761]:
+            - heading "For Artists" [level=4] [ref=f75e762]
+            - list [ref=f75e763]:
+              - listitem [ref=f75e764]:
+                - link "Apply to Join" [ref=f75e765] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f75e766]:
+                - link "Pricing" [ref=f75e767] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f75e768]:
+                - link "Browse Venues" [ref=f75e769] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f75e770]:
+                - link "FAQs" [ref=f75e771] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f75e772]:
+            - heading "For Venues" [level=4] [ref=f75e773]
+            - list [ref=f75e774]:
+              - listitem [ref=f75e775]:
+                - link "Discover Art" [ref=f75e776] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f75e777]:
+                - link "Register Your Venue" [ref=f75e778] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f75e779]:
+                - link "Wallplace Curated" [ref=f75e780] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f75e781]:
+                - link "How It Works" [ref=f75e782] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f75e783]:
+                - link "FAQs" [ref=f75e784] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f75e785]:
+            - heading "Company" [level=4] [ref=f75e786]
+            - list [ref=f75e787]:
+              - listitem [ref=f75e788]:
+                - link "About" [ref=f75e789] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f75e790]:
+                - link "Blog" [ref=f75e791] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f75e792]:
+                - link "How It Works" [ref=f75e793] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f75e794]:
+                - link "Sustainability" [ref=f75e795] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f75e796]:
+                - link "Partner with us" [ref=f75e797] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f75e798]:
+                - link "Contact" [ref=f75e799] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f75e800]:
+                - link "Complaints" [ref=f75e801] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f75e802]:
+                - link "Terms" [ref=f75e803] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f75e804]:
+                - link "Artist Agreement" [ref=f75e805] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f75e806]:
+                - link "Venue Agreement" [ref=f75e807] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f75e808]:
+                - link "Privacy" [ref=f75e809] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f75e810]:
+                - link "Cookies" [ref=f75e811] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f75e812]:
+                - link "Returns & Refunds" [ref=f75e813] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f75e814]:
+                - link "IP Policy" [ref=f75e815] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f75e817]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f75e818] [cursor=pointer]: Feedback
+  - alert [ref=f75e821]
