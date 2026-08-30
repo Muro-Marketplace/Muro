@@ -1,0 +1,5 @@
+[      76ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/artist-portal/settings:0
+[    2783ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://goo.gl/9p2vKq) %o @ https://www.wallplace.co.uk/artist-portal/settings:0
+[    2783ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ https://www.wallplace.co.uk/artist-portal/settings:0
+[    2783ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "new-password"): (More info: https://goo.gl/9p2vKq) %o @ https://www.wallplace.co.uk/artist-portal/settings:0
+[   23021ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=password:0
