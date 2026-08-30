@@ -19,6 +19,7 @@ import { partitionBulkAddDrafts } from "./bulk-add-validation";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
+import { WORKS_CAP } from "@/lib/pricing";
 
 interface SizeEntry {
   label: string;
@@ -205,7 +206,11 @@ const statusColors: Record<string, string> = {
   Sold: "bg-border/50 text-muted",
 };
 
-const PORTFOLIO_LIMITS: Record<string, number> = { core: 8, premium: 20, pro: 9999 };
+// Sourced from WORKS_CAP (@/lib/pricing): Pro is a real ceiling of 50 works,
+// not unlimited. Previously this map hard-coded pro: 9999 as a stand-in for
+// "unlimited", which both drifted from the actual plan cap and meant the
+// at-limit upsell logic below could never fire for a Pro artist.
+const PORTFOLIO_LIMITS = WORKS_CAP;
 
 // Total images allowed per artwork (primary + extras) by subscription tier.
 const IMAGE_LIMITS: Record<string, number> = { core: 3, premium: 5, pro: 10 };
@@ -1899,12 +1904,12 @@ export default function PortfolioPage() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                {/* Pro tier is effectively unlimited (limit = 9999),
-                    which surfaced as "15/9999 works" in QA, looking
-                    like an arbitrary 4-digit cap. Drop the denominator
-                    on tiers that don't have a meaningful ceiling and
-                    just show the live count, the upgrade message
-                    branch above continues to handle Core/Premium. */}
+                {/* All tiers, including Pro, now carry a real ceiling from
+                    WORKS_CAP (Pro is 50, not unlimited), so the at-limit
+                    upsell branch above can fire for Pro too. The >= 1000
+                    denominator-drop below is defensive only: no plan's cap
+                    reaches it today, but it's kept in case a future tier
+                    genuinely has no meaningful ceiling. */}
                 <span className="text-xs text-muted">
                   {limit >= 1000 ? `${works.length} works` : `${works.length}/${limit} works`}
                 </span>

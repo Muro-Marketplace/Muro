@@ -17,6 +17,7 @@ import { slugify } from "@/lib/slugify";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
 import { artistWorkInputSchema } from "@/lib/validations";
+import { WORKS_CAP } from "@/lib/pricing";
 
 // GET: fetch works for the current user's artist profile
 export async function GET(request: Request) {
@@ -88,10 +89,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // Posting limit per tier (#24). Core 8, Premium 20, Pro 50.
-    // Updates to an existing work don't count against the cap,
-    // only new IDs do.
-    const POST_LIMITS: Record<string, number> = { core: 8, premium: 20, pro: 50 };
+    // Posting limit per tier (#24). Core 8, Premium 20, Pro 50, sourced from
+    // WORKS_CAP (@/lib/pricing) so this cannot drift from the single source
+    // of truth for plan pricing/limits. Updates to an existing work don't
+    // count against the cap, only new IDs do.
+    const POST_LIMITS = WORKS_CAP;
     const postPlan = (result.profile.subscription_plan || "core").toLowerCase();
     const postLimit = POST_LIMITS[postPlan] ?? POST_LIMITS.core;
 
