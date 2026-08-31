@@ -44,6 +44,9 @@ const STATUS_LABELS: Record<string, string> = {
   paused: "Paused",
 };
 
+// The statuses an admin may SET. past_due and paused are deliberately absent:
+// the daily managed-curation reconciler owns them, and offering them here would
+// invite an admin to hand-set a value the next reconciler run overwrites.
 const STATUS_ORDER: string[] = [
   "pending_payment",
   "awaiting_quote",
@@ -54,6 +57,48 @@ const STATUS_ORDER: string[] = [
   "cancelled",
   "refunded",
 ];
+
+// G10: a row sitting on a reconciler-owned status matched no <option>, so the
+// controlled select rendered blank and looked like an unset field. Worse, the
+// first change an admin made to any other field's row still submitted whatever
+// the browser had fallen back to. The row's own status is now always present,
+// as a disabled option, so it displays correctly and cannot be re-picked.
+function statusOptions(current: string): { value: string; label: string; disabled: boolean }[] {
+  const options = STATUS_ORDER.map((s) => ({
+    value: s,
+    label: STATUS_LABELS[s] || s,
+    disabled: false,
+  }));
+  if (!STATUS_ORDER.includes(current)) {
+    options.unshift({
+      value: current,
+      label: `${STATUS_LABELS[current] || current} (set by billing)`,
+      disabled: true,
+    });
+  }
+  return options;
+}
+
+// What POST /api/admin/curation/refund reports back.
+interface RefundOutcome {
+  refunded?: boolean;
+  refundedPence?: number;
+  subscriptionCancelled?: boolean;
+  status?: string;
+}
+
+function describeRefund(venueName: string, res: RefundOutcome): string {
+  if (res.refunded) {
+    const amount = ((res.refundedPence ?? 0) / 100).toFixed(2);
+    return res.subscriptionCancelled
+      ? `Subscription cancelled. Refunded £${amount} to ${venueName}.`
+      : `Refunded £${amount} to ${venueName}.`;
+  }
+  if (res.subscriptionCancelled) {
+    return `Subscription cancelled, there was nothing to refund. ${venueName} has no paid invoice on this request.`;
+  }
+  return `No money moved. ${venueName} is now marked ${res.status || "cancelled"}.`;
+}
 
 const TIER_LABELS: Record<string, string> = {
   single_wall: "Single wall",
@@ -86,6 +131,7 @@ export default function AdminCurationPage() {
   const [requests, setRequests] = useState<CurationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -135,6 +181,12 @@ export default function AdminCurationPage() {
   // control that actually returns money, so it confirms with the amount and
   // reloads the list afterwards rather than guessing the resulting status
   // (refunded, or cancelled when a managed row had no paid invoice).
+  //
+  // G12: the response used to be discarded. The API distinguishes "£120 went
+  // back to the venue" from "billing stopped, there was no paid invoice to
+  // refund", and both land the row on a different status, so an admin who only
+  // saw "Cancelled" could not tell whether money had moved. Report what the
+  // API actually said.
   async function refundRow(r: CurationRow) {
     const what = r.stripe_subscription_id
       ? `cancel the subscription and refund the last paid invoice for ${r.venue_name}`
@@ -142,11 +194,13 @@ export default function AdminCurationPage() {
     if (!window.confirm(`This will ${what}. Continue?`)) return;
     setSavingId(r.id);
     setError(null);
+    setOutcome(null);
     try {
-      await mutate("/api/admin/curation/refund", {
+      const res = await mutate<RefundOutcome>("/api/admin/curation/refund", {
         method: "POST",
         body: JSON.stringify({ id: r.id }),
       });
+      setOutcome(describeRefund(r.venue_name, res));
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.code || "Refund failed." : "Network error. Please try again.");
@@ -172,6 +226,11 @@ export default function AdminCurationPage() {
       </div>
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {outcome && (
+        <p className="text-sm text-foreground bg-accent/5 border border-accent/20 px-3 py-2 rounded-sm mb-4">
+          {outcome}
+        </p>
+      )}
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : requests.length === 0 ? (
@@ -231,14 +290,24 @@ export default function AdminCurationPage() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] text-muted uppercase tracking-wider mb-1">Status</label>
+                        <label
+                          htmlFor={`curation-status-${r.id}`}
+                          className="block text-[11px] text-muted uppercase tracking-wider mb-1"
+                        >
+                          Status
+                        </label>
                         <select
+                          id={`curation-status-${r.id}`}
                           value={r.status}
                           onChange={(e) => updateRow(r.id, { status: e.target.value })}
                           disabled={savingId === r.id}
                           className="w-full px-3 py-2 bg-white border border-border rounded-sm text-sm cursor-pointer focus:outline-none focus:border-accent/60 disabled:opacity-60"
                         >
-                          {STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                          {statusOptions(r.status).map((o) => (
+                            <option key={o.value} value={o.value} disabled={o.disabled}>
+                              {o.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div>

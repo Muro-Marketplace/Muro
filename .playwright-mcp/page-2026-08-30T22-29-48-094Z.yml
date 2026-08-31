@@ -1,0 +1,100 @@
+- generic [active] [ref=f117e1]:
+  - generic [ref=f117e2]:
+    - link "Skip to content" [ref=f117e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f117e4]:
+      - generic [ref=f117e6]:
+        - link "Wallplace" [ref=f117e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f117e8]:
+          - link "Marketplace" [ref=f117e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f117e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f117e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f117e13] [cursor=pointer]
+        - generic [ref=f117e16]:
+          - link "Saved" [ref=f117e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f117e21] [cursor=pointer]
+          - button "Notifications" [ref=f117e26] [cursor=pointer]
+          - generic [ref=f117e30]:
+            - link "Venue Portal" [ref=f117e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f117e32] [cursor=pointer]
+          - button "Logout" [ref=f117e35] [cursor=pointer]
+    - main [ref=f117e36]:
+      - generic [ref=f117e37]:
+        - complementary [ref=f117e38]:
+          - navigation [ref=f117e39]:
+            - paragraph [ref=f117e41]: Venue Portal
+            - generic [ref=f117e42]:
+              - list [ref=f117e43]:
+                - listitem [ref=f117e44]:
+                  - link "Dashboard" [ref=f117e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f117e46]:
+                  - link "Venue Profile" [ref=f117e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f117e48]:
+                  - link "Messages" [ref=f117e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f117e50]:
+                  - link "Placements" [ref=f117e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f117e52]:
+                  - link "My Offers" [ref=f117e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f117e54]:
+                  - link "My Walls" [ref=f117e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f117e56]:
+                  - link "Saved" [ref=f117e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f117e58]:
+                  - link "QR Labels" [ref=f117e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f117e60]:
+                  - link "Analytics" [ref=f117e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f117e62]:
+                  - link "My Orders" [ref=f117e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f117e65]:
+                - listitem [ref=f117e66]:
+                  - link "Settings" [ref=f117e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f117e68]:
+                  - button "Logout" [ref=f117e69] [cursor=pointer]
+        - generic [ref=f117e72]:
+          - generic [ref=f117e73]:
+            - generic [ref=f117e74]:
+              - heading "Analytics" [level=1] [ref=f117e75]
+              - paragraph [ref=f117e76]: QR scan activity on the artwork displayed in your venue.
+            - button "Last 30 days ▾" [ref=f117e78] [cursor=pointer]
+          - generic [ref=f117e79]:
+            - generic [ref=f117e80]:
+              - paragraph [ref=f117e81]: QR scans
+              - paragraph [ref=f117e82]: …
+              - paragraph [ref=f117e83]: last 30 days
+            - generic [ref=f117e84]:
+              - paragraph [ref=f117e85]: Unique works scanned
+              - paragraph [ref=f117e86]: …
+              - paragraph [ref=f117e87]: across the period
+            - generic [ref=f117e88]:
+              - paragraph [ref=f117e89]: Artists scanned
+              - paragraph [ref=f117e90]: …
+              - paragraph [ref=f117e91]: across the period
+          - generic [ref=f117e92]:
+            - heading "Top scanned works" [level=2] [ref=f117e93]
+            - paragraph [ref=f117e94]: Loading…
+          - generic [ref=f117e95]:
+            - heading "Top scanned artists" [level=2] [ref=f117e96]
+            - paragraph [ref=f117e97]: Loading…
+          - paragraph [ref=f117e99]:
+            - text: Want more scans? Print larger labels with a tagline, or rotate the artwork seasonally so regulars notice something new.
+            - link "Open QR labels →" [ref=f117e100] [cursor=pointer]:
+              - /url: /venue-portal/labels
+    - button "Feedback and feature requests" [ref=f117e101] [cursor=pointer]: Feedback
+  - alert [ref=f117e104]

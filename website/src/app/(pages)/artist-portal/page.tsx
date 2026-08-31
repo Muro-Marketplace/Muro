@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import PlacementActionItems from "@/components/PlacementActionItems";
+import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 import Button from "@/components/Button";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
 import { artistPayoutPounds } from "@/lib/finance/order-money";
 
 interface ActivityItem {
@@ -92,6 +94,10 @@ interface OnboardingItem {
 export default function ArtistPortalPage() {
   const { displayName, user, subscriptionStatus: authSubscriptionStatus, loading: authLoading } = useAuth();
   const [stats, setStats] = useState({ placements: 0, sales: "£0", enquiries: 0, views: 0 });
+  // Venue approaches left this week. The dashboard is where an artist plans
+  // their outreach, so the number belongs here rather than only inside the
+  // request form on Spaces.
+  const allowance = useOutreachAllowance();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("none");
   const [onboardingItems, setOnboardingItems] = useState<OnboardingItem[]>([]);
@@ -105,16 +111,24 @@ export default function ArtistPortalPage() {
   }, []);
 
   useEffect(() => {
-    // Single API call for entire dashboard
+    // Single API call for entire dashboard, plus the Stripe Connect status
+    // for the payouts checklist item (D2): the tick needs the real
+    // "onboarding complete" fact, not the mere existence of an account id,
+    // which is stored the moment onboarding STARTS.
     async function loadDashboard() {
-      const data = await authFetch("/api/dashboard").then((r) => r.json()).catch(() => ({}));
+      const [data, connect] = await Promise.all([
+        authFetch("/api/dashboard").then((r) => r.json()).catch(() => ({})),
+        authFetch("/api/stripe-connect/status")
+          .then((r) => r.json())
+          .catch(() => ({} as { onboardingComplete?: boolean })),
+      ]);
 
       if (data.profile?.subscription_status) setSubscriptionStatus(data.profile.subscription_status);
 
       if (data.stats) {
         setStats({
           placements: data.stats.activePlacements || 0,
-          sales: `\u00a3${(data.stats.totalRevenue || 0).toLocaleString()}`,
+          sales: formatPounds(data.stats.totalRevenue || 0),
           enquiries: data.stats.enquiries || 0,
           views: data.stats.views || 0,
         });
@@ -139,7 +153,10 @@ export default function ArtistPortalPage() {
       const items: OnboardingItem[] = [
         { key: "profile",  label: "Complete your profile",   complete: profileComplete,                                  href: "/artist-portal/profile" },
         { key: "work",     label: "Upload your first work",  complete: worksCount > 0,                                   href: "/artist-portal/portfolio" },
-        { key: "payouts",  label: "Set up payouts",          complete: !!profile.stripe_connect_account_id,              href: "/artist-portal/billing" },
+        // D2: keyed on the status endpoint's onboardingComplete
+        // (charges_enabled && details_submitted), the same fact billing
+        // shows. An account id alone means onboarding merely started.
+        { key: "payouts",  label: "Set up payouts",          complete: connect?.onboardingComplete === true,             href: "/artist-portal/billing" },
         { key: "placement",label: "Get your first placement", complete: placements.some((p: { status: string }) => p.status === "active"), href: "/artist-portal/placements" },
       ];
       setOnboardingItems(items);
@@ -226,7 +243,10 @@ export default function ArtistPortalPage() {
         const time = p.responded_at || p.created_at;
         const venueName = formatName(p.venue);
         const placementLink = `/placements/${encodeURIComponent(p.id)}`;
-        const iAmRequester = p.requester_user_id && p.requester_user_id === myUserId;
+        // F51: dashboard rows are raw placements columns, so the requester
+        // arrives as proposed_by_user_id; requester_user_id is a phantom.
+        const requesterId = p.requester_user_id ?? p.proposed_by_user_id;
+        const iAmRequester = requesterId && requesterId === myUserId;
         if (p.status === "pending" && !iAmRequester) {
           activityItems.push({ id: "p-" + p.id, text: `Placement request: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
         } else if (p.status === "active" && iAmRequester) {
@@ -409,7 +429,9 @@ export default function ArtistPortalPage() {
         {[
           { label: "Active Placements", value: String(stats.placements) },
           { label: "Total Sales", value: stats.sales },
-          { label: "Enquiries This Month", value: String(stats.enquiries) },
+          // D3: /api/dashboard returns an all-time enquiry count (no date
+          // window), so the label must not claim a monthly figure.
+          { label: "Total Enquiries", value: String(stats.enquiries) },
           { label: "Profile Views", value: String(stats.views) },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface border border-border rounded-sm p-5">
@@ -418,6 +440,10 @@ export default function ArtistPortalPage() {
           </div>
         ))}
       </div>
+
+      {/* Venue approaches left this week (renders nothing on an unlimited
+          plan, or before the lookup resolves). */}
+      <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-8" />
 
       {/* Placement Action Items */}
       <PlacementActionItems userId={user?.id} role="artist" />

@@ -1,0 +1,197 @@
+- generic [ref=f15e1]:
+  - generic [ref=f15e2]:
+    - link "Skip to content" [ref=f15e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f15e4]:
+      - generic [ref=f15e6]:
+        - link "Wallplace" [ref=f15e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f15e8]:
+          - link "Marketplace" [ref=f15e9] [cursor=pointer]:
+            - /url: /browse
+          - link "How It Works" [ref=f15e10] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f15e11] [cursor=pointer]:
+            - /url: /blog
+          - link "Spaces" [ref=f15e12] [cursor=pointer]:
+            - /url: /spaces
+        - generic [ref=f15e13]:
+          - link "Login" [ref=f15e14] [cursor=pointer]:
+            - /url: /login
+          - link "Sign Up" [ref=f15e15] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=f15e16]:
+      - generic [ref=f15e17]:
+        - generic [ref=f15e18]:
+          - img "Art studio" [ref=f15e20]
+          - generic [ref=f15e23]:
+            - heading "About Wallplace" [level=1] [ref=f15e24]
+            - paragraph [ref=f15e25]: Wallplace exists because thousands of incredible artworks sit in artists’ studios while thousands of bare walls in cafes could be transformed by them. We make the connection effortless.
+        - generic [ref=f15e28]:
+          - generic [ref=f15e29]:
+            - heading "The Problem We Saw" [level=2] [ref=f15e30]
+            - paragraph [ref=f15e31]: "Walk into most independent cafes, restaurants, or coworking spaces and you will see one of two things: bare walls, or mass-produced prints that could be in any city in the world. Meanwhile, there are some of the most talented emerging artists anywhere, people creating extraordinary work that deserves to be seen."
+            - paragraph [ref=f15e32]: The problem is not a lack of supply or demand. It is the gap between them. Artists do not know which venues want art. Venues do not know where to find artists. And even when they do connect, selecting work, agreeing terms, and keeping the relationship healthy can be overwhelming for both sides.
+          - generic [ref=f15e33]:
+            - heading "What Wallplace Does" [level=2] [ref=f15e34]
+            - paragraph [ref=f15e35]: Wallplace is a curated art placement service. We review and accept artists based on the quality of their work. We match them with venues that suit their style and help both sides agree on terms. Delivery and installation are arranged directly between the artist and the venue.
+            - paragraph [ref=f15e36]: For artists, we provide exhibition space, exposure, and sales opportunities without the cost or commitment of a traditional gallery. For venues, we provide a rotating selection of original, high-quality artwork that transforms their space and creates talking points for their customers, all with no upfront cost and minimal effort.
+        - generic [ref=f15e38]:
+          - generic [ref=f15e39]:
+            - heading "How Curation Works" [level=2] [ref=f15e40]
+            - paragraph [ref=f15e41]: Quality is everything. We are not a marketplace where anyone can list their work. Every artist on Wallplace has been through our review process.
+          - generic [ref=f15e42]:
+            - generic [ref=f15e43]:
+              - generic [ref=f15e44]: "01"
+              - heading "Application" [level=3] [ref=f15e45]
+              - paragraph [ref=f15e46]: Artists submit a portfolio of their best work along with a brief statement about their practice. We review every application personally.
+            - generic [ref=f15e47]:
+              - generic [ref=f15e48]: "02"
+              - heading "Review" [level=3] [ref=f15e49]
+              - paragraph [ref=f15e50]: Our team assesses work based on technical quality, originality, consistency, and suitability for display in commercial spaces. We are looking for work that holds up on a wall.
+            - generic [ref=f15e51]:
+              - generic [ref=f15e52]: "03"
+              - heading "Onboarding" [level=3] [ref=f15e53]
+              - paragraph [ref=f15e54]: Accepted artists work with us to photograph their portfolio, set pricing, and get matched with suitable venues. From there you and the venue arrange the details together.
+        - generic [ref=f15e56]:
+          - heading "What We Believe" [level=2] [ref=f15e57]
+          - generic [ref=f15e58]:
+            - generic [ref=f15e59]:
+              - heading "Art belongs in everyday life" [level=3] [ref=f15e60]
+              - paragraph [ref=f15e61]: You should not need to visit a gallery to experience great art. The cafe where you have your morning coffee, the restaurant where you celebrate an anniversary, the office where you spend your days. These spaces deserve beautiful, original work on their walls.
+            - generic [ref=f15e62]:
+              - heading "Quality over quantity" [level=3] [ref=f15e63]
+              - paragraph [ref=f15e64]: We would rather have 50 exceptional artists than 500 mediocre ones. Our curation process is rigorous because the venues and buyers who trust us deserve the best. Every piece on Wallplace has been reviewed and approved.
+            - generic [ref=f15e65]:
+              - heading "Fair for everyone" [level=3] [ref=f15e66]
+              - paragraph [ref=f15e67]: Artists keep the majority of every sale. Venues get art at no upfront cost. Buyers get original work at fair prices. We take a commission that sustains the service without exploiting anyone in the chain.
+        - generic [ref=f15e70]:
+          - heading "Original Work Only" [level=3] [ref=f15e71]
+          - paragraph [ref=f15e72]: Every piece on Wallplace is original work by a real artist. We do not accept AI-generated art. Our artists invest time, skill, and vision into their craft, and we believe that distinction matters. When you see a photograph on Wallplace, you can trust that a human being stood behind the camera.
+        - generic [ref=f15e75]:
+          - generic [ref=f15e76]:
+            - heading "For Artists" [level=2] [ref=f15e77]
+            - paragraph [ref=f15e78]: Get your work seen by thousands of people in cafes, restaurants, and creative spaces. No gallery fees, no exclusivity.
+            - link "Apply to Join" [ref=f15e79] [cursor=pointer]:
+              - /url: /apply
+          - generic [ref=f15e80]:
+            - heading "For Venues" [level=2] [ref=f15e81]
+            - paragraph [ref=f15e82]: Transform your space with original artwork at no upfront cost. We curate the artists, match them to your venue, and help you agree the terms. You and the artist arrange delivery and installation together.
+            - link "Get Art for Your Space" [ref=f15e83] [cursor=pointer]:
+              - /url: /venues
+    - contentinfo "Site footer" [ref=f15e84]:
+      - generic [ref=f15e85]:
+        - generic [ref=f15e86]:
+          - generic [ref=f15e87]:
+            - link "Wallplace" [ref=f15e88] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f15e89]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f15e90]:
+              - paragraph [ref=f15e91]: Be first to see new works
+              - paragraph [ref=f15e92]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f15e94]:
+                - textbox "your@email.com" [ref=f15e95]
+                - button "Subscribe" [ref=f15e96] [cursor=pointer]
+            - link "Instagram" [ref=f15e97] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f15e102]:
+            - heading "For Artists" [level=4] [ref=f15e103]
+            - list [ref=f15e104]:
+              - listitem [ref=f15e105]:
+                - link "Apply to Join" [ref=f15e106] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f15e107]:
+                - link "Pricing" [ref=f15e108] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f15e109]:
+                - link "Browse Venues" [ref=f15e110] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f15e111]:
+                - link "FAQs" [ref=f15e112] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f15e113]:
+            - heading "For Venues" [level=4] [ref=f15e114]
+            - list [ref=f15e115]:
+              - listitem [ref=f15e116]:
+                - link "Discover Art" [ref=f15e117] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f15e118]:
+                - link "Register Your Venue" [ref=f15e119] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f15e120]:
+                - link "Wallplace Curated" [ref=f15e121] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f15e122]:
+                - link "How It Works" [ref=f15e123] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f15e124]:
+                - link "FAQs" [ref=f15e125] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f15e126]:
+            - heading "Company" [level=4] [ref=f15e127]
+            - list [ref=f15e128]:
+              - listitem [ref=f15e129]:
+                - link "About" [ref=f15e130] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f15e131]:
+                - link "Blog" [ref=f15e132] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f15e133]:
+                - link "How It Works" [ref=f15e134] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f15e135]:
+                - link "Sustainability" [ref=f15e136] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f15e137]:
+                - link "Partner with us" [ref=f15e138] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f15e139]:
+                - link "Contact" [ref=f15e140] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f15e141]:
+                - link "Complaints" [ref=f15e142] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f15e143]:
+                - link "Terms" [ref=f15e144] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f15e145]:
+                - link "Artist Agreement" [ref=f15e146] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f15e147]:
+                - link "Venue Agreement" [ref=f15e148] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f15e149]:
+                - link "Privacy" [ref=f15e150] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f15e151]:
+                - link "Cookies" [ref=f15e152] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f15e153]:
+                - link "Returns & Refunds" [ref=f15e154] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f15e155]:
+                - link "IP Policy" [ref=f15e156] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f15e158]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [active] [ref=f15e159] [cursor=pointer]: Feedback
+    - dialog "Feedback" [ref=f15e163]:
+      - generic [ref=f15e164]:
+        - generic [ref=f15e165]:
+          - paragraph [ref=f15e166]: Wallplace is in early launch. Help shape it.
+          - button "Close feedback panel" [ref=f15e167] [cursor=pointer]: ✕
+        - tablist [ref=f15e168]:
+          - tab "Feature request" [selected] [ref=f15e169] [cursor=pointer]
+          - tab "Feedback" [ref=f15e170] [cursor=pointer]
+      - generic [ref=f15e171]:
+        - generic [ref=f15e172]:
+          - text: Title
+          - textbox "Title" [ref=f15e173]
+        - generic [ref=f15e174]:
+          - text: Description
+          - textbox "Description" [ref=f15e175]
+        - generic [ref=f15e176]:
+          - text: Email (optional)
+          - textbox "Email (optional)" [ref=f15e177]:
+            - /placeholder: So we can reply
+        - button "Send" [ref=f15e179] [cursor=pointer]
+  - alert [ref=f15e162]

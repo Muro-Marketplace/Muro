@@ -76,8 +76,11 @@ export default function CheckoutPage() {
   // so the initial render is already right.
   const allVenueCollect =
     items.length > 0 && items.every((i) => i.lineFulfilment === "collect_venue");
+  // B18: the tile used to print the raw slug ("the-copper-kettle"). Prefer the
+  // display name the line now carries, and fall back to the slug only for
+  // carts built before that field existed.
   const collectVenueName = allVenueCollect
-    ? items[0]?.collectVenueSlug ?? null
+    ? items[0]?.collectVenueName ?? items[0]?.collectVenueSlug ?? null
     : null;
   const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection" | "collect_venue">(
     allVenueCollect ? "collect_venue" : "ship",
@@ -521,6 +524,12 @@ export default function CheckoutPage() {
       if (data.url) {
         // Save shipping to localStorage for confirmation fallback
         localStorage.setItem("wallplace-last-shipping", JSON.stringify(shipping));
+        // B22: the confirmation page's fulfilment notice needs to know
+        // whether anything is actually being shipped. The session API
+        // deliberately returns no fulfilment data (E39), so hand the
+        // chosen method over via localStorage for the immediate
+        // post-checkout render.
+        localStorage.setItem("wallplace-last-fulfilment", fulfilmentMethod);
         window.location.href = data.url;
         // Leave `submitting` true so the button stays disabled while
         // the browser navigates to Stripe. Resetting it here flickers

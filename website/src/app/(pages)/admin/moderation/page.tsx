@@ -132,7 +132,8 @@ export default function AdminModerationPage() {
     let reason: string | undefined;
     if (action === "reject") {
       if (r.entity_type === "blog") {
-        reason = prompt("Reason (visible to the author):") ?? undefined;
+        // G14: the blogs PATCH emails this to the author, so the prompt says so.
+        reason = prompt("Reason (emailed to the author):") ?? undefined;
         if (!reason) return;
       } else {
         const input = prompt("Reason (kept on the queue row, optional):");
@@ -296,7 +297,7 @@ export default function AdminModerationPage() {
                           {r.entity_type === "message"
                             ? "Approve marks the flag as reviewed and fine. Reject records the message as a violation. The message itself stays in the conversation."
                             : r.entity_type === "blog"
-                              ? "Approving publishes the blog. Rejecting records the reason for the author."
+                              ? "Approving publishes the blog and tells the author. Rejecting emails them the reason."
                               : "Approve or reject to clear this from the pending queue."}
                         </p>
                         <div className="flex gap-2 shrink-0">

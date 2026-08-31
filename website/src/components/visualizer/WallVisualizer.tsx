@@ -41,6 +41,7 @@ import {
   pickDefaultSize,
   type SizeVariant,
 } from "@/lib/visualizer/dimensions";
+import { wallPatchBody } from "@/lib/visualizer/wall-save";
 import { defaultFrameConfig } from "@/lib/visualizer/frames";
 import { PRESET_WALLS, getPresetWall } from "@/lib/visualizer/preset-walls";
 import { useAutoSave } from "@/lib/visualizer/use-auto-save";
@@ -185,12 +186,22 @@ function WallVisualizerInner(props: ExtendedProps) {
   const canPersist = Boolean(props.wall && props.initialLayout);
 
   // ── Auto-save ─────────────────────────────────────────────────────
-  // The value we save is the items array + dimensions. Background isn't
-  // editable when persisting (the wall is fixed), but if we ever expose
-  // colour edits on a saved wall we'll wire it through here.
+  // The value we save is the items array, the dimensions and, for preset
+  // walls, the wall colour.
+  //
+  // E35: the colour used to be excluded on the premise that "background isn't
+  // editable when persisting". It is: the config bar leaves the colour
+  // controls enabled on a saved wall, so a recolour updated the canvas, was
+  // never sent, and vanished on the next reload. Uploaded walls carry a photo
+  // rather than a colour, so they contribute nothing here.
   const layoutSnapshot = useMemo(
-    () => ({ items, width_cm: widthCm, height_cm: heightCm }),
-    [items, widthCm, heightCm],
+    () => ({
+      items,
+      width_cm: widthCm,
+      height_cm: heightCm,
+      wall_color_hex: background.kind === "preset" ? background.color_hex : null,
+    }),
+    [items, widthCm, heightCm, background],
   );
 
   // Track the last successfully-saved wall dimensions so the
@@ -200,18 +211,26 @@ function WallVisualizerInner(props: ExtendedProps) {
   // against the stale prop and fire a wall PATCH on every save once
   // dimensions have changed even once. Initialised lazily from the
   // first wall snapshot so a freshly-mounted editor starts in sync.
-  const lastSavedDimsRef = useRef<{ width_cm: number; height_cm: number } | null>(
-    null,
-  );
+  const lastSavedDimsRef = useRef<{
+    width_cm: number;
+    height_cm: number;
+    wall_color_hex: string | null;
+  } | null>(null);
   if (lastSavedDimsRef.current === null && props.wall) {
     lastSavedDimsRef.current = {
       width_cm: props.wall.width_cm,
       height_cm: props.wall.height_cm,
+      wall_color_hex: props.wall.wall_color_hex ?? null,
     };
   }
 
   const saveLayout = useCallback(
-    async (snap: { items: WallItem[]; width_cm: number; height_cm: number }) => {
+    async (snap: {
+      items: WallItem[];
+      width_cm: number;
+      height_cm: number;
+      wall_color_hex: string | null;
+    }) => {
       if (!props.wall || !props.initialLayout) return;
       const headers = {
         "content-type": "application/json",
@@ -237,18 +256,17 @@ function WallVisualizerInner(props: ExtendedProps) {
         lastSavedDimsRef.current ?? {
           width_cm: props.wall.width_cm,
           height_cm: props.wall.height_cm,
+          wall_color_hex: props.wall.wall_color_hex ?? null,
         };
-      const wallDimsChanged =
-        snap.width_cm !== lastSaved.width_cm ||
-        snap.height_cm !== lastSaved.height_cm;
-      if (wallDimsChanged) {
+      // E35: the colour rides the same gate as the dimensions. The decision
+      // itself lives in wallPatchBody so it can be tested without mounting
+      // the editor.
+      const patchBody = wallPatchBody(snap, lastSaved);
+      if (patchBody) {
         const wallRes = await fetch(`/api/walls/${props.wall.id}`, {
           method: "PATCH",
           headers,
-          body: JSON.stringify({
-            width_cm: snap.width_cm,
-            height_cm: snap.height_cm,
-          }),
+          body: JSON.stringify(patchBody),
         });
         if (!wallRes.ok) {
           const txt = await wallRes.text().catch(() => "");
@@ -259,6 +277,7 @@ function WallVisualizerInner(props: ExtendedProps) {
         lastSavedDimsRef.current = {
           width_cm: snap.width_cm,
           height_cm: snap.height_cm,
+          wall_color_hex: snap.wall_color_hex ?? lastSaved.wall_color_hex,
         };
       }
 

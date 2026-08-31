@@ -41,23 +41,17 @@ export const metadata: Metadata = {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     locale: "en_GB",
-    // TODO(brand): drop a 1200x630 PNG at /public/og-image.png. Until
-    // it lands, social cards will 404 the image and fall back to the
-    // text-only embed.
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Wallplace",
-      },
-    ],
+    // No `images` here on purpose. An explicit entry overrides the
+    // opengraph-image file convention, and the /og-image.png this used to
+    // name was never added, so every page advertised an image that 404s.
+    // app/opengraph-image.tsx and app/twitter-image.tsx generate the real
+    // ones, for every route, and a route that wants its own can still
+    // override this per page.
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    images: ["/og-image.png"],
   },
   robots: {
     index: true,

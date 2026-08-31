@@ -11,10 +11,14 @@ import { useState } from "react";
 export default function ConfirmUnsubscribe({
   userId,
   category,
+  signature,
   label,
 }: {
   userId: string;
   category: string;
+  /** A1.3: passed straight through from the link so the POST carries the
+   *  same proof the link did. Null for mail sent before signing existed. */
+  signature?: string | null;
   label: string;
 }) {
   const [state, setState] = useState<"idle" | "working" | "done" | "failed">("idle");
@@ -22,8 +26,9 @@ export default function ConfirmUnsubscribe({
   async function confirm() {
     setState("working");
     try {
+      const sig = signature ? `&s=${encodeURIComponent(signature)}` : "";
       const res = await fetch(
-        `/api/account/email/unsubscribe?u=${encodeURIComponent(userId)}&c=${encodeURIComponent(category)}`,
+        `/api/account/email/unsubscribe?u=${encodeURIComponent(userId)}${sig}&c=${encodeURIComponent(category)}`,
         { method: "POST" },
       );
       setState(res.ok ? "done" : "failed");

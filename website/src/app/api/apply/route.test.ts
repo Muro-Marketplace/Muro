@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 /** The real `artist_applications` columns, from the committed schema snapshot. */
 const insertAttempts: Record<string, unknown>[] = [];
@@ -79,18 +79,16 @@ vi.mock("@/lib/supabase-admin", () => ({
           // hoisted fns.
           select: () => ({
             eq: (column: string) => {
+              // Row G L2366: the route resolves a claimed referral code
+              // against the codes that actually exist before storing it.
+              if (column === "referral_code") {
+                return { maybeSingle: async () => profilesSelectByReferralCodeMock() };
+              }
               if (column === "user_id") {
                 return {
                   maybeSingle: async () => {
                     return profilesSelectMock();
                   },
-                };
-              }
-              // Row G L2366: the route now resolves a claimed referral code
-              // against the codes that actually exist before storing it.
-              if (column === "referral_code") {
-                return {
-                  maybeSingle: async () => profilesSelectByReferralCodeMock(),
                 };
               }
               return {
@@ -183,8 +181,8 @@ beforeEach(() => {
   });
   profilesSelectMock.mockReturnValue({ data: null, error: null });
   profilesSelectBySlugMock.mockReturnValue({ data: null, error: null });
-  // Default: the claimed referral code belongs to a real artist, so the tests
-  // written before the code was validated still exercise the stored path.
+  // Default: the claimed code belongs to a real artist, so the tests written
+  // before the code was validated still exercise the stored path.
   profilesSelectByReferralCodeMock.mockReturnValue({
     data: { referral_code: "WP-ABC123" },
     error: null,
@@ -374,56 +372,98 @@ describe("POST /api/apply records the referral code (migration 109)", () => {
   });
 });
 
-// Production pass, row A L514. The worst-placed defect in the product: leaving
-// the OPTIONAL "primary medium" select blank returned 500 and wrote nothing, at
-// the first step of the artist acquisition funnel. The applicant saw only
-// "Something went wrong. Please try again."
-//
-// Cause: `primary_medium: d.primaryMedium || null` into a column that is NOT
-// NULL with no default. Postgres rejects the whole statement. The same file
-// already had `|| ""` two hundred lines down for the profile bridge, which is
-// what the column needed.
-//
-// `tests/integration/not-null-writes.test.ts` is the ratchet for the class;
-// this is the behaviour test for the instance.
-describe("POST /api/apply and the NOT NULL columns (row A L514)", () => {
-  /** The columns of artist_applications that are NOT NULL with no default. */
-  const REQUIRED = ["name", "email", "location", "primary_medium", "portfolio_link", "artist_statement"];
-
-  it("accepts a blank primary medium and stores an empty string, not null", async () => {
-    const res = await POST(req({ ...VALID_BODY, primaryMedium: "" }));
-
-    expect(res.status).toBe(200);
-    expect(applicationInsertMock.mock.calls[0][0]).toMatchObject({ primary_medium: "" });
+// A50 (QA 2026-08-28). The whole point of auth-gating the application (per
+// the signup/artist doc comment: "reject impersonation, instead of trusting
+// whatever email the form sent") was never enforced: an authed user could
+// file an application, and trigger the acknowledgement email, for any
+// address. When the caller is known, the application email must be theirs.
+describe("POST /api/apply enforces the authed user's email (A50)", () => {
+  it("refuses a signed-in submission for someone else's address", async () => {
+    const res = await POST(req({ ...VALID_BODY, email: "victim@example.com" }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toContain("finlay@example.com");
+    // Nothing is written and nobody is emailed for the impersonated address.
+    expect(applicationInsertMock).not.toHaveBeenCalled();
+    expect(profilesInsertMock).not.toHaveBeenCalled();
+    await flush();
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
-  it("accepts a payload that omits the medium entirely", async () => {
-    const res = await POST(req(VALID_BODY));
-
+  it("matches case-insensitively", async () => {
+    const res = await POST(req({ ...VALID_BODY, email: "FINLAY@Example.com" }));
     expect(res.status).toBe(200);
-    expect(applicationInsertMock.mock.calls[0][0]).toMatchObject({ primary_medium: "" });
+    expect(applicationInsertMock).toHaveBeenCalledTimes(1);
   });
 
-  it("writes neither null nor undefined into any NOT NULL column", async () => {
-    // Every optional field omitted — the shape the form produces when the
-    // applicant fills in only what is marked required.
-    const res = await POST(
-      req({ name: "Finlay Coles", email: "finlay@example.com", location: "London" }),
+  it("leaves the legacy unauthenticated path unchecked", async () => {
+    getAuthenticatedUserMock.mockReturnValue({ user: null, error: { status: 401 } });
+    const res = await POST(req({ ...VALID_BODY, email: "anyone@example.com" }, false));
+    expect(res.status).toBe(200);
+    expect(applicationInsertMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// R4.15 (WS5.5). Both application sends keyed on the bare email address, and
+// email_events keys burn on use: a rejected artist whose old application row
+// was deleted re-applied and triggered neither the confirmation nor the admin
+// alert, silently. The keys now carry the submission's created_at, so each
+// accepted application gets its own pair while double-submits stay covered by
+// the table's unique-email constraint (the 23505 branch skips both sends).
+describe("POST /api/apply application email idempotency keys (R4.15)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keys the receipt and admin ping per submission, not per address", async () => {
+    // Fake only Date so the two submissions carry distinct created_at values
+    // while flush()'s real setTimeout still runs.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-29T09:00:00.000Z"));
+
+    expect((await POST(req())).status).toBe(200);
+    await flush();
+
+    // The re-application: the old row is gone (rejection deleted it), so the
+    // insert succeeds again a day later.
+    vi.setSystemTime(new Date("2026-08-30T09:00:00.000Z"));
+    expect((await POST(req())).status).toBe(200);
+    await flush();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    const [first, second] = sendEmailMock.mock.calls.map(
+      (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
     );
+    expect(first).toMatch(/^artist_application_submitted:finlay@example\.com:.+/);
+    // Fail-before: both keys were the bare address, identical, so the second
+    // application's receipt was suppressed as a duplicate.
+    expect(second).not.toBe(first);
 
+    expect(notifyAdminMock).toHaveBeenCalledTimes(2);
+    const [adminFirst, adminSecond] = notifyAdminMock.mock.calls.map(
+      (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(adminFirst).toMatch(/^admin_new_application:finlay@example\.com:.+/);
+    expect(adminSecond).not.toBe(adminFirst);
+  });
+
+  it("still sends nothing at all on a duplicate submission (unique email)", async () => {
+    applicationInsertMock.mockReturnValue({ error: { code: "23505" } });
+
+    const res = await POST(req());
     expect(res.status).toBe(200);
-    const row = applicationInsertMock.mock.calls[0][0] as Record<string, unknown>;
-    for (const col of REQUIRED) {
-      expect(row[col], `${col} is NOT NULL in production`).not.toBeNull();
-      expect(row[col], `${col} is NOT NULL in production`).not.toBeUndefined();
-    }
+    await flush();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(notifyAdminMock).not.toHaveBeenCalled();
   });
 });
 
 // Row G L2366. Application 29 carried the code `QATESTREF`. No artist owns it
 // (`select count(*) from artist_profiles where referral_code='QATESTREF'` is 0)
-// and it was written to `referred_by_code` anyway, so the admin reviewing the
-// application saw an attribution that could never pay anyone.
+// and it was stored anyway, so the admin reviewing the application saw an
+// attribution that could never pay anyone, and `artist_referrals` held 0 rows
+// across the whole production database.
 describe("POST /api/apply validates the referral code (row G L2366)", () => {
   it("stores a code that a real artist owns", async () => {
     profilesSelectByReferralCodeMock.mockReturnValue({

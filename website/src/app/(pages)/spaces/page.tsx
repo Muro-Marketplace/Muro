@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { geocodePostcode } from "@/lib/geocode";
+import { matchesVenueType } from "@/lib/venue-type-match";
 import { useAuth } from "@/context/AuthContext";
 import {
   persistLocation,
@@ -15,6 +16,7 @@ import SpacesPlacementRequestForm, {
   type SpacesVenueOption,
 } from "@/components/SpacesPlacementRequestForm";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 
 interface ArtistWorkLite {
   id: string;
@@ -84,6 +86,11 @@ function SpacesPageContent() {
 
   const [postcode, setPostcode] = useState("");
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // QA bug 32b: the banner used to render the live input box, so after a failed
+  // lookup it announced "Showing venues near ZZ99 9ZZ" next to "Postcode not
+  // found" — the failure and a success for the same made-up postcode, at once.
+  // This holds the postcode actually geocoded, and only that is ever shown.
+  const [searchedPostcode, setSearchedPostcode] = useState("");
   const [postcodeError, setPostcodeError] = useState(false);
   const [searching, setSearching] = useState(false);
 
@@ -109,6 +116,10 @@ function SpacesPageContent() {
   //   this session, so the card flips to a success state.
   const [myWorks, setMyWorks] = useState<ArtistWorkLite[]>([]);
   const [worksLoading, setWorksLoading] = useState(false);
+  // What the artist has left this week, shown above the venue list so the
+  // limit is visible while they are choosing who to approach, not only once
+  // they have opened a request form.
+  const allowance = useOutreachAllowance();
   const [requestOpenSlug, setRequestOpenSlug] = useState<string | null>(null);
   const [sentRequests, setSentRequests] = useState<Record<string, string>>({});
 
@@ -142,7 +153,11 @@ function SpacesPageContent() {
     const stored = readPersistedCoords();
     if (!stored) return;
     setUserCoords(stored.coords);
-    if (stored.label) setPostcode(stored.label);
+    // A restored search is a SUCCESSFUL one, so the banner may name it.
+    if (stored.label) {
+      setPostcode(stored.label);
+      setSearchedPostcode(stored.label);
+    }
   }, []);
 
   // Venues shouldn't browse other venues, this page is for artists.
@@ -205,6 +220,15 @@ function SpacesPageContent() {
   // button from un-subscribed artists and was reported as a broken
   // CTA.) Customers and venues never see it.
   const canRequestPlacement = userType === "artist";
+  // A15: canMessageVenues admits customers, but the destination ternary below
+  // it was artist-or-venue only, so a customer pressing Message was pushed
+  // into /venue-portal/messages, which their own portal guard turns them away
+  // from. There is nowhere honest to send them instead: the messages API
+  // rejects any account with no artist or venue profile, and
+  // /customer-portal/messages is an explainer rather than an inbox (F15/H8).
+  // So the control is artist-only. Customers keep the card link and "View full
+  // profile", which is how they reach a venue today.
+  const canOpenVenueThread = canMessageVenues && userType === "artist";
 
   async function handlePostcodeSearch() {
     if (!postcode.trim()) return;
@@ -214,8 +238,12 @@ function SpacesPageContent() {
     const coords = await geocodePostcode(trimmed);
     if (coords) {
       setUserCoords(coords);
+      setSearchedPostcode(trimmed);
       persistLocation(coords, trimmed);
     } else {
+      // Leave any previous successful search in place (clearing it would throw
+      // away a good result because of a typo), but never let this failed input
+      // reach the banner.
       setPostcodeError(true);
     }
     setSearching(false);
@@ -223,7 +251,10 @@ function SpacesPageContent() {
 
   const filtered = useMemo(() => {
     let list = venues;
-    if (filterType !== "All") list = list.filter((v) => v.type === filterType);
+    // Bug 3: was `v.type === filterType`, an exact match against free text a
+    // venue writes itself, so "Café / Coffee Shop" was unreachable from the
+    // "Café" chip and 7 of 29 venues could not be filtered to at all.
+    if (filterType !== "All") list = list.filter((v) => matchesVenueType(v.type, filterType));
     if (filterArrangement === "display") list = list.filter((v) => v.interestedInFreeLoan || v.interestedInRevenueShare);
     if (filterArrangement === "revenue") list = list.filter((v) => v.interestedInRevenueShare);
     if (filterArrangement === "purchase") list = list.filter((v) => v.interestedInDirectPurchase);
@@ -240,7 +271,14 @@ function SpacesPageContent() {
         .map((v) => ({ ...v, distance: calcDistance(userCoords.lat, userCoords.lng, v.coordinates!.lat, v.coordinates!.lng) }))
         .filter((v) => v.distance <= maxDistance)
         .sort((a, b) => a.distance - b.distance);
-      const unlocated = list.filter((v) => !v.coordinates);
+      // QA 2026-08-30 bug 30: keeping these is right (see above), but they were
+      // mixed in silently, so a "within 10 miles" search listed a venue 330
+      // miles away with nothing to say why. They are flagged here and labelled
+      // on the card, so the list stops implying they passed a distance check
+      // that never ran on them.
+      const unlocated = list
+        .filter((v) => !v.coordinates)
+        .map((v) => ({ ...v, distanceUnknown: true as const }));
       list = [...located, ...unlocated];
     }
 
@@ -285,8 +323,13 @@ function SpacesPageContent() {
             <div className="mt-4 space-y-3">
               <p className="text-accent text-xs flex items-center justify-center gap-1.5">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                Showing venues near {postcode}
-                <button onClick={() => { setUserCoords(null); setPostcode(""); setMaxDistance(9999); clearPersistedLocation(); }} className="ml-1 text-white/50 underline">clear</button>
+                {/* QA bug 31: with no radius chosen nothing is filtered, only
+                    sorted, so "Showing venues near X" was a false statement
+                    about an unchanged list of every venue. Say which it is. */}
+                {maxDistance >= 9999
+                  ? `Sorted by distance from ${searchedPostcode}`
+                  : `Showing venues within ${maxDistance} miles of ${searchedPostcode}`}
+                <button onClick={() => { setUserCoords(null); setPostcode(""); setSearchedPostcode(""); setMaxDistance(9999); clearPersistedLocation(); }} className="ml-1 text-white/50 underline">clear</button>
               </p>
               {/* Distance toggle */}
               <div className="flex items-center justify-center gap-1.5">
@@ -344,6 +387,7 @@ function SpacesPageContent() {
       {/* Filters */}
       <section className="border-b border-border bg-[#FAF8F5]">
         <div className="max-w-[1200px] mx-auto px-6 py-3">
+          <OutreachAllowanceBadge allowance={allowance} className="mb-2.5" />
           <div className="flex items-center gap-4 overflow-x-auto">
             <div className="flex items-center gap-1.5">
               {VENUE_TYPES.map((t) => (
@@ -479,12 +523,29 @@ function SpacesPageContent() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
                         <h3 className="text-base font-medium text-foreground">
-                          {canSeeDetails ? venue.name : `${venue.type} in ${venue.location}`}
+                          {canSeeDetails
+                            ? venue.name
+                            : /* QA bug 2: "Venue in" with a dangling preposition when a
+                                 venue has not set its type or location. Three of nine
+                                 live venues have no type. */
+                              [venue.type || "Venue", venue.location && `in ${venue.location}`]
+                                .filter(Boolean)
+                                .join(" ")}
                         </h3>
-                        <p className="text-xs text-muted">{venue.type} &middot; {venue.location}</p>
+                        <p className="text-xs text-muted">
+                          {[venue.type, venue.location].filter(Boolean).join(" · ") || "Location not given"}
+                        </p>
                       </div>
                       {"distance" in venue && (
                         <span className="text-xs text-accent font-medium shrink-0">{(venue as DemandVenue & { distance: number }).distance.toFixed(1)} mi</span>
+                      )}
+                      {"distanceUnknown" in venue && (
+                        <span
+                          className="text-[11px] text-muted shrink-0"
+                          title="This venue has not told us exactly where it is, so it is not filtered by distance."
+                        >
+                          Distance unknown
+                        </span>
                       )}
                     </div>
 
@@ -643,16 +704,17 @@ function SpacesPageContent() {
                                   </svg>
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const portalBase = userType === "artist" ? "/artist-portal" : "/venue-portal";
-                                  router.push(`${portalBase}/messages?artist=${venue.slug}&artistName=${encodeURIComponent(venue.name)}`);
-                                }}
-                                className="text-xs font-medium text-muted hover:text-foreground transition-colors"
-                              >
-                                Message
-                              </button>
+                              {canOpenVenueThread && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    router.push(`/artist-portal/messages?artist=${encodeURIComponent(venue.slug)}&artistName=${encodeURIComponent(venue.name)}`);
+                                  }}
+                                  className="text-xs font-medium text-muted hover:text-foreground transition-colors"
+                                >
+                                  Message
+                                </button>
+                              )}
                             </div>
                             <Link href={`/venues/${venue.slug}`} className="text-xs text-muted hover:text-foreground transition-colors">
                               View full profile

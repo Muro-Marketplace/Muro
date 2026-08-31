@@ -160,16 +160,6 @@ describe("PATCH /api/admin/disputes/[id] sends nothing it has no content for", (
     await PATCH(req({ action: "escalate", note: "second opinion" }), ctx);
 
     expect(sendEmail).not.toHaveBeenCalled();
-    expect(updated).toMatchObject({ category: "escalated" });
-  });
-
-  it("emails nobody when the dispute is not attached to an order", async () => {
-    installDb({ dispute: { ...DISPUTE, order_id: null, placement_id: "plc_1" } });
-
-    const res = await PATCH(req(RESOLVE), ctx);
-
-    expect(res.status).toBe(200);
-    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("resolves anyway when the order row has vanished", async () => {
@@ -200,5 +190,104 @@ describe("PATCH /api/admin/disputes/[id] sends nothing it has no content for", (
     const res = await PATCH(req({ action: "resolve" }), ctx);
     expect(res.status).toBe(400);
     expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+// G19. Every notification on this route was gated on `dispute.order_id`, so a
+// placement dispute or one raised from a conversation resolved in silence and
+// the person who opened it had to keep refreshing the page. That is the exact
+// failure the 09 §D.2 fix was meant to end, left in place for half the cases.
+describe("PATCH /api/admin/disputes/[id] resolve on a dispute with no order", () => {
+  const NO_ORDER = { ...DISPUTE, order_id: null, placement_id: "plc_1" };
+
+  beforeEach(() => {
+    installDb({ dispute: NO_ORDER });
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "opener@x.com" } } });
+  });
+
+  it("emails the person who opened it", async () => {
+    const res = await PATCH(req(RESOLVE), ctx);
+
+    expect(res.status).toBe(200);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const sent = vi.mocked(sendEmail).mock.calls[0][0];
+    expect(sent.to).toBe("opener@x.com");
+    expect(sent.template).toBe("operational_dispute_resolved");
+    expect(sent.idempotencyKey).toBe("dispute_resolved:dsp_1:opener");
+  });
+
+  it("puts the admin's decision in the email", async () => {
+    await PATCH(req(RESOLVE), ctx);
+
+    const sent = vi.mocked(sendEmail).mock.calls[0][0];
+    expect(JSON.stringify(sent.react)).toContain("the frame was damaged in transit");
+  });
+
+  it("resolves anyway when the opener's account cannot be read", async () => {
+    getUserByIdMock.mockResolvedValue({ data: { user: null } } as never);
+
+    const res = await PATCH(req(RESOLVE), ctx);
+
+    expect(res.status).toBe(200);
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(recordAdminAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not double-notify a dispute that does have an order", async () => {
+    // The order branch already emails both parties, and the opener is one of
+    // them. Two emails about one decision is the bug this must not introduce.
+    installDb();
+    await PATCH(req(RESOLVE), ctx);
+
+    const templates = vi.mocked(sendEmail).mock.calls.map((c) => c[0].template);
+    expect(templates).toEqual(["order_dispute_resolved", "order_dispute_resolved"]);
+  });
+
+  it("sends nothing on close, which has no outcome text to report", async () => {
+    await PATCH(req({ action: "close" }), ctx);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+});
+
+// G20. `category` is the classification the opener filed under. Escalate
+// overwrote it with the literal "escalated", so the list heading and the
+// list endpoint's category filter both lost the only record of what the
+// dispute was about.
+describe("PATCH /api/admin/disputes/[id] escalate keeps the classification", () => {
+  it("preserves the original category alongside the flag", async () => {
+    installDb({ dispute: { ...DISPUTE, category: "damaged" } });
+
+    await PATCH(req({ action: "escalate", note: "second opinion" }), ctx);
+
+    expect(updated).toMatchObject({ category: "escalated: damaged" });
+  });
+
+  it("reads the category it is about to rewrite", async () => {
+    await PATCH(req({ action: "escalate" }), ctx);
+    expect(selectedColumns.disputes).toContain("category");
+  });
+
+  it("does not stack the flag when a dispute is escalated twice", async () => {
+    installDb({ dispute: { ...DISPUTE, category: "escalated: damaged" } });
+
+    await PATCH(req({ action: "escalate" }), ctx);
+
+    expect(updated).toMatchObject({ category: "escalated: damaged" });
+  });
+
+  it("still flags a dispute that was filed with no category", async () => {
+    installDb({ dispute: { ...DISPUTE, category: null } });
+
+    await PATCH(req({ action: "escalate" }), ctx);
+
+    expect(updated).toMatchObject({ category: "escalated:" });
+  });
+
+  it("leaves the status open, escalation is not a decision", async () => {
+    installDb({ dispute: { ...DISPUTE, category: "damaged" } });
+
+    await PATCH(req({ action: "escalate" }), ctx);
+
+    expect(updated).not.toHaveProperty("status");
   });
 });

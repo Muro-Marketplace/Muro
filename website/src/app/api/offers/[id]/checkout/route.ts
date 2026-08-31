@@ -12,6 +12,7 @@ import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
 import { canReceivePayout } from "@/lib/payouts/capability";
 import { isWorkSold } from "@/lib/work-stock";
+import { isOfferUnpayableAfterExpiry } from "@/lib/offers/expiry";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,9 @@ interface OfferRow {
   amount_pence: number;
   currency: string;
   status: string;
+  /** F41: the response window. Read by isOfferUnpayableAfterExpiry below. */
+  expires_at: string | null;
+  accepted_at: string | null;
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -46,6 +50,43 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
   if (offer.status !== "accepted") {
     return NextResponse.json({ error: "Offer is not in an accepted state" }, { status: 409 });
+  }
+
+  // F41. `expires_at` was stored and read by nothing, so an offer whose window
+  // had closed could still be paid for. The deadline governs the window to
+  // RESPOND, not the window to pay, so a deal accepted while the offer was live
+  // stays payable afterwards; what this stops is a row that ran past its
+  // deadline unaccepted, or one accepted after it lapsed (the PATCH had no gate
+  // until now, so those rows exist).
+  if (isOfferUnpayableAfterExpiry(offer)) {
+    await db
+      .from("purchase_offers")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .eq("id", offer.id)
+      .eq("status", "accepted");
+    return NextResponse.json(
+      {
+        error: "This offer passed its deadline before it was accepted, so it has been closed.",
+        code: "offer_expired",
+      },
+      { status: 409 },
+    );
+  }
+
+  // F49, the far end of the same hole. The legacy existing_works fulfil branch
+  // priced an offer as `?? 0`, and this route built the Stripe line straight
+  // from amount_pence with no positive-amount guard. Stripe would very likely
+  // refuse the zero-value session, but the failure would surface as a raw
+  // gateway error rather than something the venue can act on, and the guard has
+  // to exist here regardless because the bad rows predate the fulfil fix.
+  if (!Number.isFinite(offer.amount_pence) || offer.amount_pence <= 0) {
+    return NextResponse.json(
+      {
+        error: "This offer has no amount on it, so there's nothing to pay. Ask the artist to send a priced offer.",
+        code: "offer_not_priced",
+      },
+      { status: 422 },
+    );
   }
 
   // D7: purchase_offers has no link to stock, so an offer accepted on Monday can
@@ -254,7 +295,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       checkout_kind: "purchase_offer",
     },
     success_url: `${origin}/checkout/confirmation?session_id={CHECKOUT_SESSION_ID}&offer_id=${encodeURIComponent(offer.id)}`,
-    cancel_url: `${origin}/customer-portal/offers`,
+    // B31/F42: the payer on an offer is a venue and their offers live at
+    // /venue-portal/offers. The old /customer-portal/offers has never
+    // existed, so backing out of Stripe landed mid-payment on a 404.
+    cancel_url: `${origin}/venue-portal/offers`,
   });
 
   return NextResponse.json({ url: session.url });

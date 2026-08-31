@@ -897,3 +897,34 @@ describe("POST /api/messages links the unread email to the RECIPIENT's portal", 
     );
   });
 });
+
+describe("POST /api/messages refuses support replies clearly (F50)", () => {
+  it("names the contact form instead of claiming the recipient has no account", async () => {
+    // "wallplace-support" is a system slug: the GET handler special-cases it so
+    // the thread renders as "Wallplace Support", but nothing in src/, supabase/
+    // or scripts/ ever creates a profile row that owns it. The POST resolves
+    // recipients only through artist_profiles / venue_profiles, so every reply
+    // came back 404 "They may not have an account yet. If you want us to invite
+    // them, reply with their email" — advice that makes no sense for the
+    // Wallplace team, and that the inbox invited by leaving the reply box up.
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return chainSelectMaybe({ slug: "alice", user_id: "u-art-a" });
+      return chainSelectMaybe(null);
+    });
+
+    const res = await POST(
+      req({
+        conversationId: "dm-alice__wallplace-support",
+        senderName: "alice",
+        senderType: "artist",
+        recipientSlug: "wallplace-support",
+        content: "Can you help?",
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe("support_thread_readonly");
+    expect(body.error).toContain("/contact");
+  });
+});

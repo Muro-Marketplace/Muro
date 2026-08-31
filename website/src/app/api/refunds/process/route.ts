@@ -142,16 +142,48 @@ export async function POST(request: Request) {
         // half already went through the pipeline as CustomerRefundConfirmation;
         // only the decline had no template, which is what kept the legacy
         // function alive. Both halves are on one pipeline now.
+        // WS6.2 (R6.F4): the decision that STOPS money moving had no bell.
+        // The requester's id first (an artist-raised request bells the
+        // artist), the order's buyer as fallback.
+        const rejectedBellUserId =
+          ((refundReq.requester_user_id || order.buyer_user_id) as string | null) ?? null;
+        if (rejectedBellUserId) {
+          createNotification({
+            userId: rejectedBellUserId,
+            kind: "refund_rejected",
+            title: `Refund request declined on order ${order.id}`,
+            body: reason ? `Reason: ${reason}` : "See the email for details.",
+            link: `/customer-portal?order=${encodeURIComponent(order.id as string)}`,
+            idempotencyKey: `refund_rejected:${refundRequestId}`,
+          }).catch((err) => console.warn("[refunds] rejection bell failed:", err));
+        }
         const declineTo = (requesterEmail || buyerEmailFallback) as string;
+        // R4.17: the greeting used the buyer's SHIPPING name and no userId,
+        // so an artist-raised request rejected by admin opened with the
+        // buyer's name in the artist's inbox, and preference resolution ran
+        // against nobody. Greet the requester; identify the requester.
+        const requesterIsArtist = refundReq.requester_type === "artist";
+        let requesterFirstName =
+          ((order.shipping as { fullName?: string } | null)?.fullName || "there").split(" ")[0];
+        let requesterUserId = (order.buyer_user_id as string | null) ?? undefined;
+        if (requesterIsArtist) {
+          requesterUserId = (order.artist_user_id as string | null) ?? undefined;
+          const { data: artistProfileRow } = await db
+            .from("artist_profiles")
+            .select("name")
+            .eq("user_id", order.artist_user_id as string)
+            .maybeSingle<{ name: string | null }>();
+          requesterFirstName = (artistProfileRow?.name || "there").split(" ")[0];
+        }
         await sendEmail({
           idempotencyKey: `customer_refund_rejected:${refundRequestId}`,
           template: "customer_refund_rejected",
           category: "orders_and_payouts",
           to: declineTo,
+          userId: requesterUserId,
           subject: `Refund decision for order ${order.id}`,
           react: CustomerRefundRejected({
-            firstName:
-              ((order.shipping as { fullName?: string } | null)?.fullName || "there").split(" ")[0],
+            firstName: requesterFirstName,
             orderNumber: order.id as string,
             reason: reason || undefined,
             // C4: the customer's orders live on the /customer-portal dashboard;
@@ -218,11 +250,15 @@ export async function POST(request: Request) {
     const shippingRefundPence = Math.max(0, refundAmountCents - subtotalPence);
 
     // Look up transfers for this order
+    // WS2.2 (audit R3.3/R3.4/R3.6): "failed" is a mid-retry leg the sweep
+    // will pay later and "blocked" is money owed pending payout-readiness,
+    // so both must take the same haircut as "pending"; leaving them out let
+    // a partially refunded order pay the artist in full later.
     const { data: transfers } = await db
       .from("stripe_transfers")
       .select("*")
       .eq("order_id", order.id)
-      .in("status", ["pending", "paid"]);
+      .in("status", ["pending", "failed", "blocked", "paid"]);
 
     // 1. Cancel or reverse transfers
     // F32: if a transfer reversal fails we must NOT proceed to refund the
@@ -231,12 +267,33 @@ export async function POST(request: Request) {
     const failedReversals: string[] = [];
     if (transfers && transfers.length > 0) {
       for (const transfer of transfers) {
-        if (transfer.status === "pending") {
-          // Transfer hasn't been sent yet, cancel it
-          await db
-            .from("stripe_transfers")
-            .update({ status: "cancelled" })
-            .eq("id", transfer.id);
+        if (transfer.status !== "paid") {
+          // Not yet sent. A FULL refund cancels the leg outright. A PARTIAL
+          // refund used to do the same (audit R3.3), confiscating the
+          // artist's entire unpaid leg for a one-line refund; it now takes
+          // the same proportional haircut as the paid-reversal branch below,
+          // and only a leg reduced to nothing is cancelled.
+          if (isFullRefund) {
+            await db
+              .from("stripe_transfers")
+              .update({ status: "cancelled", updated_at: new Date().toISOString() })
+              .eq("id", transfer.id);
+          } else {
+            const base = subtotalPence > 0
+              ? Math.round(transfer.amount_cents * (artworkRefundPence / subtotalPence))
+              : 0;
+            const ship = transfer.recipient_type === "artist" ? shippingRefundPence : 0;
+            const reduceBy = Math.min(transfer.amount_cents, base + ship);
+            const remaining = transfer.amount_cents - reduceBy;
+            await db
+              .from("stripe_transfers")
+              .update(
+                remaining > 0
+                  ? { amount_cents: remaining, updated_at: new Date().toISOString() }
+                  : { status: "cancelled", updated_at: new Date().toISOString() },
+              )
+              .eq("id", transfer.id);
+          }
         } else if (transfer.status === "paid" && transfer.stripe_transfer_id) {
           // Transfer was already sent to Connect account, reverse it
           try {

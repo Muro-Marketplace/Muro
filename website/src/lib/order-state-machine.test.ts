@@ -132,3 +132,22 @@ describe("canTransition()", () => {
     });
   });
 });
+
+// ─── WS3.4 (missing-events row 9): collection orders can complete ───
+describe("collection orders (WS3.4)", () => {
+  it("a collection order can go confirmed → delivered (the handover)", () => {
+    expect(canTransition("confirmed", "delivered", { collection: true }).ok).toBe(true);
+    expect(canTransition("processing", "delivered", { collection: true }).ok).toBe(true);
+  });
+
+  it("a shipped-fulfilment order still cannot skip to delivered", () => {
+    expect(canTransition("confirmed", "delivered").ok).toBe(false);
+    expect(canTransition("confirmed", "delivered", { collection: false }).ok).toBe(false);
+  });
+
+  it("the collection edge opens delivery only, nothing else", () => {
+    expect(canTransition("confirmed", "shipped", { collection: true }).ok).toBe(false);
+    expect(canTransition("delivered", "confirmed", { collection: true }).ok).toBe(false);
+    expect(canTransition("cancelled", "delivered", { collection: true }).ok).toBe(false);
+  });
+});

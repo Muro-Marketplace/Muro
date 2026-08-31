@@ -127,7 +127,12 @@ export default function CuratedClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const cancelled = searchParams.get("cancelled") === "1";
-  const { userType, loading: authLoading } = useAuth();
+  // E37: the session is read here so a signed-in venue's curation submission
+  // is attributed to them. The POST used to go out with Content-Type alone,
+  // and /api/curation resolves requester_user_id solely from a bearer token,
+  // so every submission was stored anonymous even when the venue was logged
+  // in, and nothing tied the request back to their account.
+  const { userType, loading: authLoading, session } = useAuth();
 
   const [selectedTier, setSelectedTier] = useState<CuratedTierKey | null>(null);
   const [form, setForm] = useState({
@@ -222,7 +227,14 @@ export default function CuratedClient() {
     try {
       const res = await fetch("/api/curation", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // Anonymous submissions stay supported: with no session the header
+          // is simply absent, which is the route's existing path.
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
         body: JSON.stringify({
           tier: selectedTier,
           venueName: form.venueName,

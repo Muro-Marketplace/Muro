@@ -6,42 +6,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
-import { isFlagOn } from "@/lib/feature-flags";
+import { artistPortalNav } from "@/lib/portal-nav";
 
-// Nav order: Dashboard → Profile / Portfolio → Messages → Placements → rest.
-// (See plan item #8, Profile first, then Messages, then Placements.)
-//
-// Settings used to live alongside the rest in the primary list with
-// "Browse Site" relegated to a secondary section. Browse-Site was
-// noise: every artist already has the global header link to leave
-// the portal, so a duplicate sidebar entry served no purpose. We
-// dropped it and moved Settings into the secondary slot so it sits
-// under a divider, visually separated from the main workflow links
-//, matches the pattern used in venue-portal.
-const navItems = [
-  { label: "Dashboard", href: "/artist-portal" },
-  { label: "Edit Profile", href: "/artist-portal/profile" },
-  { label: "My Portfolio", href: "/artist-portal/portfolio" },
-  { label: "Messages", href: "/artist-portal/messages" },
-  { label: "Placements", href: "/artist-portal/placements" },
-  { label: "My Offers", href: "/artist-portal/offers" },
-  { label: "Collections", href: "/artist-portal/collections" },
-  { label: "Saved", href: "/artist-portal/saved" },
-  { label: "Orders", href: "/artist-portal/orders" },
-  { label: "QR Labels", href: "/artist-portal/labels" },
-  { label: "Social Posts", href: "/artist-portal/posts" },
-  // Phase 2.7 I1: artist blog editor. bug-12: only shown when BLOGS_V1 is on.
-  // Without this, prod (where the flag is off) advertised a Blogs entry point
-  // whose editor 403s on every save. The three blog pages notFound() as well,
-  // so the gate holds even if someone types the URL.
-  ...(isFlagOn("BLOGS_V1") ? [{ label: "Blogs", href: "/artist-portal/blogs" }] : []),
-  { label: "Analytics", href: "/artist-portal/analytics" },
-  { label: "Billing", href: "/artist-portal/billing" },
-];
-
-const secondaryItems = [
-  { label: "Settings", href: "/artist-portal/settings" },
-];
+// H6: the nav lists moved to src/lib/portal-nav.ts. The header's portal
+// dropdown kept a second hand-written copy of them and had silently drifted
+// (it was missing Enquiries, My Offers, Social Posts and Blogs). Both read the
+// same module now. Ordering and the reasoning behind each entry live there.
+const { primary: navItems, secondary: secondaryItems } = artistPortalNav();
 
 // All navigable artist-portal pages: used for the document.title sync
 // below so every page reads as "<Section> | Artist Portal | Wallplace"

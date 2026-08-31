@@ -12,12 +12,13 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock, rpcMock } =
+const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock, rpcMock, cancelPaidLoanMock } =
   vi.hoisted(() => ({
   fromMock: vi.fn(),
   getUserByIdMock: vi.fn(),
   nextEvent: { value: null as unknown },
   paidLoanDeletedMock: vi.fn(async () => {}),
+  cancelPaidLoanMock: vi.fn(async () => ({ status: "cancelled" })),
   curationDeletedMock: vi.fn(async () => {}),
   rpcMock: vi.fn(
     async (): Promise<{ data: unknown; error: { message: string } | null }> => ({
@@ -40,6 +41,7 @@ vi.mock("@/lib/placements/paid-loan-billing", () => ({
   handleInvoicePaid: vi.fn(async () => false),
   handleInvoicePaymentFailed: vi.fn(async () => false),
   handleSubscriptionDeleted: paidLoanDeletedMock,
+  cancelPaidLoanBilling: cancelPaidLoanMock,
 }));
 vi.mock("@/lib/curation/billing", () => ({
   handleCurationInvoicePaid: vi.fn(async () => false),
@@ -127,6 +129,8 @@ function installDb(opts: { profile?: unknown } = {}) {
     update: () => ({ eq: async () => ({ error: null }) }),
     upsert: async () => ({ error: null }),
     insert: async () => ({ error: null, data: null }),
+    // The 500 path releases the webhook dedup claim.
+    delete: () => ({ eq: async () => ({ error: null }) }),
   }));
 }
 
@@ -454,6 +458,88 @@ describe("customer.subscription.deleted reaches all three reconcilers (D13)", ()
 // half that actually happened — its select named `free_until` before migration
 // 115 created it, so the whole statement was rejected and the programme never
 // credited anyone.
+describe("past_due recovery tells the artist (WS4.4 return half)", () => {
+  it("an invoice.paid that recovers past_due sends subscription_recovered, keyed on the invoice", async () => {
+    installDb({ profile: { id: "ap-1", user_id: "u-artist", name: "Maya Chen", subscription_status: "past_due", subscription_plan: "pro" } });
+    nextEvent.value = event("invoice.paid", { id: "in_rec_1", customer: "cus_1", billing_reason: "subscription_cycle", amount_paid: 0 });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "subscription_recovered");
+    expect(sends).toHaveLength(1);
+    expect(sends[0].idempotencyKey).toBe("subscription_recovered:in_rec_1");
+  });
+
+  it("an already-active subscriber gets no recovery email", async () => {
+    installDb({ profile: { id: "ap-1", user_id: "u-artist", name: "Maya Chen", subscription_status: "active", subscription_plan: "pro" } });
+    nextEvent.value = event("invoice.paid", { id: "in_rec_2", customer: "cus_1", billing_reason: "subscription_cycle", amount_paid: 0 });
+    await POST(post());
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "subscription_recovered");
+    expect(sends).toHaveLength(0);
+  });
+});
+
+describe("async payment failure tells the buyer (WS1.5)", () => {
+  it("emails the buyer once, keyed on the session; no order is touched", async () => {
+    installDb();
+    nextEvent.value = event("checkout.session.async_payment_failed", {
+      id: "cs_async_1",
+      mode: "payment",
+      customer_email: "jo@x.com",
+      customer_details: { email: "jo@x.com", name: "Jo Buyer" },
+      metadata: { kind: "cart_checkout" },
+    });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "customer_payment_failed");
+    expect(sends).toHaveLength(1);
+    expect(sends[0].to).toBe("jo@x.com");
+    expect(sends[0].idempotencyKey).toBe("async_payment_failed:cs_async_1");
+  });
+
+  it("a non-cart kind (curation, offer) is not the cart's business", async () => {
+    installDb();
+    nextEvent.value = event("checkout.session.async_payment_failed", {
+      id: "cs_async_2",
+      mode: "payment",
+      customer_email: "jo@x.com",
+      metadata: { kind: "curation_request" },
+    });
+    await POST(post());
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "customer_payment_failed");
+    expect(sends).toHaveLength(0);
+  });
+});
+
+describe("recurring-invoice handler throws answer 500 (WS1.1 second half)", () => {
+  it("a paid-loan invoice.paid throw releases the claim via 500 so Stripe redelivers", async () => {
+    // Swallowing this used to keep the dedup claim: a transient DB fault
+    // during the artist-share leg silently lost a month's share forever.
+    installDb();
+    const { handleInvoicePaid } = await import("@/lib/placements/paid-loan-billing");
+    vi.mocked(handleInvoicePaid).mockRejectedValueOnce(new Error("db blink"));
+    nextEvent.value = event("invoice.paid", { id: "in_1", customer: "cus_1" });
+    const res = await POST(post());
+    expect(res.status).toBe(500);
+  });
+
+  it("a curation invoice.payment_failed throw answers 500 too", async () => {
+    installDb();
+    const { handleCurationInvoiceFailed } = await import("@/lib/curation/billing");
+    vi.mocked(handleCurationInvoiceFailed).mockRejectedValueOnce(new Error("db blink"));
+    nextEvent.value = event("invoice.payment_failed", { id: "in_2", customer: "cus_1" });
+    const res = await POST(post());
+    expect(res.status).toBe(500);
+  });
+});
+
 describe("customer.subscription.created credits the referrer atomically", () => {
   beforeEach(() => {
     rpcMock.mockClear();
@@ -489,6 +575,28 @@ describe("customer.subscription.created credits the referrer atomically", () => 
     nextEvent.value = event("customer.subscription.created", subscription({ status: "incomplete" }));
     await POST(post());
     expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it("WS3.5: the referrer is emailed when the credit lands, keyed per referred artist", async () => {
+    nextEvent.value = event("customer.subscription.created", subscription());
+    await POST(post());
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "referral_credit_granted");
+    expect(sends).toHaveLength(1);
+    expect(sends[0].to).toBe("maya@example.com");
+    // referred.id: the RPC guard credits each referred artist exactly once.
+    expect(sends[0].idempotencyKey).toBe("referral_credit:u-artist");
+  });
+
+  it("WS3.5: no grant email when the RPC says nothing was credited", async () => {
+    rpcMock.mockResolvedValueOnce({ data: [{ credited: false }], error: null });
+    nextEvent.value = event("customer.subscription.created", subscription());
+    await POST(post());
+    const sends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "referral_credit_granted");
+    expect(sends).toHaveLength(0);
   });
 
   it("still answers 200 when the credit RPC fails", async () => {
@@ -574,7 +682,7 @@ describe("a branch that throws releases the event-dedup claim", () => {
 // number at their counter.
 describe("checkout.session.completed books a collect_venue order", () => {
   const CART_ROW = {
-    cart: [{ workId: "w-1", title: "Vietnamese Village", artistSlug: "fin-coles", price: 100, quantity: 1 }],
+    cart: [{ workId: "w-1", title: "Vietnamese Village", artistSlug: "fin-coles", price: 100, quantity: 1, collectPlacementId: "p-wall" }],
     shipping: {
       fullName: "Jo Bloggs",
       email: "jo@x.com",
@@ -590,10 +698,12 @@ describe("checkout.session.completed books a collect_venue order", () => {
 
   let orderInsert: Record<string, unknown> | null = null;
   const workFlagUpdates: Array<Record<string, unknown>> = [];
+  const placementUpdates: Array<Record<string, unknown>> = [];
 
   function setupCartDb(shippingOverride?: Record<string, unknown>) {
     orderInsert = null;
     workFlagUpdates.length = 0;
+    placementUpdates.length = 0;
     const shippingRow = shippingOverride ?? CART_ROW.shipping;
     fromMock.mockImplementation((table: string) => {
       const chain: Record<string, unknown> = {
@@ -674,7 +784,16 @@ describe("checkout.session.completed books a collect_venue order", () => {
         return { select: () => c };
       }
       if (table === "placements") {
-        return { select: () => chain, update: () => ({ eq: async () => ({ error: null }) }) };
+        return {
+          select: () => chain,
+          update: (row: Record<string, unknown>) => {
+            placementUpdates.push(row);
+            return {
+              eq: async () => ({ error: null }),
+              in: async () => ({ error: null }),
+            };
+          },
+        };
       }
       return {
         select: () => chain,
@@ -757,11 +876,169 @@ describe("checkout.session.completed books a collect_venue order", () => {
     expect(venueSends).toHaveLength(0);
   });
 
-  it("clears available_in_store on the sold works, and nothing else", async () => {
+  it("a THROW inside the cart branch answers 500 and releases the claim (WS1.1, audit F1)", async () => {
+    // The audit's worst shape: money taken, an exception between the
+    // settlement gate and completion (here: the profile lookup that feeds
+    // buildArtistLegs rejects), and the old catch swallowed it into a 200
+    // that kept the dedup claim, so Stripe never retried.
+    const released: string[] = [];
+    setupCartDb();
+    nextEvent.value = completedSession();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") {
+        return {
+          insert: async () => ({ error: null }),
+          delete: () => ({ eq: async (_c: string, id: string) => { released.push(id); return { error: null }; } }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return { select: () => ({ in: async () => { throw new Error("transient db fault"); }, eq: () => ({ maybeSingle: async () => ({ data: { user_id: "u" } }) }) }) };
+      }
+      return base(table);
+    });
+
+    const res = await POST(post());
+    expect(res.status).toBe(500);
+    expect(released).toHaveLength(1);
+    expect(orderInsert).toBeNull();
+  });
+
+  it("without a QR scan: venue gets the notice and the offer clears, but NO revenue share (owner ruling)", async () => {
+    // The 24h attribution token is the ONLY road to a venue share; a buyer
+    // who never scanned still triggers the physical-world consequences.
+    setupCartDb();
+    nextEvent.value = completedSession();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "cart_sessions") {
+        const c: Record<string, unknown> = {
+          maybeSingle: async () => ({
+            data: {
+              stripe_session_id: "cs_1",
+              cart: CART_ROW.cart.map((l) => ({ ...l, lineFulfilment: "collect_venue", collectPlacementId: "p-1" })),
+              shipping: CART_ROW.shipping,
+              source: "direct",
+              venue_slug: null,
+              artist_slugs: ["fin-coles"],
+              expected_subtotal_pence: 10000,
+              expected_shipping_pence: 0,
+              artist_shipping_pence: {},
+            },
+            error: null,
+          }),
+        };
+        c.eq = () => c;
+        c.gt = () => c;
+        return { select: () => c, update: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      if (table === "placements") {
+        const chain: Record<string, unknown> = {
+          maybeSingle: async () => ({ data: null, error: null }),
+          order: async () => ({ data: [], error: null }),
+          then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+          limit: async () => ({ data: [{ venue_slug: "the-copper-kettle" }], error: null }),
+        };
+        chain.eq = () => chain;
+        chain.in = () => chain;
+        return {
+          select: () => chain,
+          update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
+        };
+      }
+      return base(table);
+    });
+
     await POST(post());
-    // The wall piece sold; the tick box comes off so the collect CTA
-    // disappears, while online availability follows the stock decrement.
+
+    expect(orderInsert).toBeTruthy();
+    expect(Number(orderInsert!.venue_revenue)).toBe(0);
+    const venueSends = vi.mocked(sendEmail).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.template === "venue_collection_pending");
+    expect(venueSends).toHaveLength(1);
+    expect(venueSends[0].to).toBe("venue@x.com");
+  });
+
+  it("clears the placement's off-the-wall offer AND the legacy work flag on sale", async () => {
+    await POST(post());
+    // The wall piece sold: the placement's offer (121) comes down so the CTA
+    // disappears, the legacy tick box (120) is cleared, and online
+    // availability follows the normal stock decrement untouched.
+    expect(placementUpdates).toContainEqual({ in_store_price: null, in_store_frame_included: false });
     expect(workFlagUpdates).toEqual([{ available_in_store: false }]);
+  });
+
+  it("bug 20: an empty artist_slugs falls back to the cart line, so the order is not orphaned", async () => {
+    // Production holds one order booked with a NULL artist: money taken, the
+    // print on nobody's Orders queue, nobody told to post it. The cart LINES
+    // named the artist the whole time.
+    setupCartDb();
+    nextEvent.value = completedSession();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "cart_sessions") {
+        const c: Record<string, unknown> = {
+          maybeSingle: async () => ({
+            data: {
+              stripe_session_id: "cs_1",
+              cart: CART_ROW.cart,
+              shipping: CART_ROW.shipping,
+              source: CART_ROW.source,
+              venue_slug: CART_ROW.venue_slug,
+              artist_slugs: [],
+              expected_subtotal_pence: CART_ROW.expected_subtotal_pence,
+              expected_shipping_pence: CART_ROW.expected_shipping_pence,
+              artist_shipping_pence: {},
+            },
+            error: null,
+          }),
+        };
+        c.eq = () => c;
+        c.gt = () => c;
+        return { select: () => c, update: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      return base(table);
+    });
+
+    await POST(post());
+    expect(orderInsert).toBeTruthy();
+    expect(orderInsert!.artist_slug).toBe("fin-coles");
+  });
+
+  it("WS3.3: an off-wall sale ENDS the placement - sold, billing cancelled, stamps cleared", async () => {
+    // Before this, nothing ever set a placement to "sold": an off-wall sale
+    // left the placement active forever, and a paid-loan venue kept paying a
+    // monthly display fee for a piece that had left the arrangement.
+    setupCartDb();
+    nextEvent.value = completedSession();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        const chain: Record<string, unknown> = {
+          maybeSingle: async () => ({ data: null, error: null }),
+          order: async () => ({ data: [], error: null }),
+          limit: async () => ({ data: [{ venue_slug: "the-copper-kettle" }], error: null }),
+          then: (resolve: (v: unknown) => unknown) =>
+            resolve({ data: [{ id: "p-wall", status: "active" }], error: null }),
+        };
+        chain.eq = () => chain;
+        chain.in = () => chain;
+        return {
+          select: () => chain,
+          update: (row: Record<string, unknown>) => {
+            placementUpdates.push(row);
+            return { eq: async () => ({ error: null }), in: async () => ({ error: null }) };
+          },
+        };
+      }
+      return base(table);
+    });
+
+    await POST(post());
+    expect(placementUpdates).toContainEqual({ status: "sold" });
+    expect(cancelPaidLoanMock).toHaveBeenCalledWith("p-wall", expect.anything());
+    expect(workFlagUpdates).toContainEqual({ placed_at_venue: null, current_placement_id: null });
   });
 
   it("books it with zero shipping cost", async () => {
@@ -771,5 +1048,167 @@ describe("checkout.session.completed books a collect_venue order", () => {
 
   beforeEach(() => {
     nextEvent.value = completedSession();
+  });
+});
+
+// WS2.1 (audit R3.1 CRITICAL). transfer.reversed used to write the RETRYABLE
+// `failed` status, and the daily sweep then re-executed the full transfer once
+// Stripe's 24h idempotency key lapsed: every reversal became a scheduled
+// double payment. A reversal is terminal.
+describe("transfer.reversed is terminal", () => {
+  it("writes status reversed, never failed", async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") {
+        return { insert: async () => ({ error: null }), delete: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      if (table === "stripe_transfers") {
+        return { update: (row: Record<string, unknown>) => { writes.push(row); return { eq: async () => ({ error: null }) }; } };
+      }
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+      };
+    });
+    nextEvent.value = event("transfer.reversed", { id: "tr_1", amount: 1000 });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    expect(writes).toEqual([{ status: "reversed" }]);
+  });
+});
+
+// ─── WS1.2/1.3/1.4: chargebacks and dashboard refunds reach the books ───
+//
+// Before 2026-08-28 charge.dispute.* and charge.refunded fell through to the
+// default 200: the platform ate chargebacks while still paying artists, and a
+// dashboard refund left legs paying, stock sold and the order lying.
+import { stripe as stripeMockedModule } from "@/lib/stripe";
+import { sendAdminAlert as adminAlertMock } from "@/lib/email/admin-alert";
+
+describe("chargebacks and dashboard refunds (WS1.2/1.3/1.4)", () => {
+  const ORDER = { id: "WS-DISPUTED1", status: "delivered", delivered_at: "2026-08-20T00:00:00Z", buyer_email: "buyer@x.com", artist_slug: "fin-coles", items: [{ workId: "w-1", quantity: 2 }], total: 100 };
+  let transferUpdates: Array<{ row: Record<string, unknown>; filters: string[] }>;
+  let orderUpdates: Array<Record<string, unknown>>;
+  let paidLegs: Array<{ id: string; stripe_transfer_id: string | null }>;
+  let orderRow: Record<string, unknown> | null;
+
+  function installMoneyDb() {
+    transferUpdates = [];
+    orderUpdates = [];
+    paidLegs = [];
+    orderRow = { ...ORDER };
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") {
+        return { insert: async () => ({ error: null }), delete: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      if (table === "orders") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: orderRow, error: null }) }) }),
+          update: (row: Record<string, unknown>) => { orderUpdates.push(row); return { eq: async () => ({ error: null }) }; },
+        };
+      }
+      if (table === "stripe_transfers") {
+        const filters: string[] = [];
+        const updChain = (row: Record<string, unknown>) => {
+          const c: Record<string, unknown> = {};
+          const push = (name: string) => (...args: unknown[]) => { filters.push(`${name}:${JSON.stringify(args)}`); return c; };
+          c.eq = push("eq");
+          c.in = push("in");
+          c.like = push("like");
+          c.then = (resolve: (v: unknown) => unknown) => { transferUpdates.push({ row, filters: [...filters] }); return Promise.resolve({ error: null }).then(resolve); };
+          return c;
+        };
+        return {
+          update: (row: Record<string, unknown>) => updChain(row),
+          select: () => ({ eq: () => ({ eq: async () => ({ data: paidLegs, error: null }) }) }),
+        };
+      }
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+      };
+    });
+  }
+
+  beforeEach(() => {
+    installMoneyDb();
+    vi.mocked(adminAlertMock).mockClear();
+    vi.mocked(stripeMockedModule.transfers.createReversal).mockClear();
+    vi.mocked(stripeMockedModule.transfers.createReversal).mockResolvedValue({ id: "trr_1" } as never);
+  });
+
+  it("dispute.created holds unpaid legs, marks the order disputed, and alerts admin", async () => {
+    nextEvent.value = event("charge.dispute.created", {
+      id: "dp_1", amount: 10000, reason: "fraudulent", payment_intent: "pi_1",
+      evidence_details: { due_by: 1790000000 },
+    });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    expect(transferUpdates).toHaveLength(1);
+    expect(transferUpdates[0].row).toMatchObject({ status: "blocked" });
+    expect(orderUpdates).toEqual([{ status: "disputed" }]);
+    expect(vi.mocked(adminAlertMock)).toHaveBeenCalledTimes(1);
+    const alert = vi.mocked(adminAlertMock).mock.calls[0][0] as { idempotencyKey: string };
+    expect(alert.idempotencyKey).toBe("chargeback_opened:dp_1");
+  });
+
+  it("dispute lost: unpaid legs cancelled, paid legs reversed, order refunded", async () => {
+    paidLegs = [{ id: "leg-1", stripe_transfer_id: "tr_9" }];
+    nextEvent.value = event("charge.dispute.closed", { id: "dp_1", amount: 10000, status: "lost", payment_intent: "pi_1" });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    expect(vi.mocked(stripeMockedModule.transfers.createReversal)).toHaveBeenCalledWith(
+      "tr_9", {}, { idempotencyKey: "chargeback:dp_1:reversal:leg-1" },
+    );
+    expect(orderUpdates).toEqual([{ status: "refunded" }]);
+    // First transfers write cancels the unpaid set, second marks the reversed leg.
+    expect(transferUpdates[0].row).toMatchObject({ status: "cancelled" });
+    expect(transferUpdates[1].row).toMatchObject({ status: "reversed" });
+  });
+
+  it("dispute won: held legs go back to pending and the order status is restored", async () => {
+    nextEvent.value = event("charge.dispute.closed", { id: "dp_1", amount: 10000, status: "won", payment_intent: "pi_1" });
+    await POST(post());
+    expect(transferUpdates[0].row).toMatchObject({ status: "pending", last_error: null });
+    expect(orderUpdates).toEqual([{ status: "delivered" }]);
+  });
+
+  it("dashboard FULL refund: legs handled, stock restocked, order refunded, buyer emailed once", async () => {
+    paidLegs = [{ id: "leg-1", stripe_transfer_id: "tr_9" }];
+    nextEvent.value = event("charge.refunded", { id: "ch_1", refunded: true, amount: 10000, amount_refunded: 10000, payment_intent: "pi_1" });
+    const res = await POST(post());
+    expect(res.status).toBe(200);
+    expect(rpcMock).toHaveBeenCalledWith("restock_work", { p_work_id: "w-1", p_qty: 2 });
+    expect(orderUpdates).toEqual([{ status: "refunded" }]);
+    const refundEmails = vi.mocked(sendEmail).mock.calls.map((c) => c[0]).filter((c) => c.template === "customer_refund_confirmation");
+    expect(refundEmails).toHaveLength(1);
+    expect(refundEmails[0].idempotencyKey).toBe("refund:WS-DISPUTED1:dashboard");
+  });
+
+  it("charge.refunded on an already-refunded order is a no-op (the in-app flow owns it)", async () => {
+    orderRow = { ...ORDER, status: "refunded" };
+    nextEvent.value = event("charge.refunded", { id: "ch_1", refunded: true, amount: 10000, amount_refunded: 10000, payment_intent: "pi_1" });
+    const res = await POST(post());
+    expect((await res.json()).ignored).toBe("already_refunded");
+    expect(transferUpdates).toHaveLength(0);
+    expect(orderUpdates).toHaveLength(0);
+  });
+
+  it("PARTIAL dashboard refund alerts a human and touches no money rows", async () => {
+    nextEvent.value = event("charge.refunded", { id: "ch_1", refunded: false, amount: 10000, amount_refunded: 2500, payment_intent: "pi_1" });
+    await POST(post());
+    expect(transferUpdates).toHaveLength(0);
+    expect(orderUpdates).toHaveLength(0);
+    expect(vi.mocked(adminAlertMock).mock.calls[0][0]).toMatchObject({ idempotencyKey: "dashboard_partial_refund:ch_1:2500" });
+  });
+
+  it("refund.failed alerts admin with the reason", async () => {
+    nextEvent.value = event("refund.failed", { id: "re_1", amount: 5000, payment_intent: "pi_1", failure_reason: "expired_or_canceled_card" });
+    await POST(post());
+    expect(vi.mocked(adminAlertMock).mock.calls[0][0]).toMatchObject({ idempotencyKey: "refund_failed:re_1" });
   });
 });

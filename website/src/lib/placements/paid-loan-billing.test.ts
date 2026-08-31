@@ -31,7 +31,17 @@ vi.mock("@/lib/stripe", () => ({
     subscriptions: { create: subscriptionsCreateMock, update: subscriptionsUpdateMock },
   },
 }));
-vi.mock("@/lib/stripe-connect", () => ({ scheduleTransfer: scheduleTransferMock }));
+vi.mock("@/lib/stripe-connect", () => ({
+  scheduleTransfer: scheduleTransferMock,
+  recordBlockedLeg: vi.fn(async () => {}),
+}));
+// WS4.6: the payout gate is real capability now, not a truthy account id.
+vi.mock("@/lib/payouts/capability", () => ({
+  canReceivePayout: vi.fn(async () => ({ ok: true, accountId: "acct_test" })),
+}));
+vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
+vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
+vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/platform-fee", () => ({
   platformFeePercentForArtist: platformFeePctMock,
   DEFAULT_PLAN_FEE_PERCENT: 10,
@@ -279,6 +289,41 @@ describe("handleInvoicePaid()", () => {
     // 10_000 pence × (1 - 0.15) = 8500 pence
     expect(scheduleTransferMock.mock.calls[0][0].amountCents).toBe(8_500);
     expect(scheduleTransferMock.mock.calls[0][0].orderId).toBe("placement:p1:in_1");
+  });
+
+  it("R2.13: an invoice for a NON-ACTIVE placement still pays but trips the admin alarm", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    platformFeePctMock.mockReturnValue(15);
+    const { db } = buildDb({
+      billingForSubscription: {
+        id: "row1",
+        placement_id: "p1",
+        payer_user_id: "v1",
+        payee_user_id: "a1",
+        monthly_amount_pence: 10_000,
+        current_period_end: null,
+      },
+      artistConnect: { stripe_connect_account_id: "acct_artist" },
+      placement: { status: "sold" },
+    });
+    const handled = await handleInvoicePaid(
+      {
+        id: "in_stale",
+        subscription: "sub_111",
+        period_start: 1_700_000_000,
+        period_end: 1_702_500_000,
+        lines: { data: [{ period: { start: 1_700_000_000, end: 1_702_500_000 } }] },
+      } as unknown as Parameters<typeof handleInvoicePaid>[0],
+      db as Parameters<typeof handleInvoicePaid>[1],
+    );
+    expect(handled).toBe(true);
+    const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+    const alerts = vi.mocked(sendAdminAlert).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.idempotencyKey === "paid_loan_nonactive:in_stale");
+    expect(alerts).toHaveLength(1);
+    // The venue WAS charged, so the artist share still schedules.
+    expect(scheduleTransferMock).toHaveBeenCalled();
   });
 
   it("returns false when no billing row matches", async () => {

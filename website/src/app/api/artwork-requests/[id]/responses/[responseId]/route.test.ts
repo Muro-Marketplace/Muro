@@ -28,6 +28,23 @@ let responseOverride: Record<string, unknown> = {};
 // gate, is unaffected.
 let capProfileRow: Record<string, unknown> | null = null;
 let capActiveCount = 0;
+// F47: the artist's own profile, which the acceptance gates read.
+let artistProfileRow: { review_status: string | null } | null = { review_status: "approved" };
+let gatingV1On = false;
+let artistSubscribed = true;
+// F47: the venue profile row the collection-address stamp composes from.
+let venueAddressRow: Record<string, unknown> | null = {
+  name: "Copper Kettle",
+  address_line1: "1 High Street",
+  address_line2: null,
+  city: "Hampton",
+  postcode: "TW12 2TH",
+};
+// F47: the artist_works row behind the first pinned work id.
+let firstWorkRow: { title: string | null; image: string | null } | null = {
+  title: "Last Light",
+  image: "https://img.test/last-light.jpg",
+};
 
 // ---- Mocks -----------------------------------------------------------
 
@@ -42,6 +59,12 @@ vi.mock("@/lib/api-auth", () => ({
 vi.mock("@/lib/notifications", () => ({
   createNotification: vi.fn(async () => undefined),
 }));
+
+// F47 gates + F48 fan-out. Defaults: flag off (so the subscription gate is
+// dormant, matching the placements PATCH) and the artist approved.
+vi.mock("@/lib/feature-flags", () => ({ isFlagOn: vi.fn(() => gatingV1On) }));
+vi.mock("@/lib/subscriptions", () => ({ isSubscribed: vi.fn(async () => ({ active: artistSubscribed })) }));
+vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => undefined) }));
 
 vi.mock("@/lib/supabase-admin", () => {
   // The route reads:
@@ -69,7 +92,15 @@ vi.mock("@/lib/supabase-admin", () => {
     chain.eq = () => chain;
     chain.maybeSingle = async () => {
       if (table === "artist_profiles") {
-        return { data: capProfileRow, error: null };
+        // Two gates read this table with different columns: F47's review-status
+        // gate (`review_status`) and Task 3's concurrent-placement cap
+        // (`subscription_plan`, `subscription_status`). One mock row serves
+        // both; `capProfileRow` defaults to null, which is an artist safely
+        // under the Core cap, and `artistProfileRow` to approved.
+        if (artistProfileRow === null && capProfileRow === null) {
+          return { data: null, error: null };
+        }
+        return { data: { ...artistProfileRow, ...capProfileRow }, error: null };
       }
       if (table === "artwork_requests") {
         return {
@@ -82,6 +113,8 @@ vi.mock("@/lib/supabase-admin", () => {
           error: null,
         };
       }
+      if (table === "venue_profiles") return { data: venueAddressRow, error: null };
+      if (table === "artist_works") return { data: firstWorkRow, error: null };
       if (table === "artwork_request_responses") {
         return {
           data: {
@@ -129,11 +162,19 @@ vi.mock("@/lib/supabase-admin", () => {
   return {
     getSupabaseAdmin: () => ({
       from: (table: string) => makeChainable(table),
+      // F48: the fan-out resolves the artist's email through the admin API.
+      auth: {
+        admin: {
+          getUserById: async () => ({
+            data: { user: { email: "artist@example.test", user_metadata: { first_name: "Maya" } } },
+          }),
+        },
+      },
     }),
   };
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.resetModules();
   inserts = [];
   updates = [];
@@ -141,7 +182,22 @@ beforeEach(() => {
   responseOverride = {};
   capProfileRow = null;
   capActiveCount = 0;
+  artistProfileRow = { review_status: "approved" };
+  gatingV1On = false;
+  artistSubscribed = true;
+  venueAddressRow = {
+    name: "Copper Kettle",
+    address_line1: "1 High Street",
+    address_line2: null,
+    city: "Hampton",
+    postcode: "TW12 2TH",
+  };
+  firstWorkRow = { title: "Last Light", image: "https://img.test/last-light.jpg" };
+  vi.mocked((await import("@/lib/email/send")).sendEmail).mockClear();
 });
+
+/** Every messages row the route wrote (F48). */
+const messageInserts = () => inserts.filter((i) => i.table === "messages");
 
 function buildRequest(action: "accept" | "decline") {
   return new Request("https://w.local/api/artwork-requests/arq_1/responses/resp_1", {
@@ -358,5 +414,172 @@ describe("PATCH /api/artwork-requests/[id]/responses/[responseId]", () => {
       expect(res.status).toBe(200);
       expect(inserts.find((i) => i.table === "purchase_offers")).toBeTruthy();
     });
+  });
+});
+
+describe("accept forces QR on for a revenue share (F44)", () => {
+  it("overrides an explicit proposed_qr_enabled=false", async () => {
+    // The old default was `resp.proposed_qr_enabled ?? (arrangementType ===
+    // "revenue_share")`, and `??` only covers null, so an explicit false went
+    // straight through and produced a revenue_share placement with no QR code:
+    // a venue cut of QR sales that can never be earned.
+    responseOverride = { proposed_qr_enabled: false, proposed_revenue_share_percent: 25 };
+    const { PATCH } = await import("./route");
+    const res = await PATCH(buildRequest("accept"), ctx);
+    expect(res.status).toBe(200);
+
+    const placement = inserts.find((i) => i.table === "placements");
+    expect(placement!.row.arrangement_type).toBe("revenue_share");
+    expect(placement!.row.qr_enabled, "a revenue share was created without QR").toBe(true);
+  });
+
+  it("leaves QR off on a non-revenue-share arrangement", async () => {
+    responseOverride = {
+      proposed_qr_enabled: false,
+      proposed_revenue_share_percent: null,
+      proposed_monthly_fee_pence: 5000,
+    };
+    const { PATCH } = await import("./route");
+    await PATCH(buildRequest("accept"), ctx);
+
+    const placement = inserts.find((i) => i.table === "placements");
+    expect(placement!.row.arrangement_type).toBe("paid_loan");
+    expect(placement!.row.qr_enabled).toBe(false);
+  });
+});
+
+describe("accept stamps the address and applies the acceptance gates (F47)", () => {
+  it("stamps the venue's collection address onto the placement", async () => {
+    const { PATCH } = await import("./route");
+    await PATCH(buildRequest("accept"), ctx);
+
+    const placement = inserts.find((i) => i.table === "placements");
+    // Fail-before: neither this route nor anything downstream wrote it, so a
+    // work placed through a brief had no collection address on the row that the
+    // buyer's confirmation reads.
+    expect(placement!.row.collection_address).toBe(
+      "Copper Kettle, 1 High Street, Hampton, TW12 2TH",
+    );
+  });
+
+  it("leaves the address null rather than inventing one", async () => {
+    venueAddressRow = null;
+    const { PATCH } = await import("./route");
+    await PATCH(buildRequest("accept"), ctx);
+
+    const placement = inserts.find((i) => i.table === "placements");
+    expect(placement!.row.collection_address).toBeNull();
+  });
+
+  it("names the placement after the pinned work, not the brief", async () => {
+    const { PATCH } = await import("./route");
+    await PATCH(buildRequest("accept"), ctx);
+
+    const placement = inserts.find((i) => i.table === "placements");
+    // Fail-before: work_title was always req.title, so a placement created from
+    // "Coffee shop wall" was called that on the wall, in the record and in the
+    // collection flow.
+    expect(placement!.row.work_title).toBe("Last Light");
+    expect(placement!.row.work_image).toBe("https://img.test/last-light.jpg");
+  });
+
+  it("falls back to the brief title when the artist pinned no works", async () => {
+    responseOverride = { work_ids: [] };
+    const { PATCH } = await import("./route");
+    await PATCH(buildRequest("accept"), ctx);
+
+    const placement = inserts.find((i) => i.table === "placements");
+    expect(placement!.row.work_title).toBe("Coffee shop wall");
+  });
+
+  it("refuses to activate a placement for a pending-review artist", async () => {
+    artistProfileRow = { review_status: "pending" };
+    const { PATCH } = await import("./route");
+    const res = await PATCH(buildRequest("accept"), ctx);
+
+    // Fail-before: /api/placements PATCH refuses exactly this, and this route
+    // was a second path to the same active state with no gate at all.
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ error: "artist_application_pending" });
+    expect(inserts.find((i) => i.table === "placements")).toBeUndefined();
+    expect(updates.find((u) => u.table === "artwork_request_responses")).toBeUndefined();
+  });
+
+  it("refuses to activate for an unsubscribed artist when GATING_V1 is on", async () => {
+    gatingV1On = true;
+    artistSubscribed = false;
+    const { PATCH } = await import("./route");
+    const res = await PATCH(buildRequest("accept"), ctx);
+
+    expect(res.status).toBe(402);
+    await expect(res.json()).resolves.toMatchObject({ error: "subscription_required" });
+    expect(inserts.find((i) => i.table === "placements")).toBeUndefined();
+  });
+
+  it("does not apply the placement gates to an offer acceptance", async () => {
+    // Offer / commission / message acceptances create no placement, so the
+    // gates that protect an active placement have nothing to protect.
+    artistProfileRow = { review_status: "pending" };
+    responseOverride = {
+      response_type: "offer",
+      proposed_offer_amount_pence: 25000,
+      proposed_revenue_share_percent: null,
+      proposed_monthly_fee_pence: null,
+    };
+    const { PATCH } = await import("./route");
+    const res = await PATCH(buildRequest("accept"), ctx);
+
+    expect(res.status).toBe(200);
+    expect(inserts.find((i) => i.table === "purchase_offers")).toBeTruthy();
+  });
+});
+
+describe("accept and decline reach the artist beyond the bell (F48)", () => {
+  it("writes the acceptance into the dm thread", async () => {
+    const { PATCH } = await import("./route");
+    await PATCH(buildRequest("accept"), ctx);
+
+    // Fail-before: createNotification was the only signal on either branch,
+    // while placements and offers mirror every state change into the thread.
+    const msg = messageInserts()[0];
+    expect(msg, "no thread message was written").toBeTruthy();
+    expect(msg.row.conversation_id).toBe("dm-copper-kettle__the-artist");
+    expect(msg.row.message_type).toBe("artwork_response_status");
+    expect(msg.row.recipient_user_id).toBe("u-artist");
+    expect(String(msg.row.content)).toContain("Accepted your response");
+  });
+
+  it("emails the artist on accept, with the outcome that drives the next step", async () => {
+    const { PATCH } = await import("./route");
+    const { sendEmail } = await import("@/lib/email/send");
+    await PATCH(buildRequest("accept"), ctx);
+
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template: "artist_artwork_response_accepted",
+        to: "artist@example.test",
+        userId: "u-artist",
+        // Keyed on the response, so a retried accept dedupes rather than
+        // double-sending.
+        idempotencyKey: "artwork_response_accepted:resp_1",
+      }),
+    );
+  });
+
+  it("writes the decline into the thread and emails it too", async () => {
+    const { PATCH } = await import("./route");
+    const { sendEmail } = await import("@/lib/email/send");
+    const res = await PATCH(buildRequest("decline"), ctx);
+    expect(res.status).toBe(200);
+
+    const msg = messageInserts()[0];
+    expect(msg).toBeTruthy();
+    expect(String(msg.row.content)).toContain("Passed on your response");
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template: "artist_artwork_response_declined",
+        idempotencyKey: "artwork_response_declined:resp_1",
+      }),
+    );
   });
 });

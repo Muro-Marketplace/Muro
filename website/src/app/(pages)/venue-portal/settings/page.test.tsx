@@ -68,3 +68,100 @@ describe("venue settings Stripe Connect onboard (05 mutate)", () => {
     );
   });
 });
+
+// E14 (WS8 item 3). venue_profiles has no order_notifications_enabled column,
+// so the "Order updates" toggle could never persist: every click PATCHed a
+// missing column, 500'd and reverted with an error toast. The row is gone for
+// venues until the column exists.
+describe("venue settings notification rows (E14)", () => {
+  it("does not offer the Order updates toggle venues cannot save", async () => {
+    render(<VenueSettingsPage />);
+    // Anchor on a row that IS there so the absence check is not passing
+    // against a blank render.
+    expect(await screen.findByText("Message notifications")).toBeTruthy();
+    expect(screen.getByText("Wallplace news & digest")).toBeTruthy();
+    expect(screen.queryByText("Order updates")).toBeNull();
+  });
+});
+
+// E10/E12 (WS8 item 3). The Account Details card used to be three
+// uncontrolled inputs with no save button, no submit handler and no wiring
+// to any API — a venue could not correct their contact name, phone or
+// address anywhere in the portal. The card now loads the contact PII from
+// the raw venue profile and saves through the venue-profile PUT.
+describe("venue settings Account Details contact form (E10/E12)", () => {
+  function mockProfileReads() {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url.includes("venue-profile")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              profile: {
+                contact_name: "Priya Shah",
+                phone: "020 7123 4567",
+                address_line1: "1 High Street",
+                address_line2: "",
+                city: "London",
+                postcode: "E1 6AN",
+              },
+            }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+    });
+  }
+
+  it("hydrates the contact fields from the venue profile", async () => {
+    mockProfileReads();
+    render(<VenueSettingsPage />);
+
+    const nameInput = (await screen.findByPlaceholderText("Who should artists ask for?")) as HTMLInputElement;
+    expect(nameInput.value).toBe("Priya Shah");
+    expect((screen.getByPlaceholderText("e.g. 020 7123 4567") as HTMLInputElement).value).toBe("020 7123 4567");
+    expect((screen.getByPlaceholderText("Street address") as HTMLInputElement).value).toBe("1 High Street");
+  });
+
+  it("saves the edited contact fields through the venue-profile PUT", async () => {
+    mockProfileReads();
+    mutateMock.mockResolvedValue({ success: true });
+    render(<VenueSettingsPage />);
+
+    const nameInput = (await screen.findByPlaceholderText("Who should artists ask for?")) as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: "Dev Patel" } });
+    fireEvent.click(screen.getByText("Save Details"));
+
+    await waitFor(() => expect(screen.getByText("Saved")).toBeTruthy());
+    const putCall = mutateMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
+    expect(putCall).toBeTruthy();
+    expect((putCall![1] as RequestInit).method).toBe("PUT");
+    const body = JSON.parse((putCall![1] as RequestInit).body as string);
+    // Fail-before: typing here reached no API at all; the values were
+    // silently discarded on navigation.
+    expect(body).toEqual({
+      contact_name: "Dev Patel",
+      phone: "020 7123 4567",
+      address_line1: "1 High Street",
+      address_line2: null,
+      city: "London",
+      postcode: "E1 6AN",
+    });
+  });
+
+  it("surfaces a save failure as an error toast", async () => {
+    mockProfileReads();
+    mutateMock.mockRejectedValue(new Error("offline"));
+    render(<VenueSettingsPage />);
+
+    await screen.findByPlaceholderText("Who should artists ask for?");
+    fireEvent.click(screen.getByText("Save Details"));
+
+    await waitFor(() =>
+      expect(showToastMock).toHaveBeenCalledWith("Failed to save. Please check your connection.", {
+        variant: "error",
+      }),
+    );
+    expect(screen.queryByText("Saved")).toBeNull();
+  });
+});

@@ -115,8 +115,8 @@ export default function AboutPage() {
               <h3 className="text-xl mb-3">Onboarding</h3>
               <p className="text-sm text-muted leading-relaxed">
                 Accepted artists work with us to photograph their portfolio,
-                set pricing, and get matched with suitable venues. We handle
-                everything from there.
+                set pricing, and get matched with suitable venues. From there
+                you and the venue arrange the details together.
               </p>
             </div>
           </div>

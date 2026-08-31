@@ -1,0 +1,231 @@
+- generic [active] [ref=f47e1]:
+  - generic [ref=f47e2]:
+    - link "Skip to content" [ref=f47e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f47e4]:
+      - generic [ref=f47e6]:
+        - link "Wallplace" [ref=f47e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f47e8]:
+          - link "Galleries" [ref=f47e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Portfolios" [ref=f47e10] [cursor=pointer]:
+            - /url: /browse?view=portfolios
+          - link "Collections" [ref=f47e11] [cursor=pointer]:
+            - /url: /browse?view=collections
+          - link "Spaces" [ref=f47e12] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f47e14] [cursor=pointer]
+        - generic [ref=f47e17]:
+          - link "Saved" [ref=f47e18] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f47e22] [cursor=pointer]
+          - generic [ref=f47e26]:
+            - link "My Account" [ref=f47e27] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f47e28] [cursor=pointer]
+          - button "Logout" [ref=f47e31] [cursor=pointer]
+    - main [ref=f47e32]:
+      - generic [ref=f47e33]:
+        - navigation "Breadcrumb" [ref=f47e36]:
+          - list [ref=f47e37]:
+            - listitem [ref=f47e38]:
+              - link "Artists" [ref=f47e39] [cursor=pointer]:
+                - /url: /browse
+              - generic [ref=f47e40]: ›
+            - listitem [ref=f47e41]:
+              - link "Fin Coles" [ref=f47e42] [cursor=pointer]:
+                - /url: /browse/fin-coles
+              - generic [ref=f47e43]: ›
+            - listitem [ref=f47e44]:
+              - generic [ref=f47e45]: Giraffe at Sunset
+        - generic [ref=f47e48]:
+          - generic [ref=f47e49]:
+            - generic [ref=f47e51]:
+              - img "Giraffe at Sunset, Photography Print"
+            - button "View on your wall" [ref=f47e54] [cursor=pointer]
+          - generic [ref=f47e60]:
+            - paragraph [ref=f47e61]:
+              - link "Fin Coles" [ref=f47e62] [cursor=pointer]:
+                - /url: /browse/fin-coles
+            - heading "Giraffe at Sunset" [level=1] [ref=f47e63]
+            - paragraph [ref=f47e64]: Currently placed at The Mayfield
+            - generic [ref=f47e66]:
+              - generic [ref=f47e67]: Available
+              - button "Save" [ref=f47e69] [cursor=pointer]
+            - generic [ref=f47e72]: 5 views this week
+            - generic [ref=f47e78]:
+              - term [ref=f47e79]: Medium
+              - definition [ref=f47e80]: Photography Print
+            - generic [ref=f47e81]:
+              - paragraph [ref=f47e82]: Size & Price
+              - generic [ref=f47e83]:
+                - combobox "Choose size" [expanded] [ref=f47e84] [cursor=pointer]:
+                  - generic [ref=f47e85]: 4×6" (10×15 cm), £29.99
+                - listbox [ref=f47e224]:
+                  - option "4×6\" (10×15 cm), £29.99" [selected] [ref=f47e225] [cursor=pointer]
+                  - option "8×12\" (20×30 cm), £49.99" [ref=f47e230] [cursor=pointer]
+                  - option "16×24\" (41×61 cm), £69.99" [ref=f47e233] [cursor=pointer]
+                  - option "20×30\" (51×76 cm), £94.99" [ref=f47e236] [cursor=pointer]
+                  - option "24×36\" (61×91 cm), £149.99" [ref=f47e239] [cursor=pointer]
+            - generic [ref=f47e88]:
+              - paragraph [ref=f47e89]: UK shipping £3.50
+              - paragraph [ref=f47e90]: Ships to UK only
+            - generic [ref=f47e91]:
+              - generic [ref=f47e92]:
+                - button "Buy Now, £29.99" [ref=f47e93] [cursor=pointer]
+                - button "Add to basket" [ref=f47e94] [cursor=pointer]
+              - button "Message the artist →" [ref=f47e99] [cursor=pointer]
+        - generic [ref=f47e101]:
+          - generic [ref=f47e102]:
+            - generic [ref=f47e103]:
+              - paragraph [ref=f47e104]: Continue exploring
+              - heading "More by Fin Coles" [level=2] [ref=f47e105]
+            - link "View full portfolio" [ref=f47e106] [cursor=pointer]:
+              - /url: /browse/fin-coles
+          - generic [ref=f47e109]:
+            - link "Vietnamese Village Sold Vietnamese Village Photography Print · From £29.99" [ref=f47e110] [cursor=pointer]:
+              - /url: /browse/fin-coles/vietnamese-village
+              - generic [ref=f47e111]:
+                - img "Vietnamese Village" [ref=f47e112]
+                - generic [ref=f47e113]: Sold
+              - paragraph [ref=f47e114]: Vietnamese Village
+              - paragraph [ref=f47e115]: Photography Print · From £29.99
+            - link "Mt. Fitz Roy Sold Mt. Fitz Roy Photography Print · From £29.99" [ref=f47e116] [cursor=pointer]:
+              - /url: /browse/fin-coles/mt-fitz-roy
+              - generic [ref=f47e117]:
+                - img "Mt. Fitz Roy" [ref=f47e118]
+                - generic [ref=f47e119]: Sold
+              - paragraph [ref=f47e120]: Mt. Fitz Roy
+              - paragraph [ref=f47e121]: Photography Print · From £29.99
+            - link "Guanaco in Patagonia Sold Guanaco in Patagonia Photography Print · From £29.99" [ref=f47e122] [cursor=pointer]:
+              - /url: /browse/fin-coles/guanaco-in-patagonia
+              - generic [ref=f47e123]:
+                - img "Guanaco in Patagonia" [ref=f47e124]
+                - generic [ref=f47e125]: Sold
+              - paragraph [ref=f47e126]: Guanaco in Patagonia
+              - paragraph [ref=f47e127]: Photography Print · From £29.99
+            - link "Streets of St. Tropez Sold Streets of St. Tropez Photography Print · From £29.99" [ref=f47e128] [cursor=pointer]:
+              - /url: /browse/fin-coles/streets-of-st-tropez
+              - generic [ref=f47e129]:
+                - img "Streets of St. Tropez" [ref=f47e130]
+                - generic [ref=f47e131]: Sold
+              - paragraph [ref=f47e132]: Streets of St. Tropez
+              - paragraph [ref=f47e133]: Photography Print · From £29.99
+        - generic [ref=f47e136]:
+          - paragraph [ref=f47e137]: Seller information
+          - paragraph [ref=f47e138]:
+            - text: This artwork is sold by
+            - link "Fin Coles" [ref=f47e139] [cursor=pointer]:
+              - /url: /browse/fin-coles
+            - text: ", an independent artist listing on Wallplace. Your contract of sale is with the artist, not with Wallplace. Wallplace operates the platform, processes payments via Stripe, and facilitates customer service."
+          - paragraph [ref=f47e140]:
+            - text: Contact the artist via their
+            - link "profile" [ref=f47e141] [cursor=pointer]:
+              - /url: /browse/fin-coles
+            - text: or email
+            - link "hello@wallplace.co.uk" [ref=f47e142] [cursor=pointer]:
+              - /url: mailto:hello@wallplace.co.uk
+            - text: . For your 14-day right to cancel and other consumer rights, see our
+            - link "Returns & Refunds" [ref=f47e143] [cursor=pointer]:
+              - /url: /returns
+            - text: and
+            - link "Platform Terms" [ref=f47e144] [cursor=pointer]:
+              - /url: /terms
+            - text: .
+    - contentinfo "Site footer" [ref=f47e145]:
+      - generic [ref=f47e146]:
+        - generic [ref=f47e147]:
+          - generic [ref=f47e148]:
+            - link "Wallplace" [ref=f47e149] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f47e150]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f47e151]:
+              - paragraph [ref=f47e152]: Be first to see new works
+              - paragraph [ref=f47e153]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f47e155]:
+                - textbox "your@email.com" [ref=f47e156]
+                - button "Subscribe" [ref=f47e157] [cursor=pointer]
+            - link "Instagram" [ref=f47e158] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f47e163]:
+            - heading "For Artists" [level=4] [ref=f47e164]
+            - list [ref=f47e165]:
+              - listitem [ref=f47e166]:
+                - link "Apply to Join" [ref=f47e167] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f47e168]:
+                - link "Pricing" [ref=f47e169] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f47e170]:
+                - link "Browse Venues" [ref=f47e171] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f47e172]:
+                - link "FAQs" [ref=f47e173] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f47e174]:
+            - heading "For Venues" [level=4] [ref=f47e175]
+            - list [ref=f47e176]:
+              - listitem [ref=f47e177]:
+                - link "Discover Art" [ref=f47e178] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f47e179]:
+                - link "Register Your Venue" [ref=f47e180] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f47e181]:
+                - link "Wallplace Curated" [ref=f47e182] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f47e183]:
+                - link "How It Works" [ref=f47e184] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f47e185]:
+                - link "FAQs" [ref=f47e186] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f47e187]:
+            - heading "Company" [level=4] [ref=f47e188]
+            - list [ref=f47e189]:
+              - listitem [ref=f47e190]:
+                - link "About" [ref=f47e191] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f47e192]:
+                - link "Blog" [ref=f47e193] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f47e194]:
+                - link "How It Works" [ref=f47e195] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f47e196]:
+                - link "Sustainability" [ref=f47e197] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f47e198]:
+                - link "Partner with us" [ref=f47e199] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f47e200]:
+                - link "Contact" [ref=f47e201] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f47e202]:
+                - link "Complaints" [ref=f47e203] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f47e204]:
+                - link "Terms" [ref=f47e205] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f47e206]:
+                - link "Artist Agreement" [ref=f47e207] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f47e208]:
+                - link "Venue Agreement" [ref=f47e209] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f47e210]:
+                - link "Privacy" [ref=f47e211] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f47e212]:
+                - link "Cookies" [ref=f47e213] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f47e214]:
+                - link "Returns & Refunds" [ref=f47e215] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f47e216]:
+                - link "IP Policy" [ref=f47e217] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f47e219]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f47e220] [cursor=pointer]: Feedback
+  - alert [ref=f47e223]

@@ -30,7 +30,9 @@ export const mock: ArtistPayoutSentProps = {
   payoutAmount: { amount: 21600, currency: "GBP" },
   payoutDate: "24 April 2026",
   expectedArrival: "28 April 2026",
-  payoutUrl: "https://wallplace.co.uk/artist-portal/billing/payouts",
+  // R6.F1: /artist-portal/billing/payouts does not exist; the Payouts section
+  // lives on the billing page itself, so that is where this button must go.
+  payoutUrl: "https://wallplace.co.uk/artist-portal/billing",
   supportUrl: "https://wallplace.co.uk/support",
 };
 

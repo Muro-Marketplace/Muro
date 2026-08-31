@@ -27,22 +27,42 @@
  */
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ApplicationForm from "@/components/ApplicationForm";
 import { useAuth } from "@/context/AuthContext";
 
 export default function ApplicationGate() {
   const router = useRouter();
-  const { user, userType, loading } = useAuth();
+  const { user, userType, loading, signOut } = useAuth();
   const [redirected, setRedirected] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  // A49 (QA 2026-08-28): the wrong-role CTA used to be a plain link to
+  // /signup/artist?next=/apply while the user was still signed in.
+  // RedirectIfLoggedIn wraps that signup page and bounced them straight
+  // back here, so the button was an infinite loop. Do what the copy says:
+  // sign out first, then go to the artist signup.
+  async function handleSwitchAccount() {
+    setSwitching(true);
+    try {
+      await signOut();
+    } catch {
+      /* fall through: even a failed sign-out attempt should still land on
+         the signup page, where RedirectIfLoggedIn re-checks the session */
+    }
+    router.push("/signup/artist?next=/apply");
+  }
 
   useEffect(() => {
     if (loading) return;
     if (!user && !redirected) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRedirected(true);
-      router.replace("/signup/artist?next=/apply");
+      // A17: carry the current query string (e.g. ?plan=pro from the
+      // pricing page) through the signup hop so the plan preselect
+      // survives account creation and email verification.
+      const search = typeof window !== "undefined" ? window.location.search : "";
+      router.replace(`/signup/artist?next=${encodeURIComponent(`/apply${search}`)}`);
     }
   }, [loading, user, redirected, router]);
 
@@ -76,12 +96,14 @@ export default function ApplicationGate() {
           The artist application is for individual artists. Sign out
           and create an artist account to continue.
         </p>
-        <Link
-          href="/signup/artist?next=/apply"
-          className="inline-block px-4 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+        <button
+          type="button"
+          onClick={handleSwitchAccount}
+          disabled={switching}
+          className="inline-block px-4 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-60"
         >
-          Create artist account
-        </Link>
+          {switching ? "Signing out..." : "Sign out and create artist account"}
+        </button>
       </div>
     );
   }

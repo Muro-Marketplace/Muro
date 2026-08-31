@@ -11,12 +11,15 @@ import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import { resolveArtistNamesBulk } from "@/emails/_helpers/resolve-artist-name";
 import { ArtistPayoutSent } from "@/emails/templates/payments/ArtistPayoutSent";
+import { ReferralCreditGranted } from "@/emails/templates/payments/ReferralCreditGranted";
+import { SubscriptionRecovered } from "@/emails/templates/payments/SubscriptionRecovered";
 import { ArtistPayoutFailed } from "@/emails/templates/payments/ArtistPayoutFailed";
 import { SubscriptionPaymentFailed } from "@/emails/templates/payments/SubscriptionPaymentFailed";
 import { SubscriptionTrialEnding } from "@/emails/templates/payments/SubscriptionTrialEnding";
 import { SubscriptionStarted } from "@/emails/templates/payments/SubscriptionStarted";
 import { SubscriptionUpgraded } from "@/emails/templates/payments/SubscriptionUpgraded";
 import { SubscriptionCancelled } from "@/emails/templates/payments/SubscriptionCancelled";
+import { SubscriptionCardExpiring } from "@/emails/templates/payments/SubscriptionCardExpiring";
 import { SubscriptionRenewalReceipt } from "@/emails/templates/payments/SubscriptionRenewalReceipt";
 import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/ArtistStripeKycNeeded";
 // Only the default remains here: the per-artist rate is resolved inside
@@ -53,6 +56,8 @@ import { missingStripePriceEnvs } from "@/env";
 import type Stripe from "stripe";
 import { isSettled } from "@/lib/payments/settlement";
 import { VenueCollectionPending } from "@/emails/templates/venue-lifecycle/VenueCollectionPending";
+import { CustomerRefundConfirmation } from "@/emails/templates/orders/CustomerRefundConfirmation";
+import { CustomerPaymentFailed } from "@/emails/templates/orders/CustomerPaymentFailed";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -160,7 +165,10 @@ async function handleWebhookEvent(
   }
 
   // ─── Curation checkout (one-off OR managed subscription) ───
-  if (event.type === "checkout.session.completed") {
+  // WS1.5: async_payment_succeeded is the settlement of a deferred completed
+  // event (BACS and friends); every write below is idempotent, so accepting
+  // both types books the money whichever event carries the settled state.
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object as Stripe.Checkout.Session;
     if (session.metadata?.kind === "curation_request") {
       const requestId = session.metadata.curation_request_id;
@@ -261,7 +269,7 @@ async function handleWebhookEvent(
   }
 
   // ─── Purchase-offer checkout (Request 1 — venue-only offers) ───
-  if (event.type === "checkout.session.completed") {
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object as Stripe.Checkout.Session;
     if (session.metadata?.checkout_kind === "purchase_offer") {
       const offerId = session.metadata.offer_id;
@@ -613,6 +621,7 @@ async function handleWebhookEvent(
         kind: "paid_loan_started",
         title: `Monthly loan payments started, £${Number(placement.monthly_fee_gbp).toFixed(2)}/mo`,
         body: "The venue's card is set up. Your first payout follows the first paid invoice.",
+        idempotencyKey: `paid_loan_started:${placementId}`,
         // Owner find (2026-08-28): the flat list gave the artist nowhere to
         // SEE the payment; the detail page carries the payment status banner.
         link: `/placements/${encodeURIComponent(placementId)}`,
@@ -631,11 +640,16 @@ async function handleWebhookEvent(
   // acknowledgement, which is correct — there is nothing to do with it.
 
   // ─── Art purchase checkout ───
-  if (event.type === "checkout.session.completed") {
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object as Stripe.Checkout.Session;
 
     // Only process one-time payment checkouts (art purchases), not subscriptions
-    if (session.mode === "payment") {
+    // WS1.6: and only CART sessions. The earlier branches claim their kinds,
+    // but ordering is not a contract; an unknown future kind must not be
+    // booked as a cart.
+    const sessionKind = session.metadata?.kind ?? session.metadata?.checkout_kind ?? "";
+    const isCartKind = sessionKind === "" || sessionKind === "cart_checkout";
+    if (session.mode === "payment" && isCartKind) {
       try {
         // Server-side cart row is the data-of-record (Plan B Task 6). The
         // 500-char metadata cap used to truncate big carts; cart_sessions
@@ -657,7 +671,18 @@ async function handleWebhookEvent(
         const source = saved.source || session.metadata?.source || "direct";
         const venueSlug = saved.venueSlug || session.metadata?.venue_slug || "";
         const artistSlugs = (saved.artistSlugs || []).join(",") || session.metadata?.artist_slugs || "";
-        const firstArtistSlug = artistSlugs.split(",")[0] || "";
+        // QA 2026-08-30 bug 20 (critical): when the cart session carried no
+        // artistSlugs, this resolved to "" and the order was booked with a NULL
+        // artist. Production holds one such row: GBP 64.49 charged, the print
+        // never appeared on any artist's Orders queue, so nobody was ever told
+        // to post it, artist_revenue was 0 and platform_fee_percent was 0, yet
+        // it still counted toward admin GROSS SALES. The cart LINES knew whose
+        // work it was the whole time (items[].artistName was populated), so
+        // fall back to them before giving up.
+        const firstArtistSlug =
+          artistSlugs.split(",")[0] ||
+          (cartItems as Array<{ artistSlug?: string }>).map((i) => i.artistSlug || "").find(Boolean) ||
+          "";
         const savedShipping = saved.shipping as Record<string, string>;
 
         // Compute revenue splits
@@ -876,6 +901,11 @@ async function handleWebhookEvent(
           id: orderId,
           stripe_payment_intent_id: paymentIntentId,
           buyer_email: session.customer_email || savedShipping?.email || "",
+          // Set by /api/checkout when the buyer was signed in, blank for guest
+          // checkout. Nothing wrote this column before, so every order was
+          // reachable only by matching on the email address, which breaks the
+          // moment somebody changes theirs.
+          buyer_user_id: session.metadata?.buyer_user_id || null,
           items: cartItems,
           shipping: {
             fullName: savedShipping?.fullName || "",
@@ -903,6 +933,10 @@ async function handleWebhookEvent(
               ]
             : [{ status: "confirmed", timestamp: nowIso }],
           source,
+          // Still null means neither the session nor any cart line named an
+          // artist. The order is booked anyway (the customer HAS paid, and
+          // losing the record would be worse), but it is an orphan and an
+          // admin alert fires below so a human assigns it the same day.
           artist_slug: firstArtistSlug || null,
           artist_user_id: artistUserId,
           venue_slug: venueSlug || null,
@@ -1121,7 +1155,15 @@ async function handleWebhookEvent(
               const fallbackName = item.artistName && !/^[a-z0-9-]+$/.test(item.artistName) ? item.artistName : null;
               return {
                 title: item.title || "Artwork",
-                artistName: resolved || fallbackName || slug || "Artist",
+                // Owner-reported 2026-08-30: the last fallback printed the raw
+                // slug in the buyer's receipt. The line above already refuses a
+                // slug-shaped artistName, so falling through to one here was
+                // the same leak by another route.
+                artistName:
+                  resolved ||
+                  fallbackName ||
+                  slug.split("-").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ||
+                  "Artist",
                 quantity: Number(item.qty ?? item.quantity ?? 1),
                 size: item.size,
                 image: item.image || `${SITE}/placeholder-work.jpg`,
@@ -1145,6 +1187,30 @@ async function handleWebhookEvent(
               await db.from("orders").update({ items: orderItems }).eq("id", orderId);
             } catch (persistErr) {
               console.warn("[webhook] persisting enriched items failed:", persistErr);
+            }
+          }
+
+          // Bug 20: an order nobody can fulfil must not sit silent. The buyer
+          // has been charged, so this alerts rather than throwing; keyed on the
+          // order so a Stripe redelivery cannot spam.
+          if (!firstArtistSlug) {
+            try {
+              const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+              await sendAdminAlert({
+                idempotencyKey: `orphan_order:${orderId}`,
+                subject: `Order ${orderId} has no artist attached`,
+                summary:
+                  `Order ${orderId} was paid but neither the cart session nor any cart line named an ` +
+                  `artist, so it appears on no artist's Orders queue and nobody has been told to post ` +
+                  `it. Assign the artist by hand, then check how long the customer has been waiting.`,
+                fields: [
+                  { label: "Order", value: String(orderId) },
+                  { label: "Buyer", value: String(buyerEmail || "unknown") },
+                ],
+                metadata: { orderId },
+              });
+            } catch (orphanErr) {
+              console.error("[webhook] orphan-order alert failed:", orphanErr);
             }
           }
 
@@ -1178,11 +1244,78 @@ async function handleWebhookEvent(
           // stranger will present an order number at the counter. A sale they
           // are not told about is a confrontation waiting there. Email keyed on
           // the order so a Stripe redelivery cannot double it, plus a bell.
-          if (isVenueCollection && venueSlug) {
+          if (isVenueCollection) {
             // Owner decision 2026-08-28: the wall piece just sold, so the
             // work stops being collectable. ONLY the tick box is cleared;
             // online availability and stock follow the normal decrement, so
             // prints keep selling unless this was the last piece.
+            // 121: the wall piece just sold, so its placement's off-the-wall
+            // offer comes down with it; the legacy work-level tick box (120)
+            // is cleared too. Online stock follows the normal decrement, so
+            // prints keep selling unless this was the last piece. Both are
+            // non-critical bookkeeping: a failure must not stop the venue
+            // being told someone is coming to collect.
+            const soldPlacementIds = Array.from(new Set(
+              (cartItems as Array<{ collectPlacementId?: string }>)
+                .map((i) => i.collectPlacementId || "")
+                .filter(Boolean),
+            ));
+            if (soldPlacementIds.length > 0) {
+              try {
+                const { error: offErr } = await db
+                  .from("placements")
+                  .update({ in_store_price: null, in_store_frame_included: false })
+                  .in("id", soldPlacementIds);
+                if (offErr) console.warn("[webhook] could not clear off-the-wall offer:", offErr);
+              } catch (offErr) {
+                console.warn("[webhook] off-the-wall offer clear threw:", offErr);
+              }
+            }
+            // WS3.3 (audit: off-wall sale kept billing). The piece is sold, so
+            // the placement ends NOW: status → sold, and any paid-loan billing
+            // is cancelled so the venue does not pay next month's display fee
+            // for a piece that has left the arrangement. Direct writes rather
+            // than the placements PATCH on purpose: that route's
+            // active→terminal inventory block RESTORES stock, which is built
+            // for unsold returns; this piece is sold and the sale itself
+            // already decremented. The "Placed at X" portfolio stamp clears
+            // for the same reason. Idempotent: a redelivery sees status=sold
+            // and skips.
+            if (soldPlacementIds.length > 0) {
+              try {
+                const { cancelPaidLoanBilling } = await import("@/lib/placements/paid-loan-billing");
+                const { data: soldRows } = await db
+                  .from("placements")
+                  .select("id, status")
+                  .in("id", soldPlacementIds);
+                for (const pl of (soldRows || []) as Array<{ id: string; status: string }>) {
+                  if (pl.status === "sold") continue;
+                  const { error: soldErr } = await db
+                    .from("placements")
+                    .update({ status: "sold" })
+                    .eq("id", pl.id);
+                  if (soldErr) {
+                    console.error("[webhook] could not mark placement sold:", soldErr);
+                    continue;
+                  }
+                  try {
+                    await cancelPaidLoanBilling(pl.id, db);
+                  } catch (cancelErr) {
+                    console.error("[webhook] paid-loan cancel after off-wall sale failed:", cancelErr);
+                  }
+                  try {
+                    await db
+                      .from("artist_works")
+                      .update({ placed_at_venue: null, current_placement_id: null })
+                      .eq("current_placement_id", pl.id);
+                  } catch (stampErr) {
+                    console.warn("[webhook] placement stamp clear failed:", stampErr);
+                  }
+                }
+              } catch (windDownErr) {
+                console.error("[webhook] off-wall placement wind-down failed:", windDownErr);
+              }
+            }
             if (cartWorkIds.length > 0) {
               try {
                 const { error: flagErr } = await db
@@ -1191,16 +1324,29 @@ async function handleWebhookEvent(
                   .in("id", cartWorkIds);
                 if (flagErr) console.warn("[webhook] could not clear available_in_store:", flagErr);
               } catch (flagErr) {
-                // Non-critical bookkeeping: a failure here must not stop the
-                // venue being told someone is coming to collect.
                 console.warn("[webhook] available_in_store clear threw:", flagErr);
               }
             }
             try {
+              // Owner ruling (2026-08-28): the venue's revenue SHARE needs a QR
+              // scan within 24 hours (the attribution token's TTL), but the
+              // NOTICE does not - someone is walking in to collect whatever the
+              // buyer's journey was. When attribution is absent, resolve the
+              // venue from the sold placement instead.
+              let noticeVenueSlug = venueSlug;
+              if (!noticeVenueSlug && soldPlacementIds.length > 0) {
+                const { data: soldPl } = await db
+                  .from("placements")
+                  .select("venue_slug")
+                  .in("id", soldPlacementIds)
+                  .limit(1);
+                noticeVenueSlug = (soldPl?.[0] as { venue_slug?: string } | undefined)?.venue_slug || "";
+              }
+              if (!noticeVenueSlug) throw new Error("no venue resolvable for collection notice");
               const { data: venueRow } = await db
                 .from("venue_profiles")
                 .select("user_id, name")
-                .eq("slug", venueSlug)
+                .eq("slug", noticeVenueSlug)
                 .maybeSingle<{ user_id: string | null; name: string | null }>();
               if (venueRow?.user_id) {
                 const { data: { user: venueUser } } = await db.auth.admin.getUserById(venueRow.user_id);
@@ -1212,7 +1358,12 @@ async function handleWebhookEvent(
                   kind: "collection_pending",
                   title: `Sold off your wall: ${firstWork}`,
                   body: `${savedShipping?.fullName || "The buyer"} will collect it with order ${orderId}`,
-                  link: "/venue-portal/placements",
+                  // F10: one sold placement deep-links straight to it; the
+                  // sendEmail below can throw, so the bell is keyed (F6b).
+                  link: soldPlacementIds.length === 1
+                    ? `/placements/${soldPlacementIds[0]}`
+                    : "/venue-portal/placements",
+                  idempotencyKey: `collection_pending:${orderId}`,
                 }).catch((err) => console.warn("[webhook] collection bell failed:", err));
                 if (venueUser?.email) {
                   await sendEmail({
@@ -1231,7 +1382,7 @@ async function handleWebhookEvent(
                       placementsUrl: `${SITE}/venue-portal/placements`,
                       supportUrl: `${SITE}/support`,
                     }),
-                    metadata: { orderId, venueSlug },
+                    metadata: { orderId, venueSlug: noticeVenueSlug },
                   });
                 }
               }
@@ -1248,7 +1399,47 @@ async function handleWebhookEvent(
           await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
         }
       } catch (err) {
+        // WS1.1 (audit F1, verified): this catch used to swallow the throw and
+        // fall through to the default 200, which KEPT the dedup claim. Money
+        // taken, no order booked, Stripe never retries, invisible to the
+        // sweep. A 500 releases the claim (see the POST wrapper) so the
+        // redelivery gets another run; every write in this branch is
+        // idempotent, so a partial first pass is completed, not doubled.
         console.error("Order processing error:", err);
+        return NextResponse.json({ error: "Order processing failed" }, { status: 500 });
+      }
+    }
+  }
+
+  // ─── WS1.5 second half: a deferred payment FAILED after checkout ───
+  // Bank-debit style methods complete checkout before the money moves. The
+  // settlement gate correctly booked nothing, but the buyer walked away
+  // believing they bought art. Nothing was charged and no order exists;
+  // cart_sessions rows simply expire, so the only repair owed is the truth,
+  // to the buyer, once per session.
+  if (event.type === "checkout.session.async_payment_failed") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const sessionKind = session.metadata?.kind || "";
+    if (sessionKind === "" || sessionKind === "cart_checkout") {
+      const buyerEmail = session.customer_details?.email || session.customer_email || "";
+      if (buyerEmail) {
+        try {
+          await sendEmail({
+            idempotencyKey: `async_payment_failed:${session.id}`,
+            template: "customer_payment_failed",
+            category: "orders_and_payouts",
+            to: buyerEmail,
+            subject: "Your Wallplace payment did not go through",
+            react: CustomerPaymentFailed({
+              firstName: (session.customer_details?.name || "there").split(" ")[0],
+              browseUrl: `${SITE}/browse`,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { stripeSessionId: session.id },
+          });
+        } catch (mailErr) {
+          console.error("[webhook] async-payment-failed email failed:", mailErr);
+        }
       }
     }
   }
@@ -1460,9 +1651,9 @@ async function handleWebhookEvent(
       try {
         const { data: referred } = await db
           .from("artist_profiles")
-          .select("id")
+          .select("id, name")
           .eq("stripe_customer_id", customerId)
-          .maybeSingle<{ id: string }>();
+          .maybeSingle<{ id: string; name: string | null }>();
         if (referred) {
           const { data: credit, error: creditErr } = await db.rpc("extend_free_until", {
             p_referred_id: referred.id,
@@ -1478,6 +1669,56 @@ async function handleWebhookEvent(
                 referrerId: row.referrer_id,
                 freeUntil: row.new_free_until,
               });
+              // WS3.5 (audit R7 row 14): the credit is a real money event
+              // (the referrer's fee drops to 0% until free_until) and was
+              // recorded with this console.log alone. Tell the referrer.
+              // Keyed on the referred artist: the RPC's guard means each
+              // referred artist credits exactly once, ever.
+              try {
+                const { data: referrer } = await db
+                  .from("artist_profiles")
+                  .select("user_id, name")
+                  .eq("id", row.referrer_id)
+                  .maybeSingle<{ user_id: string | null; name: string | null }>();
+                if (referrer?.user_id) {
+                  const freeUntilDate = row.new_free_until
+                    ? new Date(row.new_free_until).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : "";
+                  createNotification({
+                    userId: referrer.user_id,
+                    kind: "referral_credited",
+                    title: "You earned 30 fee-free days",
+                    body: `${referred.name || "An artist you referred"} started a paid plan. Your platform fee is 0% until ${freeUntilDate}.`,
+                    link: "/artist-portal/billing",
+                    idempotencyKey: `referral_credited:${referred.id}`,
+                  }).catch((err) => console.warn("[webhook] referral bell failed:", err));
+                  const { data: { user: referrerUser } } = await db.auth.admin.getUserById(referrer.user_id);
+                  if (referrerUser?.email) {
+                    await sendEmail({
+                      idempotencyKey: `referral_credit:${referred.id}`,
+                      template: "referral_credit_granted",
+                      category: "orders_and_payouts",
+                      to: referrerUser.email,
+                      userId: referrer.user_id,
+                      subject: "You earned 30 fee-free days on Wallplace",
+                      react: ReferralCreditGranted({
+                        firstName: (referrer.name || "there").split(" ")[0],
+                        referredArtistName: referred.name || "An artist you referred",
+                        freeUntilDate,
+                        billingUrl: `${SITE}/artist-portal/billing`,
+                        supportUrl: `${SITE}/support`,
+                      }),
+                      metadata: { referredId: referred.id, referrerId: row.referrer_id },
+                    });
+                  }
+                }
+              } catch (referralNotifyErr) {
+                console.error("[webhook] referral grant comms failed:", referralNotifyErr);
+              }
             }
           }
         }
@@ -1679,7 +1920,12 @@ async function handleWebhookEvent(
     try {
       await handleInvoicePaidPaidLoan(invoice);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and a month's artist share was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] paid-loan invoice.paid:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
   if (event.type === "invoice.payment_failed") {
@@ -1687,7 +1933,12 @@ async function handleWebhookEvent(
     try {
       await handleInvoicePaymentFailedPaidLoan(invoice);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the venue's dunning was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] paid-loan invoice.payment_failed:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
   if (event.type === "customer.subscription.deleted") {
@@ -1695,7 +1946,12 @@ async function handleWebhookEvent(
     try {
       await handleSubscriptionDeletedPaidLoan(subscription);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the billing wind-down was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] paid-loan subscription.deleted:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
 
@@ -1708,7 +1964,12 @@ async function handleWebhookEvent(
     try {
       await handleCurationInvoicePaid(invoice);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the curation receipt and status was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] curation invoice.paid:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
   if (event.type === "invoice.payment_failed") {
@@ -1716,7 +1977,12 @@ async function handleWebhookEvent(
     try {
       await handleCurationInvoiceFailed(invoice);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the curation dunning was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] curation invoice.payment_failed:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
   if (event.type === "customer.subscription.deleted") {
@@ -1724,7 +1990,12 @@ async function handleWebhookEvent(
     try {
       await handleCurationSubscriptionDeleted(subscription);
     } catch (err) {
+      // WS1.1 second half: swallowing this kept the dedup claim, so Stripe
+      // never retried and the curation wind-down was silently lost.
+      // The handlers are invoice/subscription-keyed idempotent, so the
+      // retried event completes the work rather than doubling it.
       console.error("[stripe webhook] curation subscription.deleted:", err);
+      return NextResponse.json({ error: "Recurring-billing processing failed" }, { status: 500 });
     }
   }
 
@@ -1747,6 +2018,43 @@ async function handleWebhookEvent(
           .update({ subscription_status: "active" })
           .eq("stripe_customer_id", customerId);
         if (error) console.error("Invoice paid recovery error:", error);
+        // WS4.4 (R2.2, return half): the dunning emails say the portfolio is
+        // delisted while payments fail; recovery used to flip the status
+        // back in silence. Close the loop. Keyed on the invoice that paid.
+        if (!error && profile.user_id) {
+          try {
+            const { data: { user: recoveredUser } } = await db.auth.admin.getUserById(profile.user_id);
+            if (recoveredUser?.email) {
+              const planName = ((profile.subscription_plan as string) || "Wallplace")
+                .replace(/^./, (c: string) => c.toUpperCase());
+              createNotification({
+                userId: profile.user_id,
+                kind: "subscription_recovered",
+                title: "Payment received, your portfolio is live again",
+                body: "Your subscription is active and your work is back in the marketplace.",
+                link: "/artist-portal/billing",
+                idempotencyKey: `subscription_recovered:${invoice.id}`,
+              }).catch((err) => console.warn("[webhook] recovery bell failed:", err));
+              await sendEmail({
+                idempotencyKey: `subscription_recovered:${invoice.id}`,
+                template: "subscription_recovered",
+                category: "orders_and_payouts",
+                to: recoveredUser.email,
+                userId: profile.user_id,
+                subject: "Payment received, your portfolio is live again",
+                react: SubscriptionRecovered({
+                  firstName: (profile.name || "there").split(" ")[0],
+                  planName,
+                  portfolioUrl: `${SITE}/artist-portal/profile`,
+                  supportUrl: `${SITE}/support`,
+                }),
+                metadata: { invoiceId: invoice.id, customerId },
+              });
+            }
+          } catch (recoveryMailErr) {
+            console.error("[webhook] recovery email failed:", recoveryMailErr);
+          }
+        }
       }
 
       // Renewal receipt, only for recurring charges, not the initial signup
@@ -1801,18 +2109,56 @@ async function handleWebhookEvent(
         .select("user_id, name")
         .eq("stripe_connect_account_id", connectAccountId)
         .maybeSingle();
-      if (artistProfile?.user_id) {
-        const { data: { user } } = await db.auth.admin.getUserById(artistProfile.user_id);
+      // WS2.3 (audit R3.9): a VENUE whose bank payout bounces used to vanish
+      // here (artist_profiles only). Resolve venues as the fallback and warn
+      // the admin when neither side matches.
+      let failedRecipient = artistProfile;
+      if (!failedRecipient?.user_id) {
+        const { data: venueProfile } = await db
+          .from("venue_profiles")
+          .select("user_id, name")
+          .eq("stripe_connect_account_id", connectAccountId)
+          .maybeSingle();
+        failedRecipient = venueProfile;
+      }
+      if (!failedRecipient?.user_id) {
+        await sendAdminAlert({
+          idempotencyKey: `payout_failed_unmatched:${payout.id}`,
+          subject: "Bank payout failed for an unmatched Connect account",
+          summary: "A payout.failed event arrived for a Connect account that matches no artist or venue profile. Investigate in Stripe.",
+          fields: [
+            { label: "Connect account", value: connectAccountId },
+            { label: "Payout", value: payout.id },
+            { label: "Amount", value: `£${(payout.amount / 100).toFixed(2)}` },
+          ],
+          actionPath: "/admin/financials",
+          actionLabel: "Open financials",
+        }).catch(() => {});
+      }
+      if (failedRecipient?.user_id) {
+        const artistProfileResolved = failedRecipient;
+        const { data: { user } } = await db.auth.admin.getUserById(artistProfileResolved.user_id);
         if (user?.email) {
+          // WS6.2 (R6.F5): the artist's money bounced back off their bank;
+          // that deserves a bell, not just an inbox entry. Keyed because the
+          // email below can throw and Stripe redelivers.
+          createNotification({
+            userId: artistProfileResolved.user_id,
+            kind: "payout_failed",
+            title: "A payout to your bank failed",
+            body: payout.failure_message || "Stripe could not send your payout. Check your bank details.",
+            link: "/artist-portal/billing",
+            idempotencyKey: `payout_failed:${payout.id}`,
+          }).catch((err) => console.warn("[webhook] payout-failed bell failed:", err));
           await sendEmail({
             idempotencyKey: `payout_failed:${payout.id}`,
             template: "artist_payout_failed",
             category: "orders_and_payouts",
             to: user.email,
             subject: "Payout couldn't be sent",
-            userId: artistProfile.user_id,
+            userId: artistProfileResolved.user_id,
             react: ArtistPayoutFailed({
-              firstName: (artistProfile.name || "there").split(" ")[0],
+              firstName: (artistProfileResolved.name || "there").split(" ")[0],
               payoutAmount: { amount: payout.amount, currency: (payout.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" },
               reason: payout.failure_message || payout.failure_code || "Stripe rejected the transfer.",
               fixPayoutUrl: `${SITE}/artist-portal/billing`,
@@ -1857,7 +2203,11 @@ async function handleWebhookEvent(
             kind: "payout_sent",
             title: `Payout sent · ${amountLabel}`,
             body: `Expected to land ${arrival}`,
-            link: "/artist-portal/billing/payouts",
+            // F9/F1: /artist-portal/billing/payouts does not exist; billing
+            // is the page that lists payouts. Keyed because the sendEmail
+            // below can throw and Stripe's retry re-runs this bell (F6b).
+            link: "/artist-portal/billing",
+            idempotencyKey: `payout_sent:${payout.id}`,
           }).catch((err) => console.warn("[stripe webhook] payout notification failed:", err));
 
           await sendEmail({
@@ -1872,7 +2222,7 @@ async function handleWebhookEvent(
               payoutAmount: amount,
               payoutDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
               expectedArrival: arrival,
-              payoutUrl: `${SITE}/artist-portal/billing/payouts`,
+              payoutUrl: `${SITE}/artist-portal/billing`,
               supportUrl: `${SITE}/support`,
             }),
             metadata: { payoutId: payout.id, connectAccountId },
@@ -1886,12 +2236,299 @@ async function handleWebhookEvent(
   if (event.type === "transfer.reversed") {
     const transfer = event.data.object as Stripe.Transfer;
 
+    // WS2.1 (audit R3.1 CRITICAL, verified): this used to write `failed`,
+    // which is a RETRYABLE state - the daily sweep re-executed the transfer
+    // in full once the 24h Stripe idempotency key lapsed, turning every
+    // reversal (in-app refunds included, since Stripe echoes their reversal
+    // back as this event) into a scheduled double payment. A reversal is
+    // terminal: the money came back deliberately.
     const { error } = await db
       .from("stripe_transfers")
-      .update({ status: "failed" })
+      .update({ status: "reversed" })
       .eq("stripe_transfer_id", transfer.id);
 
     if (error) console.error("Transfer reversed update error:", error);
+  }
+
+  // ─── Card expiring (WS4.5, audit R2.4): the pre-failure warning ───
+  //
+  // The registered subscription_card_expiring template had no sender, so the
+  // first anyone heard about an expiring card was the failed invoice.
+  if (event.type === "customer.source.expiring") {
+    const source = event.data.object as Stripe.Card & { customer?: string | Stripe.Customer | null };
+    const customerId = typeof source.customer === "string" ? source.customer : source.customer?.id;
+    if (customerId) {
+      const { data: profile } = await db
+        .from("artist_profiles")
+        .select("user_id, name")
+        .eq("stripe_customer_id", customerId)
+        .maybeSingle<{ user_id: string | null; name: string | null }>();
+      if (profile?.user_id) {
+        const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+        if (user?.email) {
+          await sendEmail({
+            idempotencyKey: `card_expiring:${customerId}:${source.exp_month}-${source.exp_year}`,
+            template: "subscription_card_expiring",
+            category: "orders_and_payouts",
+            to: user.email,
+            userId: profile.user_id,
+            subject: "Your card is about to expire",
+            react: SubscriptionCardExpiring({
+              firstName: (profile.name || "there").split(" ")[0],
+              last4: source.last4 || "____",
+              expiresAt: `${String(source.exp_month).padStart(2, "0")}/${source.exp_year}`,
+              updatePaymentUrl: `${SITE}/artist-portal/billing`,
+            }),
+            metadata: { customerId },
+          });
+        }
+      }
+    }
+    return NextResponse.json({ received: true });
+  }
+
+  // ─── Chargebacks (WS1.2, audit R3.2 CRITICAL) ───
+  //
+  // Until 2026-08-28 these events were claimed by the dedup table and acked
+  // with the default 200: the platform silently lost the sale plus the
+  // dispute fee, held artist legs still paid out on schedule mid-case, and
+  // nobody was told inside the evidence window. The dispute email's "we hold
+  // the payout while the case is open" promise is now true.
+  if (event.type === "charge.dispute.created") {
+    const dispute = event.data.object as Stripe.Dispute;
+    const paymentIntentId =
+      typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
+    const { data: order } = paymentIntentId
+      ? await db.from("orders").select("id, status, buyer_email, artist_slug").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      : { data: null };
+
+    if (order) {
+      // Hold every not-yet-paid leg. Paid legs are dealt with on `closed`
+      // (a reversal only if the dispute is LOST).
+      const { error: holdErr } = await db
+        .from("stripe_transfers")
+        .update({ status: "blocked", last_error: `held: chargeback ${dispute.id}`, updated_at: new Date().toISOString() })
+        .eq("order_id", order.id)
+        .in("status", ["pending", "failed"]);
+      if (holdErr) console.error("[webhook] dispute leg hold failed:", holdErr);
+
+      const { error: stErr } = await db.from("orders").update({ status: "disputed" }).eq("id", order.id);
+      if (stErr) console.error("[webhook] dispute status write failed:", stErr);
+    }
+
+    const dueBy = dispute.evidence_details?.due_by
+      ? new Date(dispute.evidence_details.due_by * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long" })
+      : "unknown";
+    await sendAdminAlert({
+      idempotencyKey: `chargeback_opened:${dispute.id}`,
+      subject: `Chargeback opened: £${(dispute.amount / 100).toFixed(2)}${order ? ` on ${order.id}` : ""}`,
+      summary: `A buyer disputed a charge (reason: ${dispute.reason}). Artist payouts for the order are held. Evidence is due by ${dueBy}; respond in the Stripe dashboard or the money is lost by default.`,
+      fields: [
+        { label: "Dispute", value: dispute.id },
+        { label: "Order", value: order?.id || "no matching order" },
+        { label: "Amount", value: `£${(dispute.amount / 100).toFixed(2)}` },
+        { label: "Reason", value: dispute.reason || "unknown" },
+        { label: "Evidence due", value: dueBy },
+      ],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    });
+    return NextResponse.json({ received: true });
+  }
+
+  if (event.type === "charge.dispute.closed") {
+    const dispute = event.data.object as Stripe.Dispute;
+    const paymentIntentId =
+      typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
+    const { data: order } = paymentIntentId
+      ? await db.from("orders").select("id, status, delivered_at").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      : { data: null };
+
+    if (order && dispute.status === "won") {
+      // Release the held legs back to the queue; the sweep pays them.
+      await db
+        .from("stripe_transfers")
+        .update({ status: "pending", last_error: null, updated_at: new Date().toISOString() })
+        .eq("order_id", order.id)
+        .eq("status", "blocked")
+        .like("last_error", "held: chargeback%");
+      await db
+        .from("orders")
+        .update({ status: order.delivered_at ? "delivered" : "confirmed" })
+        .eq("id", order.id);
+    } else if (order && dispute.status === "lost") {
+      // The buyer's bank took the money. Held/pending legs die; PAID legs are
+      // clawed back with an idempotent reversal per leg.
+      await db
+        .from("stripe_transfers")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("order_id", order.id)
+        .in("status", ["pending", "failed", "blocked"]);
+      const { data: paidLegs } = await db
+        .from("stripe_transfers")
+        .select("id, stripe_transfer_id")
+        .eq("order_id", order.id)
+        .eq("status", "paid");
+      for (const leg of (paidLegs || []) as Array<{ id: string; stripe_transfer_id: string | null }>) {
+        if (!leg.stripe_transfer_id) continue;
+        try {
+          await stripe.transfers.createReversal(
+            leg.stripe_transfer_id,
+            {},
+            { idempotencyKey: `chargeback:${dispute.id}:reversal:${leg.id}` },
+          );
+          await db.from("stripe_transfers").update({ status: "reversed", updated_at: new Date().toISOString() }).eq("id", leg.id);
+        } catch (revErr) {
+          console.error("[webhook] chargeback reversal failed:", { leg: leg.id, revErr });
+        }
+      }
+      await db.from("orders").update({ status: "refunded" }).eq("id", order.id);
+    }
+
+    await sendAdminAlert({
+      idempotencyKey: `chargeback_closed:${dispute.id}`,
+      subject: `Chargeback ${dispute.status}: £${(dispute.amount / 100).toFixed(2)}${order ? ` on ${order.id}` : ""}`,
+      summary:
+        dispute.status === "won"
+          ? "The dispute was won. Held artist payouts have been released back to the queue."
+          : dispute.status === "lost"
+            ? "The dispute was lost: the buyer's bank kept the money, held payouts were cancelled and any already-paid artist legs were reversed. Check the reversal results below in Stripe."
+            : `The dispute closed with status ${dispute.status}.`,
+      fields: [
+        { label: "Dispute", value: dispute.id },
+        { label: "Order", value: order?.id || "no matching order" },
+        { label: "Outcome", value: dispute.status || "unknown" },
+      ],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    });
+    return NextResponse.json({ received: true });
+  }
+
+  // ─── Dashboard-initiated refunds (WS1.3, audit R1.F2 / R3.5) ───
+  //
+  // stripe.refunds.create from the in-app flow ALSO emits this event; the
+  // order is already marked refunded there, so the no-op guard below keeps
+  // the two paths from double-processing. What this handler catches is the
+  // refund issued straight from the Stripe dashboard, which previously never
+  // reached the books: legs kept paying, stock stayed sold, the order lied.
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    const paymentIntentId =
+      typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id;
+    const { data: order } = paymentIntentId
+      ? await db.from("orders").select("id, status, buyer_email, items").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      : { data: null };
+
+    if (!order || order.status === "refunded") {
+      return NextResponse.json({ received: true, ignored: order ? "already_refunded" : "no_matching_order" });
+    }
+
+    const fullyRefunded = charge.refunded === true;
+    if (!fullyRefunded) {
+      // A PARTIAL dashboard refund has no in-app record naming which line it
+      // was for, so leg surgery here would guess. Alert a human instead of
+      // guessing with money.
+      await sendAdminAlert({
+        idempotencyKey: `dashboard_partial_refund:${charge.id}:${charge.amount_refunded}`,
+        subject: `Partial dashboard refund on ${order.id}: £${(charge.amount_refunded / 100).toFixed(2)}`,
+        summary: "A partial refund was issued from the Stripe dashboard. The books were NOT adjusted automatically because the refunded line is unknown; reconcile the artist legs by hand via the in-app refund flow.",
+        fields: [
+          { label: "Order", value: order.id },
+          { label: "Refunded so far", value: `£${(charge.amount_refunded / 100).toFixed(2)}` },
+        ],
+        actionPath: "/admin/financials",
+        actionLabel: "Open financials",
+      });
+      return NextResponse.json({ received: true, partial: true });
+    }
+
+    // Full refund: cancel unpaid legs, reverse paid legs, restock, mark, tell.
+    await db
+      .from("stripe_transfers")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("order_id", order.id)
+      .in("status", ["pending", "failed", "blocked"]);
+    const { data: paidLegs } = await db
+      .from("stripe_transfers")
+      .select("id, stripe_transfer_id")
+      .eq("order_id", order.id)
+      .eq("status", "paid");
+    for (const leg of (paidLegs || []) as Array<{ id: string; stripe_transfer_id: string | null }>) {
+      if (!leg.stripe_transfer_id) continue;
+      try {
+        await stripe.transfers.createReversal(
+          leg.stripe_transfer_id,
+          {},
+          { idempotencyKey: `dashrefund:${charge.id}:reversal:${leg.id}` },
+        );
+        await db.from("stripe_transfers").update({ status: "reversed", updated_at: new Date().toISOString() }).eq("id", leg.id);
+      } catch (revErr) {
+        console.error("[webhook] dashboard-refund reversal failed:", { leg: leg.id, revErr });
+      }
+    }
+    for (const item of ((order.items as Array<{ workId?: string; quantity?: number; qty?: number }>) || [])) {
+      if (!item.workId) continue;
+      const { error: restockErr } = await db.rpc("restock_work", {
+        p_work_id: item.workId,
+        p_qty: Number(item.qty ?? item.quantity ?? 1),
+      });
+      if (restockErr) console.warn("[webhook] dashboard-refund restock failed:", restockErr);
+    }
+    await db.from("orders").update({ status: "refunded" }).eq("id", order.id);
+    if (order.buyer_email) {
+      try {
+        await sendEmail({
+          idempotencyKey: `refund:${order.id}:dashboard`,
+          template: "customer_refund_confirmation",
+          category: "orders_and_payouts",
+          to: order.buyer_email,
+          subject: `Your refund for order ${order.id}`,
+          react: CustomerRefundConfirmation({
+            firstName: "there",
+            orderNumber: order.id,
+            refundAmount: { amount: charge.amount_refunded, currency: "GBP" },
+            expectedArrival: "5 to 10 business days",
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { orderId: order.id },
+        });
+      } catch (mailErr) {
+        console.warn("[webhook] dashboard-refund email failed:", mailErr);
+      }
+    }
+    await sendAdminAlert({
+      idempotencyKey: `dashboard_refund:${charge.id}`,
+      subject: `Dashboard refund processed on ${order.id}`,
+      summary: "A full refund issued from the Stripe dashboard was reconciled automatically: unpaid legs cancelled, paid legs reversed, stock restored, buyer emailed.",
+      fields: [{ label: "Order", value: order.id }],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    });
+    return NextResponse.json({ received: true });
+  }
+
+  // ─── refund.failed (WS1.4): the buyer's money did NOT go back ───
+  if (event.type === "refund.failed") {
+    const refund = event.data.object as Stripe.Refund;
+    const paymentIntentId =
+      typeof refund.payment_intent === "string" ? refund.payment_intent : refund.payment_intent?.id;
+    const { data: order } = paymentIntentId
+      ? await db.from("orders").select("id, status").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      : { data: null };
+    await sendAdminAlert({
+      idempotencyKey: `refund_failed:${refund.id}`,
+      subject: `Refund FAILED${order ? ` on ${order.id}` : ""}: £${(refund.amount / 100).toFixed(2)}`,
+      summary: "Stripe could not return the money to the buyer (failure reason below). The order may be marked refunded while the buyer has not been paid back; resolve in the Stripe dashboard and contact the buyer.",
+      fields: [
+        { label: "Refund", value: refund.id },
+        { label: "Order", value: order?.id || "no matching order" },
+        { label: "Reason", value: (refund as { failure_reason?: string }).failure_reason || "unknown" },
+      ],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    });
+    return NextResponse.json({ received: true });
   }
 
   // ─── Connect account onboarding updates ───
@@ -1918,6 +2555,21 @@ async function handleWebhookEvent(
       .from("artist_profiles")
       .update(patch)
       .eq("stripe_connect_account_id", account.id);
+
+    // WS2.3 (audit R3.7): `blocked` used to be a dead end - money owed to a
+    // not-yet-payable recipient never became payable when they finished
+    // onboarding. When payouts flip on, release the blocked legs for this
+    // account back to the queue. Dispute holds are NOT released here: those
+    // are blocked for a reason that onboarding cannot cure.
+    if (account.payouts_enabled) {
+      const { error: unblockErr } = await db
+        .from("stripe_transfers")
+        .update({ status: "pending", last_error: null, updated_at: new Date().toISOString() })
+        .eq("stripe_connect_account_id", account.id)
+        .eq("status", "blocked")
+        .not("last_error", "like", "held: chargeback%");
+      if (unblockErr) console.warn("[webhook] blocked-leg release failed:", unblockErr);
+    }
 
     // KYC-needed email: Stripe populates `requirements.currently_due` when
     // the Connect account is missing info. We only email the artist side
@@ -1983,6 +2635,8 @@ async function scheduleOrderLegs(
 ): Promise<void> {
   const { orderId, legs, venueSlug, venueRevenue, isCollection } = params;
 
+  const schedulingFailures: string[] = [];
+
   // Transfer venue revenue share.
   if (venueSlug && venueRevenue > 0) {
     try {
@@ -2022,6 +2676,7 @@ async function scheduleOrderLegs(
       }
     } catch (transferErr) {
       console.error("Venue transfer error:", transferErr);
+      schedulingFailures.push(`venue ${venueSlug}: ${transferErr instanceof Error ? transferErr.message : String(transferErr)}`);
     }
   }
 
@@ -2059,6 +2714,22 @@ async function scheduleOrderLegs(
       }
     } catch (transferErr) {
       console.error("Artist transfer error:", { slug: leg.artistSlug, transferErr });
+      schedulingFailures.push(`${leg.artistSlug}: ${transferErr instanceof Error ? transferErr.message : String(transferErr)}`);
     }
+  }
+
+  // WS2.5 (audit R1.F10): a per-leg scheduling failure used to be a log line
+  // only, and the whole-order reconciler is blind to orders that HAVE some
+  // legs. Anything that slipped through the idempotent retries above gets a
+  // human, with the order id they need.
+  if (schedulingFailures.length > 0) {
+    await sendAdminAlert({
+      idempotencyKey: `leg_schedule_failed:${orderId}`,
+      subject: `Payout leg scheduling failed on ${orderId}`,
+      summary: "One or more payout legs could not be written to the ledger. The buyer has paid; the listed recipients have no pending transfer. Redeliver the Stripe event or record the legs by hand.",
+      fields: schedulingFailures.map((f, i) => ({ label: `Failure ${i + 1}`, value: f })),
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    }).catch(() => {});
   }
 }

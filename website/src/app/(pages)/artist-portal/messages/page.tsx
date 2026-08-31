@@ -14,8 +14,17 @@ export default function ArtistMessagesPage() {
   }
 
   const userSlug = artist?.slug || "unknown";
-  const initialArtistSlug = searchParams.get("artist") || undefined;
-  const initialArtistName = searchParams.get("artistName") || undefined;
+  // QA 2026-08-30 bug 40: "Message this venue" on every venue page links here
+  // with ?venue=&venueName= (VenueProfileApplyCta), but this page only read
+  // ?artist=, so the parameters were dropped and the inbox opened on "Select a
+  // conversation" with no composer. That is the primary artist-to-venue contact
+  // route on the platform, and it is metered, so an artist could spend an
+  // approach and land nowhere. The prop is the COUNTERPARTY slug regardless of
+  // whether that party is an artist or a venue, so both spellings feed it.
+  const initialArtistSlug =
+    searchParams.get("venue") || searchParams.get("artist") || undefined;
+  const initialArtistName =
+    searchParams.get("venueName") || searchParams.get("artistName") || undefined;
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/messages">

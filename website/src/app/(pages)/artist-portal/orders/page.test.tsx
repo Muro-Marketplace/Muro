@@ -24,6 +24,29 @@ vi.mock("@/components/ArtistPortalLayout", () => ({ default: ({ children }: { ch
 vi.mock("@/components/EmptyState", () => ({ default: () => null }));
 vi.mock("@/components/OrderStatusTracker", () => ({ default: () => null }));
 
+// next/navigation — required by useUrlState (useSearchParams) behind the
+// page's Suspense boundary.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => ({ get: () => null, toString: () => "" }),
+  usePathname: () => "/artist-portal/orders",
+}));
+
+// useUrlState — R6.F9: `?id=` selects the order (detail panel open). Mocked
+// on useState so tests can pre-select via urlStateValues without a real
+// router round-trip (mirrors the customer-portal harness).
+const urlStateValues: Record<string, string> = {};
+vi.mock("@/lib/use-url-state", async () => {
+  const { useState } = await import("react");
+  return {
+    useUrlState: (param: string, defaultValue: string) => {
+      const initial = urlStateValues[param] !== undefined ? urlStateValues[param] : defaultValue;
+      const [val, setVal] = useState(initial);
+      return [val, setVal];
+    },
+  };
+});
+
 import ArtistOrdersPage from "./page";
 import { ApiError } from "@/lib/api-client";
 
@@ -46,6 +69,7 @@ afterEach(() => cleanup());
 beforeEach(() => {
   authFetchMock.mockReset();
   mutateMock.mockReset();
+  for (const key of Object.keys(urlStateValues)) delete urlStateValues[key];
   authFetchMock.mockImplementation((url: string) =>
     Promise.resolve(
       new Response(JSON.stringify(url.includes("refunds") ? { refundRequests: [] } : { orders: [ORDER] }), { status: 200 }),
@@ -79,6 +103,26 @@ function mockReads(refundRequests: unknown[]) {
     ),
   );
 }
+
+describe("a pending refund is visible without expanding the row (bug 29)", () => {
+  it("badges the row, so the sale does not look like an ordinary completed one", async () => {
+    // One production request had been pending over four months, including one
+    // the artist raised themselves, while the row showed nothing and its value
+    // still counted toward headline earnings.
+    mockReads([PENDING_REFUND]);
+    render(<ArtistOrdersPage />);
+
+    expect(await screen.findByText("REFUND PENDING")).toBeTruthy();
+  });
+
+  it("shows no badge when nothing is pending against the order", async () => {
+    mockReads([]);
+    render(<ArtistOrdersPage />);
+
+    await screen.findByText("o1");
+    expect(screen.queryByText("REFUND PENDING")).toBeNull();
+  });
+});
 
 describe("artist orders refund actions (D18: approve/reject feedback)", () => {
   it("surfaces the server error and keeps the request pending when approve fails", async () => {
@@ -153,6 +197,28 @@ describe("artist orders Issue Refund (D19: honest 403 handling)", () => {
   });
 });
 
+describe("artist orders ?id= deep link (WS6.6 / R6.F9)", () => {
+  it("opens the order detail panel when the bell's ?id= param names an order", async () => {
+    // Fail-before: the refund bells promise "approve / reject directly" via
+    // /artist-portal/orders?id={orderId}, but selection was plain useState so
+    // the param was ignored and the artist landed on the unfiltered list.
+    mockReads([PENDING_REFUND]);
+    urlStateValues.id = "o1";
+
+    render(<ArtistOrdersPage />);
+
+    expect(await screen.findByText("Order o1")).toBeTruthy();
+    // The deep-linked panel surfaces the pending refund the bell was about.
+    expect(await screen.findByText("Approve Refund")).toBeTruthy();
+  });
+
+  it("still renders the plain list when no id is in the URL", async () => {
+    render(<ArtistOrdersPage />);
+    expect(await screen.findByText("o1")).toBeTruthy();
+    expect(screen.queryByText("Order o1")).toBeNull();
+  });
+});
+
 describe("artist orders status update (05 mutate migration)", () => {
   it("surfaces the server error and does not advance status when the update fails", async () => {
     mutateMock.mockRejectedValue(new ApiError(403, "Order missing artist link", "forbidden", {}));
@@ -169,5 +235,39 @@ describe("artist orders status update (05 mutate migration)", () => {
 
     // After success the status is "shipped", so the "Mark as Shipped" action is gone.
     await waitFor(() => expect(screen.queryByText("Mark as Shipped")).toBeNull());
+  });
+});
+
+describe("artist orders ?order= alias + deep-link scroll (D4)", () => {
+  beforeEach(() => {
+    // jsdom has no scrollIntoView; the deep-link effect calls it on the
+    // detail panel.
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    window.history.replaceState({}, "", "/artist-portal/orders");
+  });
+
+  it("opens the detail panel from the legacy ?order= param and scrolls it into view", async () => {
+    // The customer portal's deep links use ?order=; the artist page reads it
+    // as an alias for ?id= so hand-copied links keep working.
+    window.history.replaceState({}, "", "/artist-portal/orders?order=o1");
+    mockReads([]);
+
+    render(<ArtistOrdersPage />);
+
+    expect(await screen.findByText("Order o1")).toBeTruthy();
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+  });
+
+  it("ignores a deep link naming an order that is not in the list", async () => {
+    window.history.replaceState({}, "", "/artist-portal/orders?order=someone-elses");
+    mockReads([]);
+
+    render(<ArtistOrdersPage />);
+
+    expect(await screen.findByText("o1")).toBeTruthy();
+    expect(screen.queryByText("Order o1")).toBeNull();
   });
 });

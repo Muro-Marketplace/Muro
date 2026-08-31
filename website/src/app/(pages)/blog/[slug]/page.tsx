@@ -3,6 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { blogPosts } from "@/data/blog-posts";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { renderMarkdown } from "@/lib/markdown";
 import { slugify } from "@/lib/slugify";
 import type { Metadata } from "next";
 
@@ -299,11 +300,12 @@ function DbBlogView({
             )}
           </div>
           <div className="prose prose-lg max-w-none">
-            {(blog.body_markdown ?? "").split("\n\n").map((paragraph, i) => (
-              <p key={i} className="text-foreground/80 leading-relaxed mb-6 text-base whitespace-pre-wrap">
-                {paragraph}
-              </p>
-            ))}
+            {/* A32: the editor's own label says "Body (markdown)", but this
+                used to split on blank lines and print each chunk verbatim, so
+                artists' headings, links and lists were published as raw
+                syntax. renderMarkdown returns React elements, never HTML, so
+                nothing user-authored can inject markup. */}
+            {renderMarkdown(blog.body_markdown ?? "")}
           </div>
 
           {featured.length > 0 && (

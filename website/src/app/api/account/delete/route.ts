@@ -157,6 +157,71 @@ export async function POST(request: Request) {
   // failures invisible: the account is gone, so nobody can log in and
   // notice their data survived.
   const failures: string[] = [];
+
+  // WS3.2 (missing-events gap 2, CRITICAL): deletion must stop the money.
+  // Before this, a deleted person's Stripe subscriptions kept billing forever:
+  // their SaaS plan, any paid-loan placements they were paying for as a
+  // venue, and any managed curation retainer. Cancellation failures collect
+  // like every other step, and a failure ABORTS the deletion below, because
+  // "account gone, card still charged monthly" is the one outcome worse than
+  // asking the user to try again.
+  const cancelStripeSub = async (label: string, subId: string | null | undefined) => {
+    if (!subId) return;
+    try {
+      const { stripe } = await import("@/lib/stripe");
+      await stripe.subscriptions.cancel(subId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Already-cancelled or missing is the state we wanted.
+      if (/canceled subscription/i.test(msg) || /No such subscription/i.test(msg)) return;
+      failures.push(`${label}: ${msg}`);
+    }
+  };
+  {
+    const { data: artistRow } = await db
+      .from("artist_profiles")
+      .select("stripe_subscription_id")
+      .eq("user_id", userId)
+      .maybeSingle<{ stripe_subscription_id: string | null }>();
+    await cancelStripeSub("stripe (artist plan)", artistRow?.stripe_subscription_id);
+
+    const { data: paidLoans } = await db
+      .from("placement_recurring_billings")
+      .select("stripe_subscription_id, status")
+      .eq("payer_user_id", userId)
+      .in("status", ["active", "past_due", "paused"]);
+    for (const row of (paidLoans || []) as Array<{ stripe_subscription_id: string | null; status: string }>) {
+      await cancelStripeSub("stripe (paid loan)", row.stripe_subscription_id);
+    }
+
+    const { data: curations } = await db
+      .from("curation_requests")
+      .select("stripe_subscription_id, status")
+      .eq("requester_user_id", userId)
+      .in("status", ["in_progress", "past_due", "paused"]);
+    for (const row of (curations || []) as Array<{ stripe_subscription_id: string | null; status: string }>) {
+      await cancelStripeSub("stripe (curation)", row.stripe_subscription_id);
+    }
+  }
+
+  // Abort BEFORE the scrub, not after. The generic failure check at the end of
+  // this route refuses to delete the auth user, but by then the data is
+  // already gone, which would leave the worst of both: a scrubbed account that
+  // still exists and still cannot be deleted while Stripe stays unreachable.
+  // Stopping here costs the user a retry and loses nothing.
+  if (failures.length > 0) {
+    console.error("[account/delete] aborted before scrub, Stripe cancel failed:", failures);
+    return NextResponse.json(
+      {
+        error:
+          "We could not stop your active billing, so we have not deleted anything yet. " +
+          "Nothing has been removed and nothing has been charged. Please try again shortly, " +
+          "or contact support and we will finish it by hand.",
+      },
+      { status: 500 },
+    );
+  }
+
   const step = async (label: string, run: () => PromiseLike<{ error: unknown } | void>) => {
     try {
       const result = await run();

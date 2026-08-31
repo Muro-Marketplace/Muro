@@ -44,7 +44,25 @@ function isOrderStatus(value: string): value is OrderStatus {
   return (ORDER_STATUSES as readonly string[]).includes(value);
 }
 
-export function canTransition(from: OrderStatus, to: OrderStatus): TransitionResult {
+// WS3.4 (missing-events row 9): a collection order has no dispatch leg, so
+// `delivered` (the buyer confirming the handover) is reachable from every
+// pre-shipped pipeline state. Without this, collect-from-venue orders sat at
+// `confirmed` forever: delivered_at never stamped, the statutory 14-day
+// refund window never started, and the confirm prompt never fired. The edge
+// exists ONLY when the caller says the order is a collection (and delivered
+// stays buyer-only in the route), so shipped orders keep the strict pipeline.
+const COLLECTION_DELIVERABLE: readonly OrderStatus[] = [
+  "confirmed",
+  "artist_notified",
+  "awaiting_dispatch",
+  "processing",
+];
+
+export function canTransition(
+  from: OrderStatus,
+  to: OrderStatus,
+  opts: { collection?: boolean } = {},
+): TransitionResult {
   if (!isOrderStatus(from)) {
     return { ok: false, reason: `Unknown current status: ${from}` };
   }
@@ -52,6 +70,9 @@ export function canTransition(from: OrderStatus, to: OrderStatus): TransitionRes
     return { ok: false, reason: `Unknown target status: ${to}` };
   }
   if (TRANSITIONS[from].includes(to)) {
+    return { ok: true };
+  }
+  if (opts.collection && to === "delivered" && COLLECTION_DELIVERABLE.includes(from)) {
     return { ok: true };
   }
   return {

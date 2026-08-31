@@ -78,6 +78,9 @@ export interface ArtistWork {
     status: string | null;
     collectionAddress: string | null;
     placedSizeLabel: string | null;
+    /** 121: buy-off-the-wall offer for this placed piece; null = no offer. */
+    inStorePrice?: number | null;
+    inStoreFrameIncluded?: boolean;
   } | null;
   /** Soft FK to placements.id for the active placement on this work. */
   current_placement_id?: string | null;

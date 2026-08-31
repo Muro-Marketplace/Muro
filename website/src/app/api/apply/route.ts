@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { applySchema } from "@/lib/validations";
+import { buildArtistApplicationRow } from "@/lib/artist-application-row";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationSubmitted } from "@/emails/templates/artist-additions/ArtistApplicationSubmitted";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -56,15 +57,37 @@ export async function POST(request: Request) {
 
     const d = parsed.data;
 
-    // Row G L2366. The referral code is stored verbatim, so application 29
-    // carried `QATESTREF` — a code no artist owns — into `referred_by_code` as
-    // if it were real. Nothing downstream re-checks it, `artist_referrals` holds
-    // 0 rows across all of production, and the admin reviewing the application
-    // sees an attribution that will never pay anyone. Resolve it against the
-    // codes that actually exist and drop it if it matches none. A code the
-    // applicant mistyped is worth losing; a code that looks credited and is not
-    // is worse than none.
-    const claimedCode = (d as { referralCode?: string }).referralCode?.trim().toUpperCase() || "";
+    // A50 (QA 2026-08-28): the whole point of auth-gating the application is
+    // to reject impersonation instead of trusting whatever email the form
+    // sent, and this route never actually checked. A signed-in user could
+    // file an application, and trigger the acknowledgement email, for any
+    // address they liked. When we know who the caller is, the application
+    // email must be their own; the legacy unauthenticated path is unchanged.
+    if (authedUser?.email && d.email.toLowerCase() !== authedUser.email.toLowerCase()) {
+      return NextResponse.json(
+        {
+          error: `Please apply with the email on your account (${authedUser.email}). To use a different address, sign out first.`,
+        },
+        { status: 403 },
+      );
+    }
+
+    // ONE insert, no strip-and-retry. Every column below exists in production
+    // (checked against `tests/integration/schema-columns.json` and against the
+    // live schema), so the ladder that used to sit under this could not do what
+    // it claimed. What it actually did was worse than nothing: see migration 109.
+    // A L514 (production pass, 2026-08-30): submitting with the optional
+    // fields blank answered 500. `primary_medium` was written as an explicit
+    // null and `artist_statement` as undefined, which JSON serialisation drops
+    // so the column never reached the INSERT. Both are NOT NULL with no
+    // default. Row building now lives in one tested place, see
+    // `lib/artist-application-row.ts` for why "" is the right coercion.
+    // Row G L2366. Resolve the claimed referral code against the codes that
+    // actually exist before it is stored. A code the applicant mistyped is
+    // worth losing; a code that looks credited and is not is worse than none,
+    // and `artist_referrals` held 0 rows across all of production because
+    // nothing downstream ever re-checked it.
+    const claimedCode = d.referralCode?.trim().toUpperCase() || "";
     let referredByCode: string | null = null;
     if (claimedCode) {
       const { data: referrer } = await getSupabaseAdmin()
@@ -78,63 +101,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // ONE insert, no strip-and-retry. Every column below exists in production
-    // (checked against `tests/integration/schema-columns.json` and against the
-    // live schema), so the ladder that used to sit under this could not do what
-    // it claimed. What it actually did was worse than nothing: see migration 109.
-    const fullRow: Record<string, unknown> = {
-      name: d.name,
-      email: d.email,
-      location: d.location,
-      instagram: d.instagram || null,
-      website: d.website || null,
-      // NOT NULL with no default, and the form labels this field optional. It
-      // was `|| null`, so leaving the select blank made Postgres reject the
-      // whole insert and the applicant got an unexplained 500 at the first step
-      // of the funnel (row A L514). The profile bridge below this already used
-      // `|| ""`, which is what the column needs.
-      primary_medium: d.primaryMedium || "",
-      discipline: d.discipline || null,
-      sub_styles: d.subStyles || [],
-      // Merge `sampleWorkUrls` into `portfolio_link` until we have a
-      // dedicated samples column. Existing portfolio link kept on its
-      // own line, sample URLs follow on subsequent lines so admins
-      // reviewing the application see everything in one place.
-      portfolio_link: (() => {
-        const samples = (d as { sampleWorkUrls?: string[] }).sampleWorkUrls
-          ?.map((u) => u?.trim())
-          .filter((u): u is string => !!u && u.length > 0);
-        const main = d.portfolioLink?.trim() || "";
-        if (!samples || samples.length === 0) return main;
-        const sampleBlock = samples
-          .map((u, i) => `Sample ${i + 1}: ${u}`)
-          .join("\n");
-        return main ? `${main}\n${sampleBlock}` : sampleBlock;
-      })(),
-      // Also NOT NULL, also optional in the schema. The form always posts the
-      // key so it arrives as "" and survives, but a client that omits it drops
-      // the key from the JSON body entirely and Postgres rejects the insert the
-      // same way `primary_medium` did.
-      artist_statement: d.artistStatement || "",
-      trader_status: d.traderStatus || null,
-      business_name: d.businessName || null,
-      vat_number: d.vatNumber || null,
-      offers_originals: d.offersOriginals || false,
-      offers_prints: d.offersPrints || false,
-      offers_framed: d.offersFramed || false,
-      offers_commissions: d.offersCommissions || false,
-      open_to_free_loan: d.openToFreeLoan || false,
-      open_to_revenue_share: d.openToRevenueShare || false,
-      open_to_purchase: d.openToPurchase || false,
-      delivery_radius: d.deliveryRadius || null,
-      venue_types: d.venueTypes || [],
-      themes: d.themes || [],
-      hear_about: d.hearAbout || null,
-      selected_plan: d.selectedPlan || "core",
-      referred_by_code: referredByCode,
-      status: "pending",
-      created_at: new Date().toISOString(),
-    };
+    const fullRow = buildArtistApplicationRow(d, { referredByCode });
 
     // X3 / 074. Was the anon client. Migration 074 drops both
     // `WITH CHECK (true)` INSERT policies on artist_applications, so an anon
@@ -260,8 +227,12 @@ export async function POST(request: Request) {
         // K1: was notifyAdminNewApplication in the legacy module. Through the
         // pipeline it gets an email_events row and an idempotency key, so a
         // retried submission no longer pings the admin twice.
+        // R4.15: keyed on the bare email, this burnt forever, so a rejected
+        // artist re-applying (their old row deleted) pinged nobody. The
+        // submission's created_at scopes the key to THIS application; the
+        // unique email constraint already stops double-submits reaching here.
         await sendAdminAlert({
-          idempotencyKey: `admin_new_application:${d.email.toLowerCase()}`,
+          idempotencyKey: `admin_new_application:${d.email.toLowerCase()}:${fullRow.created_at}`,
           subject: `New artist application: ${d.name}`,
           summary: `${d.name} has applied to join Wallplace.`,
           fields: [
@@ -274,17 +245,18 @@ export async function POST(request: Request) {
         });
 
         // Applicant receipt via the new pipeline (polished template, logged,
-        // preference-aware). We key idempotency off the email address so a
-        // double-submit from the form doesn't double-send.
+        // preference-aware). R4.15: keyed per submission (email + the row's
+        // created_at), not per address, so a legitimate re-application after a
+        // rejection gets its receipt. Double-submits never reach this block:
+        // the duplicate insert 23505s and alreadyApplied skips both sends.
         await sendEmail({
-          idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}`,
+          idempotencyKey: `artist_application_submitted:${d.email.toLowerCase()}:${fullRow.created_at}`,
           template: "artist_application_submitted",
           category: "placements",
           to: d.email,
           subject: "We've received your Wallplace application",
           react: ArtistApplicationSubmitted({
             firstName: (d.name || "there").split(" ")[0],
-            reviewTimelineDays: 3,
             portfolioUrl: `${SITE}/artist-portal/portfolio`,
           }),
           metadata: { email: d.email, location: d.location },

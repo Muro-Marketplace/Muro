@@ -59,7 +59,7 @@ const artistFaqs: FaqEntry[] = [
   {
     question: "How does the curation process work?",
     answer:
-      "After you submit your application with a portfolio of your work, our team reviews it based on technical quality, originality, consistency, and suitability for display in commercial spaces. We aim to respond within 5 business days. If accepted, we will schedule an onboarding call to discuss your portfolio, pricing, and preferences.",
+      "After you submit your application with a portfolio of your work, our team reviews it based on technical quality, originality, consistency, and suitability for display in commercial spaces. We aim to respond within 5 business days. If accepted, you'll get an onboarding email with everything you need to set up your portfolio, pricing, and preferences.",
   },
   {
     question: "What happens after my application is accepted?",
@@ -68,13 +68,11 @@ const artistFaqs: FaqEntry[] = [
         <p>
           Within 1 working day of acceptance you&rsquo;ll get an onboarding email
           with a link to set your password, upload your portfolio, and
-          configure pricing + delivery preferences. We&rsquo;ll book a 30-minute
-          onboarding call within the next week to walk through it together
-          and help you set up your first works.
+          configure pricing + delivery preferences. If you&rsquo;d like a hand
+          getting set up, reply to that email and we&rsquo;ll help.
         </p>
         <p>
-          Once your portfolio is live, venues can start enquiring immediately,
-          most artists see their first venue interest in the first 2 to 3 weeks.
+          Once your portfolio is live, venues can start enquiring immediately.
           You can read more about{" "}
           <Link href="/how-it-works">how the platform works end-to-end</Link>{" "}
           or check the <Link href="/artist-agreement">artist agreement</Link>.
@@ -377,7 +375,7 @@ export default function FaqsPage() {
             <h2 className="text-3xl mb-4">Still have questions?</h2>
             <p className="text-muted leading-relaxed mb-8">
               We are happy to help. Get in touch and we will get back to you
-              within 24 hours.
+              within 2 working days.
             </p>
             <Button href="/contact" variant="primary" size="lg">
               Contact Us

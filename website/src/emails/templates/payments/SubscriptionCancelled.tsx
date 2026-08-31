@@ -18,6 +18,11 @@ export function SubscriptionCancelled({ firstName, planName, accessEndsAt, react
       <P>Hi {firstName}, your {planName} subscription is scheduled to end on <strong>{accessEndsAt}</strong>. You&rsquo;ll keep full access until then.</P>
       <P>If you change your mind:</P>
       <Button href={reactivateUrl}>Reactivate</Button>
+      <P>
+        One thing to know: while your subscription is inactive your portfolio is not shown in
+        the public marketplace. Resubscribe any time and your work is listed again straight
+        away, exactly as you left it.
+      </P>
       <SupportBlock supportUrl={supportUrl} />
     </EmailShell>
   );

@@ -23,7 +23,7 @@ export default function TermsPage() {
             </div>
 
             <div className="space-y-10">
-              <div>
+              <div id="about" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">1. About These Terms</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>These terms govern your use of wallplace.co.uk and the Wallplace platform (the &ldquo;Platform&rdquo;). By creating an account or using the Platform, you agree to be bound by these terms.</p>
@@ -32,7 +32,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="definitions" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">2. Definitions</h2>
                 <div className="space-y-2 text-muted leading-relaxed">
                   <p><strong className="text-foreground">Platform</strong> means the Wallplace website, services, and tools.</p>
@@ -47,7 +47,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="platform" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">3. The Wallplace Platform</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Wallplace connects artists with commercial venues such as cafes, restaurants, hotels, offices, and bars. The Platform enables artists to showcase their work and enables venues to discover and source original artwork.</p>
@@ -57,7 +57,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="accounts" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">4. Account Registration</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>You must be at least 18 years old to create an account. You must provide accurate, complete, and current information during registration and keep it updated.</p>
@@ -66,7 +66,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="artists" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">5. Artist-Specific Terms</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Artists must be accepted through the application process, which is at the sole discretion of Wallplace. Acceptance is based on quality, originality, consistency, and commercial suitability.</p>
@@ -77,7 +77,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="venues" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">6. Venue-Specific Terms</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Venues may register and use the Platform at no cost. There are no registration fees, membership fees, commissions, or hidden charges while you maintain an active account.</p>
@@ -87,12 +87,12 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="buyers" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">7. Buyer Terms</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Buyers may purchase artwork by scanning QR labels on displayed artwork or by browsing the Platform directly. The contract of sale is between the buyer and the artist. Wallplace is not the seller.</p>
                   <p>Prices are displayed in GBP. Payment is processed via Stripe. Wallplace does not hold buyer funds at any point.</p>
-                  <p><strong className="text-foreground">Cooling-off period:</strong> Under the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013, you have a 14-day cooling-off period for online purchases, except for bespoke or personalised artwork (which is commissioned specifically for you and is exempt under Regulation 28(1)(b)). To cancel, notify the artist within 14 days of receiving the artwork. Return the artwork in its original condition at your own cost (unless faulty). The artist will issue a refund within 14 days of receiving the returned artwork.</p>
+                  <p id="cooling-off" className="scroll-mt-24"><strong className="text-foreground">Cooling-off period:</strong> Under the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013, you have a 14-day cooling-off period for online purchases, except for bespoke or personalised artwork (which is commissioned specifically for you and is exempt under Regulation 28(1)(b)). To cancel, notify the artist within 14 days of receiving the artwork. Return the artwork in its original condition at your own cost (unless faulty). The artist will issue a refund within 14 days of receiving the returned artwork.</p>
                   <p><strong className="text-foreground">Faulty or misdescribed goods:</strong> You have additional rights under the Consumer Rights Act 2015, including the right to repair, replacement, or refund for goods that are faulty or not as described.</p>
                   <p><strong className="text-foreground">Seller information:</strong> The seller for each order is the individual artist, not Wallplace. The artist&rsquo;s trading name and contact route are disclosed on every listing page and in your order confirmation, as required under the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013.</p>
                   <p><strong className="text-foreground">Delivery responsibility:</strong> Risk of loss or damage in transit remains with the seller (the artist) until the artwork is received by the buyer at the delivery address. Wallplace is not a party to the delivery contract and is not liable for delays, loss, or damage caused by third-party couriers. Artists are expected to use a reputable, tracked courier service appropriate to the value of the work.</p>
@@ -102,7 +102,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="payments" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">8. Payment Processing</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>All payments are processed through Stripe and Stripe Connect. Wallplace does not hold, process, or have access to buyer payment details.</p>
@@ -111,7 +111,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="intellectual-property" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">9. Content and Intellectual Property</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Artists retain full copyright and ownership of their work at all times. By listing artwork on the Platform, artists grant Wallplace a non-exclusive, worldwide, royalty-free licence to use, display, and reproduce artwork images for Platform operation and marketing. This licence continues while the artwork is listed, plus a 90-day wind-down period after removal.</p>
@@ -126,7 +126,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="prohibited-conduct" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">10. Prohibited Conduct</h2>
                 <div className="text-muted leading-relaxed">
                   <p className="mb-3">You must not:</p>
@@ -142,7 +142,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="non-circumvention" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">10A. Non-Circumvention</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>The Platform&rsquo;s value depends on transactions occurring through it. To protect that value, the following non-circumvention obligation applies to artists and venues.</p>
@@ -158,7 +158,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="disputes" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">11. Dispute Resolution</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Wallplace encourages all parties to resolve disputes directly. Where this is not possible, the following process applies:</p>
@@ -201,7 +201,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="liability" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">12. Limitation of Liability</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>The Platform is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo;. Wallplace excludes all warranties to the maximum extent permitted by law.</p>
@@ -218,12 +218,12 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="indemnification" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">13. Indemnification</h2>
                 <p className="text-muted leading-relaxed">You agree to indemnify and hold Wallplace harmless from any claims, losses, or damages arising from your breach of these terms, your use of the Platform, your artwork or content, your transactions with other users, or disputes between you and other users.</p>
               </div>
 
-              <div>
+              <div id="cancellation" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">14. Termination</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Either party may terminate with 30 days&rsquo; written notice. Wallplace may suspend or terminate accounts immediately for breach, prohibited conduct, or where continued access poses a risk.</p>
@@ -232,7 +232,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="changes" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">15. Changes to These Terms</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>Wallplace may update these terms from time to time. Material changes will be notified by email or Platform notice at least 14 days before taking effect.</p>
@@ -240,12 +240,12 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="general" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">16. General Provisions</h2>
                 <p className="text-muted leading-relaxed">These terms, together with the Artist Agreement, Venue Partnership Agreement, Privacy Policy, and Cookie Policy, constitute the entire agreement between you and Wallplace. If any provision is found to be unenforceable, the remaining provisions continue in full force. A failure to enforce any right is not a waiver of that right. You may not assign your rights under these terms without consent. Wallplace may assign its rights freely. No third party has rights under the Contracts (Rights of Third Parties) Act 1999.</p>
               </div>
 
-              <div>
+              <div id="governing-law" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">17. Governing Law and Jurisdiction</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>These terms are governed by the laws of England and Wales. The courts of England and Wales have exclusive jurisdiction over any disputes.</p>
@@ -253,7 +253,7 @@ export default function TermsPage() {
                 </div>
               </div>
 
-              <div>
+              <div id="contact" className="scroll-mt-24">
                 <h2 className="text-2xl mb-4">18. Contact</h2>
                 <p className="text-muted leading-relaxed">
                   Wallplace, London, United Kingdom.<br />

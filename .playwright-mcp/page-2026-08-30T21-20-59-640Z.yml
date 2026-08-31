@@ -1,0 +1,27 @@
+- generic [active] [ref=f66e1]:
+  - generic [ref=f66e2]:
+    - link "Skip to content" [ref=f66e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f66e4]:
+      - generic [ref=f66e6]:
+        - link "Wallplace" [ref=f66e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f66e8]:
+          - link "Marketplace" [ref=f66e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f66e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f66e12] [cursor=pointer]
+        - generic [ref=f66e15]:
+          - link "Saved" [ref=f66e16] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f66e20] [cursor=pointer]
+          - generic [ref=f66e24]:
+            - link "My Account" [ref=f66e25] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f66e26] [cursor=pointer]
+          - button "Logout" [ref=f66e29] [cursor=pointer]
+    - main [ref=f66e30]:
+      - paragraph [ref=f66e32]: Loading...
+    - button "Feedback and feature requests" [ref=f66e33] [cursor=pointer]: Feedback
+  - alert [ref=f66e36]

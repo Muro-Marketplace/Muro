@@ -93,3 +93,70 @@ describe("venue profile editing (E42-a)", () => {
     await waitFor(() => expect(unsavedWarningMock).toHaveBeenCalledWith(true));
   });
 });
+
+// WS8 item 4 (QA 2026-08-28): three venue-profile truths.
+describe("venue profile truths (E6/E8/E9)", () => {
+  it("E6: Cancel reverts the section's edits, so the next Save does not persist them", async () => {
+    venueState.venue = { name: "Kings Arms", type: "Cafe", location: "London" };
+    render(<VenueProfilePage />);
+
+    fireEvent.click(screen.getAllByText("Edit")[0]);
+    const nameInput = screen.getByPlaceholderText("Your venue's name") as HTMLInputElement;
+    expect(nameInput.value).toBe("Kings Arms");
+    fireEvent.change(nameInput, { target: { value: "Renamed Arms" } });
+
+    // Fail-before: Cancel only exited edit mode; the typed value stayed in
+    // state (and dirty) and the next Save persisted the "cancelled" edit.
+    fireEvent.click(screen.getByText("Cancel"));
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    const putCall = mutateMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
+    const body = JSON.parse((putCall![1] as RequestInit).body as string);
+    expect(body.name).toBe("Kings Arms");
+  });
+
+  it("E8: an empty profile starts with no styles or themes selected, and Save persists none", async () => {
+    venueState.venue = { name: "Kings Arms", location: "London" };
+    render(<VenueProfilePage />);
+
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    const putCall = mutateMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
+    const body = JSON.parse((putCall![1] as RequestInit).body as string);
+    // Fail-before: Contemporary/Minimal/Photography and
+    // Nature/City/Architecture were pre-selected for empty profiles, so any
+    // Save silently persisted taste tags the venue never chose, and artists
+    // then targeted them on false data.
+    expect(body.preferred_styles).toEqual([]);
+    expect(body.preferred_themes).toEqual([]);
+  });
+
+  it("E8: saved tags still hydrate and persist unchanged", async () => {
+    venueState.venue = {
+      name: "Kings Arms",
+      location: "London",
+      preferredStyles: ["Abstract"],
+      preferredThemes: ["Seascape"],
+    };
+    render(<VenueProfilePage />);
+
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    const putCall = mutateMock.mock.calls.find((c) => c[0] === "/api/venue-profile");
+    const body = JSON.parse((putCall![1] as RequestInit).body as string);
+    expect(body.preferred_styles).toEqual(["Abstract"]);
+    expect(body.preferred_themes).toEqual(["Seascape"]);
+  });
+
+  it("E9: the decorative Preferred Artwork Sizes control is gone", () => {
+    // No preferred_sizes column exists (vestigial per writable-fields.ts), so
+    // the pills could only ever discard the selection on save. Honest UI:
+    // the control is removed until the column exists.
+    render(<VenueProfilePage />);
+    expect(screen.queryByText("Preferred Artwork Sizes")).toBeNull();
+    expect(screen.queryByText("Small (up to 40cm)")).toBeNull();
+  });
+});

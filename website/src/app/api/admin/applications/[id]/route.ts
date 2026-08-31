@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withAdmin } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { findUserByEmail } from "@/lib/auth/find-user-by-email";
+import { parseRole } from "@/lib/auth-roles";
 import { slugify } from "@/lib/slugify";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationApproved } from "@/emails/templates/artist-additions/ArtistApplicationApproved";
@@ -125,11 +126,23 @@ export async function PUT(
 
     if (existingUser) {
       userId = existingUser.id;
-      // Update their metadata to ensure user_type is "artist"
+      // G5/H2: MERGE the metadata, never clobber it, and never demote an
+      // existing role. The old write sent a fresh three-key object: GoTrue
+      // shallow-merges top-level keys so unrelated keys survived, but
+      // user_type was force-flipped to "artist" — a venue (or admin) who
+      // also applied as an artist silently lost their portal. Spreading the
+      // existing metadata keeps every key explicit rather than trusting
+      // merge semantics, and the role rule is: keep venue/admin as they
+      // are; only role-less and customer accounts become artists (becoming
+      // an artist is the point of the application they submitted).
+      const existingMeta = (existingUser.user_metadata ?? {}) as Record<string, unknown>;
+      const existingRole = parseRole(existingMeta.user_type);
+      const keepExistingRole = existingRole === "venue" || existingRole === "admin";
       await db.auth.admin.updateUserById(userId, {
         user_metadata: {
-          user_type: "artist",
-          display_name: app.name,
+          ...existingMeta,
+          user_type: keepExistingRole ? existingRole : "artist",
+          display_name: existingMeta.display_name || app.name,
           artist_slug: artistSlug,
         },
       });

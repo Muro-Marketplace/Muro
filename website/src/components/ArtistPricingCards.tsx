@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Button from "@/components/Button";
 import { PLAN_PRICES, PLATFORM_FEE_PERCENT, WORKS_CAP, ACTIVE_PLACEMENT_CAP } from "@/lib/pricing";
+import { OUTREACH_WEEKLY_LIMIT } from "@/lib/outreach-cap";
 
 interface Plan {
   key: "core" | "premium" | "pro";
@@ -28,7 +29,7 @@ const PLANS: Plan[] = [
       `Up to ${ACTIVE_PLACEMENT_CAP.core} active venue placements at a time`,
       `Up to ${WORKS_CAP.core} works in your portfolio`,
       "Standard artist profile",
-      "Message venues directly",
+      `Approach ${OUTREACH_WEEKLY_LIMIT.core} new venues a week`,
       "Visibility to venues browsing the platform",
       "Basic analytics dashboard",
     ],
@@ -46,6 +47,7 @@ const PLANS: Plan[] = [
       `Up to ${WORKS_CAP.premium} works in your portfolio`,
       "Featured artist profile and badge",
       "Priority visibility in venue recommendations",
+      `Approach ${OUTREACH_WEEKLY_LIMIT.premium} new venues a week`,
       "Full analytics, views, enquiries, conversion",
       "Priority response from the Wallplace team",
     ],
@@ -61,6 +63,7 @@ const PLANS: Plan[] = [
       `Up to ${WORKS_CAP.pro} works in your portfolio`,
       "Priority inclusion in Wallplace Curated shortlists",
       "Premium profile with enhanced presentation",
+      `Approach ${OUTREACH_WEEKLY_LIMIT.pro} new venues a week`,
       "Full analytics with venue breakdown and export",
       "Dedicated account support",
     ],

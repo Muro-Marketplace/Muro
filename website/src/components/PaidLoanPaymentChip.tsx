@@ -136,12 +136,15 @@ export default function PaidLoanPaymentChip({
         ? `Pay the artist their monthly fee${fee}, they're already displaying the work.`
         : `Get billing set up before the work is installed${fee}.`;
     }
-    // Artist
+    // Artist. F33: nothing automatically nudges the venue in either state,
+    // so don't claim it. The dunning case does have Stripe's retries
+    // behind it; the live-without-payment case has no automation at all,
+    // the honest advice is to chase the venue directly.
     if (isProblem) {
-      return "We've nudged the venue. Stripe will retry the charge automatically.";
+      return "Stripe will retry the charge automatically. If it keeps failing, message the venue.";
     }
     return isLive
-      ? "The artwork is on the wall but the venue hasn't started billing yet, we've nudged them."
+      ? "The artwork is on the wall but the venue hasn't started billing yet. A message to the venue is the quickest way to chase it."
       : "The venue hasn't set up the monthly card yet. They can do this from their placements list.";
   })();
 

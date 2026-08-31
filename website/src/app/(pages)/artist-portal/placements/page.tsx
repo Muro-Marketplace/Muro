@@ -11,6 +11,7 @@ import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { artistKeepsLabel, venueShareLabel } from "@/lib/revenue-share-labels";
 import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { updatePlacementStatus } from "@/lib/placements/status-update";
@@ -326,7 +327,12 @@ export default function PlacementsPage() {
       .then((data) => {
         if (data.placements && data.placements.length > 0) {
           const mapped: Placement[] = data.placements.map((p: Record<string, unknown>) => {
-            const requesterId = (p.requester_user_id as string) || null;
+            // F24/F51: GET /api/placements emits the resolved requester as
+            // proposed_by_user_id; requester_user_id is a phantom the rows
+            // never carry. Read both so respond buttons and direction tags
+            // resolve.
+            const requesterId =
+              ((p.requester_user_id ?? p.proposed_by_user_id) as string | null) || null;
             // Strict: only the recipient of a request can respond. Requests
             // the viewer sent themselves show a "Sent" tag and no
             // Accept/Counter/Decline buttons.
@@ -933,7 +939,7 @@ export default function PlacementsPage() {
                     />
                     <span className="text-sm text-muted">per month</span>
                   </div>
-                  <p className="text-xs text-muted mt-2">Billing is handled manually for now, use this to record the agreed amount.</p>
+                  <p className="text-xs text-muted mt-2">The venue sets up the monthly payment by card once the placement is agreed, and Wallplace collects it automatically from then on.</p>
                 </div>
               )}
             </div>
@@ -1438,7 +1444,11 @@ export default function PlacementsPage() {
                         {typeof p.revenueSharePercent === "number" && p.revenueSharePercent > 0 && (
                           <div>
                             <p className="text-muted mb-0.5">{ARRANGEMENT_LABEL.revenue_share}</p>
-                            <p className="text-foreground font-medium">{p.revenueSharePercent}% to artist</p>
+                            {/* A4.2: this read "N% to artist" on a number that is
+                                the VENUE's cut, so an artist giving away 24% was
+                                shown 24% as their earnings. */}
+                            <p className="text-foreground font-medium">{artistKeepsLabel(p.revenueSharePercent)}</p>
+                            <p className="text-[11px] text-muted">{venueShareLabel(p.revenueSharePercent)}</p>
                           </div>
                         )}
                         {typeof p.monthlyFeeGbp === "number" && p.monthlyFeeGbp > 0 && (

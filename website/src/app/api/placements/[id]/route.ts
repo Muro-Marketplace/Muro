@@ -66,22 +66,29 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   // Resolve who currently "owns" the request, i.e. who made the latest
   // offer and is therefore awaiting a response. Precedence:
   //   1. Latest counter message sender (most recent acts).
-  //   2. The placements.requester_user_id column.
+  //   2. The placements.proposed_by_user_id column. (F29: this used to read
+  //      placement.requester_user_id, a phantom column no migration ever
+  //      created, so the column path was ALWAYS null and every row leaned
+  //      on the message scan.)
   //   3. The original placement_request message sender (used when the
-  //      column is NULL because the row was created before we started
-  //      writing requester_user_id, or because the column doesn't exist
-  //      in the env). Without this fallback, a brand-new pending row
-  //      with NULL requester_user_id reads as `null !== userId` true
-  //      for everyone, and the original sender sees their own
+  //      column is NULL because the row predates proposed_by_user_id
+  //      being written). Without this fallback, a brand-new pending row
+  //      with a NULL column reads as `null !== userId` true for
+  //      everyone, and the original sender sees their own
   //      Accept/Decline buttons. That was the "first request you can
   //      accept your own" bug.
-  let effectiveRequesterId: string | null = placement.requester_user_id || null;
+  let effectiveRequesterId: string | null = placement.proposed_by_user_id || null;
   let firstRequester: string | null = null;
   try {
+    // F29: scoped to THIS placement's messages via the jsonb metadata,
+    // instead of scanning the latest 50 placement_request messages
+    // platform-wide and filtering after, which stopped resolving as soon
+    // as 50 newer requests existed anywhere on the platform.
     const { data: reqMsgs } = await db
       .from("messages")
       .select("sender_id, metadata, created_at")
       .eq("message_type", "placement_request")
+      .contains("metadata", { placementId: id })
       .order("created_at", { ascending: false })
       .limit(50);
     let counterFound = false;

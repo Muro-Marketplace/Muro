@@ -14,11 +14,13 @@ import type { PanelWork } from "@/components/visualizer/WorksPanel";
 import Dropdown from "@/components/Dropdown";
 import MakeOfferModal from "@/components/offers/MakeOfferModal";
 import { isFlagOn } from "@/lib/feature-flags";
+import { physicalSizeLabel } from "@/lib/physical-size";
 import {
   buildSizeVariants,
   parseDimensions,
 } from "@/lib/visualizer/dimensions";
 import { resolveShippingCost, tierLabel, SIGNATURE_THRESHOLD_GBP } from "@/lib/shipping-calculator";
+import { frameUpliftFor } from "./frame-uplift";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 interface ArtworkPageClientProps {
@@ -88,54 +90,15 @@ export default function ArtworkPageClient({
 
   const selectedPricing = work.pricing[selectedSizeIdx] || work.pricing[0];
 
-  // Frame uplift scales by size. The artist's `priceUplift` value is
-  // treated as the price for the SMALLEST listed size; for larger
-  // sizes we scale by perimeter (≈ frame moulding cost) which gives
-  // a much more realistic ramp than a flat number across an A4 print
-  // and a 100×80cm canvas. The smallest size is picked deterministically
-  // by ascending area so the baseline doesn't depend on which size
-  // the buyer has selected. Falls back to the flat uplift if the
-  // size labels can't be parsed.
-  const frameUplift = (() => {
-    if (!selectedFrame) return 0;
-    // Explicit per-size override wins. Set in the artist portfolio
-    // form; an artist who's said "A4 = £20, A2 = £45" gets exactly
-    // those values rather than the perimeter ramp.
-    const explicit = selectedPricing
-      ? (selectedFrame as { pricesBySize?: Record<string, number> }).pricesBySize?.[selectedPricing.label]
-      : undefined;
-    if (typeof explicit === "number" && Number.isFinite(explicit) && explicit >= 0) {
-      return Math.round(explicit * 100) / 100;
-    }
-
-    const baseUplift = selectedFrame.priceUplift || 0;
-    if (baseUplift <= 0) return 0;
-    if (!work.pricing || work.pricing.length === 0) return baseUplift;
-    const parsedSizes = work.pricing
-      .map((p) => ({ pricing: p, dims: parseDimensions(p.label) }))
-      .filter(
-        (x): x is { pricing: typeof work.pricing[0]; dims: { widthCm: number; heightCm: number } } =>
-          Boolean(x.dims),
-      );
-    if (parsedSizes.length === 0) return baseUplift;
-    let smallestArea = Infinity;
-    let baselinePerimeter = 0;
-    for (const s of parsedSizes) {
-      const a = s.dims.widthCm * s.dims.heightCm;
-      if (a < smallestArea) {
-        smallestArea = a;
-        baselinePerimeter = 2 * (s.dims.widthCm + s.dims.heightCm);
-      }
-    }
-    if (!baselinePerimeter) return baseUplift;
-    const selectedDims = selectedPricing
-      ? parseDimensions(selectedPricing.label)
-      : null;
-    if (!selectedDims) return baseUplift;
-    const selectedPerimeter =
-      2 * (selectedDims.widthCm + selectedDims.heightCm);
-    return Math.round(baseUplift * (selectedPerimeter / baselinePerimeter));
-  })();
+  // B10: the charged uplift and the "+£X" on each Frame dropdown row are
+  // now the same function, so an artist's explicit per-size frame prices
+  // can no longer be honoured by one and ignored by the other. See
+  // frame-uplift.ts for the ramp itself.
+  const frameUplift = frameUpliftFor(
+    selectedFrame,
+    selectedPricing?.label,
+    work.pricing,
+  );
 
   const displayPrice = selectedPricing
     ? Math.round((selectedPricing.price + frameUplift) * 100) / 100
@@ -365,46 +328,19 @@ export default function ArtworkPageClient({
             options={[
               { value: "-1", label: "No frame" },
               ...frameOptions.map((f, i) => {
-                // Show the per-size scaled uplift in the dropdown so
-                // the buyer sees the actual price they'll pay for the
-                // currently-selected size, not the artist's small-size
-                // baseline. Uses the same scaling logic as the live
-                // frameUplift used on the buy button.
-                const scaledForRow = (() => {
-                  const baseUplift = f.priceUplift || 0;
-                  if (baseUplift <= 0) return 0;
-                  const parsedSizes = work.pricing
-                    .map((p) => ({ pricing: p, dims: parseDimensions(p.label) }))
-                    .filter(
-                      (
-                        x,
-                      ): x is {
-                        pricing: typeof work.pricing[0];
-                        dims: { widthCm: number; heightCm: number };
-                      } => Boolean(x.dims),
-                    );
-                  if (parsedSizes.length === 0) return baseUplift;
-                  let smallestArea = Infinity;
-                  let baselinePerimeter = 0;
-                  for (const s of parsedSizes) {
-                    const a = s.dims.widthCm * s.dims.heightCm;
-                    if (a < smallestArea) {
-                      smallestArea = a;
-                      baselinePerimeter =
-                        2 * (s.dims.widthCm + s.dims.heightCm);
-                    }
-                  }
-                  if (!baselinePerimeter) return baseUplift;
-                  const selectedDims = selectedPricing
-                    ? parseDimensions(selectedPricing.label)
-                    : null;
-                  if (!selectedDims) return baseUplift;
-                  const selectedPerimeter =
-                    2 * (selectedDims.widthCm + selectedDims.heightCm);
-                  return Math.round(
-                    baseUplift * (selectedPerimeter / baselinePerimeter),
-                  );
-                })();
+                // Show the per-size uplift in the dropdown so the buyer
+                // sees the actual price they'll pay for the currently
+                // selected size, not the artist's small-size baseline.
+                //
+                // B10: this used to compute only the perimeter ramp, so
+                // it silently skipped the artist's explicit pricesBySize
+                // overrides that the charge below honours. Same function
+                // as the charge now.
+                const scaledForRow = frameUpliftFor(
+                  f,
+                  selectedPricing?.label,
+                  work.pricing,
+                );
                 return {
                   value: String(i),
                   label: f.label,
@@ -434,10 +370,14 @@ export default function ArtworkPageClient({
           a manual shippingPrice. Shows tier + delivery window + signature
           line so buyers know what they're getting. */}
       {(() => {
-        const sizeLabelForCalc = selectedPricing?.label || work.dimensions;
+        const sizeLabelForCalc = selectedPricing?.label || physicalSizeLabel(work.dimensions, "");
         const totalPriceForCalc = (displayPrice ?? selectedPricing?.price) || 0;
         const uk = resolveShippingCost({
-          manualPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : null,
+          // B11: this quoted the work-level shippingPrice while the cart
+          // lines carry effectiveShippingPrice, which prefers the selected
+          // size's own shippingPrice. So an artist with per-size delivery
+          // had one figure quoted here and a different one charged.
+          manualPrice: typeof effectiveShippingPrice === "number" ? effectiveShippingPrice : null,
           dimensions: sizeLabelForCalc,
           framed: !!selectedFrame,
           priceGbp: totalPriceForCalc,
@@ -527,7 +467,7 @@ export default function ArtworkPageClient({
                     quantityAvailable: sizeStock ?? null,
                     shippingPrice: effectiveShippingPrice,
                     internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
-                    dimensions: selectedPricing.label || work.dimensions,
+                    dimensions: selectedPricing.label || physicalSizeLabel(work.dimensions, ""),
                     framed: !!selectedFrame,
                     // E46c: identity, not just the flag, so checkout can price it.
                     frameLabel: selectedFrame?.label,
@@ -562,7 +502,7 @@ export default function ArtworkPageClient({
                     quantityAvailable: sizeStock ?? null,
                     shippingPrice: effectiveShippingPrice,
                     internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
-                    dimensions: selectedPricing.label || work.dimensions,
+                    dimensions: selectedPricing.label || physicalSizeLabel(work.dimensions, ""),
                     framed: !!selectedFrame,
                     // E46c: identity, not just the flag, so checkout can price it.
                     frameLabel: selectedFrame?.label,
@@ -596,11 +536,58 @@ export default function ArtworkPageClient({
             size; for the legacy original-only flow it stays
             "Original". Shipping is £0 because the buyer collects in
             person, that's the entire point of the pickup option. */}
+        {/* 121: the buy-off-the-wall OFFER on the placement is the primary
+            gate now. The artist priced THIS physical piece (size, frame) at
+            live-on-wall, so the button shows whenever the offer exists, with
+            the offer's own price and the placed size; the size selector above
+            keeps driving the normal delivery purchase, which stays available
+            alongside. */}
+        {work.available
+          && work.currentPlacement?.status === "active"
+          && work.currentPlacement.inStorePrice != null
+          && (() => {
+            const offer = work.currentPlacement!;
+            // Owner-reported 2026-08-31: this fell back to work.dimensions,
+            // which is the IMAGE's pixel size, so the basket read
+            // "(Off the wall, 2795 x 4192 px)". A pixel count is never a
+            // physical size, so an unlabelled piece is just itself.
+            const wallSize = physicalSizeLabel(offer.placedSizeLabel, "");
+            return (
+              <button
+                onClick={() => {
+                  addItem({
+                    type: "work",
+                    workId: work.id,
+                    artistSlug,
+                    artistName,
+                    title: `${work.title} (Off the wall${wallSize ? `, ${wallSize}` : ""})`,
+                    image: work.image,
+                    size: wallSize || "Original",
+                    price: offer.inStorePrice!,
+                    quantity: 1,
+                    shippingPrice: 0,
+                    lineFulfilment: "collect_venue",
+                    collectVenueSlug: offer.venueSlug ?? undefined,
+                    collectVenueName: offer.venueName ?? undefined,
+                    collectPlacementId: offer.id,
+                  });
+                  router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+                }}
+                className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
+              >
+                {`Buy off the wall at ${offer.venueName || "the venue"}, £${offer.inStorePrice!.toFixed(2)}${offer.inStoreFrameIncluded ? " (framed)" : ""}`}
+              </button>
+            );
+          })()}
+        {/* Legacy fallback for works ticked before the placement-level offer
+            existed (120 tick box / pre-120 in-store prices), shown only when
+            the placement carries NO offer of its own. */}
         {/* Owner decision 2026-08-28: the tick box (availableInStore) gates
             the collect CTA and the price is the NORMAL tier price; the legacy
             in-store price sources remain only as a fallback gate for works
             saved before migration 120. */}
-        {work.available && (work.availableInStore === true || selectedInStorePrice != null)
+        {work.currentPlacement?.inStorePrice == null
+          && work.available && (work.availableInStore === true || selectedInStorePrice != null)
           && work.currentPlacement?.status === "active"
           && (work.currentPlacement.placedSizeLabel == null
             || !selectedPricing
@@ -650,6 +637,7 @@ export default function ArtworkPageClient({
                   // live placements table before any money is taken.
                   lineFulfilment: "collect_venue",
                   collectVenueSlug: work.currentPlacement?.venueSlug ?? undefined,
+                  collectVenueName: work.currentPlacement?.venueName ?? undefined,
                   collectPlacementId: work.currentPlacement?.id,
                 });
                 router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);

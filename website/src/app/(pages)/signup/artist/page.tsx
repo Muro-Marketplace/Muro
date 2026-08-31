@@ -25,13 +25,14 @@
  *   - signUp creates the user with `user_type: "artist"` metadata,
  *     which downstream auth-aware routes use to gate / land them on
  *     the artist portal.
- *   - We immediately signInWithPassword so they don't have to wait
- *     for email verification before filling in the application.
- *     Email verification is still enforced by Supabase config; until
- *     verified the artist can read /apply but other portal areas
- *     stay restricted.
- *   - router.push("/apply"), so they continue straight into Step 2
- *     instead of seeing a "thanks" page.
+ *   - the destination depends on whether Supabase returned a session,
+ *     which it does only when email confirmation is off for the project.
+ *     With confirmation ON the applicant must click the verification link
+ *     first, so they go to /check-your-inbox; the login link in that email
+ *     carries ?next= so they land on /apply (Step 2) after signing in. With
+ *     confirmation OFF, which is the production setting today, the account
+ *     is already signed in and they go straight to /apply. There is no
+ *     immediate signInWithPassword either way. See lib/signup-destination.ts.
  */
 
 import { useState } from "react";
@@ -39,6 +40,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
+import { signupDestination } from "@/lib/signup-destination";
 import { isFlagOn } from "@/lib/feature-flags";
 import { safeRedirect } from "@/lib/safe-redirect";
 import TermsCheckbox from "@/components/TermsCheckbox";
@@ -92,7 +94,7 @@ export default function ArtistSignUpPage() {
         return;
       }
 
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -118,7 +120,10 @@ export default function ArtistSignUpPage() {
         }),
       }).catch(() => {});
 
-      router.push("/check-your-inbox");
+      // A L447/A L458: was unconditional. Supabase returns a session only
+      // when email confirmation is off, in which case the account is already
+      // signed in and the inbox page is untrue. See lib/signup-destination.ts.
+      router.push(signupDestination(signUpData, postSignupNext));
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -146,8 +151,8 @@ export default function ArtistSignUpPage() {
             Apply to join as an artist
           </h1>
           <p className="text-white/50 text-sm">
-            Create your account first, we&rsquo;ll take you straight to the
-            application
+            Create your account, verify your email, and the application
+            form is your next stop
           </p>
         </div>
 
@@ -292,12 +297,13 @@ export default function ArtistSignUpPage() {
               disabled={loading || !agreedToTos || !turnstileToken}
               className="w-full px-6 py-3 bg-accent text-white text-sm font-semibold uppercase tracking-wider rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50"
             >
-              {loading ? "Creating Account..." : "Continue to Application"}
+              {loading ? "Creating Account..." : "Create Account"}
             </button>
             <p className="text-[11px] text-muted text-center leading-relaxed">
-              You&rsquo;ll go straight to the application form after this.
-              Approval emails take you back to login, your account is
-              already set up.
+              We&rsquo;ll email you a verification link. Verify, sign in,
+              and you&rsquo;ll land on the application form. Approval
+              emails take you back to login, your account is already
+              set up.
             </p>
           </form>
         </div>

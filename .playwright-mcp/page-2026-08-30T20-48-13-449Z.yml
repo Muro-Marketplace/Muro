@@ -1,0 +1,25 @@
+- generic [active] [ref=f27e1]:
+  - generic [ref=f27e2]:
+    - link "Skip to content" [ref=f27e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f27e4]:
+      - generic [ref=f27e6]:
+        - link "Wallplace" [ref=f27e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f27e8]:
+          - link "Marketplace" [ref=f27e9] [cursor=pointer]:
+            - /url: /browse
+          - link "How It Works" [ref=f27e10] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f27e11] [cursor=pointer]:
+            - /url: /blog
+          - link "Spaces" [ref=f27e12] [cursor=pointer]:
+            - /url: /spaces
+        - generic [ref=f27e13]:
+          - link "Login" [ref=f27e14] [cursor=pointer]:
+            - /url: /login
+          - link "Sign Up" [ref=f27e15] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=f27e16]
+    - button "Feedback and feature requests" [ref=f27e17] [cursor=pointer]: Feedback
+  - alert [ref=f27e20]

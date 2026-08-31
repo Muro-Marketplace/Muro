@@ -1,0 +1,326 @@
+- generic [active] [ref=f20e1]:
+  - generic [ref=f20e2]:
+    - link "Skip to content" [ref=f20e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f20e4]:
+      - generic [ref=f20e6]:
+        - link "Wallplace" [ref=f20e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f20e8]:
+          - link "Marketplace" [ref=f20e9] [cursor=pointer]:
+            - /url: /browse
+          - link "How It Works" [ref=f20e10] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f20e11] [cursor=pointer]:
+            - /url: /blog
+          - link "Spaces" [ref=f20e12] [cursor=pointer]:
+            - /url: /spaces
+        - generic [ref=f20e13]:
+          - link "Login" [ref=f20e14] [cursor=pointer]:
+            - /url: /login
+          - link "Sign Up" [ref=f20e15] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=f20e16]:
+      - generic [ref=f20e17]:
+        - generic [ref=f20e19]:
+          - generic [ref=f20e20]:
+            - heading "Frequently Asked Questions" [level=1] [ref=f20e21]
+            - paragraph [ref=f20e22]: Everything you need to know about how Wallplace works for artists, venues, and art lovers.
+          - tablist "Filter FAQs by audience" [ref=f20e23]:
+            - tab "All" [selected] [ref=f20e24] [cursor=pointer]
+            - tab "For artists" [ref=f20e25] [cursor=pointer]
+            - tab "For venues" [ref=f20e26] [cursor=pointer]
+            - tab "For buyers" [ref=f20e27] [cursor=pointer]
+        - tabpanel "All" [ref=f20e28]:
+          - generic [ref=f20e31]:
+            - heading "General" [level=2] [ref=f20e32]
+            - generic [ref=f20e33]:
+              - generic [ref=f20e34]:
+                - button "What is Wallplace?" [ref=f20e35] [cursor=pointer]
+                - paragraph [ref=f20e38]: Wallplace is a curated marketplace connecting emerging and established artists with independent venues, cafes, restaurants, coworking spaces, offices, and more, that want original artwork on their walls. We handle the curation and provide the platform for discovery, communication, and sales. Artists manage their own fulfilment and delivery.
+              - generic [ref=f20e39]:
+                - button "How does Wallplace make money?" [ref=f20e40] [cursor=pointer]
+                - generic [ref=f20e43]:
+                  - paragraph [ref=f20e44]: Wallplace earns through artist membership plans (from £9.99/month) and a platform fee on artwork sales (5 to 15% depending on the artist’s plan). When a piece sells, the artist keeps the majority. Venues never pay a platform fee.
+                  - paragraph [ref=f20e45]:
+                    - text: Full breakdown on our
+                    - link "pricing page" [ref=f20e46] [cursor=pointer]:
+                      - /url: /pricing
+                    - text: .
+              - generic [ref=f20e47]:
+                - button "Is Wallplace a gallery?" [ref=f20e48] [cursor=pointer]
+                - paragraph [ref=f20e51]: Not in the traditional sense. We do not have a physical gallery space. Instead, we use the walls of independent venues as our exhibition spaces. This means artists get their work seen by thousands of people in everyday settings, and venues get beautiful original art without the cost of commissioning it directly.
+          - generic [ref=f20e54]:
+            - heading "For Artists" [level=2] [ref=f20e55]
+            - generic [ref=f20e56]:
+              - generic [ref=f20e57]:
+                - button "How much does it cost to join Wallplace as an artist?" [ref=f20e58] [cursor=pointer]
+                - generic [ref=f20e61]:
+                  - paragraph [ref=f20e62]: It is free to apply. Once accepted, membership starts from £9.99/month (Core plan) with your first month free. Higher tiers (Premium at £24.99/month, Pro at £49.99/month) offer lower platform fees on sales and more visibility.
+                  - paragraph [ref=f20e63]:
+                    - text: See our
+                    - link "pricing page" [ref=f20e64] [cursor=pointer]:
+                      - /url: /pricing
+                    - text: for the full breakdown, or
+                    - link "apply now" [ref=f20e65] [cursor=pointer]:
+                      - /url: /apply
+                    - text: to start a profile.
+              - generic [ref=f20e66]:
+                - button "How does the curation process work?" [ref=f20e67] [cursor=pointer]
+                - paragraph [ref=f20e70]: After you submit your application with a portfolio of your work, our team reviews it based on technical quality, originality, consistency, and suitability for display in commercial spaces. We aim to respond within 5 business days. If accepted, you'll get an onboarding email with everything you need to set up your portfolio, pricing, and preferences.
+              - generic [ref=f20e71]:
+                - button "What happens after my application is accepted?" [ref=f20e72] [cursor=pointer]
+                - generic [ref=f20e75]:
+                  - paragraph [ref=f20e76]: Within 1 working day of acceptance you’ll get an onboarding email with a link to set your password, upload your portfolio, and configure pricing + delivery preferences. If you’d like a hand getting set up, reply to that email and we’ll help.
+                  - paragraph [ref=f20e77]:
+                    - text: Once your portfolio is live, venues can start enquiring immediately. You can read more about
+                    - link "how the platform works end-to-end" [ref=f20e78] [cursor=pointer]:
+                      - /url: /how-it-works
+                    - text: or check the
+                    - link "artist agreement" [ref=f20e79] [cursor=pointer]:
+                      - /url: /artist-agreement
+                    - text: .
+              - generic [ref=f20e80]:
+                - button "When do I get paid for sales?" [ref=f20e81] [cursor=pointer]
+                - generic [ref=f20e84]:
+                  - paragraph [ref=f20e85]:
+                    - text: Payouts run via Stripe Connect. When a buyer pays, the funds are held until the artwork has been confirmed delivered (or 14 days have passed without a buyer dispute, whichever comes first). At that point we transfer your share, sale price minus our platform fee (5 to 15% depending on plan) and any agreed venue revenue share, straight to your linked bank account. You’ll see every payout itemised in
+                    - link "your billing page" [ref=f20e86] [cursor=pointer]:
+                      - /url: /artist-portal/billing
+                    - text: .
+                  - paragraph [ref=f20e87]: We send an email receipt for every transfer + a daily payout digest if you had multiple sales that day.
+              - generic [ref=f20e88]:
+                - button "Who handles shipping when a piece sells?" [ref=f20e89] [cursor=pointer]
+                - generic [ref=f20e92]:
+                  - paragraph [ref=f20e93]: "You do. Each artist sets their own shipping price (or free shipping) per work. When a sale comes in we email you with the buyer’s address, packing checklist, and a ship-by date, you pack and dispatch within the agreed window (default: 5 working days). Tracking number goes back to the buyer through the platform."
+                  - paragraph [ref=f20e94]: Couriers, packing materials and delivery methods are your call, most of our artists use Parcelforce, DHL, or specialist art couriers like Mailboxes Etc. for larger pieces. We’ll add recommended courier partners in the artist portal soon.
+              - generic [ref=f20e95]:
+                - button "Can I set my own prices?" [ref=f20e96] [cursor=pointer]
+                - paragraph [ref=f20e99]: Yes. You set the prices for your work. We may offer guidance on pricing based on our experience of what sells well in venue settings, but the final decision is always yours. We will never list your work at a price you have not agreed to.
+              - generic [ref=f20e100]:
+                - button "Do I need to provide framed work?" [ref=f20e101] [cursor=pointer]
+                - paragraph [ref=f20e104]: Not necessarily. We work with artists to determine the best presentation for their work. Some pieces are displayed framed, others unframed. We can help arrange framing at competitive rates through our partners, or you can provide your own frames. Framing costs are discussed during onboarding.
+              - generic [ref=f20e105]:
+                - button "What if my work gets damaged in a venue?" [ref=f20e106] [cursor=pointer]
+                - generic [ref=f20e109]:
+                  - paragraph [ref=f20e110]:
+                    - text: Venues agree to exercise reasonable care over displayed artwork under our
+                    - link "Venue Partnership Agreement" [ref=f20e111] [cursor=pointer]:
+                      - /url: /venue-agreement
+                    - text: . If damage occurs due to venue negligence, the venue is liable. We strongly recommend you insure your artwork for its full value, including periods when it is on display in venues. Wallplace can help facilitate communication between you and the venue, but we are not liable for damage, loss, or theft of artwork.
+                  - paragraph [ref=f20e112]:
+                    - text: If something happens, raise a case through
+                    - link "our complaints process" [ref=f20e113] [cursor=pointer]:
+                      - /url: /complaints
+                    - text: and we’ll help broker a resolution.
+              - generic [ref=f20e114]:
+                - button "Can I cancel my membership?" [ref=f20e115] [cursor=pointer]
+                - paragraph [ref=f20e118]: Yes. You can cancel at any time with 30 days’ notice. You are responsible for collecting your artwork from any venues where it is currently displayed within 30 days of your cancellation date. No cancellation fees or penalties apply.
+              - generic [ref=f20e119]:
+                - button "Is Wallplace exclusive? Can I sell my work elsewhere?" [ref=f20e120] [cursor=pointer]
+                - paragraph [ref=f20e123]: Wallplace is non-exclusive. You are free to sell your work through other channels, galleries, your own website, or any other platform. We only ask that if a piece is currently on display in a venue through Wallplace, you let us know before selling it through another channel so we can arrange a replacement.
+              - generic [ref=f20e124]:
+                - button "Is my artwork protected from theft?" [ref=f20e125] [cursor=pointer]
+                - paragraph [ref=f20e128]: Every image on Wallplace is served at reduced resolution with compressed quality, good enough for browsing, not enough for reproduction. Right-click saving is disabled, and images cannot be dragged or selected. The original high-resolution file never leaves your hands, we only display a web-optimised version. Our Terms of Service prohibit unauthorised reproduction, and every sale is tracked and attributed to you as the creator.
+          - generic [ref=f20e131]:
+            - heading "For Venues" [level=2] [ref=f20e132]
+            - generic [ref=f20e133]:
+              - generic [ref=f20e134]:
+                - button "How much does it cost for a venue to display art?" [ref=f20e135] [cursor=pointer]
+                - generic [ref=f20e138]:
+                  - paragraph [ref=f20e139]: Nothing. There is no cost to venues for browsing, enquiring, or displaying artwork through Wallplace. Delivery and installation are arranged directly between you and the artist. Venues never pay a platform fee, Wallplace’s revenue comes from sales commissions and optional artist tools, not from charges to venues.
+                  - paragraph [ref=f20e140]:
+                    - text: Full terms in the
+                    - link "venue agreement" [ref=f20e141] [cursor=pointer]:
+                      - /url: /venue-agreement
+                    - text: .
+              - generic [ref=f20e142]:
+                - button "What happens after I enquire about an artist?" [ref=f20e143] [cursor=pointer]
+                - paragraph [ref=f20e147]:
+                  - text: Your enquiry lands in the artist’s Wallplace inbox + email. Most artists reply within 48 hours. From there you agree the arrangement (paid loans, revenue-share loans, and direct purchases), confirm dates and conditions, and the artist confirms the placement on the platform, that creates the loan record both parties countersign before the work is dispatched. You can track everything from your
+                  - link "placements page" [ref=f20e148] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                  - text: .
+              - generic [ref=f20e149]:
+                - button "How long does it take from enquiry to artwork on the wall?" [ref=f20e150] [cursor=pointer]
+                - generic [ref=f20e153]:
+                  - paragraph [ref=f20e154]: For an off-the-shelf placement (i.e. the work already exists), most arrangements go from first message to installed in 2 to 3 weeks. Roughly 3 to 5 days of conversation plus agreement, then 5 to 10 days for dispatch and install scheduling. Bespoke commissions take longer, weeks to months depending on the artist.
+                  - paragraph [ref=f20e155]: You’ll see live status (Requested → Accepted → Scheduled → Installed → Live) on the placement record once it’s created.
+              - generic [ref=f20e156]:
+                - button "Who installs the artwork, us or the artist?" [ref=f20e157] [cursor=pointer]
+                - generic [ref=f20e160]:
+                  - paragraph [ref=f20e161]: By default, you and the artist arrange installation directly. For local placements (artist within ~30 miles), most artists prefer to install themselves, they know how the piece is meant to hang and it gives them a chance to see the space. For shipped placements, the artist sends with hanging hardware + instructions and your team installs.
+                  - paragraph [ref=f20e162]:
+                    - text: Wallplace can introduce an art-handling partner for larger / heavier pieces or fragile works on request, message
+                    - link "hello@wallplace.co.uk" [ref=f20e163] [cursor=pointer]:
+                      - /url: mailto:hello@wallplace.co.uk
+                    - text: and we’ll set it up.
+              - generic [ref=f20e164]:
+                - button "Do we need to sign a contract?" [ref=f20e165] [cursor=pointer]
+                - paragraph [ref=f20e169]:
+                  - text: Yes, a simple partnership agreement covers care of artwork, display period, sales, and damage. Plain English. Cancellable on 30 days’ notice. You can
+                  - link "read the full venue agreement here" [ref=f20e170] [cursor=pointer]:
+                    - /url: /venue-agreement
+                  - text: .
+              - generic [ref=f20e171]:
+                - button "What if a piece of art gets damaged?" [ref=f20e172] [cursor=pointer]
+                - generic [ref=f20e175]:
+                  - paragraph [ref=f20e176]: Under the Venue Partnership Agreement, venues must exercise reasonable care over displayed artwork. If damage occurs due to negligence by venue staff or contractors, the venue is liable and should cooperate with the artist to resolve it. We recommend reporting any damage to both the artist and Wallplace within 48 hours. Wallplace can facilitate communication but is not liable for artwork damage.
+                  - paragraph [ref=f20e177]:
+                    - text: If you need help working through a damage claim, raise it via
+                    - link "our complaints process" [ref=f20e178] [cursor=pointer]:
+                      - /url: /complaints
+                    - text: and our team will help mediate.
+              - generic [ref=f20e179]:
+                - button "Can we choose which art to display?" [ref=f20e180] [cursor=pointer]
+                - paragraph [ref=f20e184]:
+                  - text: Absolutely. Browse
+                  - link "artist portfolios" [ref=f20e185] [cursor=pointer]:
+                    - /url: /browse
+                  - text: and enquire directly with artists whose work interests you, you have the final say on what goes on your walls. You can also arrange rotations directly with artists to keep things fresh.
+              - generic [ref=f20e186]:
+                - button "What happens when a customer wants to buy a piece?" [ref=f20e187] [cursor=pointer]
+                - paragraph [ref=f20e190]: Each artwork on display includes a discreet label with the artist name, title, and a QR code or URL linking to the piece on Wallplace. Customers can enquire or purchase directly through us. Your staff do not need to handle any sales, they just point customers to the label.
+              - generic [ref=f20e191]:
+                - button "Do our staff need to do anything?" [ref=f20e192] [cursor=pointer]
+                - paragraph [ref=f20e195]: Very little. Delivery and installation are arranged between you and the artist. Once artwork is up, your team just needs to keep an eye on it (as they would any decor) and point curious customers to the QR label for information and purchasing. No sales handling required.
+              - generic [ref=f20e196]:
+                - button "How often does the artwork change?" [ref=f20e197] [cursor=pointer]
+                - paragraph [ref=f20e200]: That depends on your arrangement with the artist. Some venues prefer a rotation every 2 to 3 months to keep the space feeling fresh. Others prefer to keep pieces longer. You agree this directly with the artist when arranging the placement.
+              - generic [ref=f20e201]:
+                - button "Can we buy the artwork ourselves?" [ref=f20e202] [cursor=pointer]
+                - paragraph [ref=f20e205]: Yes. You can purchase any artwork at the listed price through the QR code or directly on the platform. Some artists also offer special pricing for venue purchases, discuss this with the artist directly.
+          - generic [ref=f20e208]:
+            - heading "For Buyers" [level=2] [ref=f20e209]
+            - generic [ref=f20e210]:
+              - generic [ref=f20e211]:
+                - button "How does buying through Wallplace work?" [ref=f20e212] [cursor=pointer]
+                - paragraph [ref=f20e216]:
+                  - text: Buying through Wallplace is the same as buying from any reputable online shop. Every piece is sold by the artist directly. We process the payment and coordinate the transaction. See our
+                  - link "Terms of Sale" [ref=f20e217] [cursor=pointer]:
+                    - /url: /terms
+                  - text: ","
+                  - link "Returns Policy" [ref=f20e218] [cursor=pointer]:
+                    - /url: /returns
+                  - text: ", and"
+                  - link "Complaints Policy" [ref=f20e219] [cursor=pointer]:
+                    - /url: /complaints
+                  - text: for the full answers to delivery, refunds, damage, and dispute questions.
+              - generic [ref=f20e220]:
+                - button "Can I track an order without a Wallplace account?" [ref=f20e221] [cursor=pointer]
+                - paragraph [ref=f20e225]:
+                  - text: Yes. You can
+                  - link "track an order" [ref=f20e226] [cursor=pointer]:
+                    - /url: /orders/track
+                  - text: using the order ID and email from your receipt. No account required.
+              - generic [ref=f20e227]:
+                - button "Who do I contact if something goes wrong with my order?" [ref=f20e228] [cursor=pointer]
+                - paragraph [ref=f20e232]:
+                  - text: Email
+                  - link "hello@wallplace.co.uk" [ref=f20e233] [cursor=pointer]:
+                    - /url: mailto:hello@wallplace.co.uk
+                  - text: and we’ll sort it. For formal disputes, use our
+                  - link "complaints process" [ref=f20e234] [cursor=pointer]:
+                    - /url: /complaints
+                  - text: .
+        - generic [ref=f20e237]:
+          - heading "Still have questions?" [level=2] [ref=f20e238]
+          - paragraph [ref=f20e239]: We are happy to help. Get in touch and we will get back to you within 2 working days.
+          - link "Contact Us" [ref=f20e240] [cursor=pointer]:
+            - /url: /contact
+    - contentinfo "Site footer" [ref=f20e241]:
+      - generic [ref=f20e242]:
+        - generic [ref=f20e243]:
+          - generic [ref=f20e244]:
+            - link "Wallplace" [ref=f20e245] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f20e246]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f20e247]:
+              - paragraph [ref=f20e248]: Be first to see new works
+              - paragraph [ref=f20e249]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f20e251]:
+                - textbox "your@email.com" [ref=f20e252]
+                - button "Subscribe" [ref=f20e253] [cursor=pointer]
+            - link "Instagram" [ref=f20e254] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f20e259]:
+            - heading "For Artists" [level=4] [ref=f20e260]
+            - list [ref=f20e261]:
+              - listitem [ref=f20e262]:
+                - link "Apply to Join" [ref=f20e263] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f20e264]:
+                - link "Pricing" [ref=f20e265] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f20e266]:
+                - link "Browse Venues" [ref=f20e267] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f20e268]:
+                - link "FAQs" [ref=f20e269] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f20e270]:
+            - heading "For Venues" [level=4] [ref=f20e271]
+            - list [ref=f20e272]:
+              - listitem [ref=f20e273]:
+                - link "Discover Art" [ref=f20e274] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f20e275]:
+                - link "Register Your Venue" [ref=f20e276] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f20e277]:
+                - link "Wallplace Curated" [ref=f20e278] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f20e279]:
+                - link "How It Works" [ref=f20e280] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f20e281]:
+                - link "FAQs" [ref=f20e282] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f20e283]:
+            - heading "Company" [level=4] [ref=f20e284]
+            - list [ref=f20e285]:
+              - listitem [ref=f20e286]:
+                - link "About" [ref=f20e287] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f20e288]:
+                - link "Blog" [ref=f20e289] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f20e290]:
+                - link "How It Works" [ref=f20e291] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f20e292]:
+                - link "Sustainability" [ref=f20e293] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f20e294]:
+                - link "Partner with us" [ref=f20e295] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f20e296]:
+                - link "Contact" [ref=f20e297] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f20e298]:
+                - link "Complaints" [ref=f20e299] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f20e300]:
+                - link "Terms" [ref=f20e301] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f20e302]:
+                - link "Artist Agreement" [ref=f20e303] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f20e304]:
+                - link "Venue Agreement" [ref=f20e305] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f20e306]:
+                - link "Privacy" [ref=f20e307] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f20e308]:
+                - link "Cookies" [ref=f20e309] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f20e310]:
+                - link "Returns & Refunds" [ref=f20e311] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f20e312]:
+                - link "IP Policy" [ref=f20e313] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f20e315]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f20e316] [cursor=pointer]: Feedback
+  - alert [ref=f20e319]

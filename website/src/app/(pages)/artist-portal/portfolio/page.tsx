@@ -461,6 +461,29 @@ export default function PortfolioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bulkPricesOpen, bulkPriceSelected, bulkPriceRows.length]);
 
+  // D23 (finishes E41-e): the last fire-and-forget path is gone. This used to
+  // setWorks, fire postWorks and swallow the rejection into console.error,
+  // while every caller toasted success on the next line. A reorder, a bulk
+  // availability flip, a bulk add, a bulk price change or a copy-from that the
+  // server rejected all reported "done" and then reverted on the next reload.
+  //
+  // Now the grid updates optimistically, the POST is awaited, and a failure
+  // rolls the grid back and shows the server's real message. The success toast
+  // is the caller's own wording, returned through `run` so one control can
+  // serve all five.
+  const bulkWorksSave = useSaveAction<[ArtistWork[], string], string>({
+    optimistic: (updated) => {
+      const snapshot = works;
+      setWorks(updated);
+      return () => setWorks(snapshot);
+    },
+    run: async (updated, message) => {
+      await postWorks(updated);
+      return message;
+    },
+    successMessage: (message) => message,
+  });
+
   if (artistLoading || !artist) {
     return (
       <ArtistPortalLayout activePath="/artist-portal/portfolio">
@@ -541,12 +564,9 @@ export default function PortfolioPage() {
     persistedWorks.current = updated;
   }
 
-  // Legacy fire-and-forget wrapper, still used by the delete / bulk-edit callers
-  // (E41-b, E41-e migrate them next). handleSubmit no longer uses this — it awaits
-  // postWorks through useSaveAction so a failed add/edit can no longer report success.
-  function saveWorks(updated: ArtistWork[]) {
-    setWorks(updated);
-    void postWorks(updated).catch((err) => console.error("Work sync error:", err));
+
+  function saveWorks(updated: ArtistWork[], message: string) {
+    void bulkWorksSave.save(updated, message);
   }
 
   function handleDeleteWork(index: number) {
@@ -569,7 +589,7 @@ export default function PortfolioPage() {
     const next = works.slice();
     const [moved] = next.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
-    saveWorks(next);
+    saveWorks(next, "Order updated");
   }
 
   // ── Bulk edit actions ──────────────────────────────────────────────
@@ -604,8 +624,8 @@ export default function PortfolioPage() {
     const next = works.map((w) =>
       selectedIds.has(w.id) ? { ...w, available } : w,
     );
-    saveWorks(next);
-    showToast(
+    saveWorks(
+      next,
       `Marked ${selectedIds.size} work${selectedIds.size === 1 ? "" : "s"} as ${available ? "available" : "sold"}`,
     );
   }
@@ -1047,8 +1067,8 @@ export default function PortfolioPage() {
 
     // Append to the existing works array; saveWorks handles the API
     // sync and the UI update.
-    saveWorks([...works, ...newWorks]);
-    showToast(
+    saveWorks(
+      [...works, ...newWorks],
       `Added ${newWorks.length} work${newWorks.length === 1 ? "" : "s"}`,
     );
     setBulkAddSaving(false);
@@ -1168,8 +1188,8 @@ export default function PortfolioPage() {
         priceBand: `From £${lowest}`,
       };
     });
-    saveWorks(next);
-    showToast(
+    saveWorks(
+      next,
       `Updated prices for ${byWork.size} work${byWork.size === 1 ? "" : "s"}`,
     );
     setBulkPricesOpen(false);
@@ -1395,8 +1415,8 @@ export default function PortfolioPage() {
       }
       return result;
     });
-    saveWorks(next);
-    showToast(
+    saveWorks(
+      next,
       `Applied ${kind} from "${source.title}" to ${bulkEditTargetIds.size} work${
         bulkEditTargetIds.size === 1 ? "" : "s"
       }`,
@@ -1856,10 +1876,6 @@ export default function PortfolioPage() {
       image: form.imagePreview,
       orientation: form.orientation,
       ...(shippingVal != null && !isNaN(shippingVal) ? { shippingPrice: shippingVal } : {}),
-      // Owner decision 2026-08-28: in-store is a FLAG now, not a price list.
-      // The collect-from-venue price is the normal tier price, so nothing
-      // per-size needs persisting; the tick box maps to available_in_store.
-      availableInStore: form.inStoreEnabled,
       quantityAvailable: qtyFinite ? qtyVal : null,
       frameOptions: cleanFrameOptions.length > 0 ? cleanFrameOptions : undefined,
     };
@@ -2415,22 +2431,10 @@ export default function PortfolioPage() {
                   />
                   <span className="text-xs text-muted">Different shipping per size</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.inStoreEnabled}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setForm((p) => ({
-                        ...p,
-                        inStoreEnabled: checked,
-                        inStorePricing: checked ? (p.inStorePricing.length ? p.inStorePricing : p.sizes.map(() => "")) : [],
-                      }));
-                    }}
-                    className="w-3.5 h-3.5 rounded-sm border border-border accent-accent"
-                  />
-                  <span className="text-xs text-muted">Available to buy in store?</span>
-                </label>
+                {/* 121: in-store availability moved to the PLACEMENT. The
+                    artist is prompted when marking a piece live on the wall
+                    (placement detail page), where the actual size and frame
+                    are known; the portfolio no longer asks. */}
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"

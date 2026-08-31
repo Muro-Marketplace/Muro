@@ -1,0 +1,5 @@
+[      93ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/venue-portal/messages?artist=fin-coles&artistName=Fin%20Coles:0
+[   74924ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://www.wallplace.co.uk/api/messages:0
+[   74925ms] [ERROR] Failed to send: ApiError: Message too short
+    at i (https://www.wallplace.co.uk/_next/static/chunks/08oyi3km~xskp.js:1:15234)
+    at async eZ (https://www.wallplace.co.uk/_next/static/chunks/0l4cq.~dmxax..js:1:41006) @ https://www.wallplace.co.uk/_next/static/chunks/0l4cq.~dmxax..js:0

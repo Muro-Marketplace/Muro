@@ -12,6 +12,10 @@ const PUBLIC_ROUTES = {
     "Stripe webhook. Authenticated by constructEvent signature verification.",
   "src/app/api/webhooks/supabase/route.ts":
     "Supabase webhook. Authenticated by HMAC over the raw body (verifySignature).",
+  "src/app/api/webhooks/resend/route.ts":
+    "Resend delivery webhook (WS5.2). Authenticated by the svix signature over the raw " +
+    "body (verifySvixSignature, timestamp-bounded); refuses everything when " +
+    "RESEND_WEBHOOK_SECRET is unset.",
   "src/app/api/orders/track/route.ts":
     "Guest order tracking. Authenticated by signed token or email match, rate limited.",
   "src/app/api/newsletter/route.ts":
@@ -26,7 +30,9 @@ const PUBLIC_ROUTES = {
   "src/app/api/contact/route.ts":
     "Public contact form. Writes an inbound enquiry, reads nothing.",
   "src/app/api/enquiry/route.ts":
-    "Public enquiry form. Writes an inbound enquiry, reads nothing.",
+    "Public enquiry form (POST). The artist-facing GET/PATCH added for E27 both " +
+    "resolve the caller via getAuthenticatedUser and scope every read and write to " +
+    "the artist_slug derived from the token's own artist_profiles row.",
   "src/app/api/curation/route.ts":
     "Public bespoke-curation enquiry. Associates a user only when a token is present.",
   "src/app/api/register-venue/route.ts":

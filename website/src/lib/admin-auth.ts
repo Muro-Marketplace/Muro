@@ -97,6 +97,45 @@ async function adminUsersHasRow(userId: string): Promise<boolean> {
  * middleware or route handlers that want to branch on admin status without
  * committing to a specific error response).
  */
+/**
+ * Which of these users are admins, in one round trip.
+ *
+ * H26: the inactive-users cron walks a page of users and must not mail staff
+ * as customers (an admin account has no artist and no venue profile, which is
+ * exactly the customer fallback's shape). It cannot use the predicates below
+ * because both take a Request, and the `no-inline-admin-check` rule makes this
+ * module the only legal home for an `admin_users` read. So the batch form
+ * lives here rather than being reimplemented at the call site.
+ *
+ * Fails OPEN on a lookup error, deliberately: this gates a marketing email,
+ * not access. The worst case is an admin receiving one re-engagement email,
+ * where failing closed would silently drop the whole send.
+ */
+export async function adminUserIdsAmong(
+  users: Array<{ id: string; email?: string | null }>,
+): Promise<Set<string>> {
+  const admins = new Set<string>();
+  const allowlist = adminEmails();
+  for (const u of users) {
+    const email = u.email?.toLowerCase();
+    if (email && allowlist.includes(email)) admins.add(u.id);
+  }
+
+  const ids = users.map((u) => u.id).filter(Boolean);
+  if (ids.length === 0) return admins;
+
+  const { data, error } = await getSupabaseAdmin()
+    .from("admin_users")
+    .select("user_id")
+    .in("user_id", ids);
+  if (error) {
+    console.error("[admin-auth] admin_users batch lookup failed:", error.message);
+    return admins;
+  }
+  for (const row of (data || []) as Array<{ user_id: string }>) admins.add(row.user_id);
+  return admins;
+}
+
 export async function isAdminRequest(request: Request): Promise<boolean> {
   const user = await resolveUser(request);
   if (!user) return false;

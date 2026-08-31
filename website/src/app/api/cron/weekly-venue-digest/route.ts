@@ -1,10 +1,9 @@
 // Vercel Cron, Wednesday 09:00 UTC.
 
-import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email/send";
 import { VenueWeeklyDigest } from "@/emails/templates/venue-lifecycle/VenueWeeklyDigest";
-import { requireCronAuth, runBatch } from "../_auth";
+import { requireCronAuth, runBatch, finishCronRun } from "../_auth";
 
 export const dynamic = "force-dynamic";
 
@@ -61,15 +60,19 @@ export async function GET(request: Request) {
         weekStart: weekStartLabel,
         weekEnd: weekEndLabel,
         profileViews: viewCount ?? 0,
-        artistMatches: 0,
         placementRequests: requestCount ?? 0,
         activePlacements: activeCount ?? 0,
-        suggestedArtists: [],
+        // H24: `artistMatches: 0` and `suggestedArtists: []` used to be passed
+        // on every send. Neither had a source: artist-to-venue matching does
+        // not exist. The stat is gone from the template and the suggestion
+        // block only renders when a list is supplied, so nothing here fabricates
+        // a zero. Populate `suggestedArtists` here the day matching lands.
         dashboardUrl: `${SITE}/venue-portal`,
       }),
       metadata: { week: weekStartLabel },
     });
   });
 
-  return NextResponse.json({ ok: true, ...result });
+  // WS6.5: all-failed runs 500 and alert admin; partial failure stays 200.
+  return finishCronRun("weekly-venue-digest", result, { ...result });
 }

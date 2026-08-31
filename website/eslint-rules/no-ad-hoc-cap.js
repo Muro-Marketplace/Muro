@@ -6,15 +6,15 @@ module.exports = {
     type: "problem",
     docs: {
       description:
-        "Forbid re-implementing an inline daily outreach counter on the placements or messages table. " +
+        "Forbid re-implementing an inline windowed outreach counter on the placements or messages table. " +
         "The canonical aggregation is checkArtistOutreachCap() in src/lib/outreach-cap.ts. " +
         "Siloed inline counters let artists exceed the real cap by spreading outreach across surfaces.",
     },
     schema: [],
     messages: {
       adHocCap:
-        "Daily outreach counting belongs in checkArtistOutreachCap() (src/lib/outreach-cap.ts). " +
-        "Do not re-implement an inline placements/messages daily counter.",
+        "Rolling-window outreach counting belongs in checkArtistOutreachCap() (src/lib/outreach-cap.ts). " +
+        "Do not re-implement an inline placements/messages counter.",
     },
   },
 
@@ -125,6 +125,41 @@ module.exports = {
       );
     }
 
+    /**
+     * Columns that identify WHOSE rows are being counted. A chain that filters
+     * on one of these plus a created_at window is a per-user windowed counter,
+     * whether or not it asks Supabase for a count: since the cap helper stopped
+     * using { count: "exact" } (it needs the timestamps to work out when an
+     * approach frees up), a copied counter would otherwise slip past this rule.
+     */
+    const ACTOR_COLUMNS = new Set([
+      "created_by_user_id",
+      "proposed_by_user_id",
+      "requester_user_id",
+      "sender_id",
+      "artist_user_id",
+    ]);
+
+    function isActorEq(callNode) {
+      const callee = callNode.callee;
+      if (
+        !callee ||
+        callee.type !== "MemberExpression" ||
+        callee.computed ||
+        callee.property.type !== "Identifier" ||
+        callee.property.name !== "eq"
+      ) {
+        return false;
+      }
+      const firstArg = callNode.arguments[0];
+      return (
+        firstArg &&
+        firstArg.type === "Literal" &&
+        typeof firstArg.value === "string" &&
+        ACTOR_COLUMNS.has(firstArg.value)
+      );
+    }
+
     return {
       CallExpression(node) {
         // We're interested in `.from("placements")` or `.from("messages")`.
@@ -160,14 +195,19 @@ module.exports = {
         // Inspect each call in the chain for the two cap indicators.
         let hasGteCreatedAt = false;
         let hasCountSelect = false;
+        let hasActorEq = false;
 
         for (const { callNode } of chainMethods) {
           if (!hasGteCreatedAt && isGteCreatedAt(callNode)) hasGteCreatedAt = true;
           if (!hasCountSelect && isCountSelect(callNode)) hasCountSelect = true;
-          if (hasGteCreatedAt && hasCountSelect) break;
+          if (!hasActorEq && isActorEq(callNode)) hasActorEq = true;
+          if (hasGteCreatedAt && (hasCountSelect || hasActorEq)) break;
         }
 
-        if (hasGteCreatedAt && hasCountSelect) {
+        // A created_at window on its own is an ordinary date-ranged read. It
+        // becomes a cap counter when it also asks for a count, or narrows to
+        // one actor's rows.
+        if (hasGteCreatedAt && (hasCountSelect || hasActorEq)) {
           context.report({ node, messageId: "adHocCap" });
         }
       },

@@ -32,7 +32,7 @@ const tabContent: Record<Audience, {
     secondary: { href: "/curated", label: "Or explore Curated, a managed selection from £49" },
   },
   artist: {
-    lede: "Apply to join Wallplace's curated roster. We accept around half. Accepted artists get their first month free, then choose any tier.",
+    lede: "Apply to join Wallplace's curated roster. Every application is reviewed personally. Accepted artists get their first month free, then choose any tier.",
     steps: [
       { number: "01", title: "Apply", description: "Submit your portfolio. We review every application personally and respond within 5 business days." },
       { number: "02", title: "Get Accepted", description: "Pass curation review and your profile goes live. First month free on any plan." },
@@ -45,7 +45,7 @@ const tabContent: Record<Audience, {
     lede: "Buy original artwork directly from independent artists. Spot a piece on a wall in a venue and scan the QR, or browse a growing roster of artist storefronts online.",
     steps: [
       { number: "01", title: "Discover", description: "Find work in person at a venue showing Wallplace artists, or browse artist storefronts online." },
-      { number: "02", title: "Buy", description: "Pay securely through Wallplace. Every piece comes with a certificate of authenticity from the artist." },
+      { number: "02", title: "Buy", description: "Pay securely through Wallplace. Your money goes to the artist who made the work, less a small platform fee." },
       { number: "03", title: "Receive", description: "Pickup from the venue or have it shipped. Track the order through your account until it arrives." },
     ],
     cta: { href: "/browse", label: "Browse artwork" },

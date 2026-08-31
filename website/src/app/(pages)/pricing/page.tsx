@@ -36,6 +36,12 @@ const comparisonRows = [
     pro: "Yes",
   },
   {
+    feature: "New venue approaches",
+    core: "3 a week",
+    premium: "6 a week",
+    pro: "15 a week",
+  },
+  {
     feature: "Venue matching",
     core: "Curated visibility",
     premium: "Proactive matching",
@@ -80,6 +86,11 @@ const faqItems = [
       "The platform fee is the percentage Wallplace takes when a sale is made through the platform, whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is a flat 15% on every plan, separate from your membership cost. You keep the rest, minus any revenue share you have agreed with the venue hosting your work.",
   },
   {
+    question: "How many venues can I approach?",
+    answer:
+      "Core covers 3 new venue approaches a week, Premium 6, and Pro 15. The allowance is shared: placement requests, the first message you send a venue, and artwork request responses all draw on the same pool, so you can spend it however suits you. It runs on a rolling 7 days rather than resetting on a fixed day, so an approach you made last Tuesday comes back to you this Tuesday. Replying to a venue that has already replied to you is always free and never counts. You can see what you have left on any venue's request form.",
+  },
+  {
     question: "Is the first month really free?",
     answer:
       "Yes. Every approved artist gets their first month at no cost, on any tier. You can start with Core and upgrade later, or begin on Premium or Pro. The first month is always free. After that, billing begins on your chosen plan.",
@@ -87,7 +98,7 @@ const faqItems = [
   {
     question: "Can I change my tier?",
     answer:
-      "Yes, you can upgrade or downgrade at any time. If you upgrade mid-cycle, the difference is prorated. Downgrading takes effect at the start of your next billing period.",
+      "Yes, you can upgrade or downgrade at any time from your billing page. You check out for the new plan, it starts straight away, and your old plan is cancelled as soon as the new one is running.",
   },
   {
     question: "Is placement guaranteed?",
@@ -97,7 +108,7 @@ const faqItems = [
   {
     question: "What happens when I cancel?",
     answer:
-      "You can cancel at any time. Your membership remains active until the end of the period you have paid for. We will arrange the return of any artwork currently on display with venues, and your profile will be removed from the platform. No cancellation fees.",
+      "You can cancel with 30 days' written notice, by email or from your account settings. Your membership remains active until the end of the notice period. You collect any artwork on display with venues within 30 days of cancelling, and your profile is then removed from the platform. No cancellation fees.",
   },
   {
     question: "Are there any other fees?",
@@ -301,7 +312,7 @@ export default function PricingPage() {
                 For artists producing enough work to hang in several venues at
                 once, Pro is the commercially obvious choice.
               </p>
-              <Button href="/apply" size="md">
+              <Button href="/apply?plan=pro" size="md">
                 Apply for Pro
               </Button>
             </div>

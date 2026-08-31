@@ -4,7 +4,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { messageSchema } from "@/lib/validations";
-import { checkArtistOutreachCap } from "@/lib/outreach-cap";
+import { checkArtistOutreachCap, outreachCapPayload } from "@/lib/outreach-cap";
 import { orFilter } from "@/lib/db/safe-filter";
 import { assertPlacementParty, handleAuthzError } from "@/lib/authz";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
@@ -34,6 +34,10 @@ function formatSlugToName(slug: string): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
+
+/** The system thread with the Wallplace team. No artist or venue profile owns
+ *  this slug, so it can be read but never replied to (F50). */
+const SUPPORT_SLUG = "wallplace-support";
 
 // GET: fetch conversations for the authenticated user, enriched with profile data
 export async function GET(request: Request) {
@@ -227,7 +231,7 @@ export async function GET(request: Request) {
       const profile = profileMap.get(conv.otherParty);
       // Special-case the Wallplace Support system thread so it never
       // renders as the raw slug "wallplace-support".
-      const isSupport = conv.otherParty === "wallplace-support";
+      const isSupport = conv.otherParty === SUPPORT_SLUG;
       return {
         ...conv,
         otherPartyDisplayName: isSupport
@@ -297,6 +301,26 @@ export async function POST(request: Request) {
       return `dm-${a}__${b}`;
     }
 
+    // F50. "wallplace-support" is a system slug. The GET handler special-cases
+    // it so the thread renders as "Wallplace Support", but nothing in src/,
+    // supabase/ or scripts/ ever creates a profile row that owns it, and the
+    // recipient resolution below only looks at artist_profiles and
+    // venue_profiles. So every reply on a support thread came back 404 with
+    // "They may not have an account yet. If you want us to invite them, reply
+    // with their email" — advice that makes no sense for the Wallplace team.
+    // Refuse plainly and point at the route that actually reaches us. The inbox
+    // hides the reply box on these threads for the same reason; this is the
+    // server half, for anything that reaches the endpoint directly.
+    if (recipientSlug === SUPPORT_SLUG) {
+      return NextResponse.json(
+        {
+          error: "Replies aren't sent from this thread. Use the contact form at /contact and the team will pick it up.",
+          code: "support_thread_readonly",
+        },
+        { status: 400 },
+      );
+    }
+
     const db = getSupabaseAdmin();
 
     // Resolve the authenticated user's actual slug from their profile.
@@ -305,11 +329,20 @@ export async function POST(request: Request) {
     // profile impersonate anyone by passing that slug in the body. If the
     // user has no artist/venue profile, reject outright rather than
     // quietly delivering a spoofed message.
-    const { data: senderArtist } = await db.from("artist_profiles").select("slug").eq("user_id", auth.user!.id).maybeSingle();
+    const { data: senderArtist } = await db.from("artist_profiles").select("slug, name").eq("user_id", auth.user!.id).maybeSingle();
     const { data: senderVenue } = !senderArtist
-      ? await db.from("venue_profiles").select("slug").eq("user_id", auth.user!.id).maybeSingle()
+      ? await db.from("venue_profiles").select("slug, name").eq("user_id", auth.user!.id).maybeSingle()
       : { data: null };
     const resolvedSenderSlug = senderArtist?.slug || senderVenue?.slug || null;
+    // The SLUG stays the stored identity (sender_name is matched against it in
+    // the thread lookups below and must not change shape). This is the human
+    // name for the notification EMAIL only: owner-reported 2026-08-30, the
+    // notification read "fin-coles" where the person's name belongs. Falls back
+    // to a de-slugged version when a profile has no name set.
+    const resolvedSenderDisplayName =
+      (senderArtist as { name?: string | null } | null)?.name?.trim() ||
+      (senderVenue as { name?: string | null } | null)?.name?.trim() ||
+      (resolvedSenderSlug ? formatSlugToName(resolvedSenderSlug) : "Someone");
     if (!resolvedSenderSlug) {
       return NextResponse.json(
         { error: "Your account is not set up to send messages yet, complete your artist or venue profile first." },
@@ -406,16 +439,7 @@ export async function POST(request: Request) {
         exemptConversationId: cidLocal,
       });
       if (!cap.ok) {
-        return NextResponse.json(
-          {
-            error: "outreach_limit_reached",
-            message: cap.result.message,
-            limit: cap.result.limit,
-            sent: cap.result.used,
-            plan: cap.result.plan,
-          },
-          { status: 429 },
-        );
+        return NextResponse.json(outreachCapPayload(cap.result), { status: 429 });
       }
     }
 
@@ -544,6 +568,8 @@ export async function POST(request: Request) {
           // carry a proposer, which is what "written by almost nothing" looks
           // like.
           proposed_by_user_id: auth.user!.id,
+          // Immutable creator stamp the outreach cap counts (migration 122).
+          created_by_user_id: auth.user!.id,
           created_at: new Date().toISOString(),
         });
         if (placementError) console.error("Placement insert error:", placementError);
@@ -819,7 +845,7 @@ export async function POST(request: Request) {
               recipientUserId: recipientArtist.user_id,
               recipientName: recipientArtist.name,
               recipientPortal: "artist",
-              senderName: resolvedSenderSlug,
+              senderName: resolvedSenderDisplayName,
               messagePreview: content,
               conversationId: cid || "",
             });
@@ -843,7 +869,7 @@ export async function POST(request: Request) {
               // F7: venues used to get an artist-portal link here, which
               // bounced them off a portal guard instead of opening the thread.
               recipientPortal: "venue",
-              senderName: resolvedSenderSlug,
+              senderName: resolvedSenderDisplayName,
               messagePreview: content,
               conversationId: cid || "",
             });

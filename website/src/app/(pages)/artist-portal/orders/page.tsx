@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { readOrderItems, type RawOrderItem } from "@/lib/order-items";
+import { useUrlState } from "@/lib/use-url-state";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
 import { artistPayoutPounds, formatPounds } from "@/lib/finance/order-money";
 
 interface Order {
   id: string;
-  items: { title: string; qty: number; price: number }[];
+  items: RawOrderItem[];
   shipping: { fullName: string; email: string; phone: string; addressLine1: string; addressLine2?: string; city: string; postcode: string; country: string };
   // Subtotal and shipping_cost expose the split that makes up `total`,
   // so the revenue breakdown can show how the items-line and "Sale
@@ -56,9 +58,31 @@ const statusActions: Record<string, { next: string; label: string; color: string
 };
 
 export default function ArtistOrdersPage() {
+  // useUrlState transitively calls useSearchParams, which in Next 16
+  // triggers "Missing Suspense boundary" prerender errors. Wrap the
+  // dynamic subtree in Suspense (mirrors customer-portal).
+  return (
+    <Suspense
+      fallback={
+        <ArtistPortalLayout activePath="/artist-portal/orders">
+          <p className="text-muted text-sm py-12 text-center">Loading orders...</p>
+        </ArtistPortalLayout>
+      }
+    >
+      <ArtistOrdersContent />
+    </Suspense>
+  );
+}
+
+function ArtistOrdersContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  // R6.F9: the refund bells deep-link `/artist-portal/orders?id={orderId}`
+  // ("approve / reject directly"), but the selection used to be plain
+  // useState so the param was ignored and the artist landed on the
+  // unfiltered list. URL state consumes `?id=` the way customer-portal
+  // consumes `?order=`, and keeps the selection shareable.
+  const [selectedOrder, setSelectedOrder] = useUrlState<string>("id", "");
   const [trackingInput, setTrackingInput] = useState("");
   const [updating, setUpdating] = useState(false);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
@@ -73,13 +97,38 @@ export default function ArtistOrdersPage() {
   const [issueRefundAmount, setIssueRefundAmount] = useState("");
   const [issueRefundReason, setIssueRefundReason] = useState("");
 
+  // D4 (QA 2026-08-28), on top of R6.F9's useUrlState above: `?id=` now
+  // selects the order via URL state. Two finishing touches here: honour the
+  // legacy `?order=` alias (the param name the customer portal uses, so
+  // hand-copied links keep working) by folding it into the id state, and
+  // scroll the opened detail panel into view once the deep-linked order has
+  // loaded so the selection is visible, not just technically applied.
+  const [deepLinkApplied, setDeepLinkApplied] = useState(false);
+
   useEffect(() => {
+    const deepLinkedId = new URLSearchParams(window.location.search).get("id")
+      || new URLSearchParams(window.location.search).get("order");
     authFetch("/api/orders")
       .then((r) => r.json())
-      .then((data) => { if (data.orders) setOrders(data.orders); })
+      .then((data) => {
+        if (!data.orders) return;
+        setOrders(data.orders);
+        if (deepLinkedId && (data.orders as Order[]).some((o) => o.id === deepLinkedId)) {
+          setSelectedOrder(deepLinkedId);
+          setDeepLinkApplied(true);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!deepLinkApplied) return;
+    document
+      .getElementById("order-detail-panel")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [deepLinkApplied]);
 
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -261,10 +310,10 @@ export default function ArtistOrdersPage() {
 
       {/* Order detail */}
       {selected && (
-        <div className="bg-surface border border-accent/20 rounded-sm p-6 mb-6">
+        <div id="order-detail-panel" className="bg-surface border border-accent/20 rounded-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-base font-medium">Order {selected.id}</h2>
-            <button onClick={() => setSelectedOrder(null)} className="text-xs text-muted hover:text-foreground">Close</button>
+            <button onClick={() => setSelectedOrder("")} className="text-xs text-muted hover:text-foreground">Close</button>
           </div>
 
           <OrderStatusTracker currentStatus={selected.status} statusHistory={selected.status_history || []} />
@@ -313,45 +362,20 @@ export default function ArtistOrdersPage() {
             </div>
           )}
 
-          {/* Items. The webhook overwrites orders.items with an
-              enriched shape (`quantity`, `lineTotal: {amount,currency}`)
-              once the receipt email is built; legacy rows persisted
-              before that overwrite still carry the cart shape (`qty`,
-              `price`). Read both so the breakdown never renders £NaN
-              on either generation. */}
+          {/* Items. This dual-shape read used to live here and only here,
+              which is how the customer portal and the tracking page came to
+              show £0.00 on the same orders. It now lives in
+              lib/order-items.ts so all three surfaces share one reader. */}
           <div className="mt-6 space-y-2">
             <p className="text-xs text-muted uppercase tracking-wider">Items</p>
-            {(selected.items || []).map(
-              (
-                item: {
-                  title?: string;
-                  qty?: number;
-                  quantity?: number;
-                  price?: number;
-                  lineTotal?: { amount?: number; currency?: string };
-                },
-                i: number,
-              ) => {
-                const qty = Number(item.quantity ?? item.qty ?? 1);
-                // Prefer lineTotal.amount (pence) when present; fall
-                // back to price * qty (pounds) for legacy rows.
-                const lineTotalPounds = (() => {
-                  const amt = item.lineTotal?.amount;
-                  if (typeof amt === "number" && Number.isFinite(amt)) return amt / 100;
-                  const price = Number(item.price);
-                  if (Number.isFinite(price) && Number.isFinite(qty)) return price * qty;
-                  return 0;
-                })();
-                return (
-                  <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
-                    <span>
-                      {item.title || "Artwork"} &times; {qty}
-                    </span>
-                    <span className="font-medium">&pound;{lineTotalPounds.toFixed(2)}</span>
-                  </div>
-                );
-              },
-            )}
+            {readOrderItems(selected.items).map((item, i) => (
+              <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
+                <span>
+                  {item.title} &times; {item.quantity}
+                </span>
+                <span className="font-medium">&pound;{item.lineTotal.toFixed(2)}</span>
+              </div>
+            ))}
           </div>
 
           {/* Revenue breakdown */}
@@ -653,7 +677,7 @@ export default function ArtistOrdersPage() {
             <button
               key={order.id}
               onClick={() => {
-                setSelectedOrder(selectedOrder === order.id ? null : order.id);
+                setSelectedOrder(selectedOrder === order.id ? "" : order.id);
                 // Refund feedback is per-order; don't carry it to another order's panel.
                 setRefundActionError(null);
                 setIssueRefundError(null);
@@ -668,6 +692,23 @@ export default function ArtistOrdersPage() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium text-foreground">{order.id}</p>
                     {order.source === "qr" && <span className="text-[9px] bg-accent/10 text-accent px-1.5 py-0.5 rounded-sm font-medium">QR</span>}
+                    {/* QA 2026-08-30 bug 29: a pending refund was only visible
+                        once the row was expanded, so an order with a full
+                        refund awaiting a decision looked like an ordinary
+                        completed sale, and its value still counted toward the
+                        artist's headline earnings. One production request had
+                        been pending for over four months, including one the
+                        artist raised themselves. */}
+                    {refundRequests.some(
+                      (r) => r.order_id === order.id && r.status === "pending",
+                    ) && (
+                      <span
+                        className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-sm font-medium"
+                        title="A refund has been requested for this order and is awaiting a decision. If it is approved, this sale's earnings will be reversed."
+                      >
+                        REFUND PENDING
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted mt-0.5">
                     {new Date(order.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}

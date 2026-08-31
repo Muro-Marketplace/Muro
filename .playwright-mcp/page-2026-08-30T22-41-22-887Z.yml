@@ -1,0 +1,124 @@
+- generic [active] [ref=f125e1]:
+  - generic [ref=f125e2]:
+    - link "Skip to content" [ref=f125e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f125e4]:
+      - generic [ref=f125e6]:
+        - link "Wallplace" [ref=f125e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f125e8]:
+          - link "Marketplace" [ref=f125e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f125e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f125e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f125e13] [cursor=pointer]
+        - generic [ref=f125e16]:
+          - link "Saved" [ref=f125e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f125e21] [cursor=pointer]
+          - button "Notifications" [ref=f125e26] [cursor=pointer]
+          - generic [ref=f125e30]:
+            - link "Venue Portal" [ref=f125e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f125e32] [cursor=pointer]
+          - button "Logout" [ref=f125e35] [cursor=pointer]
+    - main [ref=f125e36]:
+      - generic [ref=f125e37]: Loading placement…
+    - contentinfo "Site footer" [ref=f125e38]:
+      - generic [ref=f125e39]:
+        - generic [ref=f125e40]:
+          - generic [ref=f125e41]:
+            - link "Wallplace" [ref=f125e42] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f125e43]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f125e44]:
+              - paragraph [ref=f125e45]: Be first to see new works
+              - paragraph [ref=f125e46]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f125e48]:
+                - textbox "your@email.com" [ref=f125e49]
+                - button "Subscribe" [ref=f125e50] [cursor=pointer]
+            - link "Instagram" [ref=f125e51] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f125e56]:
+            - heading "For Artists" [level=4] [ref=f125e57]
+            - list [ref=f125e58]:
+              - listitem [ref=f125e59]:
+                - link "Apply to Join" [ref=f125e60] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f125e61]:
+                - link "Pricing" [ref=f125e62] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f125e63]:
+                - link "Browse Venues" [ref=f125e64] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f125e65]:
+                - link "FAQs" [ref=f125e66] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f125e67]:
+            - heading "For Venues" [level=4] [ref=f125e68]
+            - list [ref=f125e69]:
+              - listitem [ref=f125e70]:
+                - link "Discover Art" [ref=f125e71] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f125e72]:
+                - link "Register Your Venue" [ref=f125e73] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f125e74]:
+                - link "Wallplace Curated" [ref=f125e75] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f125e76]:
+                - link "How It Works" [ref=f125e77] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f125e78]:
+                - link "FAQs" [ref=f125e79] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f125e80]:
+            - heading "Company" [level=4] [ref=f125e81]
+            - list [ref=f125e82]:
+              - listitem [ref=f125e83]:
+                - link "About" [ref=f125e84] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f125e85]:
+                - link "Blog" [ref=f125e86] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f125e87]:
+                - link "How It Works" [ref=f125e88] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f125e89]:
+                - link "Sustainability" [ref=f125e90] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f125e91]:
+                - link "Partner with us" [ref=f125e92] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f125e93]:
+                - link "Contact" [ref=f125e94] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f125e95]:
+                - link "Complaints" [ref=f125e96] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f125e97]:
+                - link "Terms" [ref=f125e98] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f125e99]:
+                - link "Artist Agreement" [ref=f125e100] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f125e101]:
+                - link "Venue Agreement" [ref=f125e102] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f125e103]:
+                - link "Privacy" [ref=f125e104] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f125e105]:
+                - link "Cookies" [ref=f125e106] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f125e107]:
+                - link "Returns & Refunds" [ref=f125e108] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f125e109]:
+                - link "IP Policy" [ref=f125e110] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f125e112]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f125e113] [cursor=pointer]: Feedback
+  - alert [ref=f125e116]

@@ -110,7 +110,11 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ success: true });
+    // A2.3. The reference was minted here, written to the row and printed in
+    // the acknowledgement email, but the response carried only { success },
+    // so the page could not show it. Someone who never received the email, or
+    // closed it, was asked to quote a reference they had never seen.
+    return NextResponse.json({ success: true, reference });
   } catch {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }

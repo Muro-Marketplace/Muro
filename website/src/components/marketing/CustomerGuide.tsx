@@ -40,9 +40,9 @@ const benefits = [
         <circle cx="14" cy="14" r="11" />
       </svg>
     ),
-    title: "Certificate of authenticity",
+    title: "Know exactly what you're buying",
     description:
-      "Every sale ships with a signed certificate from the artist. Provenance, dimensions, year, and edition (if any) on record.",
+      "Medium, dimensions and the artist's own description on every listing. Want a signed certificate of authenticity? Ask the artist before you buy.",
   },
   {
     icon: (
@@ -65,7 +65,7 @@ const benefits = [
     ),
     title: "Secure payment",
     description:
-      "Card, Apple Pay, Google Pay. Wallplace holds the funds until the artist confirms dispatch, so you're never out of pocket if something goes wrong.",
+      "Card, Apple Pay, Google Pay. Wallplace holds the funds until delivery is confirmed (or 14 days pass with no dispute), so you're covered if something goes wrong.",
   },
   {
     icon: (
@@ -103,7 +103,7 @@ const faqItems = [
   {
     question: "Can I sell the piece on later?",
     answer:
-      "Yes, it's yours. Wallplace doesn't claim resale rights. Your certificate of authenticity travels with the work, so future buyers can verify provenance.",
+      "Yes, it's yours. Wallplace doesn't claim resale rights. Keep your order confirmation as a record of the purchase; it shows the work came directly from the artist.",
   },
   {
     question: "Where does my money go?",

@@ -42,7 +42,11 @@ const entry: TemplateEntry<SubscriptionTrialEndingProps> = {
   description: "Pre-expiry reminder with benefits list.",
   stream: "news",
   persona: "multi",
-  category: "promotions",
+  // WS4.5 (audit R2.3/R4.1 Critical): this is the ONLY notice before the
+  // first real charge. It sat in "promotions" (opt-in, default OFF,
+  // suppressible, throttled), so anyone with a preferences row was charged
+  // with no warning. Billing notices always send.
+  category: "orders_and_payouts",
   subject: "Your {{planName}} trial ends {{trialEndDate}}",
   previewText: "Keep your upgrades?",
   component: SubscriptionTrialEnding,

@@ -49,7 +49,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { scheduleTransfer } from "@/lib/stripe-connect";
+import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
+import { canReceivePayout } from "@/lib/payouts/capability";
+import { sendEmail } from "@/lib/email/send";
+import { VenuePaidLoanInvoice } from "@/emails/templates/payments/VenuePaidLoanInvoice";
+import { PaidLoanPaymentFailed } from "@/emails/templates/payments/PaidLoanPaymentFailed";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
 // E11b: moved to a neutral home once the artist-subscription webhook branch needed
 // the same item-level read. Re-exported because callers already import it from here.
@@ -291,10 +297,54 @@ export async function handleInvoicePaid(
       free_until: string | null;
     }>();
   const platformFeePct = platformFeePercentForArtist(artistProfile ?? null);
+  // WS4.6 (audit R3.13/R1.F6): the share comes from what the invoice actually
+  // COLLECTED, not the recorded monthly fee. A prorated, discounted or trial
+  // £0 invoice used to overpay the artist against money never taken; the
+  // recorded fee remains only the fallback for legacy events without a
+  // populated amount_paid.
+  const collectedPence =
+    typeof invoice.amount_paid === "number" && invoice.amount_paid >= 0
+      ? invoice.amount_paid
+      : billing.monthly_amount_pence;
   const artistShareCents = Math.max(
     0,
-    Math.round(billing.monthly_amount_pence * (1 - platformFeePct / 100)),
+    Math.round(collectedPence * (1 - platformFeePct / 100)),
   );
+
+  // R2.13 (audit): cancelPaidLoanBilling failures were swallowed with a
+  // comment promising "the webhook reconciler will catch up", and no
+  // reconciler existed - so invoices for a COMPLETED placement kept paying
+  // the artist share indefinitely. The daily subscription-reconcile cron now
+  // exists, and this is the immediate tripwire: an invoice for a non-active
+  // placement still pays the share (the venue WAS charged; the artist's cut
+  // of real money is owed), but admin hears about it the same minute so the
+  // orphaned subscription gets cancelled by a human today, not never.
+  try {
+    const { data: placementRow } = await db
+      .from("placements")
+      .select("status")
+      .eq("id", billing.placement_id)
+      .maybeSingle<{ status: string | null }>();
+    if (placementRow && placementRow.status !== "active") {
+      const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+      await sendAdminAlert({
+        idempotencyKey: `paid_loan_nonactive:${invoice.id}`,
+        subject: "Paid-loan invoice charged for a non-active placement",
+        summary:
+          `Invoice ${invoice.id} charged the venue for placement ${billing.placement_id}, ` +
+          `whose status is "${placementRow.status}". The Stripe subscription should have been ` +
+          `cancelled when the placement ended; cancel it in Stripe or via the placement page.`,
+        fields: [
+          { label: "Placement", value: billing.placement_id },
+          { label: "Placement status", value: String(placementRow.status) },
+          { label: "Invoice", value: String(invoice.id) },
+        ],
+        metadata: { placementId: billing.placement_id, invoiceId: invoice.id },
+      });
+    }
+  } catch (staleAlertErr) {
+    console.warn("[paid-loan] non-active placement check failed:", staleAlertErr);
+  }
 
   // Audit fix: explicit idempotency check before scheduleTransfer.
   // The Stripe webhook retries failed events up to 3 days; without
@@ -314,16 +364,64 @@ export async function handleInvoicePaid(
     return true; // already scheduled, replay is a no-op
   }
 
-  const artistConnect = artistProfile;
-  if (artistConnect?.stripe_connect_account_id && artistShareCents > 0) {
-    await scheduleTransfer({
-      orderId: transferOrderId,
-      recipientType: "artist",
-      recipientUserId: billing.payee_user_id,
-      connectAccountId: artistConnect.stripe_connect_account_id,
-      amountCents: artistShareCents,
-      immediate: false,
-    });
+  // WS4.6 (audit R2.8/R3.10): gate on real payout capability, and when the
+  // artist is NOT payable record a blocked leg so the owed share is a visible
+  // IOU instead of silently vanishing month after month.
+  if (artistShareCents > 0 && billing.payee_user_id) {
+    const cap = await canReceivePayout(db, { kind: "artist", userId: billing.payee_user_id });
+    if (cap.ok && cap.accountId) {
+      await scheduleTransfer({
+        orderId: transferOrderId,
+        recipientType: "artist",
+        recipientUserId: billing.payee_user_id,
+        connectAccountId: cap.accountId,
+        amountCents: artistShareCents,
+        immediate: false,
+      });
+    } else {
+      await recordBlockedLeg(db, {
+        orderId: transferOrderId,
+        recipientType: "artist",
+        recipientUserId: billing.payee_user_id,
+        amountCents: artistShareCents,
+        reason: cap.reason ?? "payouts_not_ready",
+      });
+    }
+  }
+
+  // WS4.8 (audit R4.13): the venue gets their monthly receipt. Keyed on the
+  // invoice, so Stripe redelivery cannot double it.
+  if (billing.payer_user_id && collectedPence > 0) {
+    try {
+      const { data: { user: venueUser } } = await db.auth.admin.getUserById(billing.payer_user_id);
+      const { data: venueProfile } = await db
+        .from("venue_profiles")
+        .select("name")
+        .eq("user_id", billing.payer_user_id)
+        .maybeSingle<{ name: string | null }>();
+      if (venueUser?.email) {
+        await sendEmail({
+          idempotencyKey: `paid_loan_invoice:${invoice.id}`,
+          template: "venue_paid_loan_invoice",
+          category: "orders_and_payouts",
+          to: venueUser.email,
+          userId: billing.payer_user_id,
+          subject: "Your monthly display fee receipt",
+          react: VenuePaidLoanInvoice({
+            firstName: (venueProfile?.name || "there").split(" ")[0],
+            venueName: venueProfile?.name || "your venue",
+            invoiceNumber: invoice.number || invoice.id || "invoice",
+            amountDue: { amount: collectedPence, currency: "GBP" },
+            dueDate: "Paid",
+            invoiceUrl: invoice.hosted_invoice_url || `${SITE}/placements/${encodeURIComponent(billing.placement_id)}`,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { placementId: billing.placement_id, invoiceId: invoice.id ?? "" },
+        });
+      }
+    } catch (mailErr) {
+      console.warn("[paid-loan] receipt email failed:", mailErr);
+    }
   }
   return true;
 }
@@ -367,6 +465,100 @@ export async function handleInvoicePaymentFailed(
     .update({ status: finalAttempt ? "paused" : "past_due" })
     .eq("id", billing.id);
 
+  // WS4.3 (audit R2.7/R6.F2): the docstring above promised notification and
+  // nothing ever sent one. The VENUE (payer) gets a dunning email keyed per
+  // invoice per stage; the ARTIST gets a bell (their money is what stops);
+  // the final failure also alerts the admin.
+  const { data: placementRow } = await db
+    .from("placements")
+    .select("work_title, artist_slug, monthly_fee_gbp")
+    .eq("id", billing.placement_id)
+    .maybeSingle<{ work_title: string | null; artist_slug: string | null; monthly_fee_gbp: number | null }>();
+  const feePence = Math.round(Number(placementRow?.monthly_fee_gbp || 0) * 100);
+  const workTitle = placementRow?.work_title || "your placed artwork";
+  // Owner-reported 2026-08-30: slugs were reaching customer-facing email. This
+  // one told a venue their payment had failed for a work "by fin-coles".
+  // Resolve the artist's real name, de-slugging only if their profile has none.
+  const dunningArtistName = await (async () => {
+    const slug = placementRow?.artist_slug || "";
+    if (!slug) return "the artist";
+    const { data: ap } = await db
+      .from("artist_profiles")
+      .select("name")
+      .eq("slug", slug)
+      .maybeSingle<{ name: string | null }>();
+    return (
+      ap?.name?.trim() ||
+      slug.split("-").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ||
+      "the artist"
+    );
+  })();
+
+  if (billing.payer_user_id) {
+    try {
+      const { data: { user: venueUser } } = await db.auth.admin.getUserById(billing.payer_user_id);
+      const { data: venueProfile } = await db
+        .from("venue_profiles")
+        .select("name")
+        .eq("user_id", billing.payer_user_id)
+        .maybeSingle<{ name: string | null }>();
+      if (venueUser?.email) {
+        await sendEmail({
+          idempotencyKey: `paid_loan_dunning:${invoice.id}:${finalAttempt ? "final" : "retry"}`,
+          template: "paid_loan_payment_failed",
+          category: "orders_and_payouts",
+          to: venueUser.email,
+          userId: billing.payer_user_id,
+          subject: finalAttempt
+            ? "Monthly display payments are paused"
+            : "Your monthly display fee payment failed",
+          react: PaidLoanPaymentFailed({
+            venueFirstName: (venueProfile?.name || "there").split(" ")[0],
+            workTitle,
+            artistName: dunningArtistName,
+            monthlyFee: { amount: feePence, currency: "GBP" },
+            finalAttempt,
+            updatePaymentUrl: `${SITE}/placements/${encodeURIComponent(billing.placement_id)}/payment`,
+          }),
+          metadata: { placementId: billing.placement_id, invoiceId: invoice.id ?? "" },
+        });
+      }
+    } catch (mailErr) {
+      console.warn("[paid-loan] dunning email failed:", mailErr);
+    }
+  }
+  if (billing.payee_user_id) {
+    const { createNotification } = await import("@/lib/notifications");
+    createNotification({
+      userId: billing.payee_user_id,
+      kind: "paid_loan_payment_failed",
+      title: finalAttempt
+        ? `Monthly payments paused for ${workTitle}`
+        : `A monthly payment failed for ${workTitle}`,
+      body: finalAttempt
+        ? "The venue's card could not be charged after several attempts. You are not being paid while billing is paused."
+        : "The venue's card was declined. Stripe retries automatically; the venue has been asked to update it.",
+      link: `/placements/${encodeURIComponent(billing.placement_id)}`,
+      // Webhook-driven: Stripe redelivers, and each invoice attempt is its
+      // own event, so the key carries the invoice and the stage (F6).
+      idempotencyKey: `paid_loan_payment_failed:${invoice.id}:${finalAttempt ? "final" : "retry"}`,
+    }).catch(() => {});
+  }
+  if (finalAttempt) {
+    const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+    await sendAdminAlert({
+      idempotencyKey: `paid_loan_paused:${billing.id}:${invoice.id}`,
+      subject: `Paid-loan billing paused: ${workTitle}`,
+      summary: "Stripe exhausted its retries on a monthly display fee. The billing row is paused, both parties were told, and the artist is unpaid until the venue fixes their card or the placement is wound down.",
+      fields: [
+        { label: "Placement", value: billing.placement_id },
+        { label: "Monthly fee", value: `£${(feePence / 100).toFixed(2)}` },
+      ],
+      actionPath: "/admin/financials",
+      actionLabel: "Open financials",
+    }).catch(() => {});
+  }
+
   return true;
 }
 
@@ -396,5 +588,31 @@ export async function handleSubscriptionDeleted(
     .from("placement_recurring_billings")
     .update({ status: "cancelled" })
     .eq("id", billing.id);
+
+  // WS4 / audit R2.13: the cancellation used to be a silent row write. Both
+  // parties get a bell; the placement page's payment banner drops with it.
+  const { data: fullRow } = await db
+    .from("placement_recurring_billings")
+    .select("placement_id, payer_user_id, payee_user_id")
+    .eq("id", billing.id)
+    .maybeSingle<{ placement_id: string; payer_user_id: string | null; payee_user_id: string | null }>();
+  if (fullRow) {
+    const { createNotification } = await import("@/lib/notifications");
+    for (const [userId, body] of [
+      [fullRow.payee_user_id, "The venue's monthly payments for this placement have been cancelled."],
+      [fullRow.payer_user_id, "Your monthly payments for this placement have been cancelled."],
+    ] as const) {
+      if (!userId) continue;
+      createNotification({
+        userId,
+        kind: "paid_loan_cancelled",
+        title: "Monthly loan payments cancelled",
+        body,
+        link: `/placements/${encodeURIComponent(fullRow.placement_id)}`,
+        // Webhook-driven (customer.subscription.deleted redelivers).
+        idempotencyKey: `paid_loan_cancelled:${subscription.id}:${userId}`,
+      }).catch(() => {});
+    }
+  }
   return true;
 }

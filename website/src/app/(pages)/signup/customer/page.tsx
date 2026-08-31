@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
+import { signupDestination } from "@/lib/signup-destination";
 import { isFlagOn } from "@/lib/feature-flags";
 import { safeRedirect } from "@/lib/safe-redirect";
 import TermsCheckbox from "@/components/TermsCheckbox";
@@ -65,7 +66,7 @@ export default function CustomerSignUpPage() {
         return;
       }
 
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -94,7 +95,10 @@ export default function CustomerSignUpPage() {
         }),
       }).catch(() => {});
 
-      router.push("/check-your-inbox");
+      // A L447/A L458: was unconditional. Supabase returns a session only
+      // when email confirmation is off, in which case the account is already
+      // signed in and the inbox page is untrue. See lib/signup-destination.ts.
+      router.push(signupDestination(signUpData, postSignupNext));
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
