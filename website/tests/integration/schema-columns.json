@@ -43,7 +43,7 @@
   "email_recent_sends": ["user_id", "template", "stream", "created_at"],
   "email_suppressions": ["email", "reason", "scope", "notes", "created_at"],
   "placement_archives": ["placement_id", "user_id", "archived_at"],
-  "artist_applications": ["id", "name", "email", "location", "instagram", "website", "primary_medium", "portfolio_link", "artist_statement", "offers_originals", "offers_prints", "offers_framed", "offers_commissions", "open_to_free_loan", "open_to_revenue_share", "open_to_purchase", "delivery_radius", "venue_types", "themes", "hear_about", "selected_plan", "status", "created_at", "discipline", "sub_styles", "trader_status", "business_name", "vat_number", "reviewed_at", "reviewed_by", "referred_by_code"],
+  "artist_applications": ["id", "name", "email", "location", "instagram", "website", "primary_medium", "portfolio_link", "artist_statement", "offers_originals", "offers_prints", "offers_framed", "offers_commissions", "open_to_free_loan", "open_to_revenue_share", "open_to_purchase", "delivery_radius", "venue_types", "themes", "hear_about", "selected_plan", "status", "created_at", "discipline", "sub_styles", "trader_status", "business_name", "vat_number", "reviewed_at", "reviewed_by", "referred_by_code", "acknowledged_cooling_off", "acknowledged_cooling_off_at"],
   "contact_submissions": ["id", "name", "email", "type", "message", "created_at", "reference"],
   "venue_registrations": ["id", "venue_name", "venue_type", "contact_name", "email", "phone", "address_line1", "address_line2", "city", "postcode", "wall_space", "art_interests", "message", "hear_about", "status", "created_at"],
   "stripe_webhook_events": ["event_id", "event_type", "created_at"],

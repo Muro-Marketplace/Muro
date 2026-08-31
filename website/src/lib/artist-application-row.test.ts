@@ -105,6 +105,41 @@ describe("buildArtistApplicationRow", () => {
     expect(row.status).toBe("pending");
   });
 
+  // Migration 126. The form requires this of consumer applicants and has
+  // always sent it, but `applySchema` never declared the field, so zod
+  // stripped it and no writer ever saw it. Every consumer artist attested to
+  // a statutory cancellation right and we kept no evidence of it.
+  describe("cooling-off acknowledgement", () => {
+    it("records the acknowledgement and when it was given", () => {
+      const row = buildArtistApplicationRow(
+        parse({ ...MINIMAL, traderStatus: "consumer", acknowledgedCoolingOff: true }),
+        { now: "2026-08-31T09:00:00.000Z" },
+      );
+      expect(row.acknowledged_cooling_off).toBe(true);
+      expect(row.acknowledged_cooling_off_at).toBe("2026-08-31T09:00:00.000Z");
+    });
+
+    it("survives validation rather than being stripped", () => {
+      const parsed = applySchema.safeParse({ ...MINIMAL, acknowledgedCoolingOff: true });
+      expect(parsed.success && parsed.data.acknowledgedCoolingOff).toBe(true);
+    });
+
+    it("holds null, not false, when nothing was acknowledged", () => {
+      // false would assert the applicant declined. We simply have no record.
+      const row = buildArtistApplicationRow(parse(MINIMAL));
+      expect(row.acknowledged_cooling_off).toBeNull();
+      expect(row.acknowledged_cooling_off_at).toBeNull();
+    });
+
+    it("stamps no time when the box was explicitly unticked", () => {
+      const row = buildArtistApplicationRow(
+        parse({ ...MINIMAL, acknowledgedCoolingOff: false }),
+      );
+      expect(row.acknowledged_cooling_off).toBe(false);
+      expect(row.acknowledged_cooling_off_at).toBeNull();
+    });
+  });
+
   it("accepts an injected timestamp", () => {
     const row = buildArtistApplicationRow(parse(MINIMAL), { now: "2026-08-31T00:00:00.000Z" });
     expect(row.created_at).toBe("2026-08-31T00:00:00.000Z");

@@ -1665,3 +1665,9 @@
 [51994606ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/notifications:0
 [54558202ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
 [54558370ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[55379455ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[55379758ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[55449754ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[55449754ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[55489447ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[55489750ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0

@@ -79,6 +79,10 @@ export const applySchema = z.object({
   hearAbout: optionalString(200),
   selectedPlan: z.enum(["core", "pro", "premium"]).optional(),
   referralCode: optionalString(20),
+  // The form has required this of consumer applicants since launch and has
+  // always sent it. It was never declared here, so zod stripped it and the
+  // attestation was discarded at the validation boundary. See migration 126.
+  acknowledgedCoolingOff: z.boolean().optional(),
 });
 
 export const registerVenueSchema = z.object({

@@ -55,6 +55,7 @@ export function buildArtistApplicationRow(
   d: ApplyData,
   opts: { now?: string } = {},
 ): Record<string, unknown> {
+  const now = opts.now ?? new Date().toISOString();
   return {
     name: d.name,
     email: d.email,
@@ -82,7 +83,11 @@ export function buildArtistApplicationRow(
     hear_about: d.hearAbout || null,
     selected_plan: d.selectedPlan || "core",
     referred_by_code: d.referralCode ? d.referralCode.toUpperCase() : null,
+    // Migration 126. Only recorded when the applicant actually ticked it;
+    // null means we hold no record, which is not the same as a refusal.
+    acknowledged_cooling_off: d.acknowledgedCoolingOff ?? null,
+    acknowledged_cooling_off_at: d.acknowledgedCoolingOff ? now : null,
     status: "pending",
-    created_at: opts.now ?? new Date().toISOString(),
+    created_at: now,
   };
 }
