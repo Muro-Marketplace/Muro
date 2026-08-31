@@ -103,3 +103,45 @@ describe("PlacementStepper on a SOLD placement (row 727)", () => {
     expect(screen.queryByRole("button", { name: /Mark collected/i })).toBeNull();
   });
 });
+
+// Row 2167 / PASS2 "silent failure" pattern. Typing a past install date and
+// pressing Confirm did nothing visible: the picker rejects it and the API
+// refuses it with `400 {"error":"Install date can't be in the past."}`, and
+// neither message had anywhere to render. The only two error slots sat in the
+// advance and undo rows, which the open picker replaces.
+describe("PlacementStepper install-date refusal is visible (row 2167)", () => {
+  const active = {
+    id: "pl-1",
+    status: "active",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    acceptedAt: "2026-08-01T11:00:00.000Z",
+    scheduledFor: null,
+    installedAt: null,
+    liveFrom: null,
+    collectedAt: null,
+  };
+
+  it("shows the reason when the chosen date is in the past", async () => {
+    render(<PlacementStepper placement={active} canAdvance />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Schedule install/i }));
+    const input = document.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "2020-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Confirm$/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/Install date can't be in the past/i);
+  });
+
+  it("leaves the picker open so the date can be corrected", async () => {
+    render(<PlacementStepper placement={active} canAdvance />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Schedule install/i }));
+    const input = document.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "2020-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Confirm$/i }));
+
+    await screen.findByRole("alert");
+    expect(document.querySelector('input[type="date"]')).toBeTruthy();
+  });
+});

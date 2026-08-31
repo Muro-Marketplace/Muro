@@ -115,7 +115,16 @@ export default function BlogEditor({
   // PATCH against the right URL — the React `currentId` state isn't
   // updated synchronously, so reading it right after setCurrentId
   // would still see the stale null. Audit follow-up.
-  async function handleCreate(): Promise<string | null> {
+  //
+  // `navigate: false` is the submit-for-review path (row 2442). On
+  // /artist-portal/blogs/new that flow creates the draft and then PATCHes it
+  // for review. When the PATCH is refused (`422` with an `issues` array saying
+  // exactly what is wrong), the `router.replace` fired by the create had
+  // already sent the author to the edit page, so the editor holding the error
+  // was on its way off screen and a fresh one mounted showing a draft. The
+  // refusal reached nobody and the author believed they had submitted. Navigate
+  // once the whole flow has settled instead.
+  async function handleCreate({ navigate = true }: { navigate?: boolean } = {}): Promise<string | null> {
     setSaving("saving");
     setError(null);
     try {
@@ -131,7 +140,7 @@ export default function BlogEditor({
       });
       setCurrentId(data.blog.id);
       setSaving("saved");
-      router.replace(`/artist-portal/blogs/${data.blog.id}/edit`);
+      if (navigate) router.replace(`/artist-portal/blogs/${data.blog.id}/edit`);
       return data.blog.id;
     } catch (err) {
       setSaving("error");
@@ -146,9 +155,11 @@ export default function BlogEditor({
       return;
     }
     let id = currentId;
+    let created = false;
     if (!id) {
-      id = await handleCreate();
+      id = await handleCreate({ navigate: false });
       if (!id) return; // create failed, error already set
+      created = true;
     }
     setSaving("saving");
     try {
@@ -165,6 +176,9 @@ export default function BlogEditor({
       });
       setStatus("pending_review");
       setSaving("saved");
+      // Only now, with the submission accepted. A refusal keeps the author on
+      // the page that is showing them why.
+      if (created) router.replace(`/artist-portal/blogs/${id}/edit`);
     } catch (err) {
       setSaving("error");
       setError(err instanceof ApiError ? describeSaveError(err.payload) : "Network error");
@@ -276,7 +290,7 @@ export default function BlogEditor({
           <div className="flex gap-2">
             {!currentId && (
               <button
-                onClick={handleCreate}
+                onClick={() => { void handleCreate(); }}
                 className="px-3 py-2 text-sm rounded-sm border border-border hover:border-accent/40"
                 disabled={!title.trim() || !body.trim()}
               >

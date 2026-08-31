@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { mutate, ApiError } from "@/lib/api-client";
+import { mutate, apiErrorMessage } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
 
 export interface PlacementStepperData {
@@ -113,7 +113,7 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
       }
       setSchedulePickerOpen(false);
     } catch (err) {
-      setError(err instanceof ApiError ? err.code || "Could not update stage" : "Network error. Please try again.");
+      setError(apiErrorMessage(err, "Could not update stage"));
     } finally {
       setBusy(null);
     }
@@ -184,7 +184,7 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
         window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: placement.id, action: "undo", stage } }));
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.code || "Could not undo stage" : "Network error. Please try again.");
+      setError(apiErrorMessage(err, "Could not undo stage"));
     } finally {
       setBusy(null);
     }
@@ -336,6 +336,16 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
           >
             Cancel
           </button>
+          {/* Row 2167. The picker rejects a past date and the API refuses one
+              with `400 {"error":"Install date can't be in the past."}`. Neither
+              message had anywhere to render: the only two error slots are in
+              the advance and undo rows, which this block replaces. So the
+              Confirm button did nothing and the bad date stayed in the box. */}
+          {error && (
+            <p role="alert" className="basis-full text-xs text-red-600">
+              {error}
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -62,3 +62,55 @@ describe("BlogEditor save (05 bug-12)", () => {
     expect(screen.getByText("Saved")).toBeTruthy();
   });
 });
+
+// Row 2442 area / PASS2 "silent failure" pattern. On /artist-portal/blogs/new,
+// "Submit for review" saved the draft (POST 200) and then failed the review
+// PATCH with `422 {"error":"Not ready for review","issues":["Body needs at
+// least 200 characters before submitting."]}`. The author saw none of it: the
+// create had already called router.replace, so the editor holding the error was
+// on its way off screen and a fresh one mounted showing a draft. Status stayed
+// "draft" and the author believed they had submitted.
+describe("BlogEditor submit-for-review refusal is visible (row 2442)", () => {
+  const NOT_READY = new ApiError(422, "Not ready for review", "Not ready for review", {
+    error: "Not ready for review",
+    issues: ["Body needs at least 200 characters before submitting."],
+  });
+
+  it("shows the server's reason when the review PATCH is refused", async () => {
+    mutateMock
+      .mockResolvedValueOnce({ blog: { id: "b1" } }) // create succeeds
+      .mockRejectedValueOnce(NOT_READY); // submit is refused
+    renderAndFill();
+
+    fireEvent.click(screen.getByText("Submit for review"));
+
+    expect(
+      await screen.findByText(/Body needs at least 200 characters before submitting\./),
+    ).toBeTruthy();
+  });
+
+  it("does not navigate away from the refusal", async () => {
+    mutateMock
+      .mockResolvedValueOnce({ blog: { id: "b1" } })
+      .mockRejectedValueOnce(NOT_READY);
+    renderAndFill();
+
+    fireEvent.click(screen.getByText("Submit for review"));
+    await screen.findByText(/Body needs at least 200 characters/);
+
+    expect(routerReplaceMock).not.toHaveBeenCalled();
+  });
+
+  it("still moves to the saved draft's URL once the submission is accepted", async () => {
+    mutateMock
+      .mockResolvedValueOnce({ blog: { id: "b1" } })
+      .mockResolvedValueOnce({ blog: { id: "b1", status: "pending_review" } });
+    renderAndFill();
+
+    fireEvent.click(screen.getByText("Submit for review"));
+
+    await waitFor(() =>
+      expect(routerReplaceMock).toHaveBeenCalledWith("/artist-portal/blogs/b1/edit"),
+    );
+  });
+});

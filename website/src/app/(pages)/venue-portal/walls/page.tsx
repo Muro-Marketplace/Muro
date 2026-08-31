@@ -111,9 +111,16 @@ export default function VenueWallsPage() {
         </div>
         {atCap || notAllowed ? (
           <div className="flex flex-col items-end gap-1">
-            <span
+            {/* Row 1844. This was a <span aria-disabled="true">: styled to look
+                disabled, but not a button, so nothing announced it as one and
+                nothing could read its disabled state. Pass 2 recorded the
+                control as "NOT disabled at the cap". A real disabled button is
+                announced, cannot be focused, and reads as unavailable to
+                anything inspecting the page. */}
+            <button
+              type="button"
+              disabled
               className="px-4 py-2 rounded-full bg-stone-900/30 text-white/80 text-sm font-medium cursor-not-allowed select-none"
-              aria-disabled="true"
               title={
                 notAllowed
                   ? "Saving walls isn't included on your plan."
@@ -121,7 +128,7 @@ export default function VenueWallsPage() {
               }
             >
               + New Wall
-            </span>
+            </button>
             <Link
               href="/pricing"
               className="text-xs text-accent hover:underline"
