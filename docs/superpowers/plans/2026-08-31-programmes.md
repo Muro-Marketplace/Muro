@@ -31,6 +31,14 @@
 - **Programme placements are normal placements** and count toward artist concurrent-placement caps (2/5/unlimited). Deliberate: rent-paying placements are what make the Pro tier's "priority inclusion in Curated shortlists" concretely worth buying.
 - **Cafés keep the free baseline.** A programme is an optional paid service above it, exactly what the venue agreement's 90-day clause anticipated. Nothing in this plan changes free QR-loan display.
 - **Sale proceeds are unaffected**: a piece sold off a programme wall follows the normal 15% platform fee and artist split. Sold pieces are replaced at the next scheduled rotation, not by an ad-hoc visit.
+- **Founding sites**: the first 5 programme clients lock their rate for 24 months, mirroring the founding-artist mechanic. Recorded on the request row, honoured at requote time, never advertised as unlimited.
+
+### Naming decisions (owner granted full authority, 2026-08-31)
+
+- **Wallplace Curated** keeps its name and narrows to what it is: the one-off fee for judgement (£49, £149, £299). A paid shortlist.
+- **Wallplace Programmes** is the recurring product. "Programme" is the sector's own term (Artiq and TurningArt both sell art programmes), so it matches what buyers search for and how they speak. It works in a sentence ("we run a Wallplace programme"), covers cafés through to hotels without excluding anyone, and collides with nothing: "Walls" is taken by the visualiser and "Collections" by artwork bundles.
+- **One marketing page at `/programmes`**, leading with workplaces because that is where the budget is, covering the whole ladder. **`/workplaces` is a permanent redirect to it**, so the sales-friendly URL works when it is said aloud on a call. Do not build a second page.
+- Every user-facing string says "programme" (British spelling), never "program".
 
 ### Deliberately out of scope
 
@@ -136,11 +144,12 @@ describe("programme tier", () => {
 ### Task 3: Demand surfaces
 
 **Files:**
-- Create: `src/app/(pages)/workplaces/page.tsx` (+ a client component only if interactivity demands it; mirror how `/curated` splits)
+- Create: `src/app/(pages)/programmes/page.tsx` (+ a client component only if interactivity demands it; mirror how `/curated` splits)
+- Create: a permanent redirect `/workplaces` to `/programmes` (use the project's existing redirect mechanism; check `next.config.ts` for how other redirects are declared and follow it, else a route file that redirects)
 - Modify: nav and footer (grep where `/curated` and `/venues` links live), `src/app/(pages)/curated/CuratedClient.tsx` (Programmes card), the public artwork page that QR scans land on (one feeder line)
-- Test: extend `tests/integration/one-curated-price-source.test.ts` to cover the new page files
+- Test: extend `tests/integration/one-curated-price-source.test.ts` to cover the new page files; if `tests/integration/redirect-targets.test.ts` exists, add the `/workplaces` redirect to it
 
-The page is aimed at the sharp end of the ladder, where the budget is: offices, hotels, restaurants. Cafés reach the same product through the Curated card.
+The page leads with the sharp end of the ladder, where the budget is (offices, hotels, restaurants), then shows the full ladder so a café or restaurant sees itself too.
 
 **Page content contract** (copy rules apply; every number derived from `CURATION_TIERS.programme` and `PROGRAMME_LADDER` via `gbp()`):
 - Hero: what it is, the from-price, one CTA into the Task 2 intake.
@@ -152,9 +161,9 @@ The page is aimed at the sharp end of the ladder, where the budget is: offices, 
 - FAQ: term (twelve months, then rolling), billing (monthly or quarterly), rotation (twice a year included, quarterly available), what happens when a piece sells (replaced at the next rotation, normal artist split applies), can staff buy (yes, via the QR card).
 
 - [ ] **Step 1:** Add the new file paths to the no-literal-prices guard, run, RED.
-- [ ] **Step 2:** Build the page (read `src/app/(pages)/venues/page.tsx` first for the segment-page pattern), the Curated card wiring, nav entry, and the artwork-page feeder line: `Want art like this in your workplace?` linking to `/workplaces`.
-- [ ] **Step 3:** GREEN on the guard, `npx tsc --noEmit`, and a dev-server render check of `/workplaces`, `/curated` and one artwork page.
-- [ ] **Step 4:** Commit `feat(programmes): workplaces page, curated card and QR feeder`.
+- [ ] **Step 2:** Build the page (read `src/app/(pages)/venues/page.tsx` first for the segment-page pattern), the `/workplaces` redirect, the Curated card wiring, nav entry, and the artwork-page feeder line: `Want art like this in your workplace?` linking to `/programmes`.
+- [ ] **Step 3:** GREEN on the guard, `npx tsc --noEmit`, and a dev-server render check of `/programmes`, `/workplaces` (redirects), `/curated` and one artwork page.
+- [ ] **Step 4:** Commit `feat(programmes): programmes page, curated card and QR feeder`.
 
 ---
 
@@ -261,7 +270,46 @@ Lowest value of the set, so it is last and is safe to defer. It closes the funne
 
 ---
 
-### Task 9: Full gate, render pass, and the sales runbook
+### Task 9: Programme revenue is visible in the finance surface
+
+**Files:**
+- Modify: `src/lib/finance/revenue.ts`, the admin financials page that consumes it (grep for `planPricesPence` and the MRR consumer)
+- Test: `src/lib/finance/revenue.test.ts` (create if absent; note the pricing initiative left `planPricesPence` untested)
+
+Today MRR is computed from artist subscriptions only, so programme revenue would be invisible in the one place the business is measured. The entire strategic bet is that programme revenue outgrows subscription revenue, and you cannot see that happen without this.
+
+**Interface:**
+- `programmeMrrPence(db): Promise<number>` computing the monthly-equivalent sum of active programme subscriptions (`curation_requests` where tier is `programme` and status is `in_progress` or `paid`), dividing quarterly-billed rows by 3.
+- The existing MRR function gains a sibling so the admin surface can show **artist MRR, programme MRR and total** as three figures, never one blended number that hides the mix.
+
+- [ ] **Step 1:** Read `src/lib/finance/revenue.ts` and its admin consumer. Write failing tests: two monthly programmes at £150 and £250 plus one quarterly at £600 sum to 55000 pence monthly-equivalent (15000 + 25000 + 20000); cancelled and `awaiting_quote` rows are excluded; no programmes returns 0.
+- [ ] **Step 2:** Implement, keeping the artist MRR function untouched (per the data invariant, one exported function per aggregate, no mirror columns).
+- [ ] **Step 3:** Surface all three figures on the admin financials page, following its existing card style.
+- [ ] **Step 4:** GREEN, typecheck, commit `feat(programmes): programme MRR alongside artist MRR in the finance surface`.
+
+---
+
+### Task 10: The artist-facing story
+
+**Files:**
+- Modify: `src/app/(pages)/pricing/page.tsx` (artist pricing), `src/components/ArtistPricingCards.tsx` (Pro's Curated-priority line), the artist portal dashboard or placements page (where a programme placement's rent should be visible), `src/app/(pages)/faqs/page.tsx`
+- Test: whichever suites cover those surfaces; the no-literal-prices guard does not apply to these files, but derive from `PROGRAMME_PIECE_RENT_TARGET_GBP` anyway rather than hardcoding
+
+Nobody currently learns the fact that makes artists want this. A piece at the target rent earns £120 a year, which is exactly the price of a Core membership.
+
+**Copy contract** (British English, no dashes, derive the numbers):
+- Artist pricing page gains a short section: programme placements pay rent, roughly £10 per piece per month, so one programme piece covers a Core membership for the year. State plainly that programme placements are not guaranteed and depend on venue demand, because the pricing page already promises no guaranteed placement and this must not contradict it.
+- Pro's feature line sharpens from "Priority inclusion in Wallplace Curated shortlists" to name the consequence: priority for programme placements, which pay monthly rent.
+- Artist portal: where a placement is part of a programme, show its monthly rent and that it settles quarterly. Read how placements already render arrangement terms and follow it.
+- FAQ: one question on how programme rent works and when it is paid.
+
+- [ ] **Step 1:** Write the copy changes, deriving figures from the Task 1 constants.
+- [ ] **Step 2:** Verify no contradiction with the existing "placement is not guaranteed" and payout-timing FAQ answers; adjust wording rather than the existing promises if they collide.
+- [ ] **Step 3:** `npx tsc --noEmit`, run affected suites, dev-server check of `/pricing` and the artist portal, commit `feat(programmes): tell artists that programme placements pay rent`.
+
+---
+
+### Task 11: Full gate, render pass, and the sales runbook
 
 - [ ] **Step 1:** `npm run check` (generous timeout). Fix stragglers in the spirit of this plan. Commit if anything changed.
 - [ ] **Step 2:** Dev-server pass: `/workplaces`, `/curated` (Programmes card, prices derived, no managed tiers anywhere), one artwork page (feeder line), and the admin curation list showing a programme request end to end against seed data if seeds allow.
