@@ -420,9 +420,13 @@ export default function CuratedClient() {
               </div>
 
               {/* Managed group: currently just the one quoted Programmes
-                  card. Task 3 (Wallplace Programmes plan) builds this out
-                  into its own dedicated /programmes surface; this section
-                  stays as the /curated summary entry point into it. */}
+                  card. Task 3 (Wallplace Programmes plan) built the
+                  dedicated /programmes surface; this card is the /curated
+                  summary entry point into it, so it links out to
+                  /programmes instead of selecting the tier inline like the
+                  one-off cards above (the generic brief form below has
+                  nowhere to collect a programme's site count, piece
+                  estimate, sector or rotation preference). */}
               <div className="mb-14">
                 <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
                   <h3 className="font-serif text-2xl text-foreground">
@@ -439,6 +443,7 @@ export default function CuratedClient() {
                       tier={t}
                       selected={selectedTier === t.key}
                       onSelect={() => setSelectedTier(t.key)}
+                      href={t.key === "programme" ? "/programmes" : undefined}
                     />
                   ))}
                 </div>
@@ -846,19 +851,78 @@ function TierCard({
   tier,
   selected,
   onSelect,
+  href,
 }: {
   tier: CuratedTier;
   selected: boolean;
   onSelect: () => void;
+  /** When set, the card navigates to its own dedicated marketing page
+   *  (currently just Programmes → /programmes) instead of selecting the
+   *  tier inline and scrolling to the shared brief form. Used when a tier
+   *  has intake fields the shared form doesn't collect. */
+  href?: string;
 }) {
   // Two affordances per card:
-  //  - inner <button> = primary "select this plan" action; selecting
-  //    auto-scrolls to the brief form below.
-  //  - separate footer <Link> = secondary "Read more →" navigation to
-  //    /curated/{key} for the deep-dive page.
+  //  - inner <button> (or <Link> when `href` is set) = primary action;
+  //    selecting auto-scrolls to the brief form below, or navigates to the
+  //    tier's own page.
+  //  - separate footer <Link> = secondary "Read more →" navigation. Points
+  //    at the same dedicated page when `href` is set, otherwise the
+  //    generic /curated/{key} deep-dive.
   // These live as siblings inside a styled wrapper rather than nested,
   // because nesting an <a> inside a <button> is invalid HTML and would
   // also conflate the two intents.
+  const primaryContent = (
+    <>
+      <p className="text-xs font-medium uppercase tracking-wider text-muted mb-2">
+        {tier.label}
+      </p>
+      <p className="font-serif text-3xl text-foreground mb-2">
+        {tier.priceLabel}
+      </p>
+      <p className="text-sm text-foreground mb-4">{tier.summary.strapline}</p>
+      <ul className="space-y-2 mb-5">
+        {tier.summary.bullets.map((b) => (
+          <li key={b} className="flex gap-2 text-sm text-muted">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="#C17C5A"
+              strokeWidth="2"
+              strokeLinecap="round"
+              className="mt-1 shrink-0"
+            >
+              <polyline points="2 7 5.5 10.5 12 3.5" />
+            </svg>
+            <span>{b}</span>
+          </li>
+        ))}
+      </ul>
+      <span
+        className={`mt-auto inline-flex items-center gap-1 text-sm font-medium ${
+          selected ? "text-accent" : "text-foreground"
+        }`}
+      >
+        {href ? tier.cta : selected ? "Selected" : tier.cta}
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
+      </span>
+    </>
+  );
+
   return (
     <div
       className={`relative bg-white border rounded-sm flex flex-col h-full transition-colors ${
@@ -872,61 +936,25 @@ function TierCard({
           Most popular
         </span>
       )}
-      <button
-        type="button"
-        onClick={onSelect}
-        className="text-left p-6 flex-1 flex flex-col items-start cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-sm"
-      >
-        <p className="text-xs font-medium uppercase tracking-wider text-muted mb-2">
-          {tier.label}
-        </p>
-        <p className="font-serif text-3xl text-foreground mb-2">
-          {tier.priceLabel}
-        </p>
-        <p className="text-sm text-foreground mb-4">{tier.summary.strapline}</p>
-        <ul className="space-y-2 mb-5">
-          {tier.summary.bullets.map((b) => (
-            <li key={b} className="flex gap-2 text-sm text-muted">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="#C17C5A"
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="mt-1 shrink-0"
-              >
-                <polyline points="2 7 5.5 10.5 12 3.5" />
-              </svg>
-              <span>{b}</span>
-            </li>
-          ))}
-        </ul>
-        <span
-          className={`mt-auto inline-flex items-center gap-1 text-sm font-medium ${
-            selected ? "text-accent" : "text-foreground"
-          }`}
+      {href ? (
+        <Link
+          href={href}
+          className="text-left p-6 flex-1 flex flex-col items-start focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-sm"
         >
-          {selected ? "Selected" : tier.cta}
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="5" y1="12" x2="19" y2="12" />
-            <polyline points="12 5 19 12 12 19" />
-          </svg>
-        </span>
-      </button>
+          {primaryContent}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={onSelect}
+          className="text-left p-6 flex-1 flex flex-col items-start cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-sm"
+        >
+          {primaryContent}
+        </button>
+      )}
       <div className="px-6 py-3 border-t border-border/60">
         <Link
-          href={`/curated/${tier.key}`}
+          href={href ?? `/curated/${tier.key}`}
           className="text-xs text-muted hover:text-accent transition-colors inline-flex items-center gap-1"
         >
           Read the full plan

@@ -52,6 +52,32 @@ describe("curated pricing has one source of truth", () => {
     expect(page).not.toMatch(/&pound;\d/);
   });
 
+  // Task 3, Wallplace Programmes plan. /programmes is a second marketing
+  // surface for the same `programme` tier (the /curated Programmes card
+  // is the first). Same drift risk as CuratedClient/page.tsx above, so the
+  // same two-file guard: the page and its client component must derive
+  // every price from CURATION_TIERS / PROGRAMME_LADDER via gbp(), never a
+  // literal "£<number>".
+  it("programmes page derives its prices from billing tiers, not literal £ strings", () => {
+    const page = readFileSync(
+      join(process.cwd(), "src/app/(pages)/programmes/page.tsx"),
+      "utf8",
+    );
+    expect(page).toContain('from "@/lib/curation-tiers"');
+    expect(page).not.toMatch(/£\d+(\.\d{2})?/);
+    expect(page).not.toMatch(/&pound;\d/);
+  });
+
+  it("ProgrammesClient derives its prices from billing tiers, not literal £ strings", () => {
+    const client = readFileSync(
+      join(process.cwd(), "src/app/(pages)/programmes/ProgrammesClient.tsx"),
+      "utf8",
+    );
+    expect(client).toContain('from "@/lib/curation-tiers"');
+    expect(client).not.toMatch(/£\d+(\.\d{2})?/);
+    expect(client).not.toMatch(/&pound;\d/);
+  });
+
   it("renders exactly the prices venues see today, for every tier and every FAQ that quotes one", () => {
     const byKey = Object.fromEntries(CURATED_TIERS.map((t) => [t.key, t]));
 

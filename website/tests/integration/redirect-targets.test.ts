@@ -57,4 +57,15 @@ describe("next.config.ts redirects (K8)", () => {
       "the config must say the target is a DB row that cannot be deleted independently",
     ).toMatch(/DB row/i);
   });
+
+  // Wallplace Programmes plan, Task 3. /workplaces was the working name for
+  // the /programmes demand surface; redirect it rather than 404 anyone who
+  // followed an early link.
+  it("redirects /workplaces to /programmes, permanently", () => {
+    expect(redirects()).toContainEqual({
+      source: "/workplaces",
+      destination: "/programmes",
+      permanent: true,
+    });
+  });
 });

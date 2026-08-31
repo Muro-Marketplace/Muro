@@ -127,6 +127,12 @@ const nextConfig: NextConfig = {
       // so the listing agrees with the redirect. To make that account a public
       // artist instead: re-approve it AND delete this rule in the same change.
       { source: "/browse/finlay-coles", destination: "/browse/fin-coles", permanent: true },
+      // Wallplace Programmes plan, Task 3. "Workplaces" was the working name
+      // for the office/hotel/restaurant demand surface while it was being
+      // built; the shipped page is /programmes. Some early internal links
+      // and slide decks already point at /workplaces, so redirect rather
+      // than 404 the guess.
+      { source: "/workplaces", destination: "/programmes", permanent: true },
     ];
   },
 };

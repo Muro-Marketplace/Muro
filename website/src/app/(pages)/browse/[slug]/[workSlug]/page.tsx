@@ -263,6 +263,23 @@ export default async function ArtworkPage({
         </section>
       )}
 
+      {/* Feeder line into Wallplace Programmes. This is the page a QR
+          label scan lands on (source: query.ref === "qr" above), so a
+          visitor standing in a workplace-type space scanning a label is a
+          plausible lead for the recurring programme product. One quiet
+          line, not a pitch; the "More by this artist" section above and
+          the seller-information footer below stay the primary content. */}
+      <section className="py-6 border-t border-border/70">
+        <div className="max-w-[1240px] mx-auto px-6">
+          <p className="text-xs text-muted text-center">
+            Want art like this in your workplace?{" "}
+            <Link href="/programmes" className="text-accent hover:underline">
+              See Wallplace Programmes
+            </Link>
+          </p>
+        </div>
+      </section>
+
       {/* Seller information (CCR 2013 pre-contract disclosure), below "More by" as a quiet footer */}
       <section className="py-10 border-t border-border/70 bg-surface/40">
         <div className="max-w-[1240px] mx-auto px-6">

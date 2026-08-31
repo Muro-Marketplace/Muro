@@ -75,6 +75,7 @@ const venueNavLinks: NavLink[] = [
 
 const moreLinks = [
   { label: "Wallplace Curated", href: "/curated" },
+  { label: "Programmes", href: "/programmes" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
   { label: "About", href: "/about" },
