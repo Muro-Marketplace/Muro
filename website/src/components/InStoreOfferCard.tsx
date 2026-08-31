@@ -135,6 +135,18 @@ export default function InStoreOfferCard({
     }
   }
 
+  // Production pass 2, P4: "'Can buyers purchase this piece off the wall?' is
+  // still offered on a collected placement." Only the collapsed prompt was
+  // gated on `active`; the saved-offer row and its Edit button were not, so a
+  // placement whose work had come off the wall still offered to sell it from
+  // there, and the venue still read "Buyers can purchase this piece off the
+  // wall". Nothing about an off-the-wall sale means anything once the piece is
+  // no longer on the wall.
+  //
+  // `sold` is covered by the same gate and needs no separate branch: the
+  // webhook clears the offer on the sale that caused it.
+  if (placement.status !== "active") return null;
+
   // ── Venue view: read-only confirmation of what buyers will be offered ──
   if (viewerRole === "venue") {
     if (!hasOffer) return null;
@@ -183,7 +195,6 @@ export default function InStoreOfferCard({
         </div>
       );
     }
-    if (placement.status !== "active") return null;
     return (
       <div className="mb-6 bg-surface border border-border rounded-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>

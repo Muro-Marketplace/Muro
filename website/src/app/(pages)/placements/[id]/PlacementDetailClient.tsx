@@ -1206,24 +1206,35 @@ export default function PlacementDetailClient({ placementId }: Props) {
         )}
       </div>
 
-      {/* Photos */}
+      {/* Photos. Production pass 2, P4: "photos can be uploaded to a pending
+          placement under the heading 'Photos in venue'". The work is not at the
+          venue until it has been installed, so before then the heading is
+          asserting something untrue and the upload invites a photo of nothing.
+          The panel still renders, so the section is discoverable and any photo
+          already attached is still visible; the control waits. */}
       <div className="mb-10">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl text-foreground">Photos in venue</h2>
-          <label className={`px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-            {uploading ? "Uploading…" : "+ Upload"}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => handlePhotoUpload(e.target.files)}
-              className="hidden"
-            />
-          </label>
+          <h2 className="font-serif text-xl text-foreground">
+            {placement.installed_at ? "Photos in venue" : "Photos"}
+          </h2>
+          {placement.installed_at && (
+            <label className={`px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+              {uploading ? "Uploading…" : "+ Upload"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => handlePhotoUpload(e.target.files)}
+                className="hidden"
+              />
+            </label>
+          )}
         </div>
         {photos.length === 0 ? (
           <div className="bg-surface border border-border rounded-sm p-6 text-center text-sm text-muted">
-            No photos yet.
+            {placement.installed_at
+              ? "No photos yet."
+              : "Photos can be added once the work is installed at the venue."}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">

@@ -87,6 +87,8 @@ type Row = {
   revenue_share_percent?: number | null;
   /** 3.4: read so a repeated cancel cannot rewrite who did it. */
   cancelled_at?: string | null;
+  /** P4: read so an install cannot land before its own scheduled date. */
+  scheduled_for?: string | null;
 };
 
 const updates: Record<string, unknown>[] = [];
@@ -1409,5 +1411,49 @@ describe("PATCH /api/placements re-links the work when a collection is undone (3
     await patch({ id: "pl-1", unsetStage: "collected" });
 
     expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+  });
+});
+
+// Production pass 2, P4. "Installed can precede the scheduled date with no
+// complaint, producing 'Scheduled 2 Sept / Installed 31 Aug' in the progress
+// bar." A stepper that reads backwards is worse than an unstamped one: the
+// record is what both parties rely on later.
+//
+// The remedy is to move the plan, not to refuse the fact. Somebody marking a
+// piece installed is reporting what happened.
+describe("PATCH /api/placements keeps the stepper reading forward", () => {
+  const ACTIVE_SCHEDULED: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+    scheduled_for: "2099-09-02T12:00:00.000Z",
+  };
+
+  it("pulls a future scheduled date back to the install it just recorded", async () => {
+    setupDb(ACTIVE_SCHEDULED);
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0].installed_at).toEqual(expect.any(String));
+    expect(updates[0].scheduled_for).toBe(updates[0].installed_at);
+  });
+
+  it("leaves a schedule that already precedes the install alone", async () => {
+    setupDb({ ...ACTIVE_SCHEDULED, scheduled_for: "2020-01-01T00:00:00.000Z" });
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("scheduled_for");
+  });
+
+  it("touches nothing when no install date was ever scheduled", async () => {
+    setupDb({ ...ACTIVE_SCHEDULED, scheduled_for: null });
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("scheduled_for");
   });
 });

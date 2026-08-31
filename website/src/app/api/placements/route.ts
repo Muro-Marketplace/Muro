@@ -814,7 +814,7 @@ export async function PATCH(request: Request) {
     // relied on (the phantom requester_user_id rejected the whole query) is gone.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at, revenue_share_percent")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at, revenue_share_percent, scheduled_for")
       .eq("id", id)
       .single();
 
@@ -1410,6 +1410,22 @@ export async function PATCH(request: Request) {
       // can pre-schedule installs, but reject dates in the past for the
       // `scheduled` stage so a typo (or a paste-bypass of the date
       // picker's `min` attribute) can't backdate an install.
+      // Production pass 2, P4: "Installed can precede the scheduled date with
+      // no complaint, producing 'Scheduled 2 Sept / Installed 31 Aug' in the
+      // progress bar." A stepper that reads backwards is worse than an
+      // unstamped one: the record is what both parties rely on later.
+      //
+      // The remedy is to move the schedule, not to refuse the install. Someone
+      // marking a piece installed is reporting a fact, so the fact wins and the
+      // plan follows it. Stamped to the same moment so the bar reads forward.
+      if (stage === "installed") {
+        const scheduled = (existing as { scheduled_for?: string | null }).scheduled_for;
+        const installedAt = stageDate || now;
+        if (scheduled && new Date(scheduled).getTime() > new Date(installedAt).getTime()) {
+          updates.scheduled_for = installedAt;
+        }
+      }
+
       if (stage === "scheduled" && stageDate) {
         const draftDay = stageDate.slice(0, 10);
         const todayDay = new Date(now).toISOString().slice(0, 10);
