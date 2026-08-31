@@ -9,6 +9,7 @@ import {
   PROGRAMME_PIECE_RENT_MIN_GBP,
   PROGRAMME_PIECE_RENT_TARGET_GBP,
   PROGRAMME_RENT_SHARE_MAX,
+  PROGRAMME_FOUNDING_SITE_LIMIT,
 } from "./curation-tiers";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -101,5 +102,11 @@ describe("programme tier", () => {
       expect(share).toBeGreaterThan(0.35);
       expect(share).toBeLessThan(PROGRAMME_RENT_SHARE_MAX);
     }
+  });
+
+  // Task 4: mirrors FOUNDING_ARTIST_LIMIT (src/lib/pricing.ts), which the admin
+  // quote route's founding-cohort guard is built against.
+  it("caps the founding cohort at 5 sites", () => {
+    expect(PROGRAMME_FOUNDING_SITE_LIMIT).toBe(5);
   });
 });

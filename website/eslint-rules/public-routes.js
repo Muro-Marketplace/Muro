@@ -29,6 +29,13 @@ const PUBLIC_ROUTES = {
     "Public enquiry form. Writes an inbound enquiry, reads nothing.",
   "src/app/api/curation/route.ts":
     "Public bespoke-curation enquiry. Associates a user only when a token is present.",
+  "src/app/api/curation/[id]/checkout/route.ts":
+    "Wallplace Programmes, Task 4. Quoted-programme checkout link, emailed by the admin " +
+    "quote route once a programme has been priced. Authenticated by the row's id, the " +
+    "same 122-bit bearer model as the newsletter confirmation link above (whoever has " +
+    "the link reads the inbox it was sent to). The amount charged is never caller-" +
+    "supplied: it is quoted_amount_gbp, set only by an authenticated admin beforehand, " +
+    "and the route 409s until that quote exists.",
   "src/app/api/register-venue/route.ts":
     "Public venue registration. Creates a pending row for admin review.",
   "src/app/api/apply/route.ts":
@@ -72,6 +79,8 @@ const DEMO_EXEMPT_ROUTES = {
   "src/app/api/admin/blogs/[id]/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
   "src/app/api/admin/curation/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
+  "src/app/api/admin/curation/quote/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
   "src/app/api/admin/curation/refund/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",

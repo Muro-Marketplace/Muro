@@ -40,6 +40,11 @@ const DEMO_EXEMPT = new Set<string>([
   "register-venue/route.ts",
   "apply/route.ts",
   "curation/route.ts",
+  // Wallplace Programmes, Task 4. Same reasoning as curation/route.ts above:
+  // no session, this is the emailed quoted-checkout link and is authenticated
+  // by the row's id instead (see eslint-rules/public-routes.js for the fuller
+  // statement of that alternative control).
+  "curation/[id]/checkout/route.ts",
   "analytics/track/route.ts",
   "orders/track/route.ts",
   "account/email/unsubscribe/route.ts",

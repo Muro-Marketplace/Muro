@@ -17,14 +17,12 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const {
   sessionsCreateMock,
-  pricesRetrieveMock,
   fromMock,
   getUserMock,
   notifyAdminMock,
   notifyEnquiryMock,
 } = vi.hoisted(() => ({
   sessionsCreateMock: vi.fn(async () => ({ id: "cs_test_1", url: "https://stripe.example/pay" })),
-  pricesRetrieveMock: vi.fn(),
   fromMock: vi.fn(),
   getUserMock: vi.fn(async () => ({ data: { user: null } })),
   notifyAdminMock: vi.fn(async () => {}),
@@ -34,7 +32,6 @@ const {
 vi.mock("@/lib/stripe", () => ({
   stripe: {
     checkout: { sessions: { create: sessionsCreateMock } },
-    prices: { retrieve: pricesRetrieveMock },
   },
 }));
 vi.mock("@/lib/supabase-admin", () => ({
@@ -119,37 +116,20 @@ const PROGRAMME_BODY = {
   sector: "office",
 };
 
-// D22: Stripe price fixtures keyed by price id, kept for whichever future
-// tier needs a pre-configured Stripe price validated against it. A fixture
-// value of "THROW" makes the retrieve reject. Tests that need a specific
-// outcome use a UNIQUE price id, because the route caches prices in module
-// scope for 5 minutes and that cache is not cleared between tests.
-//
 // Wallplace Programmes plan, Task 1: the managed_monthly / managed_quarterly
-// tiers this fixture and the D19/D22 tests below were written against are
-// retired (CURATION_TIER_KEYS no longer contains them, so a request naming
-// either now 400s before reaching any of this Stripe-price logic). The tests
-// that exercised them are removed rather than rewritten, because there is no
-// live tier of kind "managed" left to exercise; Task 2 covers the retired
-// tiers now 400ing, and Task 4 covers price validation for the new quoted
-// `programme` tier's dynamic price_data checkout.
-const MATCHING_MONTHLY = {
-  recurring: { interval: "month", interval_count: 1 },
-  unit_amount: 7999,
-  currency: "gbp",
-};
-let priceFixtures: Record<string, unknown> = {};
+// tiers the D22 Stripe-price-fixture scaffolding and tests here were written
+// against are retired (CURATION_TIER_KEYS no longer contains them, so a
+// request naming either now 400s before reaching any Stripe-price logic).
+// The tests that exercised them are removed rather than rewritten, because
+// there is no live tier of kind "managed" left to exercise; Task 2 covers the
+// retired tiers now 400ing, and Task 4 covers price validation for the new
+// quoted `programme` tier's dynamic price_data checkout (its own route,
+// src/app/api/curation/[id]/checkout/route.test.ts, not this file).
 
 beforeEach(() => {
   vi.clearAllMocks();
   setupDb();
   sessionsCreateMock.mockResolvedValue({ id: "cs_test_1", url: "https://stripe.example/pay" });
-  priceFixtures = {};
-  pricesRetrieveMock.mockImplementation(async (id: string) => {
-    const fixture = priceFixtures[id];
-    if (fixture === "THROW") throw new Error("stripe prices retrieve down");
-    return fixture ?? MATCHING_MONTHLY;
-  });
 });
 
 describe("POST /api/curation, D19 orphan-payment guard", () => {

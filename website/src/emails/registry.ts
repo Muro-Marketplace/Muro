@@ -93,6 +93,9 @@ import VenueRegistrationConfirmation from "./templates/venue-lifecycle/VenueRegi
 // deleted lib/email.ts.
 import CurationEnquiryReceived from "./templates/venue-lifecycle/CurationEnquiryReceived";
 import CurationPaymentReceived from "./templates/venue-lifecycle/CurationPaymentReceived";
+// Wallplace Programmes, Task 4: the quote-first flow's third leg, between the
+// enquiry acknowledgement above and the payment receipt below.
+import CurationQuoteReady from "./templates/venue-lifecycle/CurationQuoteReady";
 import VenueCollectionPending from "./templates/venue-lifecycle/VenueCollectionPending";
 // D18: the counterpart to CurationPaymentReceived, sent by the admin refund endpoint.
 import CurationRefundIssued from "./templates/venue-lifecycle/CurationRefundIssued";
@@ -204,6 +207,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   ArtistRefundRequested,
   ArtistNewPlacementInvitation,
   CurationEnquiryReceived,
+  CurationQuoteReady,
   CurationPaymentReceived,
   VenueCollectionPending,
   CurationRefundIssued,

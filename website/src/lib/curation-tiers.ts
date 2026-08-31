@@ -118,6 +118,15 @@ export const PROGRAMME_RENT_SHARE_MAX = 0.7;
 export const PROGRAMME_QUARTERLY_ROTATION_UPLIFT_GBP = 40;
 
 /**
+ * Founding programme sites: the first N programme clients lock their quoted
+ * rate for 24 months, mirroring FOUNDING_ARTIST_LIMIT (src/lib/pricing.ts).
+ * Recorded on curation_requests.founding_site (migration 121) and enforced by
+ * the admin quote route (Task 4), which counts existing founding_site = true
+ * rows before allowing another and refuses once this limit is reached.
+ */
+export const PROGRAMME_FOUNDING_SITE_LIMIT = 5;
+
+/**
  * Formats a tier's priceGbp for display: whole pounds render bare ("£49"),
  * fractional pounds render to two decimal places ("£79.99").
  *
