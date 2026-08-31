@@ -19,6 +19,16 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/curated",
 }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => authState.value }));
+// Row 1924: the form prefills from /api/venue-profile for a signed-in venue.
+// authFetch pulls in @/lib/supabase, which builds a client at module load.
+vi.mock("@/lib/supabase", () => ({ supabase: { auth: {}, from: () => ({}) } }));
+vi.mock("@/lib/api-client", async (orig) => {
+  const actual = await orig<typeof import("@/lib/api-client")>();
+  return {
+    ...actual,
+    authFetch: vi.fn(async () => ({ json: async () => ({ profile: null }) })),
+  };
+});
 vi.mock("next/image", () => ({ default: () => <span /> }));
 vi.mock("@/components/Accordion", () => ({ default: () => <div /> }));
 vi.mock("@/components/AnimateIn", () => ({
@@ -27,6 +37,7 @@ vi.mock("@/components/AnimateIn", () => ({
 vi.mock("@/components/ScrollButton", () => ({ default: () => <button type="button" /> }));
 
 import CuratedClient from "./CuratedClient";
+import { authFetch } from "@/lib/api-client";
 
 function fillByLabel(root: HTMLElement, labelText: string, value: string) {
   const label = Array.from(root.querySelectorAll("label")).find(
@@ -90,5 +101,43 @@ describe("curation enquiry attribution (E37)", () => {
     const headers = (lastCurationCall(fetchSpy)![1] as { headers: Record<string, string> }).headers;
     expect(headers.Authorization).toBeUndefined();
     expect(headers["Content-Type"]).toBe("application/json");
+  });
+});
+
+// Row 1924. "The curation brief form prefills nothing, though the venue profile
+// holds the name, email and location." A signed-in venue retyped three things
+// the account already knows, on a form whose first refusal is that those three
+// are required.
+describe("the brief prefills from the venue's profile (row 1924)", () => {
+  it("fills the name, contact and location a venue has already given us", async () => {
+    authState.value = { userType: "venue", loading: false, session: { access_token: "t" } };
+    vi.mocked(authFetch).mockResolvedValue({
+      json: async () => ({
+        profile: {
+          name: "The Copper Kettle",
+          contact_name: "Hannah Reed",
+          email: "hannah@copperkettle.test",
+          location: "Hampton",
+        },
+      }),
+    } as unknown as Response);
+
+    const { container } = render(<CuratedClient />);
+
+    await waitFor(() => {
+      const values = Array.from(container.querySelectorAll("input")).map((i) => i.value);
+      expect(values).toContain("The Copper Kettle");
+      expect(values).toContain("hannah@copperkettle.test");
+    });
+  });
+
+  it("asks for nothing when the visitor is not a signed-in venue", async () => {
+    authState.value = { userType: null, loading: false, session: null };
+    vi.mocked(authFetch).mockClear();
+
+    const { container } = render(<CuratedClient />);
+
+    await waitFor(() => expect(container.querySelectorAll("input").length).toBeGreaterThan(0));
+    expect(authFetch).not.toHaveBeenCalled();
   });
 });

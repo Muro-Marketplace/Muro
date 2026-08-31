@@ -815,6 +815,38 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     });
   });
 
+  // Rows 933-939 / P4. `orders.items` for an offer was
+  // {offer_id, work_ids, collection_id} and nothing else, so every reader fell
+  // back to its defaults and the artist portal rendered "Artwork × 1, £0.00" on
+  // a £26 order. The email resolved the title fine, so the data existed.
+  it("writes an item line a person can read", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+
+    await fireOffer({ ...OFFER_META, offer_work_titles: "Harbour Light" }, 3300);
+
+    const items = state.orderInsert.row!.items as Array<Record<string, unknown>>;
+    expect(items[0]).toMatchObject({
+      title: "Harbour Light",
+      quantity: 1,
+      offer_id: OFFER_META.offer_id,
+    });
+    expect(items[0].lineTotal).toMatchObject({ amount: 3300 });
+  });
+
+  it("still names something when the titles did not travel", async () => {
+    // An order booked before the metadata carried titles, or one whose work was
+    // deleted between acceptance and payment.
+    const state = freshState();
+    setupOfferDb(state);
+
+    await fireOffer(OFFER_META, 3300);
+
+    const items = state.orderInsert.row!.items as Array<Record<string, unknown>>;
+    expect(items[0].title).toBe("Artwork");
+    expect(items[0].lineTotal).toMatchObject({ amount: 3300 });
+  });
+
   it("writes an order row at all, which is the live E6 defect", async () => {
     const state = freshState();
     setupOfferDb(state);

@@ -134,6 +134,15 @@ export default function CheckoutPage() {
       setSavedAddressId("");
       return;
     }
+    // Production pass 2, P4: "A signed-in buyer's email is not prefilled at
+    // checkout, though their name is." The address effect below fills the name
+    // from a saved address; the email is on the session and nothing used it, so
+    // a signed-in buyer retyped the address the receipt would go to. Set it
+    // before the address fetch, and never over a value they have typed.
+    if (user?.email) {
+      setShipping((prev) => (prev.email ? prev : { ...prev, email: user.email as string }));
+    }
+
     let cancelled = false;
     authFetch("/api/customer-addresses")
       .then((r) => r.json())

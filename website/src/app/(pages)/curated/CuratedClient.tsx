@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 import Accordion from "@/components/Accordion";
 import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
@@ -156,6 +157,37 @@ export default function CuratedClient() {
     wantsPaidLoan: false,
     wantsDirectPurchase: false,
   });
+
+  // Row 1924. "The curation brief form prefills nothing, though the venue
+  // profile holds the name, email and location." A signed-in venue retyped
+  // three things the account already knows, on a form whose first refusal is
+  // that those three are required. Fetched once on mount and never written over
+  // anything already typed, so it cannot fight the user.
+  useEffect(() => {
+    if (authLoading || userType !== "venue") return;
+    let cancelled = false;
+    authFetch("/api/venue-profile")
+      .then((r: Response) => r.json())
+      .then((data: { profile?: { name?: string | null; contact_name?: string | null; email?: string | null; phone?: string | null; type?: string | null; location?: string | null } }) => {
+        const p = data?.profile;
+        if (cancelled || !p) return;
+        setForm((prev) => ({
+          ...prev,
+          venueName: prev.venueName || p.name || "",
+          contactName: prev.contactName || p.contact_name || "",
+          contactEmail: prev.contactEmail || p.email || "",
+          contactPhone: prev.contactPhone || p.phone || "",
+          venueType: prev.venueType || p.type || "",
+          location: prev.location || p.location || "",
+        }));
+      })
+      .catch(() => {
+        /* Not signed in, or a network blip: the blank form still works. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, userType]);
 
   // Budget is only meaningful for arrangements where the venue actually
   // spends money — paid loan (monthly fee) or direct purchase (outright

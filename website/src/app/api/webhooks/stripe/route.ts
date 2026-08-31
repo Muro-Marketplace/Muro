@@ -307,10 +307,25 @@ async function handleWebhookEvent(
           id: paidOrderId,
           stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,
           buyer_email: session.customer_email || session.metadata.offer_buyer_email || "",
+          // Row 933-939 / P4. This was {offer_id, work_ids, collection_id} and
+          // nothing else, so every reader of `orders.items` fell back to its
+          // defaults and the artist portal showed "Artwork × 1, £0.00" on a
+          // £26 order. The ids stay (they are the link back to the offer); the
+          // title and the amount are added so the line reads as a line. The
+          // enriched `lineTotal` shape is the one lib/order-items prefers.
           items: [{
             offer_id: offerId,
             work_ids: workIds,
             collection_id: session.metadata.offer_collection_id || null,
+            title:
+              session.metadata.offer_work_titles ||
+              (session.metadata.offer_collection_id
+                ? "Collection"
+                : workIds.length > 1
+                  ? `${workIds.length} works`
+                  : "Artwork"),
+            quantity: 1,
+            lineTotal: { amount: session.amount_total || 0, currency: (session.currency || "gbp").toUpperCase() },
           }],
           // Rows 933-939. The offer session now asks Stripe for the buyer's
           // delivery address (`shipping_address_collection`), so this reads it

@@ -335,6 +335,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       // orders.buyer_email is NOT NULL. The webhook used to fall back to
       // offer_buyer_user_id, which put a UUID in an email column.
       offer_buyer_email: offer.buyer_email || auth.user!.email || "",
+      // Row 933-939 / P4. `orders.items` for an offer was
+      // {offer_id, work_ids, collection_id} with no title and no price, so the
+      // artist portal rendered "Artwork × 1, £0.00". The titles are already
+      // resolved above for the sold-out check; carry them so the webhook can
+      // write a line a person can read. Stripe caps a metadata value at 500
+      // characters, hence the trim.
+      offer_work_titles: titleList.slice(0, 480),
       // Flag so the Stripe webhook knows to treat this differently from a
       // standard cart checkout — no shipping line, link back to the offer row.
       checkout_kind: "purchase_offer",
