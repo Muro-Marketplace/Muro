@@ -1096,7 +1096,15 @@ async function handleWebhookEvent(
               const fallbackName = item.artistName && !/^[a-z0-9-]+$/.test(item.artistName) ? item.artistName : null;
               return {
                 title: item.title || "Artwork",
-                artistName: resolved || fallbackName || slug || "Artist",
+                // Owner-reported 2026-08-30: the last fallback printed the raw
+                // slug in the buyer's receipt. The line above already refuses a
+                // slug-shaped artistName, so falling through to one here was
+                // the same leak by another route.
+                artistName:
+                  resolved ||
+                  fallbackName ||
+                  slug.split("-").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ||
+                  "Artist",
                 quantity: Number(item.qty ?? item.quantity ?? 1),
                 size: item.size,
                 image: item.image || `${SITE}/placeholder-work.jpg`,

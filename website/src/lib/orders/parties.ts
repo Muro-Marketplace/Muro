@@ -28,6 +28,15 @@ export interface OrderPartySource {
   shipping?: unknown;
 }
 
+/** "fin-coles" -> "Fin Coles". Empty for an empty slug. */
+function deSlug(slug: string | null | undefined): string {
+  return (slug ?? "")
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 function firstNameFrom(value: string | null | undefined, fallback: string): string {
   const trimmed = (value ?? "").trim();
   if (!trimmed) return fallback;
@@ -75,7 +84,13 @@ export async function orderParties(
         role: "artist",
         email,
         userId: order.artist_user_id,
-        firstName: firstNameFrom(profile?.name, order.artist_slug ?? "there"),
+        // Owner-reported 2026-08-30: never fall back to the slug in an email
+        // greeting. "Hi fin-coles" is worse than "Hi there", and the slug is a
+        // lookup key rather than anything the person calls themselves.
+        // Passing the de-slugged name as the VALUE, not the fallback, so it
+        // goes through the same first-word logic: the greeting wants "Maya",
+        // not "Maya Chen", and certainly not "maya-chen".
+        firstName: firstNameFrom(profile?.name || deSlug(order.artist_slug), "there"),
       });
     }
   }
