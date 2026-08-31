@@ -26,7 +26,7 @@ const tabContent: Record<Audience, {
     steps: [
       { number: "01", title: "Browse & Filter", description: "Search curated artist portfolios by style, theme, and location. Free, no signup needed." },
       { number: "02", title: "Enquire", description: "Contact artists directly through Wallplace to discuss work, terms, and fit for your space." },
-      { number: "03", title: "Arrange", description: "Display work for free with an optional revenue share on sales, or purchase pieces outright for your permanent collection." },
+      { number: "03", title: "Arrange", description: "Display work for free with a share of sales from the wall, pay a monthly fee to keep a piece on display, or purchase outright for your permanent collection." },
     ],
     cta: { href: "/signup/venue", label: "Register your venue" },
     secondary: { href: "/curated", label: "Or explore Curated, a managed selection from £49" },

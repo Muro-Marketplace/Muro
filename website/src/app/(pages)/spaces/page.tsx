@@ -300,8 +300,11 @@ function SpacesPageContent() {
             Real venues actively seeking artwork. Enter your postcode to see demand near you.
           </p>
 
-          {/* Postcode search */}
-          <div className="flex items-center justify-center gap-3 max-w-md mx-auto">
+          {/* Postcode search. The id is the target of /spaces#postcode, which
+              the artist guide's second CTA points at (row A L163): the two CTAs
+              there both resolved to the bare /spaces URL, so the pair read as
+              two things and did one. */}
+          <div id="postcode" className="flex items-center justify-center gap-3 max-w-md mx-auto scroll-mt-24">
             <input
               type="text"
               value={postcode}

@@ -409,7 +409,11 @@ export default function ArtistGuide() {
             <Link href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
               SEE VENUE DEMAND
             </Link>
-            <Link href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors">
+            {/* Row A L163: this was a second differently-labelled button to
+                the SAME /spaces URL, so the pair read as two things and did
+                one. The postcode search lives on that page, so the second CTA
+                is the quieter route to it rather than a rival to the first. */}
+            <Link href="/spaces#postcode" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 border border-foreground/25 text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:border-foreground/50 transition-colors">
               SEARCH BY POSTCODE
             </Link>
           </div>

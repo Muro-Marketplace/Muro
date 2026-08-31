@@ -31,6 +31,15 @@ export const waitlistSchema = z.object({
   name: safeString(100),
   email,
   userType: z.enum(["artist", "venue", "both"]),
+  // Row A L364 / migration 129. The form posts these three and this schema
+  // declared none of them, so zod stripped them at the validation boundary and
+  // no writer ever saw them. A venue joining the waiting list was asked for
+  // their venue's name and where it is, and we kept neither, which is what made
+  // the list unworkable: nothing distinguished a venue in Hampton from one in
+  // Leeds and there was no way to ring anybody.
+  phone: optionalString(30),
+  venueName: optionalString(200),
+  venueLocation: optionalString(200),
 });
 
 export const contactSchema = z.object({

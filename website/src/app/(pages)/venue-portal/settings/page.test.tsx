@@ -79,7 +79,11 @@ describe("venue settings notification rows (E14)", () => {
     // Anchor on a row that IS there so the absence check is not passing
     // against a blank render.
     expect(await screen.findByText("Message notifications")).toBeTruthy();
-    expect(screen.getByText("Wallplace news & digest")).toBeTruthy();
+    // Row E L1629: the label said "digest" while the description described
+    // announcements, and this flag controls announcements only. A venue turning
+    // it off to stop the weekly digest kept getting the digest, which is set
+    // separately at /account/email.
+    expect(screen.getByText("Wallplace news")).toBeTruthy();
     expect(screen.queryByText("Order updates")).toBeNull();
   });
 });

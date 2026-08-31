@@ -1190,8 +1190,12 @@ function BrowsePortfoliosPageInner() {
     });
   }, [collections, collectionsLocationMode, userCoords, artists, maxDistance, collectionsPriceMin, collectionsPriceMax, collectionsFreeLoan, collectionsRevShare, collectionsPurchase, searchQuery]);
 
+  // Row B L622: this included `collectionsLocationMode === "local"`, which is
+  // the DEFAULT mode, so it was always true and "Clear all" plus the mobile
+  // active-filter badge rendered on a page with no filters applied. A location
+  // filter is only active once there is a location to filter by.
   const hasCollectionsFilters =
-    collectionsLocationMode === "local" ||
+    (collectionsLocationMode === "local" && !!userCoords) ||
     collectionsPriceMin > 0 ||
     collectionsPriceMax < 2000 ||
     collectionsFreeLoan ||

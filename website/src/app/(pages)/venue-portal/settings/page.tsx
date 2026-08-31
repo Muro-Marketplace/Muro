@@ -93,8 +93,12 @@ const NOTIF_ROWS: { id: NotificationPrefField; label: string; desc: string }[] =
   },
   {
     id: "email_digest_enabled",
-    label: "Wallplace news & digest",
-    desc: "Platform announcements and feature launches",
+    // Row E L1629: the label said "digest" and the description described
+    // announcements. This flag controls announcements only; the weekly venue
+    // digest is a separate preference at /account/email, so a venue turning
+    // this off to stop the digest kept getting it.
+    label: "Wallplace news",
+    desc: "Platform announcements and feature launches. Your weekly digest is set separately, under Email preferences.",
   },
 ];
 
