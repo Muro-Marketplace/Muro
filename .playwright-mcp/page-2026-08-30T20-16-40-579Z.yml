@@ -1,0 +1,311 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - link "Skip to content" [ref=f2e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f2e4]:
+      - generic [ref=f2e6]:
+        - link "Wallplace" [ref=f2e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f2e8]:
+          - link "Marketplace" [ref=f2e9] [cursor=pointer]:
+            - /url: /browse
+          - link "How It Works" [ref=f2e10] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f2e11] [cursor=pointer]:
+            - /url: /blog
+          - link "Spaces" [ref=f2e12] [cursor=pointer]:
+            - /url: /spaces
+    - main [ref=f2e13]:
+      - generic [ref=f2e14]:
+        - img "Gallery interior" [ref=f2e16]
+        - generic [ref=f2e20]:
+          - heading "WALLPLACE" [level=1] [ref=f2e21]
+          - paragraph [ref=f2e22]: The curated art marketplace for commercial spaces.
+          - paragraph [ref=f2e23]: Venues source original artwork risk-free. Artists access high-intent commercial demand.
+          - generic [ref=f2e24]:
+            - link "Discover Art" [ref=f2e25] [cursor=pointer]:
+              - /url: /browse
+            - link "Sign Up" [ref=f2e26] [cursor=pointer]:
+              - /url: /signup
+          - paragraph [ref=f2e27]:
+            - text: Just looking? Browse
+            - link "a demo artist or venue account" [ref=f2e28] [cursor=pointer]:
+              - /url: /demo
+            - text: .
+        - generic [ref=f2e29]:
+          - button "Scroll to see more" [ref=f2e30] [cursor=pointer]
+          - generic [ref=f2e36]:
+            - generic [ref=f2e37]:
+              - generic [ref=f2e38]:
+                - generic [ref=f2e39]: 30+
+                - text: Curated Artists
+              - generic [ref=f2e41]:
+                - generic [ref=f2e42]: 230+
+                - text: Original Artworks
+              - generic [ref=f2e44]:
+                - generic [ref=f2e45]: 20+
+                - text: Active Venues
+            - generic [ref=f2e46]:
+              - generic [ref=f2e47]: No AI art
+              - generic [ref=f2e49]: Every artist reviewed
+      - generic [ref=f2e50]:
+        - generic [ref=f2e54]:
+          - generic [ref=f2e55]:
+            - paragraph [ref=f2e56]: For Venues
+            - heading "Earn from your empty walls. Zero risk." [level=2] [ref=f2e57]
+            - paragraph [ref=f2e58]: Browse curated portfolios and source original artwork for your café, restaurant, hotel, office, or bar. Completely free to browse and enquire.
+            - list [ref=f2e59]:
+              - listitem [ref=f2e60]:
+                - generic [ref=f2e64]:
+                  - paragraph [ref=f2e65]: Revenue Share
+                  - paragraph [ref=f2e66]: Free to display. Earn a share when a QR scan sells the work.
+              - listitem [ref=f2e67]:
+                - generic [ref=f2e68]: £
+                - generic [ref=f2e70]:
+                  - paragraph [ref=f2e71]: Paid Loan
+                  - paragraph [ref=f2e72]: Pay the artist a monthly fee to display the work on your wall.
+              - listitem [ref=f2e73]:
+                - generic [ref=f2e76]:
+                  - paragraph [ref=f2e77]: Direct Purchase
+                  - paragraph [ref=f2e78]: Buy pieces outright for your permanent collection.
+            - generic [ref=f2e79]:
+              - link "Discover Art" [ref=f2e80] [cursor=pointer]:
+                - /url: /browse
+              - link "REGISTER YOUR VENUE" [ref=f2e81] [cursor=pointer]:
+                - /url: /signup/venue
+            - paragraph [ref=f2e82]:
+              - text: Want a shortlist picked for you?
+              - link "Professional curation services also available →" [ref=f2e83] [cursor=pointer]:
+                - /url: /curated
+          - generic [ref=f2e84]:
+            - img "Moody urban street photography" [ref=f2e86]
+            - img "Misty forest landscape" [ref=f2e88]
+            - img "Vintage film camera" [ref=f2e90]
+            - img "Deer in misty woodland" [ref=f2e92]
+            - img "Mountain landscape at night" [ref=f2e94]
+        - generic [ref=f2e98]:
+          - generic [ref=f2e99]:
+            - link [ref=f2e100] [cursor=pointer]:
+              - /url: /browse/james-okafor
+              - img "James Okafor" [ref=f2e101]
+              - paragraph [ref=f2e103]: James Okafor
+            - link [ref=f2e104] [cursor=pointer]:
+              - /url: /browse/priya-sharma
+              - img "Priya Sharma" [ref=f2e105]
+              - paragraph [ref=f2e107]: Priya Sharma
+            - link [ref=f2e108] [cursor=pointer]:
+              - /url: /browse/tom-hadley
+              - img "Tom Hadley" [ref=f2e109]
+              - paragraph [ref=f2e111]: Tom Hadley
+            - link [ref=f2e112] [cursor=pointer]:
+              - /url: /browse/sofia-ruiz
+              - img "Sofia Ruiz" [ref=f2e113]
+              - paragraph [ref=f2e115]: Sofia Ruiz
+            - link [ref=f2e116] [cursor=pointer]:
+              - /url: /browse/kai-williams
+              - img "Kai Williams" [ref=f2e117]
+              - paragraph [ref=f2e119]: Kai Williams
+            - link [ref=f2e120] [cursor=pointer]:
+              - /url: /browse/elise-moreau
+              - img "Elise Moreau" [ref=f2e121]
+              - paragraph [ref=f2e123]: Elise Moreau
+          - generic [ref=f2e124]:
+            - paragraph [ref=f2e125]: For Artists
+            - heading "Your art, in the spaces people love." [level=2] [ref=f2e126]
+            - paragraph [ref=f2e127]: Showcase, get discovered, and sell, all in one place. Your Wallplace profile is your portfolio, your storefront, and your route into the best commercial venues.
+            - list [ref=f2e128]:
+              - listitem [ref=f2e129]:
+                - generic [ref=f2e132]: Get displayed in cafés, restaurants, hotels, and offices
+              - listitem [ref=f2e133]:
+                - generic [ref=f2e136]: Sell directly online, every QR scan leads to your store
+              - listitem [ref=f2e137]:
+                - generic [ref=f2e140]: 5 to 15% platform fee. No gallery taking 50%.
+            - generic [ref=f2e141]:
+              - link "Apply to Join" [ref=f2e142] [cursor=pointer]:
+                - /url: /apply
+              - link "LEARN MORE" [ref=f2e143] [cursor=pointer]:
+                - /url: /artists
+        - generic [ref=f2e146]:
+          - heading "How Wallplace works" [level=2] [ref=f2e147]
+          - generic [ref=f2e148]:
+            - generic [ref=f2e149]:
+              - paragraph [ref=f2e150]: For Venues
+              - generic [ref=f2e151]:
+                - generic [ref=f2e152]:
+                  - generic [ref=f2e153]: "01"
+                  - generic [ref=f2e154]:
+                    - paragraph [ref=f2e155]: Browse & Filter
+                    - paragraph [ref=f2e156]: Search curated artists by style, theme, and location. Free.
+                - generic [ref=f2e157]:
+                  - generic [ref=f2e158]: "02"
+                  - generic [ref=f2e159]:
+                    - paragraph [ref=f2e160]: Enquire
+                    - paragraph [ref=f2e161]: Contact artists directly. Discuss terms and fit.
+                - generic [ref=f2e162]:
+                  - generic [ref=f2e163]: "03"
+                  - generic [ref=f2e164]:
+                    - paragraph [ref=f2e165]: Arrange
+                    - paragraph [ref=f2e166]: Display art for free with optional revenue share, or purchase outright.
+              - link "Register Your Venue" [ref=f2e168] [cursor=pointer]:
+                - /url: /signup/venue
+            - generic [ref=f2e169]:
+              - paragraph [ref=f2e170]: For Artists
+              - generic [ref=f2e171]:
+                - generic [ref=f2e172]:
+                  - generic [ref=f2e173]: "01"
+                  - generic [ref=f2e174]:
+                    - paragraph [ref=f2e175]: Apply
+                    - paragraph [ref=f2e176]: Submit your portfolio. We respond within 5 business days.
+                - generic [ref=f2e177]:
+                  - generic [ref=f2e178]: "02"
+                  - generic [ref=f2e179]:
+                    - paragraph [ref=f2e180]: Get Accepted
+                    - paragraph [ref=f2e181]: Pass our curation review. First month free.
+                - generic [ref=f2e182]:
+                  - generic [ref=f2e183]: "03"
+                  - generic [ref=f2e184]:
+                    - paragraph [ref=f2e185]: Get Discovered
+                    - paragraph [ref=f2e186]: Your profile goes live. Venues enquire directly.
+              - link "Apply to Join" [ref=f2e188] [cursor=pointer]:
+                - /url: /apply
+        - generic [ref=f2e193]:
+          - paragraph [ref=f2e194]: Active Demand
+          - heading "Venues are looking for art right now" [level=2] [ref=f2e195]
+          - paragraph [ref=f2e196]: Cafés, restaurants, hotels, and offices actively seeking artwork to display. See what’s available near you.
+          - generic [ref=f2e197]:
+            - link "See Venue Demand" [ref=f2e198] [cursor=pointer]:
+              - /url: /spaces
+            - link "Apply to Join" [ref=f2e199] [cursor=pointer]:
+              - /url: /apply
+        - generic [ref=f2e202]:
+          - heading "Ready to get started?" [level=2] [ref=f2e203]
+          - paragraph [ref=f2e204]: Whether you’re looking for art, looking to be discovered, or looking to buy.
+          - generic [ref=f2e205]:
+            - generic [ref=f2e206]:
+              - paragraph [ref=f2e207]: Venues
+              - heading "Source artwork risk-free" [level=3] [ref=f2e208]
+              - paragraph [ref=f2e209]: Free to browse and enquire. No contracts.
+              - link "Register Your Venue" [ref=f2e210] [cursor=pointer]:
+                - /url: /signup/venue
+            - generic [ref=f2e211]:
+              - paragraph [ref=f2e212]: Artists
+              - heading "Get discovered by venues" [level=3] [ref=f2e213]
+              - paragraph [ref=f2e214]: First month free. From £9.99/month.
+              - link "Apply to Join" [ref=f2e215] [cursor=pointer]:
+                - /url: /apply
+            - generic [ref=f2e216]:
+              - paragraph [ref=f2e217]: Customers
+              - heading "Buy original artwork" [level=3] [ref=f2e218]
+              - paragraph [ref=f2e219]: Browse and buy directly from independent artists.
+              - link "Sign Up" [ref=f2e220] [cursor=pointer]:
+                - /url: /signup/customer
+        - generic [ref=f2e221]:
+          - img "Art being created" [ref=f2e222]
+          - generic [ref=f2e225]:
+            - paragraph [ref=f2e226]: Curated, not crowded.
+            - paragraph [ref=f2e227]: Every artist personally reviewed. No AI art.
+    - contentinfo "Site footer" [ref=f2e228]:
+      - generic [ref=f2e229]:
+        - generic [ref=f2e230]:
+          - generic [ref=f2e231]:
+            - link "Wallplace" [ref=f2e232] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f2e233]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f2e234]:
+              - paragraph [ref=f2e235]: Be first to see new works
+              - paragraph [ref=f2e236]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f2e238]:
+                - textbox "your@email.com" [ref=f2e239]
+                - button "Subscribe" [ref=f2e240] [cursor=pointer]
+            - link "Instagram" [ref=f2e241] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f2e246]:
+            - heading "For Artists" [level=4] [ref=f2e247]
+            - list [ref=f2e248]:
+              - listitem [ref=f2e249]:
+                - link "Apply to Join" [ref=f2e250] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f2e251]:
+                - link "Pricing" [ref=f2e252] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f2e253]:
+                - link "Browse Venues" [ref=f2e254] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f2e255]:
+                - link "FAQs" [ref=f2e256] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f2e257]:
+            - heading "For Venues" [level=4] [ref=f2e258]
+            - list [ref=f2e259]:
+              - listitem [ref=f2e260]:
+                - link "Discover Art" [ref=f2e261] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f2e262]:
+                - link "Register Your Venue" [ref=f2e263] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f2e264]:
+                - link "Wallplace Curated" [ref=f2e265] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f2e266]:
+                - link "How It Works" [ref=f2e267] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f2e268]:
+                - link "FAQs" [ref=f2e269] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f2e270]:
+            - heading "Company" [level=4] [ref=f2e271]
+            - list [ref=f2e272]:
+              - listitem [ref=f2e273]:
+                - link "About" [ref=f2e274] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f2e275]:
+                - link "Blog" [ref=f2e276] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f2e277]:
+                - link "How It Works" [ref=f2e278] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f2e279]:
+                - link "Sustainability" [ref=f2e280] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f2e281]:
+                - link "Partner with us" [ref=f2e282] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f2e283]:
+                - link "Contact" [ref=f2e284] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f2e285]:
+                - link "Complaints" [ref=f2e286] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f2e287]:
+                - link "Terms" [ref=f2e288] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f2e289]:
+                - link "Artist Agreement" [ref=f2e290] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f2e291]:
+                - link "Venue Agreement" [ref=f2e292] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f2e293]:
+                - link "Privacy" [ref=f2e294] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f2e295]:
+                - link "Cookies" [ref=f2e296] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f2e297]:
+                - link "Returns & Refunds" [ref=f2e298] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f2e299]:
+                - link "IP Policy" [ref=f2e300] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f2e302]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f2e303] [cursor=pointer]: Feedback
+  - generic [ref=f2e308]:
+    - paragraph [ref=f2e309]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f2e310] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f2e311]:
+      - button "Decline" [ref=f2e312] [cursor=pointer]
+      - button "Accept" [ref=f2e313] [cursor=pointer]
+  - alert [ref=f2e314]

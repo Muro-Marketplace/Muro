@@ -10,9 +10,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getAuthenticatedUserMock, fromMock } = vi.hoisted(() => ({
+const { getAuthenticatedUserMock, fromMock, anonFromMock } = vi.hoisted(() => ({
   getAuthenticatedUserMock: vi.fn(),
   fromMock: vi.fn(),
+  anonFromMock: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -26,12 +27,12 @@ vi.mock("@/lib/supabase-admin", () => ({
 // The POST path (public enquiry submit) pulls in the anon client, emails and
 // rate limiting; none of it runs in these GET/PATCH tests but the imports
 // must resolve.
-vi.mock("@/lib/supabase", () => ({ supabase: { from: () => ({}) } }));
+vi.mock("@/lib/supabase", () => ({ supabase: { from: (...a: unknown[]) => anonFromMock(...a) } }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => null) }));
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn() }));
 vi.mock("@/lib/email/notifications", () => ({ sendMessageUnreadEmail: vi.fn() }));
 
-import { GET, PATCH } from "./route";
+import { GET, PATCH, POST } from "./route";
 
 const ENQUIRY_ROW = {
   id: 7,
@@ -175,5 +176,92 @@ describe("PATCH /api/enquiry", () => {
     mockDb({ slug: null });
     const res = await PATCH(req("PATCH", { id: 7, status: "handled" }));
     expect(res.status).toBe(403);
+  });
+});
+
+// C L1124. The enquiries row stored the name the form collected; the message
+// written into the artist's inbox a few lines later stored the email's local
+// part instead. An enquiry from Finlay Coles arrived in the inbox as
+// "fcoles2598", with the real name buried in the body text. Two writes, the
+// same person, different answers.
+describe("POST /api/enquiry names the sender consistently (C L1124)", () => {
+  /** Capture both inserts the POST path makes. */
+  async function submit(body: Record<string, unknown>) {
+    const enquiryInserts: Record<string, unknown>[] = [];
+    const messageInserts: Record<string, unknown>[] = [];
+
+    anonFromMock.mockImplementation((table: string) => {
+      if (table === "enquiries") {
+        return { insert: async (row: Record<string, unknown>) => { enquiryInserts.push(row); return { error: null }; } };
+      }
+      if (table === "artist_profiles") {
+        // #78 resolves the artist's real name for the alert subject, so the
+        // slug never reaches a human. Answer it or the POST throws before it
+        // reaches the messages insert.
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: { name: "Maya Chen" }, error: null }) }),
+          }),
+        };
+      }
+      return { insert: async () => ({ error: null }) };
+    });
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "messages") {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            messageInserts.push(row);
+            return { select: () => ({ single: async () => ({ data: { id: "m-1" }, error: null }) }) };
+          },
+        };
+      }
+      // artist_profiles lookups and anything else the path touches.
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: null, error: null }),
+            single: async () => ({ data: null, error: null }),
+          }),
+        }),
+        insert: () => ({ select: () => ({ single: async () => ({ data: null, error: null }) }) }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+    });
+
+    await POST(new Request("http://localhost/api/enquiry", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        senderName: "Finlay Coles",
+        senderEmail: "fcoles2598@gmail.com",
+        artistSlug: "maya-chen",
+        enquiryType: "general",
+        message: "Is this still available?",
+        ...body,
+      }),
+    }));
+
+    return { enquiryRow: enquiryInserts[0], messageRow: messageInserts[0] };
+  }
+
+  it("uses the collected name for the artist's inbox, not the email local part", async () => {
+    const { messageRow } = await submit({});
+
+    expect(messageRow?.sender_name).toBe("Finlay Coles");
+    expect(messageRow?.sender_name).not.toBe("fcoles2598");
+  });
+
+  it("agrees with the enquiries row about who sent it", async () => {
+    const { enquiryRow, messageRow } = await submit({});
+
+    expect(enquiryRow?.sender_name).toBe("Finlay Coles");
+    expect(messageRow?.sender_name).toBe(enquiryRow?.sender_name);
+  });
+
+  it("keeps the sender's address in the body, where the artist replies from", async () => {
+    const { messageRow } = await submit({});
+
+    expect(String(messageRow?.content)).toContain("fcoles2598@gmail.com");
   });
 });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { checkoutSchema } from "@/lib/validations";
 import { calculateOrderShipping } from "@/lib/shipping-checkout";
+import { resolveLineShipping } from "@/lib/checkout-shipping-source";
 import { regionForCountry, isSupportedCountry, labelForCountry } from "@/lib/iso-countries";
 import { findUkOnlyArtists } from "@/lib/shipping-scope";
 import { isWorkSold } from "@/lib/work-stock";
@@ -24,7 +25,11 @@ type WorkRow = {
   id: string;
   available: boolean | null;
   quantity_available: number | null;
-  pricing: Array<{ label: string; price: number; inStorePrice?: number | null }> | null;
+  pricing: Array<{ label: string; price: number; inStorePrice?: number | null; shippingPrice?: number | null }> | null;
+  // A1.2. Shipping inputs, resolved server-side instead of trusting the cart.
+  // See lib/checkout-shipping-source.ts for the precedence and the exploit.
+  shipping_price: number | null;
+  dimensions: string | null;
   title: string | null;
   // Migration 118. Work-level in-store price, the number a collect-from-venue
   // buyer is shown when the work has no per-size in-store pricing.
@@ -177,10 +182,17 @@ export async function POST(request: Request) {
     // allowed). If the caller IS authenticated and is the artist behind
     // any cart item, refuse — money would cycle through Stripe Connect
     // and the platform would skim a fee from the artist's own card.
+    // Also the only place the buyer's identity is known. orders.buyer_user_id
+    // exists in the schema and was written by nothing at all: 18 production
+    // orders, 0 with an id, 15 of them placed against an email that matches a
+    // real account. Stripe's session metadata is the only channel from here to
+    // the webhook that creates the order, so the id rides along there.
+    let buyerUserId: string | null = null;
     const authHeader = request.headers.get("authorization");
     if (authHeader) {
       const auth = await getAuthenticatedUser(request);
       if (auth.user) {
+        buyerUserId = auth.user.id;
         // E23a. Guarded only inside the authenticated branch, because guest
         // checkout is supported and an anonymous caller has no id to test. A
         // demo session reaching Stripe would take real money, so this is the
@@ -232,7 +244,7 @@ export async function POST(request: Request) {
     if (workIds.length > 0) {
       const { data: rows, error: worksErr } = await getSupabaseAdmin()
         .from("artist_works")
-        .select("id, available, quantity_available, pricing, title, frame_options, in_store_price, available_in_store")
+        .select("id, available, quantity_available, pricing, title, frame_options, in_store_price, available_in_store, shipping_price, dimensions")
         .in("id", workIds);
       if (worksErr) {
         console.error("[checkout] cart re-validation lookup failed:", worksErr);
@@ -635,6 +647,32 @@ export async function POST(request: Request) {
     // in Stripe but can't be paid out (escrow) until KYC completes.
     const uniqueArtistSlugs = [...new Set(items.map((i) => i.artistSlug || "").filter(Boolean))];
     const payoutDb = getSupabaseAdmin();
+
+    // A1.2. International shipping is an artist-level setting, so it is read
+    // from artist_profiles rather than from whatever the cart claimed. Only
+    // international orders read it, so UK orders, which are nearly all of
+    // them, do not pay for the round trip.
+    const artistShippingBySlug = new Map<string, { international_shipping_price: number | null }>();
+    if (region !== "uk" && uniqueArtistSlugs.length > 0) {
+      const { data: shipRows, error: shipErr } = await payoutDb
+        .from("artist_profiles")
+        .select("slug, international_shipping_price")
+        .in("slug", uniqueArtistSlugs);
+      if (shipErr) {
+        // Fail closed. Continuing here would silently drop back to the cart's
+        // own international figure, which is the value this is replacing.
+        console.error("[checkout] artist shipping lookup failed:", shipErr);
+        return NextResponse.json(
+          { error: "Couldn't work out delivery for your order, please try again." },
+          { status: 500 },
+        );
+      }
+      for (const row of shipRows || []) {
+        artistShippingBySlug.set(row.slug, {
+          international_shipping_price: row.international_shipping_price ?? null,
+        });
+      }
+    }
     const checks = await Promise.all(
       uniqueArtistSlugs.map(async (slug) => ({
         slug,
@@ -654,17 +692,39 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
+    // A1.2 (production pass, 2026-08-30). Every money input below used to come
+    // straight off the request body. A cart posted with `shippingPrice: 0`
+    // minted a live Stripe session for £49.99 against an honest £53.49, with
+    // no shipping line at all. Item prices were already re-priced from the
+    // database, which is why forging those did nothing; shipping was the one
+    // that was still trusted. `price` here is the re-priced figure too, since
+    // it drives both the dimensional estimate and the order-level signature
+    // threshold. `framed` stays client-supplied: it is a genuine buyer choice,
+    // and its price uplift is already resolved server-side from frame_options.
     const { totalShipping, artistGroups } = calculateOrderShipping(
-      items.map((it) => ({
-        artistSlug: it.artistSlug || "",
-        artistName: it.artistName || "Artist",
-        shippingPrice: it.shippingPrice ?? null,
-        internationalShippingPrice: it.internationalShippingPrice ?? null,
-        dimensions: it.dimensions || null,
-        framed: it.framed ?? false,
-        price: it.price,
-        quantity: it.quantity,
-      })),
+      pricedLines.map(({ item: it, unitPence }) => {
+        const work = it.workId ? workById.get(it.workId) : null;
+        const resolved = resolveLineShipping({
+          work,
+          artist: artistShippingBySlug.get(it.artistSlug || "") ?? null,
+          sizeLabel: it.size,
+          fallback: {
+            shippingPrice: it.shippingPrice ?? null,
+            internationalShippingPrice: it.internationalShippingPrice ?? null,
+            dimensions: it.dimensions || null,
+          },
+        });
+        return {
+          artistSlug: it.artistSlug || "",
+          artistName: it.artistName || "Artist",
+          shippingPrice: resolved.shippingPrice,
+          internationalShippingPrice: resolved.internationalShippingPrice,
+          dimensions: resolved.dimensions,
+          framed: it.framed ?? false,
+          price: unitPence / 100,
+          quantity: it.quantity,
+        };
+      }),
       region,
     );
 
@@ -724,6 +784,9 @@ export async function POST(request: Request) {
       customer_email: shipping.email,
       metadata: {
         kind: "cart_checkout",
+        // Empty string rather than omitted: Stripe metadata values must be
+        // strings, and the webhook reads a missing key the same as a blank one.
+        buyer_user_id: buyerUserId || "",
         source,
         venue_slug: venueSlug,
         artist_slugs: artistSlugs.join(","),

@@ -314,6 +314,19 @@ export default function ArtistProfileClient({
   // Sync URL with lightbox state so each artwork gets a shareable link
   useEffect(() => {
     if (navigatingAway.current) return;
+    // B L730. "Message the artist" on an artwork page sends the visitor here
+    // as /browse/<slug>?enquiry=1&work=<id>. The work param opens the lightbox,
+    // which is intended, since the enquiry scopes itself to the open work. This
+    // effect then rewrote the URL to the artwork permalink and dropped the
+    // query string with it, so roughly 1.7 seconds after the modal appeared the
+    // address bar was back on the artwork page. Reloading or sharing that link
+    // reopened the artwork rather than the enquiry, and watching the address
+    // bar rather than the page made the whole control look inert.
+    //
+    // While the enquiry is open, the URL the visitor arrived on is the one that
+    // matters. closeEnquiry strips ?enquiry=1 when they dismiss it, which lets
+    // this effect claim the URL again with the lightbox in the foreground.
+    if (showEnquiry) return;
     if (lightboxIndex !== null && filteredWorks[lightboxIndex]) {
       const workSlug = slugify(filteredWorks[lightboxIndex].title);
       window.history.pushState(null, "", `/browse/${artistSlug}/${workSlug}`);
@@ -324,7 +337,7 @@ export default function ArtistProfileClient({
         window.history.pushState(null, "", `/browse/${artistSlug}`);
       }
     }
-  }, [lightboxIndex, filteredWorks, artistSlug]);
+  }, [lightboxIndex, filteredWorks, artistSlug, showEnquiry]);
 
   // Handle browser back button closing the lightbox
   useEffect(() => {

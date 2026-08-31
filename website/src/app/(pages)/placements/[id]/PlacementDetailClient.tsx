@@ -8,6 +8,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
+import { VENUE_SHARE_CAPTION, venueShareLabel } from "@/lib/revenue-share-labels";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import PlacementLoanForm from "./PlacementLoanForm";
@@ -960,7 +962,9 @@ export default function PlacementDetailClient({ placementId }: Props) {
               <p className="text-lg font-medium text-foreground">
                 {placement.revenue_share_percent != null ? `${placement.revenue_share_percent}%` : "Not set"}
               </p>
-              <p className="text-[11px] text-muted mt-1">Artist&rsquo;s share of QR-code sales</p>
+              {/* A4.2: this named the artist as the recipient of the venue's
+                  share. Both sides read this page. */}
+              <p className="text-[11px] text-muted mt-1">{VENUE_SHARE_CAPTION}</p>
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Earned so far</p>
@@ -989,7 +993,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                 return (
                   <>
                     <p className="text-lg font-medium text-foreground">
-                      {isPaidLoan ? `\u00a3${stored.toLocaleString()}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
+                      {isPaidLoan ? `${formatPounds(stored)}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
                     </p>
                     <p className="text-[11px] text-muted mt-1">
                       {isPaidLoan ? "Venue pays artist to display the work" : "No rental fee agreed"}
@@ -1003,7 +1007,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               <p className="text-lg font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
                 {placement.qr_enabled && placement.revenue_share_percent != null && placement.revenue_share_percent > 0 && (
-                  <>, {placement.revenue_share_percent}% share on QR sales</>
+                  <>, {venueShareLabel(placement.revenue_share_percent)} on QR sales</>
                 )}
               </p>
             </div>

@@ -29,6 +29,7 @@ import { NextResponse } from "next/server";
 import { withRateLimit } from "@/lib/rate-limit";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { preferenceKeyFor, type EmailCategory } from "@/lib/email/categories";
+import { unsubscribeSigningConfigured, verifyUnsubscribe } from "@/lib/unsubscribe-token";
 
 export const runtime = "nodejs";
 
@@ -112,19 +113,60 @@ export async function POST(request: Request) {
   const url = new URL(request.url);
   const userId = url.searchParams.get("u");
   const category = url.searchParams.get("c");
+  // The POST still honours an unsigned link. RFC 8058 one-click is a
+  // deliberate act by the recipient's own mail client, not something a
+  // crawler does, and mail sent before signing existed is still in inboxes
+  // whose owners are entitled to unsubscribe from it. Once that mail has
+  // aged out, this can require a signature too.
+  if (!verifyUnsubscribe(userId, url.searchParams.get("s"))) {
+    console.warn("[unsubscribe] honoured an unsigned one-click POST (pre-signing email)");
+  }
   const result = await applyUnsubscribe(userId, category);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 }
 
 export async function GET(request: Request) {
-  // Some mail clients fire GET when the user clicks the visible link in
-  // the email body. We apply the same change and redirect to the page-
-  // side success view.
+  // A signed GET applies the change, for the mail clients that fire a GET at
+  // a link rather than opening it.
+  //
+  // An UNSIGNED GET does not write. The email footer links to the page at
+  // /account/email/unsubscribe, which since C24 requires a human to press a
+  // button, so link prefetch is already handled there and is not the concern
+  // here. What was still true of this endpoint is that the raw user id in the
+  // query string was the whole of the authorisation, and a GET is the verb
+  // anything can issue. Verified against production on 2026-08-30: an
+  // unauthenticated GET carrying nothing but a real user id turned that
+  // account's newsletter off. A user id is not a secret, it travels through
+  // API responses and logs; a signature is.
+  //
+  // Unsigned still resolves to a 200 with a message rather than an error: the
+  // recipient must be able to unsubscribe, so they are pointed at the
+  // preference centre, which is one deliberate click away. Nothing is
+  // silently ignored and nothing is silently written.
   const limited = await withRateLimit(request, RATE_LIMIT);
   if (limited) return limited;
   const url = new URL(request.url);
   const userId = url.searchParams.get("u");
   const category = url.searchParams.get("c");
+  // Only enforce a signature where we were able to produce one. With
+  // ORDER_TOKEN_SECRET unset, every link ever sent is unsigned, so enforcing
+  // would turn the unsubscribe link in every email into a dead end. Setting
+  // the secret is what activates this protection.
+  if (!unsubscribeSigningConfigured()) {
+    console.warn(
+      "[unsubscribe] ORDER_TOKEN_SECRET is unset, so unsubscribe links cannot be signed and an unsigned GET is honoured. Set it to close this.",
+    );
+  } else if (!verifyUnsubscribe(userId, url.searchParams.get("s"))) {
+    return NextResponse.json(
+      {
+        ok: true,
+        requiresConfirmation: true,
+        message:
+          "Open your email preferences to confirm which emails you'd like to stop.",
+      },
+      { status: 200 },
+    );
+  }
   const result = await applyUnsubscribe(userId, category);
   return NextResponse.json(result, { status: result.ok ? 200 : 400 });
 }

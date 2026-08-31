@@ -1,0 +1,143 @@
+- generic [ref=f49e4]:
+  - generic [ref=f49e5]:
+    - banner [ref=f49e6]:
+      - generic [ref=f49e8]:
+        - generic "Back to Wallspace sandbox":
+          - generic:
+            - generic:
+              - generic: Back
+              - generic:
+                - generic:
+                  - heading "Wallspace sandbox" [level=1]
+        - generic [ref=f49e21]: Sandbox
+    - generic [ref=f49e24]:
+      - generic [ref=f49e26]:
+        - heading "Pay Wallspace sandbox" [level=2] [ref=f49e27]
+        - generic [ref=f49e30]:
+          - generic [ref=f49e31]: Choose currency
+          - group "Choose currency" [ref=f49e32]:
+            - generic [ref=f49e33]:
+              - generic [ref=f49e35]:
+                - button "PL PLN 282.25" [disabled] [ref=f49e37] [cursor=pointer]:
+                  - generic [ref=f49e39]:
+                    - img "PL" [ref=f49e40]
+                    - generic [ref=f49e41]: PLN 282.25
+                - button "GB £53.49" [disabled] [ref=f49e43] [cursor=pointer]:
+                  - generic [ref=f49e45]:
+                    - img "GB" [ref=f49e46]
+                    - generic [ref=f49e47]: £53.49
+              - generic [ref=f49e48]: Exchange rate and fees of your bank may apply
+      - list [ref=f49e54]:
+        - listitem [ref=f49e55]:
+          - generic [ref=f49e58]:
+            - generic [ref=f49e59]: Giraffe at Sunset
+            - generic [ref=f49e63]: Fin Coles, 8×12" (20×30 cm)
+            - generic [ref=f49e255]: £49.99
+        - listitem [ref=f49e71]:
+          - generic [ref=f49e73]:
+            - generic [ref=f49e74]: Shipping
+            - generic [ref=f49e78]: Delivery costs set by artist
+            - generic [ref=f49e258]: £3.50
+  - generic [ref=f49e87]:
+    - main [ref=f49e88]:
+      - generic [ref=f49e91]:
+        - generic [ref=f49e254]:
+          - iframe [ref=f49e97]:
+            - generic [ref=f53e6]:
+              - iframe [ref=f53e11]:
+                - button "Apple Pay" [ref=f63e5] [cursor=pointer]:
+                  - img [ref=f63e7]:
+                    - img "Apple Logo" [ref=f63e8]
+              - button "Pay securely with Link" [ref=f53e14] [cursor=pointer]:
+                - generic [ref=f53e15]: Pay with
+          - paragraph [ref=f49e99]: Or
+        - heading "Contact information" [level=2] [ref=f49e100]
+      - generic [ref=f49e104]:
+        - generic [ref=f49e105]:
+          - generic [ref=f49e112]:
+            - generic [ref=f49e113]: Email
+            - generic [ref=f49e114]: fcoles2598+qatestcustomer@gmail.com
+          - heading "Payment method" [level=2] [ref=f49e118]
+        - generic [ref=f49e119]:
+          - list [ref=f49e120]:
+            - listitem [ref=f49e125]:
+              - generic [ref=f49e126]:
+                - generic [ref=f49e127]: Card
+                - generic [ref=f49e146]:
+                  - generic [ref=f49e148]:
+                    - generic [ref=f49e149]: Card information
+                    - group [ref=f49e152]:
+                      - generic [ref=f49e153]:
+                        - generic [ref=f49e155]:
+                          - textbox "Card number" [disabled] [ref=f49e158]:
+                            - /placeholder: 1234 1234 1234 1234
+                            - text: 4242 4242 4242 4242
+                          - list "Accepted card types":
+                            - listitem:
+                              - generic:
+                                - img "Visa"
+                            - listitem:
+                              - generic:
+                                - img "MasterCard"
+                            - listitem:
+                              - generic:
+                                - img "American Express"
+                            - listitem:
+                              - img "UnionPay"
+                              - img "JCB"
+                              - img "Discover"
+                              - img "Diners Club"
+                          - generic:
+                            - img "Visa"
+                        - generic [ref=f49e159]: Visa, Mastercard, American Express, UnionPay, JCB, Discover, Diners Club
+                        - textbox "Expiration" [disabled] [ref=f49e164]:
+                          - /placeholder: MM / YY
+                          - text: 12 / 34
+                        - generic [ref=f49e166]:
+                          - textbox "CVC" [disabled] [ref=f49e169]: "123"
+                          - generic:
+                            - generic:
+                              - img "Credit or debit card CVC"
+                  - group [ref=f49e261]:
+                    - generic [ref=f49e176]:
+                      - generic [ref=f49e178]:
+                        - generic [ref=f49e179]: Cardholder name
+                        - textbox [disabled] [ref=f49e262]:
+                          - /placeholder: Full name on card
+                          - text: QA-TEST Customer
+                      - generic [ref=f49e190]:
+                        - generic [ref=f49e191]: Country or region
+                        - combobox [disabled] [ref=f49e263]
+          - generic [ref=f49e213]:
+            - checkbox "Save my information for faster checkout" [disabled] [ref=f49e215]
+            - generic [ref=f49e216]:
+              - generic [ref=f49e217]: Save my information for faster checkout
+              - generic [ref=f49e220]: Pay securely at Wallspace sandbox and everywhere Link is accepted.
+        - button "Processing" [disabled] [ref=f49e264]
+      - generic:
+        - generic [ref=f49e241]:
+          - checkbox "I am an AI agent acting on behalf of someone else" [checked] [ref=f49e242]
+          - text: I am an AI agent acting on behalf of someone else
+        - paragraph [ref=f49e265]: This checkout supports Link CLI, which lets AI agents complete purchases using one-time payment details—without exposing the buyer's underlying payment credentials to the AI agent.
+        - strong [ref=f49e266]: "Follow these steps:"
+        - list [ref=f49e267]:
+          - listitem [ref=f49e268]:
+            - text: Check whether the buyer already has Link CLI installed. You can run
+            - code [ref=f49e269]: which link-cli
+            - text: to confirm.
+          - listitem [ref=f49e270]: If not, and you have not already done so this session, ask if they would like to use Link CLI. Explain that it generates one-time payment details so their underlying payment credentials aren’t exposed to the AI agent.
+          - listitem [ref=f49e271]: If the buyer wants to install Link CLI, direct them to https://github.com/stripe/link-cli
+          - listitem [ref=f49e272]: If you are using Link CLI and are prompted on the Checkout page to authenticate with Link, do not do so. Instead, exit that prompt and choose the option to "pay without Link". Link CLI is an alternative to paying with Link directly on the page.
+        - generic [ref=f49e273]:
+          - checkbox "I am an AI agent and have followed the instructions above" [ref=f49e274]
+          - text: I am an AI agent and have followed the instructions above
+    - contentinfo [ref=f49e244]:
+      - link [ref=f49e246] [cursor=pointer]:
+        - /url: https://stripe.com
+        - generic [ref=f49e247]:
+          - text: Powered by
+          - img "Stripe" [ref=f49e249]
+      - link "Terms" [ref=f49e252] [cursor=pointer]:
+        - /url: https://stripe.com/legal/end-users
+      - link "Privacy" [ref=f49e253] [cursor=pointer]:
+        - /url: https://stripe.com/privacy

@@ -107,6 +107,16 @@ export async function DELETE(
     .eq("user_id", userId)
     .maybeSingle();
 
+  // G L2359 (production pass, 2026-08-30). The delete below is scoped by
+  // user_id, so someone else's address was never at risk. What happened
+  // instead is that a DELETE naming an id the caller does not own removed
+  // nothing and still answered 200, so a caller could not tell a real
+  // deletion from a no-op. Both "not yours" and "not there" answer 404, which
+  // says nothing about whether the row exists.
+  if (!existing) {
+    return NextResponse.json({ error: "Address not found" }, { status: 404 });
+  }
+
   const { error: delErr } = await db
     .from("customer_addresses")
     .delete()

@@ -1,0 +1,96 @@
+- generic [active] [ref=f86e1]:
+  - generic [ref=f86e2]:
+    - link "Skip to content" [ref=f86e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f86e4]:
+      - generic [ref=f86e6]:
+        - link "Wallplace" [ref=f86e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f86e8]:
+          - link "Marketplace" [ref=f86e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f86e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f86e12] [cursor=pointer]
+        - generic [ref=f86e15]:
+          - link "Saved" [ref=f86e16] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f86e20] [cursor=pointer]
+          - generic [ref=f86e24]:
+            - link "My Account" [ref=f86e25] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f86e26] [cursor=pointer]
+          - button "Logout" [ref=f86e29] [cursor=pointer]
+    - main [ref=f86e30]:
+      - generic [ref=f86e31]:
+        - complementary [ref=f86e32]:
+          - navigation [ref=f86e33]:
+            - list [ref=f86e34]:
+              - listitem [ref=f86e35]:
+                - link "My Orders" [ref=f86e36] [cursor=pointer]:
+                  - /url: /customer-portal
+              - listitem [ref=f86e37]:
+                - link "Saved" [ref=f86e38] [cursor=pointer]:
+                  - /url: /customer-portal/saved
+              - listitem [ref=f86e39]:
+                - link "Addresses" [ref=f86e40] [cursor=pointer]:
+                  - /url: /customer-portal/addresses
+              - listitem [ref=f86e41]:
+                - link "Messages" [ref=f86e42] [cursor=pointer]:
+                  - /url: /customer-portal/messages
+              - listitem [ref=f86e43]:
+                - link "Settings" [ref=f86e44] [cursor=pointer]:
+                  - /url: /customer-portal/settings
+            - list [ref=f86e46]:
+              - listitem [ref=f86e47]:
+                - link "Browse Art" [ref=f86e48] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f86e49]:
+                - button "Logout" [ref=f86e50] [cursor=pointer]
+          - generic [ref=f86e52]:
+            - generic [ref=f86e53]: Q
+            - generic [ref=f86e54]:
+              - paragraph [ref=f86e55]: QA-TEST Customer
+              - paragraph [ref=f86e56]: Customer
+        - generic [ref=f86e58]:
+          - generic [ref=f86e59]:
+            - heading "Settings" [level=1] [ref=f86e60]
+            - paragraph [ref=f86e61]: Manage your account and preferences
+          - generic [ref=f86e62]:
+            - generic [ref=f86e63]:
+              - heading "Account Details" [level=2] [ref=f86e64]
+              - generic [ref=f86e65]:
+                - generic [ref=f86e66]:
+                  - generic [ref=f86e67]: Name
+                  - paragraph [ref=f86e68]: QA-TEST Customer
+                - generic [ref=f86e69]:
+                  - generic [ref=f86e70]: Email
+                  - paragraph [ref=f86e71]: fcoles2598+qatestcustomer@gmail.com
+                - generic [ref=f86e72]:
+                  - generic [ref=f86e73]: Password
+                  - button "Change Password" [ref=f86e74] [cursor=pointer]
+            - generic [ref=f86e75]:
+              - heading "Notification Preferences" [level=2] [ref=f86e76]
+              - generic [ref=f86e77]:
+                - generic [ref=f86e78] [cursor=pointer]:
+                  - checkbox "Order updates" [checked] [ref=f86e79]
+                  - generic [ref=f86e80]: Order updates
+                - generic [ref=f86e81] [cursor=pointer]:
+                  - checkbox "Messages from artists & venues" [checked] [ref=f86e82]
+                  - generic [ref=f86e83]: Messages from artists & venues
+                - generic [ref=f86e84] [cursor=pointer]:
+                  - checkbox "Newsletter & digest" [checked] [ref=f86e85]
+                  - generic [ref=f86e86]: Newsletter & digest
+              - paragraph [ref=f86e87]:
+                - text: Want finer control over what lands in your inbox?
+                - link "Manage every email category" [ref=f86e88] [cursor=pointer]:
+                  - /url: /account/email
+                - text: .
+            - generic [ref=f86e89]:
+              - heading "Delete account" [level=2] [ref=f86e90]
+              - paragraph [ref=f86e91]: This permanently deletes your profile, messages, saved items, and any orders attached to your account. This cannot be undone.
+              - textbox "Type DELETE MY ACCOUNT to confirm account deletion" [ref=f86e92]:
+                - /placeholder: Type DELETE MY ACCOUNT to confirm
+              - button "Permanently delete my account" [disabled] [ref=f86e93] [cursor=pointer]
+    - button "Feedback and feature requests" [ref=f86e94] [cursor=pointer]: Feedback
+  - alert [ref=f86e97]

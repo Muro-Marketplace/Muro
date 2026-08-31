@@ -9,13 +9,8 @@
 import { useState, useEffect, type FormEvent } from "react";
 import Link from "next/link";
 import { labelForStatus } from "@/lib/order-status-labels";
+import { readOrderItem, type RawOrderItem } from "@/lib/order-items";
 
-interface OrderItem {
-  title?: string;
-  qty?: number;
-  price?: number;
-  artistSlug?: string;
-}
 interface OrderHistoryEntry {
   status?: string;
   // B26: the writers (orders PATCH, Stripe webhook) store the date as
@@ -33,7 +28,7 @@ interface TrackedOrder {
   total: number | null;
   shipping: number | null;
   currency: string;
-  items: OrderItem[];
+  items: RawOrderItem[];
   history: OrderHistoryEntry[];
   tracking: { number: string; url: string | null } | null;
 }
@@ -219,17 +214,23 @@ export default function OrderTrackPage() {
                 <div className="border-t border-border pt-4 mb-5">
                   <p className="text-xs font-medium uppercase tracking-widest text-muted mb-3">Items</p>
                   <ul className="space-y-2">
-                    {order.items.map((item, i) => (
-                      <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
-                        <span className="text-foreground">
-                          {item.title || "Artwork"}
-                          {item.qty && item.qty > 1 ? ` × ${item.qty}` : ""}
-                        </span>
-                        <span className="text-muted shrink-0">
-                          {fmtMoney((item.price || 0) * (item.qty || 1), order.currency)}
-                        </span>
-                      </li>
-                    ))}
+                    {/* C L990. Read both shapes: the enriched rows the Stripe
+                        webhook writes carry neither `qty` nor `price`, so this
+                        rendered nothing at all. See lib/order-items.ts. */}
+                    {order.items.map((raw, i) => {
+                      const item = readOrderItem(raw);
+                      return (
+                        <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
+                          <span className="text-foreground">
+                            {item.title}
+                            {item.quantity > 1 ? ` × ${item.quantity}` : ""}
+                          </span>
+                          <span className="text-muted shrink-0">
+                            {fmtMoney(item.lineTotal, item.currency || order.currency)}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}

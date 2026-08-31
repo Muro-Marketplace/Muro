@@ -1,0 +1,3 @@
+[      49ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/account/export:0
+[   57548ms] [ERROR] Failed to load resource: the server responded with a status of 429 () @ https://www.wallplace.co.uk/api/account/export:0
+[   67899ms] [ERROR] Failed to load resource: the server responded with a status of 429 () @ https://www.wallplace.co.uk/api/account/export:0

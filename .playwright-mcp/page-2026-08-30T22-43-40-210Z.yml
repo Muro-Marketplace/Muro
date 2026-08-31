@@ -1,0 +1,76 @@
+- generic [active] [ref=f126e1]:
+  - generic [ref=f126e2]:
+    - link "Skip to content" [ref=f126e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f126e4]:
+      - generic [ref=f126e6]:
+        - link "Wallplace" [ref=f126e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f126e8]:
+          - link "Marketplace" [ref=f126e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f126e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f126e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f126e13] [cursor=pointer]
+        - generic [ref=f126e16]:
+          - link "Saved" [ref=f126e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f126e21] [cursor=pointer]
+          - button "Notifications" [ref=f126e26] [cursor=pointer]
+          - generic [ref=f126e30]:
+            - link "Venue Portal" [ref=f126e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f126e32] [cursor=pointer]
+          - button "Logout" [ref=f126e35] [cursor=pointer]
+    - main [ref=f126e36]:
+      - generic [ref=f126e37]:
+        - complementary [ref=f126e38]:
+          - navigation [ref=f126e39]:
+            - paragraph [ref=f126e41]: Venue Portal
+            - generic [ref=f126e42]:
+              - list [ref=f126e43]:
+                - listitem [ref=f126e44]:
+                  - link "Dashboard" [ref=f126e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f126e46]:
+                  - link "Venue Profile" [ref=f126e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f126e48]:
+                  - link "Messages" [ref=f126e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f126e50]:
+                  - link "Placements" [ref=f126e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f126e52]:
+                  - link "My Offers" [ref=f126e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f126e54]:
+                  - link "My Walls" [ref=f126e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f126e56]:
+                  - link "Saved" [ref=f126e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f126e58]:
+                  - link "QR Labels" [ref=f126e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f126e60]:
+                  - link "Analytics" [ref=f126e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f126e62]:
+                  - link "My Orders" [ref=f126e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f126e65]:
+                - listitem [ref=f126e66]:
+                  - link "Settings" [ref=f126e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f126e68]:
+                  - button "Logout" [ref=f126e69] [cursor=pointer]
+        - generic [ref=f126e71]:
+          - generic [ref=f126e72]:
+            - heading "Messages" [level=1] [ref=f126e73]
+            - paragraph [ref=f126e74]: Conversations with artists
+          - paragraph [ref=f126e75]: Loading messages...
+    - button "Feedback and feature requests" [ref=f126e76] [cursor=pointer]: Feedback
+  - alert [ref=f126e79]

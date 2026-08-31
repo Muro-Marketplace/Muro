@@ -23,6 +23,7 @@
 import { Resend } from "resend";
 import { render } from "@react-email/components";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { signUnsubscribe } from "@/lib/unsubscribe-token";
 import { orFilter } from "@/lib/db/safe-filter";
 import { isProductionRuntime } from "@/lib/email/env";
 import { STREAMS } from "./streams";
@@ -211,10 +212,22 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   // in exactly two forms (with `?c=` or bare), both handled; the adjacent
   // `/account/email` preference-centre link is left alone.
   if (input.userId) {
+    // The `s` signature is what makes "the link is the bearer" true. Without
+    // it the bearer is really the user id, which is not a secret. See
+    // lib/unsubscribe-token.ts. Signing is best-effort: if the secret is not
+    // configured we still send the link, because an email with no working
+    // unsubscribe is worse than an unsigned one, and the route treats an
+    // unsigned link as unverified rather than as invalid.
+    let sig = "";
+    try {
+      sig = `&s=${encodeURIComponent(signUnsubscribe(input.userId))}`;
+    } catch {
+      console.warn("[email] unsubscribe links unsigned: ORDER_TOKEN_SECRET is not set");
+    }
     const inject = (body: string): string =>
       body
-        .replaceAll("/account/email/unsubscribe?c=", `/account/email/unsubscribe?u=${input.userId}&c=`)
-        .replace(/\/account\/email\/unsubscribe(?![?\w])/g, `/account/email/unsubscribe?u=${input.userId}`);
+        .replaceAll("/account/email/unsubscribe?c=", `/account/email/unsubscribe?u=${input.userId}${sig}&c=`)
+        .replace(/\/account\/email\/unsubscribe(?![?\w])/g, `/account/email/unsubscribe?u=${input.userId}${sig}`);
     html = inject(html);
     text = inject(text);
   }

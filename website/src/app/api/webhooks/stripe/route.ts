@@ -847,6 +847,11 @@ async function handleWebhookEvent(
           id: orderId,
           stripe_payment_intent_id: paymentIntentId,
           buyer_email: session.customer_email || savedShipping?.email || "",
+          // Set by /api/checkout when the buyer was signed in, blank for guest
+          // checkout. Nothing wrote this column before, so every order was
+          // reachable only by matching on the email address, which breaks the
+          // moment somebody changes theirs.
+          buyer_user_id: session.metadata?.buyer_user_id || null,
           items: cartItems,
           shipping: {
             fullName: savedShipping?.fullName || "",

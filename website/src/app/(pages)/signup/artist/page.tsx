@@ -25,12 +25,14 @@
  *   - signUp creates the user with `user_type: "artist"` metadata,
  *     which downstream auth-aware routes use to gate / land them on
  *     the artist portal.
- *   - router.push("/check-your-inbox"): the applicant must click the
- *     verification link Supabase emails them, then sign in. The
- *     login link in that email carries ?next= so they land on /apply
- *     (Step 2) straight after signing in. There is no immediate
- *     signInWithPassword any more, so nothing on this page should
- *     promise a straight-through hop into the application form.
+ *   - the destination depends on whether Supabase returned a session,
+ *     which it does only when email confirmation is off for the project.
+ *     With confirmation ON the applicant must click the verification link
+ *     first, so they go to /check-your-inbox; the login link in that email
+ *     carries ?next= so they land on /apply (Step 2) after signing in. With
+ *     confirmation OFF, which is the production setting today, the account
+ *     is already signed in and they go straight to /apply. There is no
+ *     immediate signInWithPassword either way. See lib/signup-destination.ts.
  */
 
 import { useState } from "react";
@@ -38,6 +40,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "@/lib/supabase";
+import { signupDestination } from "@/lib/signup-destination";
 import { isFlagOn } from "@/lib/feature-flags";
 import { safeRedirect } from "@/lib/safe-redirect";
 import TermsCheckbox from "@/components/TermsCheckbox";
@@ -91,7 +94,7 @@ export default function ArtistSignUpPage() {
         return;
       }
 
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -117,7 +120,10 @@ export default function ArtistSignUpPage() {
         }),
       }).catch(() => {});
 
-      router.push("/check-your-inbox");
+      // A L447/A L458: was unconditional. Supabase returns a session only
+      // when email confirmation is off, in which case the account is already
+      // signed in and the inbox page is untrue. See lib/signup-destination.ts.
+      router.push(signupDestination(signUpData, postSignupNext));
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);

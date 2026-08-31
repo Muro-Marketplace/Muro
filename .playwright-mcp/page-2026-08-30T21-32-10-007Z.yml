@@ -1,0 +1,678 @@
+- generic [active] [ref=f76e1]:
+  - generic [ref=f76e2]:
+    - link "Skip to content" [ref=f76e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f76e4]:
+      - generic [ref=f76e6]:
+        - link "Wallplace" [ref=f76e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f76e8]:
+          - link "Galleries" [ref=f76e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Portfolios" [ref=f76e10] [cursor=pointer]:
+            - /url: /browse?view=portfolios
+          - link "Collections" [ref=f76e11] [cursor=pointer]:
+            - /url: /browse?view=collections
+          - link "Spaces" [ref=f76e12] [cursor=pointer]:
+            - /url: /spaces
+          - link "How It Works" [ref=f76e13] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f76e14] [cursor=pointer]:
+            - /url: /blog
+    - main [ref=f76e15]:
+      - generic [ref=f76e16]:
+        - generic [ref=f76e18]:
+          - navigation "Breadcrumb" [ref=f76e19]:
+            - list [ref=f76e20]:
+              - listitem [ref=f76e21]:
+                - link "Portfolios" [ref=f76e22] [cursor=pointer]:
+                  - /url: /browse?view=portfolios
+                - generic [ref=f76e23]: ›
+              - listitem [ref=f76e24]:
+                - generic [ref=f76e25]: Fin Coles
+          - link "Back to Marketplace" [ref=f76e26] [cursor=pointer]:
+            - /url: /browse
+          - generic [ref=f76e29]:
+            - generic [ref=f76e30]:
+              - img "Fin Coles" [ref=f76e32]
+              - generic [ref=f76e34]:
+                - button "Message" [ref=f76e35] [cursor=pointer]
+                - link "Host this artist? Register your venue" [ref=f76e36] [cursor=pointer]:
+                  - /url: /register-venue
+            - generic [ref=f76e37]:
+              - paragraph [ref=f76e38]: Photography
+              - heading "Fin Coles" [level=1] [ref=f76e39]
+              - generic [ref=f76e40]:
+                - paragraph [ref=f76e41]: Hampton, London
+                - generic [ref=f76e42]: ·
+                - link "@finphotography" [ref=f76e43] [cursor=pointer]:
+                  - /url: https://instagram.com/finphotography
+              - paragraph [ref=f76e48]: I’m a landscape and travel photographer inspired by wild places, dramatic scenery, and locations with a strong sense of character. My work focuses on natural landscapes, coastlines, mountains, and quiet moments from the places I visit.
+              - generic [ref=f76e49]:
+                - generic [ref=f76e50]: Colour & Atmosphere
+                - generic [ref=f76e51]: Landscapes
+                - generic [ref=f76e52]: Nature & Landscape
+                - generic [ref=f76e53]: Travel & Place
+            - complementary [ref=f76e54]:
+              - generic [ref=f76e55]:
+                - generic [ref=f76e56]:
+                  - paragraph [ref=f76e57]: Location
+                  - paragraph [ref=f76e58]: Hampton, London
+                - generic [ref=f76e59]:
+                  - paragraph [ref=f76e60]: Delivery
+                  - paragraph [ref=f76e61]: London + South East
+                - generic [ref=f76e62]:
+                  - paragraph [ref=f76e63]: Suited for
+                  - paragraph [ref=f76e64]: Any venue type
+              - generic [ref=f76e66]:
+                - paragraph [ref=f76e67]: "439"
+                - paragraph [ref=f76e68]: Views
+              - generic [ref=f76e69]:
+                - paragraph [ref=f76e70]: Sells
+                - generic [ref=f76e71]:
+                  - generic "Sells originals" [ref=f76e72]: Originals
+                  - generic "Sells prints" [ref=f76e73]: Prints
+                  - generic "Doesn't sell framed" [ref=f76e74]: Framed
+              - generic [ref=f76e75]:
+                - paragraph [ref=f76e76]: Terms
+                - generic [ref=f76e77]:
+                  - generic [ref=f76e78]: Revenue share · 20%
+                  - generic [ref=f76e81]: Paid loan
+                  - generic [ref=f76e84]: Direct purchase
+        - generic [ref=f76e87]:
+          - generic [ref=f76e96]:
+            - text: Seen in
+            - strong [ref=f76e97]: Testing Venue
+          - generic [ref=f76e99]:
+            - heading "Portfolio" [level=2] [ref=f76e101]
+            - generic [ref=f76e102]:
+              - generic [ref=f76e103]:
+                - generic [ref=f76e104] [cursor=pointer]:
+                  - generic [ref=f76e105]:
+                    - generic [ref=f76e107]:
+                      - img "Vietnamese Village"
+                    - generic:
+                      - generic:
+                        - heading "Vietnamese Village" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at Testing Venue
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/vietnamese-village
+                    - button "Sign up to save" [ref=f76e110]
+                    - generic: Sold
+                    - generic [ref=f76e113]:
+                      - button "Quick look" [ref=f76e114]
+                      - link "Full artwork page" [ref=f76e118]:
+                        - /url: /browse/fin-coles/vietnamese-village
+                  - generic [ref=f76e123]:
+                    - paragraph [ref=f76e124]: Vietnamese Village
+                    - paragraph [ref=f76e125]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e126]: From £29.99
+                - generic [ref=f76e127] [cursor=pointer]:
+                  - generic [ref=f76e128]:
+                    - generic [ref=f76e130]:
+                      - img "Giraffe at Sunset"
+                    - generic:
+                      - generic:
+                        - heading "Giraffe at Sunset" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at The Mayfield
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/giraffe-at-sunset
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e133]
+                    - generic: Available
+                    - generic [ref=f76e136]:
+                      - button "Quick look" [ref=f76e137]
+                      - link "Full artwork page" [ref=f76e141]:
+                        - /url: /browse/fin-coles/giraffe-at-sunset
+                  - generic [ref=f76e146]:
+                    - paragraph [ref=f76e147]: Giraffe at Sunset
+                    - paragraph [ref=f76e148]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e149]: From £29.99
+                - generic [ref=f76e150] [cursor=pointer]:
+                  - generic [ref=f76e151]:
+                    - generic [ref=f76e153]:
+                      - img "Cornish Countryside"
+                    - generic:
+                      - generic:
+                        - heading "Cornish Countryside" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at The Venue Test
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/cornish-countryside
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e156]
+                    - generic: Available
+                    - generic [ref=f76e159]:
+                      - button "Quick look" [ref=f76e160]
+                      - link "Full artwork page" [ref=f76e164]:
+                        - /url: /browse/fin-coles/cornish-countryside
+                  - generic [ref=f76e169]:
+                    - paragraph [ref=f76e170]: Cornish Countryside
+                    - paragraph [ref=f76e171]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e172]: From £29.99
+                - generic [ref=f76e173] [cursor=pointer]:
+                  - generic [ref=f76e174]:
+                    - generic [ref=f76e176]:
+                      - img "Himalayas"
+                    - generic:
+                      - generic:
+                        - heading "Himalayas" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at The Venue Test
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/himalayas
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e179]
+                    - generic: Available
+                    - generic [ref=f76e182]:
+                      - button "Quick look" [ref=f76e183]
+                      - link "Full artwork page" [ref=f76e187]:
+                        - /url: /browse/fin-coles/himalayas
+                  - generic [ref=f76e192]:
+                    - paragraph [ref=f76e193]: Himalayas
+                    - paragraph [ref=f76e194]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e195]: From £29.99
+                - generic [ref=f76e196] [cursor=pointer]:
+                  - generic [ref=f76e197]:
+                    - generic [ref=f76e199]:
+                      - img "Sand Dunes at Dusk"
+                    - generic:
+                      - generic:
+                        - heading "Sand Dunes at Dusk" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at Testing Venue
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/sand-dunes-at-dusk
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e202]
+                    - generic: Available
+                    - generic [ref=f76e205]:
+                      - button "Quick look" [ref=f76e206]
+                      - link "Full artwork page" [ref=f76e210]:
+                        - /url: /browse/fin-coles/sand-dunes-at-dusk
+                  - generic [ref=f76e215]:
+                    - paragraph [ref=f76e216]: Sand Dunes at Dusk
+                    - paragraph [ref=f76e217]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e218]: From £29.99
+                - generic [ref=f76e219] [cursor=pointer]:
+                  - generic [ref=f76e220]:
+                    - generic [ref=f76e222]:
+                      - img "Test Artwork One"
+                    - generic:
+                      - generic:
+                        - heading "Test Artwork One" [level=3]
+                        - paragraph: 10×8" (25×20 cm)
+                        - generic:
+                          - paragraph: From £500
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/test-artwork-one
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e225]
+                    - generic: Available
+                    - generic [ref=f76e228]:
+                      - button "Quick look" [ref=f76e229]
+                      - link "Full artwork page" [ref=f76e233]:
+                        - /url: /browse/fin-coles/test-artwork-one
+                  - generic [ref=f76e238]:
+                    - paragraph [ref=f76e239]: Test Artwork One
+                    - paragraph [ref=f76e240]: 10×8" (25×20 cm)
+                    - paragraph [ref=f76e241]: From £500
+              - generic [ref=f76e242]:
+                - generic [ref=f76e243] [cursor=pointer]:
+                  - generic [ref=f76e244]:
+                    - generic [ref=f76e246]:
+                      - img "Mt. Fitz Roy"
+                    - generic:
+                      - generic:
+                        - heading "Mt. Fitz Roy" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at Testing Venue
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/mt-fitz-roy
+                    - button "Sign up to save" [ref=f76e249]
+                    - generic: Sold
+                    - generic [ref=f76e252]:
+                      - button "Quick look" [ref=f76e253]
+                      - link "Full artwork page" [ref=f76e257]:
+                        - /url: /browse/fin-coles/mt-fitz-roy
+                  - generic [ref=f76e262]:
+                    - paragraph [ref=f76e263]: Mt. Fitz Roy
+                    - paragraph [ref=f76e264]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e265]: From £29.99
+                - generic [ref=f76e266] [cursor=pointer]:
+                  - generic [ref=f76e267]:
+                    - generic [ref=f76e269]:
+                      - img "Streets of St. Tropez"
+                    - generic:
+                      - generic:
+                        - heading "Streets of St. Tropez" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at The Green Room
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/streets-of-st-tropez
+                    - button "Sign up to save" [ref=f76e272]
+                    - generic: Sold
+                    - generic [ref=f76e275]:
+                      - button "Quick look" [ref=f76e276]
+                      - link "Full artwork page" [ref=f76e280]:
+                        - /url: /browse/fin-coles/streets-of-st-tropez
+                  - generic [ref=f76e285]:
+                    - paragraph [ref=f76e286]: Streets of St. Tropez
+                    - paragraph [ref=f76e287]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e288]: From £29.99
+                - generic [ref=f76e289] [cursor=pointer]:
+                  - generic [ref=f76e290]:
+                    - generic [ref=f76e292]:
+                      - img "Amazon Rainforest From The Air"
+                    - generic:
+                      - generic:
+                        - heading "Amazon Rainforest From The Air" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at Testing Venue
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/amazon-rainforest-from-the-air
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e295]
+                    - generic: Available
+                    - generic [ref=f76e298]:
+                      - button "Quick look" [ref=f76e299]
+                      - link "Full artwork page" [ref=f76e303]:
+                        - /url: /browse/fin-coles/amazon-rainforest-from-the-air
+                  - generic [ref=f76e308]:
+                    - paragraph [ref=f76e309]: Amazon Rainforest From The Air
+                    - paragraph [ref=f76e310]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e311]: From £29.99
+                - generic [ref=f76e312] [cursor=pointer]:
+                  - generic [ref=f76e313]:
+                    - generic [ref=f76e315]:
+                      - img "Huaraz, Peru"
+                    - generic:
+                      - generic:
+                        - heading "Huaraz, Peru" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/huaraz-peru
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e318]
+                    - generic: Available
+                    - generic [ref=f76e321]:
+                      - button "Quick look" [ref=f76e322]
+                      - link "Full artwork page" [ref=f76e326]:
+                        - /url: /browse/fin-coles/huaraz-peru
+                  - generic [ref=f76e331]:
+                    - paragraph [ref=f76e332]: Huaraz, Peru
+                    - paragraph [ref=f76e333]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e334]: From £29.99
+                - generic [ref=f76e335] [cursor=pointer]:
+                  - generic [ref=f76e336]:
+                    - generic [ref=f76e338]:
+                      - img "Christ the Redeemer"
+                    - generic:
+                      - generic:
+                        - heading "Christ the Redeemer" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/christ-the-redeemer
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e341]
+                    - generic: Available
+                    - generic [ref=f76e344]:
+                      - button "Quick look" [ref=f76e345]
+                      - link "Full artwork page" [ref=f76e349]:
+                        - /url: /browse/fin-coles/christ-the-redeemer
+                  - generic [ref=f76e354]:
+                    - paragraph [ref=f76e355]: Christ the Redeemer
+                    - paragraph [ref=f76e356]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e357]: From £29.99
+                - generic [ref=f76e358] [cursor=pointer]:
+                  - generic [ref=f76e359]:
+                    - generic [ref=f76e361]:
+                      - img "Test Artwork Two"
+                    - generic:
+                      - generic:
+                        - heading "Test Artwork Two" [level=3]
+                        - paragraph: Painting · 10×8" (25×20 cm)
+                        - generic:
+                          - paragraph: From £1200
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/test-artwork-two
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e364]
+                    - generic: Available
+                    - generic [ref=f76e367]:
+                      - button "Quick look" [ref=f76e368]
+                      - link "Full artwork page" [ref=f76e372]:
+                        - /url: /browse/fin-coles/test-artwork-two
+                  - generic [ref=f76e377]:
+                    - paragraph [ref=f76e378]: Test Artwork Two
+                    - paragraph [ref=f76e379]: Painting · 10×8" (25×20 cm)
+                    - paragraph [ref=f76e380]: From £1200
+              - generic [ref=f76e381]:
+                - generic [ref=f76e382] [cursor=pointer]:
+                  - generic [ref=f76e383]:
+                    - generic [ref=f76e385]:
+                      - img "Guanaco in Patagonia"
+                    - generic:
+                      - generic:
+                        - heading "Guanaco in Patagonia" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at Testing Venue
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/guanaco-in-patagonia
+                    - button "Sign up to save" [ref=f76e388]
+                    - generic: Sold
+                    - generic [ref=f76e391]:
+                      - button "Quick look" [ref=f76e392]
+                      - link "Full artwork page" [ref=f76e396]:
+                        - /url: /browse/fin-coles/guanaco-in-patagonia
+                  - generic [ref=f76e401]:
+                    - paragraph [ref=f76e402]: Guanaco in Patagonia
+                    - paragraph [ref=f76e403]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e404]: From £29.99
+                - generic [ref=f76e405] [cursor=pointer]:
+                  - generic [ref=f76e406]:
+                    - generic [ref=f76e408]:
+                      - img "Gyeongbokgung Palace"
+                    - generic:
+                      - generic:
+                        - heading "Gyeongbokgung Palace" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/gyeongbokgung-palace
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e411]
+                    - generic: Available
+                    - generic [ref=f76e414]:
+                      - button "Quick look" [ref=f76e415]
+                      - link "Full artwork page" [ref=f76e419]:
+                        - /url: /browse/fin-coles/gyeongbokgung-palace
+                  - generic [ref=f76e424]:
+                    - paragraph [ref=f76e425]: Gyeongbokgung Palace
+                    - paragraph [ref=f76e426]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e427]: From £29.99
+                - generic [ref=f76e428] [cursor=pointer]:
+                  - generic [ref=f76e429]:
+                    - generic [ref=f76e431]:
+                      - img "Sand Dunes"
+                    - generic:
+                      - generic:
+                        - heading "Sand Dunes" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - paragraph: Placed at The Green Room
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/sand-dunes
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e434]
+                    - generic: Available
+                    - generic [ref=f76e437]:
+                      - button "Quick look" [ref=f76e438]
+                      - link "Full artwork page" [ref=f76e442]:
+                        - /url: /browse/fin-coles/sand-dunes
+                  - generic [ref=f76e447]:
+                    - paragraph [ref=f76e448]: Sand Dunes
+                    - paragraph [ref=f76e449]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e450]: From £29.99
+                - generic [ref=f76e451] [cursor=pointer]:
+                  - generic [ref=f76e452]:
+                    - generic [ref=f76e454]:
+                      - img "Trees at Sunrise"
+                    - generic:
+                      - generic:
+                        - heading "Trees at Sunrise" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/trees-at-sunrise
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e457]
+                    - generic: Available
+                    - generic [ref=f76e460]:
+                      - button "Quick look" [ref=f76e461]
+                      - link "Full artwork page" [ref=f76e465]:
+                        - /url: /browse/fin-coles/trees-at-sunrise
+                  - generic [ref=f76e470]:
+                    - paragraph [ref=f76e471]: Trees at Sunrise
+                    - paragraph [ref=f76e472]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e473]: From £29.99
+                - generic [ref=f76e474] [cursor=pointer]:
+                  - generic [ref=f76e475]:
+                    - generic [ref=f76e477]:
+                      - img "Norwegian House"
+                    - generic:
+                      - generic:
+                        - heading "Norwegian House" [level=3]
+                        - paragraph: Photography Print · 5 sizes available
+                        - generic:
+                          - paragraph: From £29.99
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/norwegian-house
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e480]
+                    - generic: Available
+                    - generic [ref=f76e483]:
+                      - button "Quick look" [ref=f76e484]
+                      - link "Full artwork page" [ref=f76e488]:
+                        - /url: /browse/fin-coles/norwegian-house
+                  - generic [ref=f76e493]:
+                    - paragraph [ref=f76e494]: Norwegian House
+                    - paragraph [ref=f76e495]: Photography Print · 5 sizes
+                    - paragraph [ref=f76e496]: From £29.99
+                - generic [ref=f76e497] [cursor=pointer]:
+                  - generic [ref=f76e498]:
+                    - generic [ref=f76e500]:
+                      - img "Test Artwork Three"
+                    - generic:
+                      - generic:
+                        - heading "Test Artwork Three" [level=3]
+                        - paragraph: 10×8" (25×20 cm)
+                        - generic:
+                          - paragraph: From £3000
+                          - generic:
+                            - button "Quick view"
+                            - link "Open":
+                              - /url: /browse/fin-coles/test-artwork-three
+                            - button "Buy now"
+                    - button "Sign up to save" [ref=f76e503]
+                    - generic: Available
+                    - generic [ref=f76e506]:
+                      - button "Quick look" [ref=f76e507]
+                      - link "Full artwork page" [ref=f76e511]:
+                        - /url: /browse/fin-coles/test-artwork-three
+                  - generic [ref=f76e516]:
+                    - paragraph [ref=f76e517]: Test Artwork Three
+                    - paragraph [ref=f76e518]: 10×8" (25×20 cm)
+                    - paragraph [ref=f76e519]: From £3000
+          - generic [ref=f76e522]:
+            - heading "About the Artist" [level=2] [ref=f76e523]
+            - paragraph [ref=f76e525]: "I’ve always been someone who wants to see as much of the world as possible. Travel, nature, history, hiking, sport, and photography all feed into the same thing for me: curiosity. I like places that have a bit of atmosphere to them, whether that’s a dramatic mountain road, a windswept coastline, a quiet village, or a historic city street. My photography usually starts with that feeling. I’m less interested in creating overly polished images and more interested in capturing places as they felt in the moment. I like photos that make you want to stop for a second, look a little longer, and imagine being there. A lot of my work comes from time spent travelling and exploring outdoors. I’m drawn to landscapes, wildlife, old buildings, remote places, and scenes that feel connected to memory or adventure. For me, photography is a way of holding onto those moments and sharing them with other people."
+            - button "Read more" [ref=f76e526] [cursor=pointer]
+        - generic [ref=f76e530]:
+          - heading "Collections" [level=2] [ref=f76e531]
+          - link "Landscapes Fin Coles Landscapes 8 works · £300" [ref=f76e533] [cursor=pointer]:
+            - /url: /browse/collections/fin-coles-collection-1776461334527
+            - generic [ref=f76e534]:
+              - img "Landscapes"
+              - button "Sign up to save" [ref=f76e537]
+            - generic [ref=f76e540]:
+              - paragraph [ref=f76e541]: Fin Coles
+              - heading "Landscapes" [level=3] [ref=f76e542]
+              - paragraph [ref=f76e543]:
+                - generic [ref=f76e544]: 8 works
+                - text: · £300
+        - generic [ref=f76e547]:
+          - heading "Interested in Fin Coles’s work?" [level=2] [ref=f76e548]
+          - paragraph [ref=f76e549]: Get in touch to discuss pricing, availability, and how this artist’s work could transform your venue.
+          - generic [ref=f76e550]:
+            - link "Host this artist? Register your venue" [ref=f76e551] [cursor=pointer]:
+              - /url: /register-venue
+            - button "Message" [ref=f76e552] [cursor=pointer]
+            - link "Browse More Artists" [ref=f76e553] [cursor=pointer]:
+              - /url: /browse
+    - contentinfo "Site footer" [ref=f76e554]:
+      - generic [ref=f76e555]:
+        - generic [ref=f76e556]:
+          - generic [ref=f76e557]:
+            - link "Wallplace" [ref=f76e558] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f76e559]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f76e560]:
+              - paragraph [ref=f76e561]: Be first to see new works
+              - paragraph [ref=f76e562]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f76e564]:
+                - textbox "your@email.com" [ref=f76e565]
+                - button "Subscribe" [ref=f76e566] [cursor=pointer]
+            - link "Instagram" [ref=f76e567] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f76e572]:
+            - heading "For Artists" [level=4] [ref=f76e573]
+            - list [ref=f76e574]:
+              - listitem [ref=f76e575]:
+                - link "Apply to Join" [ref=f76e576] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f76e577]:
+                - link "Pricing" [ref=f76e578] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f76e579]:
+                - link "Browse Venues" [ref=f76e580] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f76e581]:
+                - link "FAQs" [ref=f76e582] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f76e583]:
+            - heading "For Venues" [level=4] [ref=f76e584]
+            - list [ref=f76e585]:
+              - listitem [ref=f76e586]:
+                - link "Discover Art" [ref=f76e587] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f76e588]:
+                - link "Register Your Venue" [ref=f76e589] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f76e590]:
+                - link "Wallplace Curated" [ref=f76e591] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f76e592]:
+                - link "How It Works" [ref=f76e593] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f76e594]:
+                - link "FAQs" [ref=f76e595] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f76e596]:
+            - heading "Company" [level=4] [ref=f76e597]
+            - list [ref=f76e598]:
+              - listitem [ref=f76e599]:
+                - link "About" [ref=f76e600] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f76e601]:
+                - link "Blog" [ref=f76e602] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f76e603]:
+                - link "How It Works" [ref=f76e604] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f76e605]:
+                - link "Sustainability" [ref=f76e606] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f76e607]:
+                - link "Partner with us" [ref=f76e608] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f76e609]:
+                - link "Contact" [ref=f76e610] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f76e611]:
+                - link "Complaints" [ref=f76e612] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f76e613]:
+                - link "Terms" [ref=f76e614] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f76e615]:
+                - link "Artist Agreement" [ref=f76e616] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f76e617]:
+                - link "Venue Agreement" [ref=f76e618] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f76e619]:
+                - link "Privacy" [ref=f76e620] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f76e621]:
+                - link "Cookies" [ref=f76e622] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f76e623]:
+                - link "Returns & Refunds" [ref=f76e624] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f76e625]:
+                - link "IP Policy" [ref=f76e626] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f76e628]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f76e629] [cursor=pointer]: Feedback
+  - generic [ref=f76e634]:
+    - paragraph [ref=f76e635]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f76e636] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f76e637]:
+      - button "Decline" [ref=f76e638] [cursor=pointer]
+      - button "Accept" [ref=f76e639] [cursor=pointer]
+  - alert [ref=f76e640]

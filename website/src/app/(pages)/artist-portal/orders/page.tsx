@@ -5,6 +5,7 @@ import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { readOrderItems, type RawOrderItem } from "@/lib/order-items";
 import { useUrlState } from "@/lib/use-url-state";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
@@ -12,7 +13,7 @@ import { artistPayoutPounds, formatPounds } from "@/lib/finance/order-money";
 
 interface Order {
   id: string;
-  items: { title: string; qty: number; price: number }[];
+  items: RawOrderItem[];
   shipping: { fullName: string; email: string; phone: string; addressLine1: string; addressLine2?: string; city: string; postcode: string; country: string };
   // Subtotal and shipping_cost expose the split that makes up `total`,
   // so the revenue breakdown can show how the items-line and "Sale
@@ -361,45 +362,20 @@ function ArtistOrdersContent() {
             </div>
           )}
 
-          {/* Items. The webhook overwrites orders.items with an
-              enriched shape (`quantity`, `lineTotal: {amount,currency}`)
-              once the receipt email is built; legacy rows persisted
-              before that overwrite still carry the cart shape (`qty`,
-              `price`). Read both so the breakdown never renders £NaN
-              on either generation. */}
+          {/* Items. This dual-shape read used to live here and only here,
+              which is how the customer portal and the tracking page came to
+              show £0.00 on the same orders. It now lives in
+              lib/order-items.ts so all three surfaces share one reader. */}
           <div className="mt-6 space-y-2">
             <p className="text-xs text-muted uppercase tracking-wider">Items</p>
-            {(selected.items || []).map(
-              (
-                item: {
-                  title?: string;
-                  qty?: number;
-                  quantity?: number;
-                  price?: number;
-                  lineTotal?: { amount?: number; currency?: string };
-                },
-                i: number,
-              ) => {
-                const qty = Number(item.quantity ?? item.qty ?? 1);
-                // Prefer lineTotal.amount (pence) when present; fall
-                // back to price * qty (pounds) for legacy rows.
-                const lineTotalPounds = (() => {
-                  const amt = item.lineTotal?.amount;
-                  if (typeof amt === "number" && Number.isFinite(amt)) return amt / 100;
-                  const price = Number(item.price);
-                  if (Number.isFinite(price) && Number.isFinite(qty)) return price * qty;
-                  return 0;
-                })();
-                return (
-                  <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
-                    <span>
-                      {item.title || "Artwork"} &times; {qty}
-                    </span>
-                    <span className="font-medium">&pound;{lineTotalPounds.toFixed(2)}</span>
-                  </div>
-                );
-              },
-            )}
+            {readOrderItems(selected.items).map((item, i) => (
+              <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
+                <span>
+                  {item.title} &times; {item.quantity}
+                </span>
+                <span className="font-medium">&pound;{item.lineTotal.toFixed(2)}</span>
+              </div>
+            ))}
           </div>
 
           {/* Revenue breakdown */}

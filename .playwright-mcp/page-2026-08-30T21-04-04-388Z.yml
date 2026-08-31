@@ -1,0 +1,122 @@
+- generic [active] [ref=f38e1]:
+  - generic [ref=f38e2]:
+    - link "Skip to content" [ref=f38e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f38e4]:
+      - generic [ref=f38e6]:
+        - link "Wallplace" [ref=f38e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f38e8]:
+          - link "Marketplace" [ref=f38e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f38e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f38e12] [cursor=pointer]
+        - generic [ref=f38e15]:
+          - link "Saved" [ref=f38e16] [cursor=pointer]:
+            - /url: /artist-portal/saved
+          - button "Messages" [ref=f38e20] [cursor=pointer]
+          - button "Notifications" [ref=f38e25] [cursor=pointer]
+          - generic [ref=f38e29]:
+            - link "Artist Portal" [ref=f38e30] [cursor=pointer]:
+              - /url: /artist-portal
+            - button "Portal menu" [ref=f38e31] [cursor=pointer]
+          - button "Logout" [ref=f38e34] [cursor=pointer]
+    - main [ref=f38e35]
+    - contentinfo "Site footer" [ref=f38e36]:
+      - generic [ref=f38e37]:
+        - generic [ref=f38e38]:
+          - generic [ref=f38e39]:
+            - link "Wallplace" [ref=f38e40] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f38e41]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f38e42]:
+              - paragraph [ref=f38e43]: Be first to see new works
+              - paragraph [ref=f38e44]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f38e46]:
+                - textbox "your@email.com" [ref=f38e47]
+                - button "Subscribe" [ref=f38e48] [cursor=pointer]
+            - link "Instagram" [ref=f38e49] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f38e54]:
+            - heading "For Artists" [level=4] [ref=f38e55]
+            - list [ref=f38e56]:
+              - listitem [ref=f38e57]:
+                - link "Apply to Join" [ref=f38e58] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f38e59]:
+                - link "Pricing" [ref=f38e60] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f38e61]:
+                - link "Browse Venues" [ref=f38e62] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f38e63]:
+                - link "FAQs" [ref=f38e64] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f38e65]:
+            - heading "For Venues" [level=4] [ref=f38e66]
+            - list [ref=f38e67]:
+              - listitem [ref=f38e68]:
+                - link "Discover Art" [ref=f38e69] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f38e70]:
+                - link "Register Your Venue" [ref=f38e71] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f38e72]:
+                - link "Wallplace Curated" [ref=f38e73] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f38e74]:
+                - link "How It Works" [ref=f38e75] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f38e76]:
+                - link "FAQs" [ref=f38e77] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f38e78]:
+            - heading "Company" [level=4] [ref=f38e79]
+            - list [ref=f38e80]:
+              - listitem [ref=f38e81]:
+                - link "About" [ref=f38e82] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f38e83]:
+                - link "Blog" [ref=f38e84] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f38e85]:
+                - link "How It Works" [ref=f38e86] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f38e87]:
+                - link "Sustainability" [ref=f38e88] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f38e89]:
+                - link "Partner with us" [ref=f38e90] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f38e91]:
+                - link "Contact" [ref=f38e92] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f38e93]:
+                - link "Complaints" [ref=f38e94] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f38e95]:
+                - link "Terms" [ref=f38e96] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f38e97]:
+                - link "Artist Agreement" [ref=f38e98] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f38e99]:
+                - link "Venue Agreement" [ref=f38e100] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f38e101]:
+                - link "Privacy" [ref=f38e102] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f38e103]:
+                - link "Cookies" [ref=f38e104] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f38e105]:
+                - link "Returns & Refunds" [ref=f38e106] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f38e107]:
+                - link "IP Policy" [ref=f38e108] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f38e110]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f38e111] [cursor=pointer]: Feedback
+  - generic: You're already signed in. Redirecting…
+  - alert [ref=f38e115]

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { artistPayoutPounds, artistPostagePounds } from "@/lib/finance/order-money";
 import { venuePerformance } from "@/lib/finance/venue-performance";
@@ -343,10 +344,13 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Total Sales</p>
-          <p className="text-2xl font-medium">£{totalEarnings.toLocaleString()}</p>
+          {/* Main's postage wording, kept. A4.7's formatPounds, also kept:
+              toLocaleString() has no minimum fraction digits, so £1,127.20
+              rendered as "£1,127.2" on an artist's own earnings figure. */}
+          <p className="text-2xl font-medium">{formatPounds(totalEarnings)}</p>
           <p className="text-xs text-muted mt-1">
             {totalPostage > 0
-              ? `All time, paid to you after fees. Includes £${totalPostage.toFixed(2)} postage you pay the courier.`
+              ? `All time, paid to you after fees. Includes ${formatPounds(totalPostage)} postage you pay the courier.`
               : "All time, paid to you after fees"}
           </p>
         </div>

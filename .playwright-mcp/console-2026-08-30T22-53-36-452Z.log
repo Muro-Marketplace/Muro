@@ -1,0 +1,1679 @@
+[     373ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/admin/applications:0
+[45357434ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/messages/unread:0
+[45357434ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48355842ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48355842ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48356046ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48356046ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48356450ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48356450ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48357254ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48357254ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48358859ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48358859ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48360846ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48360847ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48360852ms] Lock broken by another request with the 'steal' option.
+[48362066ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48362066ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48368473ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48368473ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48381281ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48381281ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48381286ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48385845ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48385845ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48386051ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48386052ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48386459ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48386459ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48387264ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48387264ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48388871ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48388871ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48392079ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48392079ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48398487ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48398487ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48417837ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48417837ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48422391ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48422391ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48422598ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48422598ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48423006ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48423006ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48423812ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48423812ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48425421ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48425421ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48427389ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48427389ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48427390ms] Lock broken by another request with the 'steal' option.
+[48428628ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48428628ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48435035ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48435035ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48447840ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48447840ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48447842ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48452390ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48452390ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48452596ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48452596ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48453002ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48453002ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48453810ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48453810ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48455418ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48455418ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48465697ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48465698ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48472104ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48472104ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48489461ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48489461ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48489667ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48489667ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48490074ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48490074ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48490879ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48490879ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48492487ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48492487ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48494459ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48494460ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48494461ms] Lock broken by another request with the 'steal' option.
+[48495695ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48495695ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48502103ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48502103ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48522152ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48522152ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48522155ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48526698ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48526699ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48526905ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48526905ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48527312ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48527312ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48528118ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48528118ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48529726ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48529726ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48532933ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48532933ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48539341ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48539341ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48552147ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48552147ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48556700ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48556700ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48556906ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48556906ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48557314ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48557314ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48558122ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48558122ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48559727ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48559727ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48561699ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48561699ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48561700ms] Lock broken by another request with the 'steal' option.
+[48562933ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48562933ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48576068ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48576068ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48576071ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48593430ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48593430ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48593637ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48593637ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48594042ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48594042ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48594848ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48594848ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48596455ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48596455ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48599663ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48599663ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48606071ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48606071ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48626035ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48626035ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48630586ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48630586ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48630793ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48630793ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48631200ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48631200ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48632008ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48632008ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48633614ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48633615ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48635583ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48635584ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48635585ms] Lock broken by another request with the 'steal' option.
+[48636820ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48636820ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48643228ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48643228ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48656035ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48656035ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48656038ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48660586ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48660586ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48660793ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48660793ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48661200ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48661200ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48662005ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48662005ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48663612ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48663612ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48666819ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48666820ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48680857ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48680857ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48698220ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48698221ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48698429ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48698429ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48698834ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48698834ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48699642ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48699642ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48701249ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48701249ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48703212ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48703212ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48703213ms] Lock broken by another request with the 'steal' option.
+[48704455ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48704455ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48710862ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48710862ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48723667ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48723667ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48723669ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48735451ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48735451ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48735658ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48735658ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48736065ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48736065ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48736872ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48736873ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48738478ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48738478ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48741685ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48741685ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48748091ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48748091ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48760898ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48760899ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48765451ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48765451ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48765658ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48765658ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48766065ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48766065ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48766870ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48766870ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48768478ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48768478ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48770448ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48770448ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48770450ms] Lock broken by another request with the 'steal' option.
+[48771686ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48771686ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48778093ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48778093ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48798550ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48798550ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48798554ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48803098ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48803098ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48803304ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48803304ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48803712ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48803712ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48804518ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48804518ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48806125ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48806125ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48809333ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48809333ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48815741ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48815741ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48828548ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48828548ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48833100ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48833100ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48833306ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48833306ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48833713ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48833713ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48834517ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48834517ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48843868ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48843868ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48845842ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48845843ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48845844ms] Lock broken by another request with the 'steal' option.
+[48847075ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48847075ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48853481ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48853481ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48853484ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48870842ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48870843ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48871049ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48871049ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48871455ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48871455ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48872261ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48872261ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48873868ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48873868ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48877075ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48877076ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48883482ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48883482ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48903622ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48903622ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48908177ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48908177ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48908384ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48908384ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48908789ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48908790ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48909596ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48909596ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48911201ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48911201ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48913174ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48913175ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48913176ms] Lock broken by another request with the 'steal' option.
+[48914409ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48914409ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48920817ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48920817ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48933623ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48933623ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48933625ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[48938178ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48938178ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48938385ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48938385ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48938791ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48938791ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48939598ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48939598ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48941205ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48941205ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48951515ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48951515ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48957923ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48957923ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48975281ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48975281ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48975488ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48975488ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48975896ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48975896ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48976704ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48976704ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48978311ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48978311ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48980279ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48980280ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48980281ms] Lock broken by another request with the 'steal' option.
+[48981518ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48981519ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[48987926ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[48987926ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49008028ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49008028ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49008030ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[49012578ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49012578ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49012783ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49012784ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49013191ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49013191ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49013997ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49013997ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49015604ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49015604ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49018809ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49018809ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49025217ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49025217ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49038024ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49038024ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49042577ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49042577ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49042784ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49042784ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49043192ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49043192ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49043999ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49043999ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49045607ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49045607ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49047574ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49047574ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49047577ms] Lock broken by another request with the 'steal' option.
+[49048814ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49048814ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49062213ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49062213ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49062216ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[49079566ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49079566ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49079770ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49079770ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49080174ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49080174ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49080980ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49080980ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49082584ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49082584ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49085791ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49085791ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49092199ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49092199ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49105004ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49105004ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49150346ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49150346ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49150553ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49150553ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49150960ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49150960ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49151768ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49151768ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49153375ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49153375ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49155345ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49155346ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49155347ms] Lock broken by another request with the 'steal' option.
+[49156582ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49156582ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49162990ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49162990ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49175797ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49175797ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49175800ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[49180347ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49180347ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49180554ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49180554ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49180960ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49180960ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49181767ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49181767ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49183374ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49183374ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49186580ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49186580ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49192987ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49192987ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49212894ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49212894ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49217449ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49217449ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49217654ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49217654ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49218061ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49218061ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49218869ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49218869ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49220476ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49220476ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49222446ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49222447ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49222447ms] Lock broken by another request with the 'steal' option.
+[49223684ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49223684ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49230091ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49230091ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49242897ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49242897ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49242900ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[49247446ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49247446ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49247653ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49247653ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49248060ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49248060ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49260075ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49260075ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49261681ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49261681ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49264887ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49264887ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49271295ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49271295ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49288658ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49288658ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25285
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25362
+    at new Promise (<anonymous>)
+    at r$._refreshAccessToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25216)
+    at r$._callRefreshToken (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:27965)
+    at r$.__loadSession (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:14186) @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49288864ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49288864ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49289271ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49289271ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49290077ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49290078ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49291685ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49291685ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49293656ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49293657ms] [WARNING] @supabase/gotrue-js: Lock "lock:sb-uwkuhygwvasdzwsusiym-auth-token" was not released within 5000ms. This may indicate an orphaned lock from a component unmount (e.g., React Strict Mode). Forcefully acquiring the lock to recover. @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49293658ms] Lock broken by another request with the 'steal' option.
+[49294892ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49294892ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[49301299ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uwkuhygwvasdzwsusiym.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[49301299ms] [ERROR] TypeError: Failed to fetch
+    at https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:35228
+    at t5 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:40168)
+    at t8 (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:24:39696)
+    at r (https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25022)
+    at async https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:37:25279 @ https://www.wallplace.co.uk/_next/static/chunks/15d_d_pky5d14.js:23
+[50562811ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ https://www.wallplace.co.uk/api/messages/unread:0
+[50562811ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ https://www.wallplace.co.uk/api/notifications:0
+[50695594ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/messages/unread:0
+[50695607ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/notifications:0
+[50836770ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/messages/unread:0
+[50836771ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[51051466ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ https://www.wallplace.co.uk/api/messages/unread:0
+[51051466ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ https://www.wallplace.co.uk/api/notifications:0
+[51215096ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ https://www.wallplace.co.uk/api/messages/unread:0
+[51215096ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ https://www.wallplace.co.uk/api/notifications:0
+[51247949ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/messages/unread:0
+[51247950ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[51934534ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/messages/unread:0
+[51934545ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/notifications:0
+[51994570ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/messages/unread:0
+[51994606ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/notifications:0
+[54558202ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[54558370ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[55379455ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[55379758ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[55449754ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[55449754ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[55489447ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[55489750ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[56372925ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[56372933ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[56475169ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[56475170ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[57734781ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[57735057ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0

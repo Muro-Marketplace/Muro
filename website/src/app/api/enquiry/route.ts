@@ -131,10 +131,17 @@ export async function POST(request: Request) {
     const { senderName, senderEmail, artistSlug, workTitle, enquiryType, message } = parsed.data;
 
     const { error } = await supabase.from("enquiries").insert({
-      // NOT the sender's display name: messages.sender_name is an identity
-      // column matched against slugs elsewhere, so a human name would be the
-      // wrong shape. The real name is carried in the message body below.
-      sender_name: senderEmail.split("@")[0],
+      // The artist's enquiries page renders this straight to them
+      // (artist-portal/enquiries), and nothing ever matches it against a slug,
+      // so it holds the name the form collected.
+      //
+      // #78 set this to the email's local part, carrying across the rule that
+      // MESSAGES.sender_name must stay a slug because four queries match it as
+      // an identity (api/messages:120, api/placements:709 and :1124,
+      // api/placements/venues:51). That rule is real, but it is about the other
+      // table. Applied here it only meant an enquiry from Finlay Coles showed
+      // up on the artist's own enquiries list as "fcoles2598".
+      sender_name: senderName,
       sender_email: senderEmail,
       artist_slug: artistSlug,
       work_title: workTitle || null,
@@ -186,6 +193,10 @@ export async function POST(request: Request) {
     const { data: insertedMessage } = await db.from("messages").insert({
       conversation_id: cid,
       sender_id: null,
+      // C L1124, and #78 independently. An anonymous enquirer has no slug, so
+      // the identity rule on this column has nothing to store here; the name
+      // is what the artist needs to see. sender_type "anonymous" is what marks
+      // this row as not slug-matchable.
       sender_name: senderName,
       sender_type: "anonymous",
       recipient_slug: artistSlug,

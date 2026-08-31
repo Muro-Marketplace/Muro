@@ -43,6 +43,9 @@ const CATEGORY_LABELS: Record<EmailCategory, string> = {
 interface SearchParams {
   c?: string;
   u?: string;
+  /** A1.3: HMAC over the user id, so the link rather than the id is the
+   *  bearer. Forwarded to the POST unchanged. */
+  s?: string;
 }
 
 // Server component so we can apply the unsubscribe and read back the
@@ -50,7 +53,7 @@ interface SearchParams {
 // no session is required. Mirrors the POST handler at /api/account/
 // email/unsubscribe (which mail clients hit for RFC 8058 one-click).
 export default async function UnsubscribePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const { c, u } = await searchParams;
+  const { c, u, s: signature } = await searchParams;
   const category = c && VALID_CATEGORIES.includes(c as EmailCategory) ? (c as EmailCategory) : null;
   const label = category ? CATEGORY_LABELS[category] : null;
 
@@ -67,7 +70,7 @@ export default async function UnsubscribePage({ searchParams }: { searchParams: 
           <h1 className="text-3xl lg:text-4xl mb-4">Email preferences</h1>
 
           {state === "confirm" && (
-            <ConfirmUnsubscribe userId={u!} category={category!} label={label || "these emails"} />
+            <ConfirmUnsubscribe userId={u!} category={category!} signature={signature ?? null} label={label || "these emails"} />
           )}
           {state === "critical" && (
             <p className="text-muted leading-relaxed mb-6">

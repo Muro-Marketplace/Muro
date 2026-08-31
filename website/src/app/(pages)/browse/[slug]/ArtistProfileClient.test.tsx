@@ -190,6 +190,48 @@ describe("ArtistProfileClient ?enquiry=1 auto-open (B12/F17/H9)", () => {
     // guests here with ?enquiry=1 expecting the form to be open.
     expect(await screen.findByPlaceholderText("Your message...")).toBeTruthy();
   });
+
+  // B L730. "Message the artist" on an artwork page arrives here with both
+  // params: ?enquiry=1 opens the form, &work= opens the lightbox behind it so
+  // the enquiry can scope itself to the piece. The lightbox then synced the URL
+  // to the artwork permalink and dropped the query string, putting the address
+  // bar back on the page the visitor had just left. Measured live on
+  // 2026-08-31: the modal appeared at 1,659ms, the URL was rewritten at
+  // 1,916ms.
+  it("does not rewrite the URL to the artwork permalink while the enquiry is open", async () => {
+    searchParamsMock.mockReturnValue(new URLSearchParams("enquiry=1&work=w1"));
+    const pushState = vi.spyOn(window.history, "pushState");
+
+    renderProfile();
+    expect(await screen.findByPlaceholderText("Your message...")).toBeTruthy();
+
+    const targets = pushState.mock.calls.map((c) => String(c[2]));
+    expect(targets.filter((t) => t.includes("/last-light"))).toEqual([]);
+    pushState.mockRestore();
+  });
+
+  it("still scopes the enquiry to the work the visitor came from", async () => {
+    searchParamsMock.mockReturnValue(new URLSearchParams("enquiry=1&work=w1"));
+
+    renderProfile();
+
+    // "Re: <title>" is what makes the artwork param worth sending at all.
+    expect(await screen.findByText("Re: Last Light")).toBeTruthy();
+  });
+
+  it("claims the artwork permalink once the enquiry is dismissed", async () => {
+    // Without this the lightbox loses its shareable link for good.
+    searchParamsMock.mockReturnValue(new URLSearchParams("work=w1"));
+    const pushState = vi.spyOn(window.history, "pushState");
+
+    renderProfile();
+
+    await waitFor(() => {
+      const targets = pushState.mock.calls.map((c) => String(c[2]));
+      expect(targets.some((t) => t.includes("/last-light"))).toBe(true);
+    });
+    pushState.mockRestore();
+  });
 });
 
 // B6: the portfolio theme picker matched `title + medium` substrings rather

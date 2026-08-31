@@ -8,6 +8,10 @@ export default function ContactForm() {
   const artistSlug = searchParams.get("artist");
 
   const [submitted, setSubmitted] = useState(false);
+  // A2.3: the API mints a reference, records it and prints it in the
+  // acknowledgement email. Showing it here means someone whose email never
+  // arrives can still quote it.
+  const [reference, setReference] = useState<string | null>(null);
   const [artistNotified, setArtistNotified] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -95,6 +99,7 @@ export default function ContactForm() {
       }
 
       setArtistNotified(notified);
+      setReference(typeof result.reference === "string" ? result.reference : null);
       setSubmitted(true);
     } catch {
       setError("Network error. Please try again.");
@@ -118,6 +123,13 @@ export default function ContactForm() {
               : `We have your message for ${artistName || "the artist"}, but we could not notify them automatically. Our team will pass it on, and we respond within 2 working days.`
             : "Thanks for reaching out. We respond within 2 working days."}
         </p>
+        {reference && (
+          <p className="text-sm text-muted mt-3">
+            Your reference is{" "}
+            <span className="font-medium text-foreground">{reference}</span>. Quote it if
+            you get in touch about this message.
+          </p>
+        )}
       </div>
     );
   }

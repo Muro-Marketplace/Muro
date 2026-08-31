@@ -1,0 +1,231 @@
+- generic [active] [ref=f80e1]:
+  - generic [ref=f80e2]:
+    - link "Skip to content" [ref=f80e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f80e4]:
+      - generic [ref=f80e6]:
+        - link "Wallplace" [ref=f80e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f80e8]:
+          - link "Galleries" [ref=f80e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Portfolios" [ref=f80e10] [cursor=pointer]:
+            - /url: /browse?view=portfolios
+          - link "Collections" [ref=f80e11] [cursor=pointer]:
+            - /url: /browse?view=collections
+          - link "Spaces" [ref=f80e12] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f80e14] [cursor=pointer]
+        - generic [ref=f80e17]:
+          - link "Saved" [ref=f80e18] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f80e22] [cursor=pointer]
+          - generic [ref=f80e26]:
+            - link "My Account" [ref=f80e27] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f80e28] [cursor=pointer]
+          - button "Logout" [ref=f80e31] [cursor=pointer]
+          - 'link "Shopping cart: 1 item" [ref=f80e32] [cursor=pointer]':
+            - /url: /checkout
+            - generic [ref=f80e36]: "1"
+    - main [ref=f80e37]:
+      - generic [ref=f80e38]:
+        - navigation "Breadcrumb" [ref=f80e41]:
+          - list [ref=f80e42]:
+            - listitem [ref=f80e43]:
+              - link "Artists" [ref=f80e44] [cursor=pointer]:
+                - /url: /browse
+              - generic [ref=f80e45]: ›
+            - listitem [ref=f80e46]:
+              - link "Mark Smith" [ref=f80e47] [cursor=pointer]:
+                - /url: /browse/mark-smith
+              - generic [ref=f80e48]: ›
+            - listitem [ref=f80e49]:
+              - generic [ref=f80e50]: The Random Time
+        - generic [ref=f80e53]:
+          - generic [ref=f80e54]:
+            - generic [ref=f80e56]:
+              - img "The Random Time, Watercolour on paper"
+            - button "View on your wall" [ref=f80e59] [cursor=pointer]
+          - generic [ref=f80e65]:
+            - paragraph [ref=f80e66]:
+              - link "Mark Smith" [ref=f80e67] [cursor=pointer]:
+                - /url: /browse/mark-smith
+            - heading "The Random Time" [level=1] [ref=f80e68]
+            - generic [ref=f80e69]:
+              - generic [ref=f80e70]: 3 available in this size
+              - button "Save" [ref=f80e72] [cursor=pointer]
+            - generic [ref=f80e75]:
+              - paragraph [ref=f80e76]: About this piece
+              - paragraph [ref=f80e77]: Built through layered washes and translucent forms, Fragments of Light reflects the way light interacts with surfaces throughout the day. The composition shifts depending on its environment, making it particularly responsive to architectural space and natural lighting conditions.
+            - generic [ref=f80e79]:
+              - term [ref=f80e80]: Medium
+              - definition [ref=f80e81]: Watercolour on paper
+            - generic [ref=f80e82]:
+              - paragraph [ref=f80e83]: Size & Price
+              - combobox "Choose size" [ref=f80e85] [cursor=pointer]:
+                - generic [ref=f80e86]: 8×10" (20×25 cm), £80
+              - list [ref=f80e89]:
+                - listitem [ref=f80e90]:
+                  - generic [ref=f80e91]: 8×10" (20×25 cm)
+                  - generic [ref=f80e92]: 3 available
+                - listitem [ref=f80e93]:
+                  - generic [ref=f80e94]: 16×20" (41×51 cm)
+                  - generic [ref=f80e95]: 3 available
+                - listitem [ref=f80e96]:
+                  - generic [ref=f80e97]: 11×14" (28×36 cm)
+                  - generic [ref=f80e98]: 3 available
+                - listitem [ref=f80e99]:
+                  - generic [ref=f80e100]: 6×8" (15×20 cm)
+                  - generic [ref=f80e101]: 3 available
+                - listitem [ref=f80e102]:
+                  - generic [ref=f80e103]: 12×16" (30×41 cm)
+                  - generic [ref=f80e104]: 3 available
+            - generic [ref=f80e105]:
+              - paragraph [ref=f80e106]: Frame
+              - combobox "Choose frame" [ref=f80e108] [cursor=pointer]:
+                - generic [ref=f80e109]: No frame
+            - generic [ref=f80e112]:
+              - paragraph [ref=f80e113]: UK shipping £3.50
+              - paragraph [ref=f80e114]: Ships to UK only
+            - generic [ref=f80e115]:
+              - paragraph [ref=f80e116]: Only 3 left at this size
+              - generic [ref=f80e117]:
+                - button "Buy Now, £80" [ref=f80e118] [cursor=pointer]
+                - button "Add to basket" [ref=f80e119] [cursor=pointer]
+              - button "Message the artist →" [ref=f80e124] [cursor=pointer]
+        - generic [ref=f80e126]:
+          - generic [ref=f80e127]:
+            - generic [ref=f80e128]:
+              - paragraph [ref=f80e129]: Continue exploring
+              - heading "More by Mark Smith" [level=2] [ref=f80e130]
+            - link "View full portfolio" [ref=f80e131] [cursor=pointer]:
+              - /url: /browse/mark-smith
+          - generic [ref=f80e134]:
+            - link [ref=f80e135] [cursor=pointer]:
+              - /url: /browse/mark-smith/still-motion
+              - img "Still motion" [ref=f80e137]
+              - paragraph [ref=f80e138]: Still motion
+              - paragraph [ref=f80e139]: Oil on canvas · From £500
+            - link [ref=f80e140] [cursor=pointer]:
+              - /url: /browse/mark-smith/the-final-moment
+              - img "The final moment" [ref=f80e142]
+              - paragraph [ref=f80e143]: The final moment
+              - paragraph [ref=f80e144]: Acrylic on board · From £500
+        - generic [ref=f80e147]:
+          - paragraph [ref=f80e148]: Seller information
+          - paragraph [ref=f80e149]:
+            - text: This artwork is sold by
+            - link "Mark Smith" [ref=f80e150] [cursor=pointer]:
+              - /url: /browse/mark-smith
+            - text: ", an independent artist listing on Wallplace. Your contract of sale is with the artist, not with Wallplace. Wallplace operates the platform, processes payments via Stripe, and facilitates customer service."
+          - paragraph [ref=f80e151]:
+            - text: Contact the artist via their
+            - link "profile" [ref=f80e152] [cursor=pointer]:
+              - /url: /browse/mark-smith
+            - text: or email
+            - link "hello@wallplace.co.uk" [ref=f80e153] [cursor=pointer]:
+              - /url: mailto:hello@wallplace.co.uk
+            - text: . For your 14-day right to cancel and other consumer rights, see our
+            - link "Returns & Refunds" [ref=f80e154] [cursor=pointer]:
+              - /url: /returns
+            - text: and
+            - link "Platform Terms" [ref=f80e155] [cursor=pointer]:
+              - /url: /terms
+            - text: .
+    - contentinfo "Site footer" [ref=f80e156]:
+      - generic [ref=f80e157]:
+        - generic [ref=f80e158]:
+          - generic [ref=f80e159]:
+            - link "Wallplace" [ref=f80e160] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f80e161]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f80e162]:
+              - paragraph [ref=f80e163]: Be first to see new works
+              - paragraph [ref=f80e164]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f80e166]:
+                - textbox "your@email.com" [ref=f80e167]
+                - button "Subscribe" [ref=f80e168] [cursor=pointer]
+            - link "Instagram" [ref=f80e169] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f80e174]:
+            - heading "For Artists" [level=4] [ref=f80e175]
+            - list [ref=f80e176]:
+              - listitem [ref=f80e177]:
+                - link "Apply to Join" [ref=f80e178] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f80e179]:
+                - link "Pricing" [ref=f80e180] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f80e181]:
+                - link "Browse Venues" [ref=f80e182] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f80e183]:
+                - link "FAQs" [ref=f80e184] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f80e185]:
+            - heading "For Venues" [level=4] [ref=f80e186]
+            - list [ref=f80e187]:
+              - listitem [ref=f80e188]:
+                - link "Discover Art" [ref=f80e189] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f80e190]:
+                - link "Register Your Venue" [ref=f80e191] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f80e192]:
+                - link "Wallplace Curated" [ref=f80e193] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f80e194]:
+                - link "How It Works" [ref=f80e195] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f80e196]:
+                - link "FAQs" [ref=f80e197] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f80e198]:
+            - heading "Company" [level=4] [ref=f80e199]
+            - list [ref=f80e200]:
+              - listitem [ref=f80e201]:
+                - link "About" [ref=f80e202] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f80e203]:
+                - link "Blog" [ref=f80e204] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f80e205]:
+                - link "How It Works" [ref=f80e206] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f80e207]:
+                - link "Sustainability" [ref=f80e208] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f80e209]:
+                - link "Partner with us" [ref=f80e210] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f80e211]:
+                - link "Contact" [ref=f80e212] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f80e213]:
+                - link "Complaints" [ref=f80e214] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f80e215]:
+                - link "Terms" [ref=f80e216] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f80e217]:
+                - link "Artist Agreement" [ref=f80e218] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f80e219]:
+                - link "Venue Agreement" [ref=f80e220] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f80e221]:
+                - link "Privacy" [ref=f80e222] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f80e223]:
+                - link "Cookies" [ref=f80e224] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f80e225]:
+                - link "Returns & Refunds" [ref=f80e226] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f80e227]:
+                - link "IP Policy" [ref=f80e228] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f80e230]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f80e231] [cursor=pointer]: Feedback
+  - alert [ref=f80e234]
