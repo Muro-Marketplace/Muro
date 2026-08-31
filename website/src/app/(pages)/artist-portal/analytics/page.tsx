@@ -5,7 +5,7 @@ import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { authFetch } from "@/lib/api-client";
 import { labelForArrangement } from "@/lib/arrangement-labels";
-import { artistPayoutPounds } from "@/lib/finance/order-money";
+import { artistPayoutPounds, artistPostagePounds } from "@/lib/finance/order-money";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
 
@@ -57,7 +57,7 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("Last 30 days");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [placements, setPlacements] = useState<Placement[]>([]);
-  const [orders, setOrders] = useState<{ total?: number; artist_revenue?: number | null; created_at?: string }[]>([]);
+  const [orders, setOrders] = useState<{ total?: number; artist_revenue?: number | null; shipping_cost?: number | null; created_at?: string }[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
@@ -120,6 +120,12 @@ export default function AnalyticsPage() {
   // Falls back to `total` for legacy rows pre-dating the artist_revenue
   // column so we don't silently zero them out.
   const totalEarnings = orders.reduce((sum: number, o) => sum + orderPayout(o), 0);
+  // QA 2026-08-30 bug 22: the payout includes the postage the buyer paid, which
+  // the artist forwards to a courier. Presenting the total as "your share after
+  // fees" counted that as margin, and the overstatement is largest on cheap
+  // works. The headline stays the payout, because that is the figure that must
+  // match Stripe, but the postage inside it is now stated.
+  const totalPostage = orders.reduce((sum: number, o) => sum + artistPostagePounds(o), 0);
   const uniqueVenues = new Set(placements.map((p) => p.venue)).size;
 
   const venuePerformance = useMemo(() => {
@@ -342,7 +348,11 @@ export default function AnalyticsPage() {
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Total Sales</p>
           <p className="text-2xl font-medium">£{totalEarnings.toLocaleString()}</p>
-          <p className="text-xs text-muted mt-1">All time, your share after fees</p>
+          <p className="text-xs text-muted mt-1">
+            {totalPostage > 0
+              ? `All time, paid to you after fees. Includes £${totalPostage.toFixed(2)} postage you pay the courier.`
+              : "All time, paid to you after fees"}
+          </p>
         </div>
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Pieces Placed</p>

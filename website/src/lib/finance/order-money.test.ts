@@ -1,15 +1,7 @@
 // K6 (07 §6). The per-order money rules, which had four copies.
 
 import { describe, it, expect } from "vitest";
-import {
-  NON_REVENUE_STATUSES,
-  artistPayoutPence,
-  artistPayoutPounds,
-  formatPounds,
-  isRevenueBearing,
-  orderGrossPence,
-  poundsToPence,
-} from "./order-money";
+import { NON_REVENUE_STATUSES, artistPayoutPence, artistPayoutPounds, formatPounds, isRevenueBearing, orderGrossPence, poundsToPence, artistPostagePounds, artistArtworkEarningsPounds } from "./order-money";
 
 describe("isRevenueBearing", () => {
   it("excludes refunded, which is the disagreement K6 is about", () => {
@@ -118,5 +110,39 @@ describe("formatPounds", () => {
 
   it("renders 0.00 rather than NaN", () => {
     expect(formatPounds(Number.NaN)).toBe("0.00");
+  });
+});
+
+// ─── QA 2026-08-30 bug 22: postage is not margin ───
+describe("postage inside an artist payout", () => {
+  it("separates the courier's money from what the artist keeps", () => {
+    // The reported case: a GBP 10 artwork with GBP 9.95 postage was shown as
+    // GBP 18.45 "earned", which is more than the artwork cost.
+    const order = { total: 19.95, artist_revenue: 18.45, shipping_cost: 9.95 };
+    expect(artistPayoutPounds(order)).toBe(18.45);
+    expect(artistPostagePounds(order)).toBe(9.95);
+    expect(artistArtworkEarningsPounds(order)).toBeCloseTo(8.5, 2);
+  });
+
+  it("is zero postage, and unchanged earnings, on a collection order", () => {
+    const order = { total: 149.99, artist_revenue: 127.49, shipping_cost: 0 };
+    expect(artistPostagePounds(order)).toBe(0);
+    expect(artistArtworkEarningsPounds(order)).toBe(127.49);
+  });
+
+  it("treats a missing shipping_cost as zero rather than NaN", () => {
+    const order = { total: 100, artist_revenue: 85 };
+    expect(artistPostagePounds(order)).toBe(0);
+    expect(artistArtworkEarningsPounds(order)).toBe(85);
+  });
+
+  it("never reports negative earnings when postage exceeds the payout", () => {
+    const order = { total: 12, artist_revenue: 5, shipping_cost: 9.95 };
+    expect(artistArtworkEarningsPounds(order)).toBe(0);
+  });
+
+  it("leaves the payout figure itself untouched, since it must match Stripe", () => {
+    const order = { total: 64.49, artist_revenue: 61.99, shipping_cost: 14.5 };
+    expect(artistPayoutPounds(order)).toBe(61.99);
   });
 });

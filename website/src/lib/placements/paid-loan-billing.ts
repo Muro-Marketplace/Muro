@@ -476,6 +476,23 @@ export async function handleInvoicePaymentFailed(
     .maybeSingle<{ work_title: string | null; artist_slug: string | null; monthly_fee_gbp: number | null }>();
   const feePence = Math.round(Number(placementRow?.monthly_fee_gbp || 0) * 100);
   const workTitle = placementRow?.work_title || "your placed artwork";
+  // Owner-reported 2026-08-30: slugs were reaching customer-facing email. This
+  // one told a venue their payment had failed for a work "by fin-coles".
+  // Resolve the artist's real name, de-slugging only if their profile has none.
+  const dunningArtistName = await (async () => {
+    const slug = placementRow?.artist_slug || "";
+    if (!slug) return "the artist";
+    const { data: ap } = await db
+      .from("artist_profiles")
+      .select("name")
+      .eq("slug", slug)
+      .maybeSingle<{ name: string | null }>();
+    return (
+      ap?.name?.trim() ||
+      slug.split("-").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ||
+      "the artist"
+    );
+  })();
 
   if (billing.payer_user_id) {
     try {
@@ -498,7 +515,7 @@ export async function handleInvoicePaymentFailed(
           react: PaidLoanPaymentFailed({
             venueFirstName: (venueProfile?.name || "there").split(" ")[0],
             workTitle,
-            artistName: placementRow?.artist_slug || "the artist",
+            artistName: dunningArtistName,
             monthlyFee: { amount: feePence, currency: "GBP" },
             finalAttempt,
             updatePaymentUrl: `${SITE}/placements/${encodeURIComponent(billing.placement_id)}/payment`,
