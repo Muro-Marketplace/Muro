@@ -58,7 +58,17 @@ const FIELD_LABELS: Record<string, string> = {
   internal_notes: "Internal notes",
 };
 
-function VersionLog({ versions, approvalsPending }: { versions: RecordVersion[]; approvalsPending: boolean }) {
+function VersionLog({
+  versions,
+  approvalsPending,
+  venueApproved,
+  artistApproved,
+}: {
+  versions: RecordVersion[];
+  approvalsPending: boolean;
+  venueApproved: boolean;
+  artistApproved: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const latest = versions[0];
   const whoLatest = latest?.changed_by_role
@@ -84,9 +94,17 @@ function VersionLog({ versions, approvalsPending }: { versions: RecordVersion[];
               )}
             </p>
           )}
+          {/* Row 2197: this said "both parties" even when the editor's own
+              tick had survived the save, contradicting the green "… has
+              approved this record" line directly below it. Name who is
+              actually outstanding. */}
           {approvalsPending && latest && (
             <p className="text-[11px] text-amber-800 mt-1">
-              Approvals were cleared, both parties need to tick the record again.
+              {venueApproved
+                ? "The terms changed, so the artist needs to tick the record again."
+                : artistApproved
+                  ? "The terms changed, so the venue needs to tick the record again."
+                  : "The terms changed, so both parties need to tick the record again."}
             </p>
           )}
         </div>
@@ -314,12 +332,26 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
         logistics_notes: payload.logisticsNotes,
         contract_attachment_url: payload.contractAttachmentUrl,
         internal_notes: payload.internalNotes,
-        ...(resetApprovals
-          ? { venue_approved: false, venue_approved_at: null, artist_approved: false, artist_approved_at: null }
-          : viewerRole === "venue"
-            ? { venue_approved: form.venueApproved, venue_approved_at: form.venueApproved ? new Date().toISOString() : null }
-            : viewerRole === "artist"
-              ? { artist_approved: form.artistApproved, artist_approved_at: form.artistApproved ? new Date().toISOString() : null }
+        // Row 2197. This mirrored the server's OLD reset, which cleared both
+        // approvals on any content change, including the one the editor had
+        // just ticked in the same save. The server keeps the editor's own tick
+        // now (their tick approves the revision they are making); the reset is
+        // for the counterparty, who has not seen it. Mirror that, or the form
+        // shows "Approvals were cleared" over a box the save actually kept.
+        ...(viewerRole === "venue"
+          ? {
+              venue_approved: form.venueApproved,
+              venue_approved_at: form.venueApproved ? new Date().toISOString() : null,
+              ...(resetApprovals ? { artist_approved: false, artist_approved_at: null } : {}),
+            }
+          : viewerRole === "artist"
+            ? {
+                artist_approved: form.artistApproved,
+                artist_approved_at: form.artistApproved ? new Date().toISOString() : null,
+                ...(resetApprovals ? { venue_approved: false, venue_approved_at: null } : {}),
+              }
+            : resetApprovals
+              ? { venue_approved: false, venue_approved_at: null, artist_approved: false, artist_approved_at: null }
               : {}),
       }, { approvalsReset: resetApprovals });
       setSaved(true);
@@ -353,7 +385,12 @@ export default function PlacementLoanForm({ placementId, record, viewerRole, pla
           version log. This is what gives each party confidence the
           other isn't editing behind their back, every save is here. */}
       {(latestVersion || approvalsPending) && (
-        <VersionLog versions={versions || []} approvalsPending={approvalsPending} />
+        <VersionLog
+          versions={versions || []}
+          approvalsPending={approvalsPending}
+          venueApproved={record.venue_approved === true}
+          artistApproved={record.artist_approved === true}
+        />
       )}
 
       {/* Type + toggles */}

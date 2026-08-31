@@ -219,11 +219,28 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         { placementId: id, changedFields },
       );
     }
-    // Reset approvals, force a re-sign by both parties.
-    row.venue_approved = false;
-    row.venue_approved_at = null;
-    row.artist_approved = false;
-    row.artist_approved_at = null;
+    // Reset approvals, force a re-sign.
+    //
+    // Row 2197: this used to clear BOTH unconditionally, and it ran after the
+    // approval assignment above, so a save that edited a field AND ticked the
+    // caller's own box left that box false. You had to save the edit, then tick
+    // and save again, and the banner contradicted itself in between: "Approvals
+    // were cleared, both parties need to tick the record again" directly above
+    // "Artist has approved this record."
+    //
+    // The tick means "I approve these terms", and the terms in the request that
+    // carries it are the NEW ones. The editor has approved their own revision.
+    // The COUNTERPARTY is the one who has not seen it, and their approval is
+    // what the reset is for. So a tick made in the same request survives, and
+    // an explicit un-tick is honoured too; only an absent one is cleared.
+    if (d.venueApproved === undefined) {
+      row.venue_approved = false;
+      row.venue_approved_at = null;
+    }
+    if (d.artistApproved === undefined) {
+      row.artist_approved = false;
+      row.artist_approved_at = null;
+    }
   }
 
   // Retry path: artist_approved / artist_approved_at may not exist yet in
