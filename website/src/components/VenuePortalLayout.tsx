@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { mutate } from "@/lib/api-client";
+import { authFetch, mutate } from "@/lib/api-client";
 import { venuePortalNav } from "@/lib/portal-nav";
 
 // H6: nav lists moved to src/lib/portal-nav.ts so the header's portal dropdown
@@ -54,12 +54,49 @@ export default function VenuePortalLayout({
   const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selfHealFailed, setSelfHealFailed] = useState(false);
+  /**
+   * Pass 2 item 3.9 (rows 2571, 2585). Two production accounts own an artist
+   * AND a venue profile on one auth user, and this bounced them to /login on
+   * `userType !== "venue"`, because there is one `user_metadata.user_type` for
+   * the pair. venue_profiles.finlay is unreachable as a result.
+   *
+   * /api/account/roles reports `ownRoles` from profile OWNERSHIP, which is the
+   * stronger authority: a user can write their own metadata and cannot write
+   * these tables. `null` is "not known yet"; a failure resolves to an empty
+   * list, so an unreachable endpoint can never open the portal.
+   */
+  const [ownsVenue, setOwnsVenue] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!loading && (!user || userType !== "venue")) {
+    if (loading || !user) return;
+    let cancelled = false;
+    authFetch("/api/account/roles")
+      .then((r) => r.json() as Promise<{ ownRoles?: unknown }>)
+      .then((data) => {
+        const own = Array.isArray(data?.ownRoles) ? (data.ownRoles as unknown[]) : [];
+        if (!cancelled) setOwnsVenue(own.includes("venue"));
+      })
+      .catch(() => {
+        if (!cancelled) setOwnsVenue(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, user]);
+
+  const venueAllowed = userType === "venue" || ownsVenue === true;
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) {
       router.replace("/login");
+      return;
     }
-  }, [loading, user, userType, router]);
+    if (userType === "venue") return;
+    // Wait for the ownership answer rather than bouncing on metadata alone.
+    if (ownsVenue === null) return;
+    if (!ownsVenue) router.replace("/login");
+  }, [loading, user, userType, ownsVenue, router]);
 
   // Set a per-page document.title so the browser tab strip is
   // distinguishable when several portal pages are open at once. The
@@ -123,7 +160,11 @@ export default function VenuePortalLayout({
     );
   }
 
-  if (!user || userType !== "venue") return null;
+  if (!user) return null;
+  // Still resolving what this account owns: render nothing rather than
+  // flashing the portal or an empty page. The effect above redirects once the
+  // answer arrives and it is "no venue".
+  if (!venueAllowed) return null;
 
   function isActive(href: string) {
     if (href === "/venue-portal") return pathname === "/venue-portal";

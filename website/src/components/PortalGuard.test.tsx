@@ -273,3 +273,75 @@ describe("<PortalGuard /> verify-email recovery actions (C1)", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
   });
 });
+
+// Pass 2 item 3.9 (rows 2571, 2585). Two production accounts own BOTH an artist
+// and a venue profile on one auth user. Navigating to /venue-portal redirected
+// them straight back, because the guard keys on user_metadata.user_type and
+// there is only one of those. venue_profiles.finlay is unreachable as a result.
+//
+// user_metadata is also the weaker of the two authorities: a user can write
+// their own, and cannot write the profile tables. /api/account/roles now
+// reports `ownRoles` from profile ownership, and the guard honours it.
+describe("<PortalGuard /> lets an account into a portal whose profile it owns (3.9)", () => {
+  function withRoles(ownRoles: string[]) {
+    authFetchMock.mockImplementation(async (url: string) => ({
+      json: async () =>
+        url === "/api/account/roles"
+          ? { roles: ownRoles, ownRoles }
+          : { profile: { review_status: "approved", subscription_status: "active" } },
+    }));
+  }
+
+  it("does not bounce an artist-metadata account out of the venue portal it owns", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u", email_confirmed_at: "2026-01-01" },
+      userType: "artist",
+      loading: false,
+    });
+    withRoles(["artist", "venue"]);
+
+    render(
+      <PortalGuard allowedType="venue">
+        <p>venue portal</p>
+      </PortalGuard>,
+    );
+
+    await waitFor(() => expect(screen.getByText("venue portal")).toBeTruthy());
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("still bounces an account that owns no such profile", async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: "u", email_confirmed_at: "2026-01-01" },
+      userType: "artist",
+      loading: false,
+    });
+    withRoles(["artist"]);
+
+    render(
+      <PortalGuard allowedType="venue">
+        <p>venue portal</p>
+      </PortalGuard>,
+    );
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/artist-portal"));
+  });
+
+  it("bounces when the roles lookup fails, rather than opening the portal", async () => {
+    // Fail closed: an unreachable roles endpoint must not become a way in.
+    useAuthMock.mockReturnValue({
+      user: { id: "u", email_confirmed_at: "2026-01-01" },
+      userType: "artist",
+      loading: false,
+    });
+    authFetchMock.mockRejectedValue(new Error("offline"));
+
+    render(
+      <PortalGuard allowedType="venue">
+        <p>venue portal</p>
+      </PortalGuard>,
+    );
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/artist-portal"));
+  });
+});

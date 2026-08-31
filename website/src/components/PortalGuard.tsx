@@ -34,6 +34,22 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
   // endpoint deliberately answers the same either way.
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
   const [signingOut, setSigningOut] = useState(false);
+  /**
+   * Roles this very account can enter without switching accounts, from
+   * /api/account/roles, which derives them from profile OWNERSHIP.
+   *
+   * Pass 2 item 3.9 (rows 2571, 2585): two production accounts own both an
+   * artist and a venue profile on one auth user, and this guard keyed on
+   * `user_metadata.user_type`, of which there is only one. So navigating to
+   * /venue-portal bounced them straight back and venue_profiles.finlay is
+   * unreachable. `user_metadata` is also the weaker authority: a user can
+   * write their own; they cannot write the profile tables.
+   *
+   * `null` means not yet known. The redirect waits for it and fails CLOSED:
+   * an unreachable roles endpoint resolves to an empty list, so it can never
+   * become a way into a portal.
+   */
+  const [ownRoles, setOwnRoles] = useState<string[] | null>(null);
 
   async function handleResendVerification() {
     if (!user?.email) return;
@@ -60,18 +76,43 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
     }
   }
 
+  // 3.9: resolve what this account actually owns before deciding to bounce it.
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    authFetch("/api/account/roles")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setOwnRoles(Array.isArray(data?.ownRoles) ? data.ownRoles : []);
+      })
+      .catch(() => {
+        // Fail closed. An empty list means "no extra portals", which is the
+        // pre-existing behaviour, not an opening.
+        if (!cancelled) setOwnRoles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, loading]);
+
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/login");
-    } else if (!loading && user && userType && userType !== allowedType) {
-      const theirRole = PORTAL_LABELS[userType] ?? userType;
-      showToast(
-        `This is the ${allowedType} portal. Redirecting to your ${theirRole} portal.`,
-        { variant: "info", durationMs: 4000 },
-      );
-      router.replace(portalPathForRole(parseRole(userType)));
+      return;
     }
-  }, [user, loading, userType, allowedType, router, showToast]);
+    if (loading || !user || !userType || userType === allowedType) return;
+    // Wait for the ownership answer rather than bouncing on metadata alone.
+    if (ownRoles === null) return;
+    if (ownRoles.includes(allowedType)) return;
+
+    const theirRole = PORTAL_LABELS[userType] ?? userType;
+    showToast(
+      `This is the ${allowedType} portal. Redirecting to your ${theirRole} portal.`,
+      { variant: "info", durationMs: 4000 },
+    );
+    router.replace(portalPathForRole(parseRole(userType)));
+  }, [user, loading, userType, allowedType, ownRoles, router, showToast]);
 
   // Check subscription for artists
   useEffect(() => {
