@@ -14,6 +14,7 @@ import type { PanelWork } from "@/components/visualizer/WorksPanel";
 import Dropdown from "@/components/Dropdown";
 import MakeOfferModal from "@/components/offers/MakeOfferModal";
 import { isFlagOn } from "@/lib/feature-flags";
+import { physicalSizeLabel } from "@/lib/physical-size";
 import {
   buildSizeVariants,
   parseDimensions,
@@ -369,7 +370,7 @@ export default function ArtworkPageClient({
           a manual shippingPrice. Shows tier + delivery window + signature
           line so buyers know what they're getting. */}
       {(() => {
-        const sizeLabelForCalc = selectedPricing?.label || work.dimensions;
+        const sizeLabelForCalc = selectedPricing?.label || physicalSizeLabel(work.dimensions, "");
         const totalPriceForCalc = (displayPrice ?? selectedPricing?.price) || 0;
         const uk = resolveShippingCost({
           // B11: this quoted the work-level shippingPrice while the cart
@@ -466,7 +467,7 @@ export default function ArtworkPageClient({
                     quantityAvailable: sizeStock ?? null,
                     shippingPrice: effectiveShippingPrice,
                     internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
-                    dimensions: selectedPricing.label || work.dimensions,
+                    dimensions: selectedPricing.label || physicalSizeLabel(work.dimensions, ""),
                     framed: !!selectedFrame,
                     // E46c: identity, not just the flag, so checkout can price it.
                     frameLabel: selectedFrame?.label,
@@ -501,7 +502,7 @@ export default function ArtworkPageClient({
                     quantityAvailable: sizeStock ?? null,
                     shippingPrice: effectiveShippingPrice,
                     internationalShippingPrice: shipsInternationally && internationalShippingPrice != null ? internationalShippingPrice : undefined,
-                    dimensions: selectedPricing.label || work.dimensions,
+                    dimensions: selectedPricing.label || physicalSizeLabel(work.dimensions, ""),
                     framed: !!selectedFrame,
                     // E46c: identity, not just the flag, so checkout can price it.
                     frameLabel: selectedFrame?.label,
@@ -546,7 +547,11 @@ export default function ArtworkPageClient({
           && work.currentPlacement.inStorePrice != null
           && (() => {
             const offer = work.currentPlacement!;
-            const wallSize = offer.placedSizeLabel || work.dimensions || "";
+            // Owner-reported 2026-08-31: this fell back to work.dimensions,
+            // which is the IMAGE's pixel size, so the basket read
+            // "(Off the wall, 2795 x 4192 px)". A pixel count is never a
+            // physical size, so an unlabelled piece is just itself.
+            const wallSize = physicalSizeLabel(offer.placedSizeLabel, "");
             return (
               <button
                 onClick={() => {

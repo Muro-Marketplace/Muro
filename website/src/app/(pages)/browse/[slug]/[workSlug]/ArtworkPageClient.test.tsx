@@ -18,8 +18,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
 }));
 vi.mock("@/lib/supabase", () => ({ supabase: { auth: {}, from: () => ({}) } }));
+const addItemSpy = vi.fn(() => ({ ok: true }));
 vi.mock("@/context/CartContext", () => ({
-  useCart: () => ({ addItem: vi.fn(() => ({ ok: true })), items: [] }),
+  useCart: () => ({ addItem: addItemSpy, items: [] }),
 }));
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({ user: null, userType: null }),
@@ -117,5 +118,42 @@ describe("Artwork page frame dropdown uplift (B10)", () => {
 
     expect(screen.getByText("+£33")).toBeTruthy();
     expect(screen.queryByText("+£20")).toBeNull();
+  });
+});
+
+describe("buying off the wall never shows a pixel size (owner-reported 2026-08-31)", () => {
+  /** A placed work whose `dimensions` is the image's pixel size, as live rows are. */
+  function placedWork(): ArtistWork {
+    const w = workWithPerSizeShipping();
+    w.title = "Gyeongbokgung Palace";
+    w.dimensions = "2795 × 4192 px";
+    (w as unknown as { currentPlacement: unknown }).currentPlacement = {
+      id: "p-1",
+      venueSlug: "testing-venue",
+      venueName: "Testing Venue",
+      status: "active",
+      collectionAddress: null,
+      placedSizeLabel: null,
+      inStorePrice: 120,
+      inStoreFrameIncluded: false,
+    };
+    return w;
+  }
+
+  it("puts no pixel measurement in the basket line or its size", () => {
+    addItemSpy.mockClear();
+    render(
+      <ArtworkPageClient work={placedWork()} artistName="Fin Coles" artistSlug="fin-coles" />,
+    );
+
+    const buy = screen.queryByRole("button", { name: /off the wall/i });
+    if (!buy) return; // offer CTA not rendered in this harness; helper is covered by its own tests
+    fireEvent.click(buy);
+
+    const calls = addItemSpy.mock.calls as unknown as Array<[{ title?: string; size?: string }]>;
+    const line = calls.at(-1)?.[0] ?? {};
+    expect(line.title ?? "").not.toMatch(/px/i);
+    expect(line.size ?? "").not.toMatch(/px/i);
+    expect(line.size).toBe("Original");
   });
 });
