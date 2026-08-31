@@ -107,14 +107,9 @@ const FAQ_ITEMS = [
       "You pick from three placement methods: free QR-loan (the artist gets a share of QR sales, you pay nothing for the art), paid loan (a monthly fee to display), or outright purchase.",
   },
   {
-    question: "Can I cancel a managed plan?",
-    answer:
-      "Yes, any time, no notice period. You keep the last shortlist.",
-  },
-  {
     question: "Do you visit in person?",
     answer:
-      `Not on ${gbp(CURATION_TIERS.single_wall.priceGbp)} to ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)} plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.`,
+      `Not on ${gbp(CURATION_TIERS.single_wall.priceGbp)} to ${gbp(CURATION_TIERS.full_space.priceGbp)} plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.`,
   },
   {
     question: "Are prices inclusive of VAT?",
@@ -345,8 +340,6 @@ export default function CuratedClient() {
               <span>From {gbp(CURATION_TIERS.single_wall.priceGbp)}</span>
               <span className="w-1 h-1 rounded-full bg-white/30" />
               <span>Delivered in 5 business days</span>
-              <span className="w-1 h-1 rounded-full bg-white/30" />
-              <span>Cancel managed plans anytime</span>
             </div>
           </div>
         </div>
@@ -399,7 +392,7 @@ export default function CuratedClient() {
               <div className="mb-12 max-w-2xl">
                 <h2 className="text-3xl md:text-4xl mb-3">Plans</h2>
                 <p className="text-muted leading-relaxed">
-                  One-off curation when you need it. Managed rotation when
+                  One-off curation when you need it. A programme when
                   you don&rsquo;t.
                 </p>
               </div>
@@ -426,14 +419,17 @@ export default function CuratedClient() {
                 </div>
               </div>
 
-              {/* Managed group */}
+              {/* Managed group: currently just the one quoted Programmes
+                  card. Task 3 (Wallplace Programmes plan) builds this out
+                  into its own dedicated /programmes surface; this section
+                  stays as the /curated summary entry point into it. */}
               <div className="mb-14">
                 <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
                   <h3 className="font-serif text-2xl text-foreground">
-                    Managed curation
+                    Programmes
                   </h3>
                   <p className="text-xs text-muted">
-                    Ongoing rotation as a subscription. Cancel anytime.
+                    Ongoing rotation, quoted per site.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
@@ -474,7 +470,7 @@ export default function CuratedClient() {
                   </p>
                   <p className="text-sm text-foreground/85 leading-relaxed">
                     Single wall → Full space when you have 2+ walls or
-                    want continuity across them. One-off → Managed when
+                    want continuity across them. One-off → Programme when
                     refresh frequency matters more than spend.
                   </p>
                 </div>
@@ -593,12 +589,9 @@ export default function CuratedClient() {
               <p className="text-sm text-muted mb-6">
                 {!selectedTier
                   ? "We'll build a curated shortlist tuned to your space."
-                  : selectedTier === "bespoke"
+                  : selectedTier === "bespoke" || selectedTier === "programme"
                     ? "We'll review your brief and email a tailored quote within 2 business days."
-                    : selectedTier === "managed_monthly" ||
-                      selectedTier === "managed_quarterly"
-                      ? "We'll set up your subscription and send your first shortlist within 5 business days."
-                      : "We'll confirm payment and email your shortlist within 5 business days."}
+                    : "We'll confirm payment and email your shortlist within 5 business days."}
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-5">
@@ -793,12 +786,9 @@ export default function CuratedClient() {
                   <p className="text-xs text-muted">
                     {!selectedTier
                       ? "Select a plan above to continue."
-                      : selectedTier === "bespoke"
+                      : selectedTier === "bespoke" || selectedTier === "programme"
                         ? "No charge yet, we'll email a tailored quote."
-                        : selectedTier === "managed_monthly" ||
-                          selectedTier === "managed_quarterly"
-                          ? `You'll be sent to secure Stripe checkout. Subscription: ${selectedTierData?.priceLabel}. Cancel anytime.`
-                          : `You'll be sent to secure Stripe checkout to pay ${selectedTierData?.priceLabel}.`}
+                        : `You'll be sent to secure Stripe checkout to pay ${selectedTierData?.priceLabel}.`}
                   </p>
                   <button
                     type="submit"
@@ -809,13 +799,9 @@ export default function CuratedClient() {
                       ? "Submitting…"
                       : !selectedTier
                         ? "Select a plan"
-                        : selectedTier === "bespoke"
+                        : selectedTier === "bespoke" || selectedTier === "programme"
                           ? "Request quote"
-                          : selectedTier === "managed_monthly"
-                            ? `Subscribe, ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}/mo`
-                            : selectedTier === "managed_quarterly"
-                              ? `Subscribe, ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)}/qtr`
-                              : `Pay ${selectedTierData?.priceLabel}`}
+                          : `Pay ${selectedTierData?.priceLabel}`}
                   </button>
                 </div>
               </form>

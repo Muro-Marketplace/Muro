@@ -1,77 +1,53 @@
-import { readdirSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { describe, it, expect } from "vitest";
-import { CURATION_TIERS, CURATION_TIER_KEYS } from "./curation-tiers";
+import { describe, expect, it } from "vitest";
+import {
+  CURATION_TIERS,
+  PROGRAMME_LADDER,
+  PROGRAMME_PIECE_RENT_MIN_GBP,
+  PROGRAMME_PIECE_RENT_TARGET_GBP,
+  PROGRAMME_RENT_SHARE_MAX,
+} from "./curation-tiers";
 
-// T10. The curation_requests.tier CHECK allowed only single_wall / full_space /
-// bespoke, while the route accepted managed_monthly and managed_quarterly too. Any
-// managed sign-up therefore violated the constraint on insert and 500'd, so the
-// £79.99/month and £199.99/quarter tiers were unsellable.
-//
-// D0 rules "fix, don't remove": widen the CHECK. This file is the guard that stops
-// the two drifting apart again, which is the actual defect. A tier added in code
-// without a matching migration fails here.
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = path.resolve(here, "../../supabase/migrations");
-
-/** The tier values the latest tier CHECK in the migrations permits. */
-function tierValuesFromMigrations(): string[] {
-  const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
-  let latest: string[] | null = null;
-  for (const file of files) {
-    const sql = readFileSync(path.join(MIGRATIONS_DIR, file), "utf8");
-    // Match the ARRAY[...] / IN (...) list of a tier check on curation_requests.
-    const check = /curation_requests_tier_check[\s\S]{0,400}?CHECK\s*\(([\s\S]*?)\)\s*;/i.exec(sql);
-    if (!check) continue;
-    const values = [...check[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
-    if (values.length) latest = values;
-  }
-  if (!latest) throw new Error("no curation_requests tier CHECK found in any migration");
-  return latest;
-}
-
-describe("curation tiers", () => {
-  it("exposes all five tiers, including the two managed ones", () => {
-    expect(CURATION_TIER_KEYS).toEqual([
-      "single_wall",
-      "full_space",
-      "bespoke",
-      "managed_monthly",
-      "managed_quarterly",
-    ]);
+// Wallplace Programmes plan, Task 1. Supersedes the T10-era version of this
+// file: managed_monthly and managed_quarterly never sold a unit (their Stripe
+// price IDs were never configured, so the route 503'd), and are retired here
+// in favour of one quoted `programme` tier. Every programme deal is quoted by
+// an admin, so there is no fixed price ID and nothing to keep in step with a
+// Stripe price. The old DB-CHECK/code sync tests this file used to carry
+// (T10's actual regression guard) move with the tier CHECK migration to
+// Task 2, which is the task that teaches curation_requests.tier about
+// `programme`.
+describe("programme tier", () => {
+  it("is quote-first, from £79.99, on a 12 month term", () => {
+    expect(CURATION_TIERS.programme.priceGbp).toBe(79.99);
+    expect(CURATION_TIERS.programme.payFirst).toBe(false);
+    expect(CURATION_TIERS.programme.termMonths).toBe(12);
   });
 
-  it("prices the managed tiers as advertised", () => {
-    expect(CURATION_TIERS.managed_monthly).toMatchObject({
-      kind: "managed",
-      priceGbp: 79.99,
-      interval: "month",
-    });
-    expect(CURATION_TIERS.managed_quarterly).toMatchObject({
-      kind: "managed",
-      priceGbp: 199.99,
-      interval: "quarter",
-    });
+  it("retires the fixed-price managed tiers", () => {
+    expect("managed_monthly" in CURATION_TIERS).toBe(false);
+    expect("managed_quarterly" in CURATION_TIERS).toBe(false);
   });
 
-  it("keeps the DB CHECK in step with the code, which is the T10 defect", () => {
-    // If these ever disagree the managed tiers become unsellable again: the route
-    // accepts the value and the insert violates the constraint.
-    expect([...tierValuesFromMigrations()].sort()).toEqual([...CURATION_TIER_KEYS].sort());
+  it("prices the ladder at about £25 per piece per month", () => {
+    expect(PROGRAMME_LADDER).toHaveLength(4);
+    for (const rung of PROGRAMME_LADDER) {
+      const perPiece = rung.monthlyGbp / rung.pieces;
+      expect(perPiece).toBeGreaterThanOrEqual(24);
+      expect(perPiece).toBeLessThanOrEqual(27);
+    }
   });
 
-  it("has a migration that permits both managed tiers", () => {
-    const permitted = tierValuesFromMigrations();
-    expect(permitted).toContain("managed_monthly");
-    expect(permitted).toContain("managed_quarterly");
+  it("keeps the artist rent guardrails", () => {
+    expect(PROGRAMME_PIECE_RENT_MIN_GBP).toBe(5);
+    expect(PROGRAMME_PIECE_RENT_TARGET_GBP).toBe(10);
+    expect(PROGRAMME_RENT_SHARE_MAX).toBe(0.7);
   });
 
-  it("still permits the three original tiers, so existing rows stay valid", () => {
-    const permitted = tierValuesFromMigrations();
-    for (const tier of ["single_wall", "full_space", "bespoke"]) {
-      expect(permitted, `${tier} must remain valid`).toContain(tier);
+  it("keeps the artist share near 40% at every rung when rent is on target", () => {
+    for (const rung of PROGRAMME_LADDER) {
+      const share = (rung.pieces * PROGRAMME_PIECE_RENT_TARGET_GBP) / rung.monthlyGbp;
+      expect(share).toBeGreaterThan(0.35);
+      expect(share).toBeLessThan(PROGRAMME_RENT_SHARE_MAX);
     }
   });
 });

@@ -11,6 +11,7 @@ import {
   CURATION_TIERS as TIERS,
   CURATION_TIER_KEYS,
   type CurationTierKey as TierKey,
+  type CurationTier,
   type ManagedTier,
 } from "@/lib/curation-tiers";
 
@@ -94,7 +95,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Please complete the required fields" }, { status: 400 });
   }
   const d = parsed.data;
-  const tier = TIERS[d.tier as TierKey];
+  // Task 1, Wallplace Programmes: no live tier has kind "managed" any more
+  // (managed_monthly / managed_quarterly are retired), so TIERS[...] alone
+  // infers a narrower type and the `tier.kind === "managed"` branch below
+  // fails to compile (a plain `: CurationTier` annotation does not widen
+  // this, since TS still narrows a const's flow type to its initializer).
+  // The `as CurationTier` assertion keeps that branch (and the ManagedTier-shaped
+  // guard it narrows to) type-checking as genuinely-unreachable-until-
+  // configured code, unchanged in behaviour. Task 2 deletes this branch
+  // entirely and adds real routing for tier.kind === "quoted_subscription"
+  // (the new `programme` tier); until then a programme submission falls
+  // through to the one-off Stripe Checkout branch below, which is wrong and
+  // is exactly what Task 2 fixes.
+  const tier = TIERS[d.tier as TierKey] as CurationTier;
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
 
   // Try to associate with a logged-in user if an auth header is present, but

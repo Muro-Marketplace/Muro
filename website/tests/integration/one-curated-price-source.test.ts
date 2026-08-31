@@ -73,19 +73,15 @@ describe("curated pricing has one source of truth", () => {
     expect(byKey.bespoke.priceLabel).toBe("From £299");
     expect(byKey.bespoke.cta).toBe("Request a quote");
 
-    expect(byKey.managed_monthly.priceLabel).toBe("£79.99 / month");
-    expect(byKey.managed_monthly.cta).toBe("Start monthly, £79.99/mo");
-    expect(byKey.managed_monthly.detail.faq[0].q).toBe(
-      "Do I pay for the art on top of £79.99?",
+    // Task 1, Wallplace Programmes: managed_monthly and managed_quarterly are
+    // retired (never sold a unit) in favour of one quoted programme tier.
+    expect(byKey.programme.priceLabel).toBe("From £79.99 per site per month");
+    expect(byKey.programme.cta).toBe("Request a programme quote");
+    expect(byKey.programme.detail.highlights[3]).toBe(
+      "Quoted per site once we understand your space, from £79.99 a month",
     );
-    expect(byKey.managed_monthly.detail.faq[0].a).toBe(
-      "Curation is £79.99. The art itself follows whichever arrangement you pick, free QR-loan, paid loan, or outright purchase.",
-    );
-
-    expect(byKey.managed_quarterly.priceLabel).toBe("£199.99 / quarter");
-    expect(byKey.managed_quarterly.cta).toBe("Start quarterly, £199.99/qtr");
-    expect(byKey.managed_quarterly.detail.faq[1].a).toBe(
-      "Curation is the £199.99. The art itself follows whichever arrangement you pick.",
+    expect(byKey.programme.detail.faq[0].a).toBe(
+      "Every programme is quoted for your site, from £79.99 a month depending on how many pieces and walls are involved.",
     );
   });
 });

@@ -101,18 +101,20 @@ const ONE_OFF_BODY = {
   contactEmail: "maya@example.com",
 };
 
-const MANAGED_BODY = {
-  tier: "managed_monthly",
-  venueName: "The Copper Kettle",
-  contactName: "Maya Chen",
-  contactEmail: "maya@example.com",
-};
-
-// D22: Stripe price fixtures keyed by price id. An id not in the map defaults to
-// a price that matches managed_monthly, so the D19 managed cases proceed to
-// session creation. A fixture value of "THROW" makes the retrieve reject. Tests
-// that need a specific outcome use a UNIQUE price id, because the route caches
-// prices in module scope for 5 minutes and that cache is not cleared between tests.
+// D22: Stripe price fixtures keyed by price id, kept for whichever future
+// tier needs a pre-configured Stripe price validated against it. A fixture
+// value of "THROW" makes the retrieve reject. Tests that need a specific
+// outcome use a UNIQUE price id, because the route caches prices in module
+// scope for 5 minutes and that cache is not cleared between tests.
+//
+// Wallplace Programmes plan, Task 1: the managed_monthly / managed_quarterly
+// tiers this fixture and the D19/D22 tests below were written against are
+// retired (CURATION_TIER_KEYS no longer contains them, so a request naming
+// either now 400s before reaching any of this Stripe-price logic). The tests
+// that exercised them are removed rather than rewritten, because there is no
+// live tier of kind "managed" left to exercise; Task 2 covers the retired
+// tiers now 400ing, and Task 4 covers price validation for the new quoted
+// `programme` tier's dynamic price_data checkout.
 const MATCHING_MONTHLY = {
   recurring: { interval: "month", interval_count: 1 },
   unit_amount: 7999,
@@ -165,91 +167,13 @@ describe("POST /api/curation, D19 orphan-payment guard", () => {
     expect(res.status).toBe(500);
     expect(deletes).toContainEqual(["id", "cr_1"]);
   });
-
-  it("managed: retains the row and returns the checkout url when the session link update throws", async () => {
-    process.env.STRIPE_PRICE_CURATION_MONTHLY = "price_test_123";
-    linkBehaviour = "throw";
-
-    const res = await POST(req(MANAGED_BODY));
-
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json).toMatchObject({ mode: "checkout", url: "https://stripe.example/pay", id: "cr_1" });
-    expect(deletes).toHaveLength(0);
-  });
-
-  it("managed: deletes the pending row when Stripe session creation itself fails", async () => {
-    process.env.STRIPE_PRICE_CURATION_MONTHLY = "price_test_123";
-    sessionsCreateMock.mockRejectedValueOnce(new Error("stripe down"));
-
-    const res = await POST(req(MANAGED_BODY));
-
-    expect(res.status).toBe(500);
-    expect(deletes).toContainEqual(["id", "cr_1"]);
-  });
 });
 
-const MANAGED_QUARTERLY_BODY = {
-  tier: "managed_quarterly",
-  venueName: "The Copper Kettle",
-  contactName: "Maya Chen",
-  contactEmail: "maya@example.com",
-};
-
-describe("POST /api/curation, D22 managed price validation", () => {
-  it("proceeds to checkout when the Stripe price matches the advertised tier", async () => {
-    process.env.STRIPE_PRICE_CURATION_MONTHLY = "price_d22_match";
-    priceFixtures["price_d22_match"] = MATCHING_MONTHLY;
-
-    const res = await POST(req(MANAGED_BODY));
-
-    expect(pricesRetrieveMock).toHaveBeenCalledWith("price_d22_match");
-    expect(sessionsCreateMock).toHaveBeenCalledOnce();
-    expect(res.status).toBe(200);
-    expect(deletes).toHaveLength(0);
-  });
-
-  it("503s and deletes the row when the price bills the wrong cadence", async () => {
-    process.env.STRIPE_PRICE_CURATION_QUARTERLY = "price_d22_cadence";
-    // Quarterly tier, but the price is configured monthly (interval_count 1).
-    priceFixtures["price_d22_cadence"] = {
-      recurring: { interval: "month", interval_count: 1 },
-      unit_amount: 19999,
-      currency: "gbp",
-    };
-
-    const res = await POST(req(MANAGED_QUARTERLY_BODY));
-
-    expect(res.status).toBe(503);
-    // No payable session must be created against a mispriced tier.
-    expect(sessionsCreateMock).not.toHaveBeenCalled();
-    expect(deletes).toContainEqual(["id", "cr_1"]);
-  });
-
-  it("503s and deletes the row when the price amount is wrong", async () => {
-    process.env.STRIPE_PRICE_CURATION_MONTHLY = "price_d22_amount";
-    // Right cadence, wrong amount (£99.99 instead of £79.99).
-    priceFixtures["price_d22_amount"] = {
-      recurring: { interval: "month", interval_count: 1 },
-      unit_amount: 9999,
-      currency: "gbp",
-    };
-
-    const res = await POST(req(MANAGED_BODY));
-
-    expect(res.status).toBe(503);
-    expect(sessionsCreateMock).not.toHaveBeenCalled();
-    expect(deletes).toContainEqual(["id", "cr_1"]);
-  });
-
-  it("503s and deletes the row when the price retrieve fails", async () => {
-    process.env.STRIPE_PRICE_CURATION_MONTHLY = "price_d22_throw";
-    priceFixtures["price_d22_throw"] = "THROW";
-
-    const res = await POST(req(MANAGED_BODY));
-
-    expect(res.status).toBe(503);
-    expect(sessionsCreateMock).not.toHaveBeenCalled();
-    expect(deletes).toContainEqual(["id", "cr_1"]);
-  });
-});
+// Wallplace Programmes plan, Task 1: this describe block used to hold four
+// "managed: ..." / D22 tests exercising managed_monthly / managed_quarterly
+// checkout and Stripe price validation. Both tiers are retired (removed from
+// CURATION_TIERS, so CURATION_TIER_KEYS / the zod schema reject them with a
+// 400 before any of this route's Stripe logic runs), and there is currently
+// no live tier of kind "managed" to exercise this way, so those tests are
+// removed rather than rewritten. See also src/lib/curation-tiers.test.ts
+// ("retires the fixed-price managed tiers").

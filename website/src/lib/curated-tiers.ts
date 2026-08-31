@@ -19,8 +19,7 @@ export type CuratedTierKey =
   | "single_wall"
   | "full_space"
   | "bespoke"
-  | "managed_monthly"
-  | "managed_quarterly";
+  | "programme";
 
 export type CuratedTierGroup = "one_off" | "managed";
 
@@ -223,101 +222,56 @@ export const CURATED_TIERS: CuratedTier[] = [
     },
   },
   {
-    key: "managed_monthly",
-    label: "Monthly rotation",
-    priceLabel: `${gbp(CURATION_TIERS.managed_monthly.priceGbp)} / month`,
-    cta: `Start monthly, ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}/mo`,
+    key: "programme",
+    label: "Programmes",
+    priceLabel: `From ${gbp(CURATION_TIERS.programme.priceGbp)} per site per month`,
+    cta: "Request a programme quote",
     group: "managed",
     summary: {
-      strapline: "New shortlist every month, walls kept fresh.",
+      strapline: "Original art on your walls all year, with rent paid to every artist.",
       bullets: [
-        "New curated shortlist each month",
-        "Rotation suggestions tuned to season and traffic",
-        "Priority support and swap coordination",
-        "Cancel anytime",
+        "Original art from local artists, rotated through the year",
+        "Installed and labelled, with a QR card for every piece",
+        "Rent paid to every artist on the wall",
+        "Quoted per site on a twelve month term",
       ],
     },
     detail: {
       strapline:
-        "A new curated shortlist every month, keeping walls fresh without you lifting a finger.",
+        "Original art from local artists on your walls all year, rotated, installed and labelled, with rent paid to every artist on the wall. Quoted per site on a twelve month term. For offices, hotels, restaurants and any space that wants its walls handled.",
       highlights: [
-        "One new shortlist per month with 3 to 5 fresh options",
-        "Rotation suggestions tuned to season, traffic, and what's performing",
-        "Priority artist coordination, we handle swaps end-to-end",
-        "Cancel any time; no notice period",
+        "Original art from local artists on your walls, all year round",
+        "Rotated, installed and labelled, so pieces stay fresh without you lifting a finger",
+        "Rent paid to every artist on the wall, not just a one-off fee",
+        `Quoted per site once we understand your space, from ${gbp(CURATION_TIERS.programme.priceGbp)} a month`,
+        "A twelve month term, built for offices, hotels, restaurants, and any space that wants its walls handled",
       ],
       howItWorks: [
         {
-          title: "Monthly drop",
-          body: "On the same day each month you get a curated shortlist ready to review.",
+          title: "1. Tell us about your site",
+          body: "Share the space, wall count, and the kind of art you want on show.",
         },
         {
-          title: "You pick and place",
-          body: "Accept the ones you want. We handle artist outreach and logistics.",
+          title: "2. We send a quote",
+          body: "A tailored monthly or quarterly price for your site, usually within 2 business days.",
         },
         {
-          title: "Swap + rotate",
-          body: "If you're rotating existing work, we coordinate the collection and return.",
+          title: "3. Install and label",
+          body: "Original pieces go up, labelled with a QR card so guests can find and buy the artist's work.",
+        },
+        {
+          title: "4. Rotate through the year",
+          body: "Pieces refresh on schedule, and rent is paid to every artist on the wall for as long as their work is up.",
         },
       ],
       faq: [
         {
-          q: `Do I pay for the art on top of ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}?`,
-          a: `Curation is ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}. The art itself follows whichever arrangement you pick, free QR-loan, paid loan, or outright purchase.`,
+          q: "How is the price worked out?",
+          a: `Every programme is quoted for your site, from ${gbp(CURATION_TIERS.programme.priceGbp)} a month depending on how many pieces and walls are involved.`,
         },
         {
-          q: "What happens if I cancel?",
-          a: "No fee. You keep the last shortlist and any live placements continue as normal.",
-        },
-      ],
-    },
-  },
-  {
-    key: "managed_quarterly",
-    label: "Quarterly refresh",
-    priceLabel: `${gbp(CURATION_TIERS.managed_quarterly.priceGbp)} / quarter`,
-    cta: `Start quarterly, ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)}/qtr`,
-    group: "managed",
-    summary: {
-      strapline: "Seasonal refresh, less admin.",
-      bullets: [
-        "One considered refresh every three months",
-        "Works best paired with a rotating loan arrangement",
-        "Seasonal mood guidance included",
-        "Cancel anytime",
-      ],
-    },
-    detail: {
-      strapline:
-        "One considered seasonal refresh every three months, less admin than monthly.",
-      highlights: [
-        "One full shortlist every quarter (four per year)",
-        "Seasonal mood and palette guidance",
-        "Pairs well with a rotating loan arrangement",
-        "Cancel any time; no notice period",
-      ],
-      howItWorks: [
-        {
-          title: "Quarterly drop",
-          body: "Every three months you get a fresh shortlist with seasonal notes.",
-        },
-        {
-          title: "Optionally rotate",
-          body: "We can coordinate pickup of existing work and install of the new shortlist.",
-        },
-        {
-          title: "Between quarters you're self-serve",
-          body: "Keep browsing the marketplace any time if something catches your eye.",
-        },
-      ],
-      faq: [
-        {
-          q: "Is this better than monthly?",
-          a: "For most venues, yes. Monthly suits high-traffic / hospitality where walls are a brand asset. Quarterly is the norm for cafés, offices, and boutique retail.",
-        },
-        {
-          q: "Do quarterly works cost extra?",
-          a: `Curation is the ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)}. The art itself follows whichever arrangement you pick.`,
+          q: "Do the artists get paid, or just Wallplace?",
+          a: "Every artist with a piece on your walls is paid rent for as long as it's up, alongside their share if a piece sells.",
         },
       ],
     },
@@ -339,9 +293,15 @@ export function getCuratedTier(key: string): CuratedTier | undefined {
  * one-off tiers where there is no subscription and nothing to cancel. Only
  * the managed (recurring) tiers may promise cancellation; the one-off tiers
  * state what the payment actually is.
+ *
+ * Wallplace Programmes plan: the managed group's only member is now the
+ * quoted `programme` tier, a termed arrangement rather than a self-serve
+ * subscription, so the managed branch no longer promises "cancel any time"
+ * either. The E38 bug (a false term of sale on a purchase-decision surface)
+ * cuts both ways; this branch would repeat it in the other direction.
  */
 export function curatedTierFooterNote(group: CuratedTierGroup): string {
   return group === "managed"
-    ? "cancel any time."
+    ? "quoted per site, on a twelve month term."
     : "a one-off payment, no subscription.";
 }

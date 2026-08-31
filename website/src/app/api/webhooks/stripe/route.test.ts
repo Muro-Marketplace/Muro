@@ -2511,7 +2511,13 @@ describe("Stripe webhook — curation payment id storage (D20)", () => {
     expect(alert.subject).toContain("Curation paid");
     expect(alert.subject).toContain("The Copper Kettle");
     const values = (alert.fields ?? []).map((f) => f.value).join(" | ");
-    expect(values).toContain("Managed, monthly rotation");
+    // Wallplace Programmes plan, Task 1: managed_monthly is retired from
+    // CURATION_TIERS, so the "One label source: CURATION_TIERS" lookup this
+    // fixture exercises (route.ts) now misses and falls back to the raw tier
+    // key rather than the old "Managed, monthly rotation" label. This is the
+    // intended, existing graceful-degradation behaviour for a historical row
+    // whose tier no longer has a live marketing label.
+    expect(values).toContain("managed_monthly");
     expect(values).toContain("79.99");
     expect(values).toContain("Managed subscription, first payment");
   });
