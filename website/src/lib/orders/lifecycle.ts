@@ -70,7 +70,15 @@ function emailsForEvent(
     case "order.out_for_delivery":
       return [{ to: input.buyerEmail, template: "order_out_for_delivery", recipient: "buyer" }];
     case "order.delivered":
-      return [{ to: input.buyerEmail, template: "order_delivered", recipient: "buyer" }];
+      // Row 874. The buyer's three templates fired and the artist got nothing
+      // on any transition, including this one, which ends the payout hold and
+      // releases their money. Processing and out-for-delivery are the artist's
+      // own clicks and telling them what they just did would be noise; this is
+      // somebody else's action and it moves their money.
+      return [
+        { to: input.buyerEmail, template: "order_delivered", recipient: "buyer" },
+        { to: input.artistEmail, template: "artist_order_delivered", recipient: "artist" },
+      ];
     case "order.cancelled":
       // 09 item 1.5: this used to return [] and a second branch inside
       // orders/route.ts sent the cancellation, so which email an order event

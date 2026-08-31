@@ -29,6 +29,10 @@ vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })
 vi.mock("@/lib/stripe-connect", () => ({ executeTransfer: vi.fn(async () => {}) }));
 vi.mock("@/lib/refunds/cancellation", () => ({ processCancellationRefund: vi.fn(async () => {}) }));
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
+const { createNotificationMock } = vi.hoisted(() => ({
+  createNotificationMock: vi.fn(async () => {}),
+}));
+vi.mock("@/lib/notifications", () => ({ createNotification: createNotificationMock }));
 
 import { PATCH } from "./route";
 import { executeTransfer } from "@/lib/stripe-connect";
@@ -58,6 +62,8 @@ function chainSelectSingle(row: unknown, visible: unknown = row) {
 beforeEach(() => {
   fromMock.mockReset();
   actAs("seller");
+  createNotificationMock.mockReset();
+  createNotificationMock.mockResolvedValue(undefined);
 });
 
 describe("PATCH /api/orders state machine", () => {
@@ -841,5 +847,105 @@ describe("confirming a venue collection closes the placement (row 727)", () => {
 
     expect(placementUpdate).toBeNull();
     expect(orderUpdate).toBeTruthy();
+  });
+});
+
+// Row 874 / production pass 2. "The buyer's three templates fired
+// (customer_order_processing, customer_order_out_for_delivery,
+// customer_order_delivered) and the lifecycle events were recorded, but NO
+// email and no bell reached the artist on any transition, including the one
+// that released their £50.99 payout."
+//
+// The email half is in lib/orders/lifecycle (artist_order_delivered). This is
+// the bell, and it fires only for a transition the artist did NOT make: they
+// drive processing and shipped themselves, and telling someone what they have
+// just clicked is noise.
+describe("the artist is told when someone else moves their order (row 874)", () => {
+  let updated: Record<string, unknown> | null = null;
+
+  function setupOrder(row: Record<string, unknown>) {
+    updated = null;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "orders") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: row }),
+              maybeSingle: async () => ({ data: row }),
+              or: () => ({ maybeSingle: async () => ({ data: row }) }),
+              eq: () => ({ maybeSingle: async () => ({ data: row }) }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            updated = payload;
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      const chain: Record<string, unknown> = {
+        single: async () => ({ data: null }),
+        maybeSingle: async () => ({ data: null }),
+        then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+      };
+      chain.eq = () => chain;
+      chain.in = () => chain;
+      return {
+        select: () => chain,
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+      };
+    });
+  }
+
+  const SHIPPED = {
+    id: "ord_bell",
+    status: "shipped",
+    artist_user_id: "u-artist",
+    artist_slug: "maya-chen",
+    buyer_user_id: "u-buyer",
+    buyer_email: "b@x.com",
+    venue_slug: null,
+    status_history: [],
+    delivered_at: null,
+  };
+
+  function patch(body: unknown): Request {
+    return new Request("http://localhost/api/orders", {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("rings the artist when the buyer confirms delivery", async () => {
+    actAs("buyer");
+    setupOrder(SHIPPED);
+
+    await PATCH(patch({ orderId: "ord_bell", status: "delivered" }));
+
+    expect(createNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u-artist", title: "Order delivered" }),
+    );
+  });
+
+  it("says nothing to the artist about a move the artist made", async () => {
+    actAs("seller");
+    setupOrder({ ...SHIPPED, status: "processing" });
+
+    await PATCH(patch({ orderId: "ord_bell", status: "shipped", trackingNumber: "TRK1" }));
+
+    expect(createNotificationMock).not.toHaveBeenCalled();
+  });
+
+  it("still writes the order when the bell fails", async () => {
+    actAs("buyer");
+    setupOrder(SHIPPED);
+    createNotificationMock.mockRejectedValueOnce(new Error("bell down"));
+
+    const res = await PATCH(patch({ orderId: "ord_bell", status: "delivered" }));
+
+    expect(res.status).toBe(200);
+    expect(updated).toMatchObject({ status: "delivered" });
   });
 });

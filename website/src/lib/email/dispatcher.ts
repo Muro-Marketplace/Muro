@@ -17,6 +17,9 @@ import { substituteTokens } from "./subject-tokens";
 
 export type TransactionalTemplate =
   | "artist_order_received"
+  // Row 874: the artist was told nothing on any transition, including the one
+  // that releases their payout.
+  | "artist_order_delivered"
   | "order_placed"
   | "order_processing"
   | "order_out_for_delivery"
@@ -45,6 +48,7 @@ export interface SendTransactionalResult {
 // longer reached through this dispatcher.
 const TEMPLATE_BINDINGS: Record<TransactionalTemplate, string> = {
   artist_order_received: "artist_order_received",
+  artist_order_delivered: "artist_order_delivered",
   order_placed: "customer_order_placed",
   order_processing: "customer_order_processing",
   order_out_for_delivery: "customer_order_out_for_delivery",

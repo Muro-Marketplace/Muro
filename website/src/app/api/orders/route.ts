@@ -24,6 +24,7 @@ const SELLER_STATUSES = new Set<string>([
 ]);
 const BUYER_STATUSES = new Set<string>(["delivered", "disputed", "cancelled"]);
 import { recordOrderEvent } from "@/lib/orders/lifecycle";
+import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import {
   CustomerOrderStatusUpdate,
@@ -296,6 +297,45 @@ export async function PATCH(request: Request) {
       });
     } catch (lifecycleErr) {
       console.error("[orders PATCH] lifecycle hook:", lifecycleErr);
+    }
+
+    // Row 874. "NO email and no bell reached the artist on any transition,
+    // including the one that released their £50.99 payout." The email half is
+    // fixed in lib/orders/lifecycle (artist_order_delivered); this is the bell.
+    //
+    // Only for a transition the artist did NOT make. Telling someone what they
+    // have just clicked is noise, and the artist drives processing and shipped
+    // themselves.
+    try {
+      const artistId = (order as { artist_user_id?: string | null }).artist_user_id ?? null;
+      if (artistId && artistId !== auth.user!.id) {
+        const bell: Record<string, { title: string; body: string }> = {
+          delivered: {
+            title: "Order delivered",
+            body: `The buyer confirmed order ${orderId} arrived. Your payout is released.`,
+          },
+          cancelled: {
+            title: "Order cancelled",
+            body: `Order ${orderId} was cancelled.`,
+          },
+          disputed: {
+            title: "Problem reported on an order",
+            body: `The buyer reported a problem with order ${orderId}.`,
+          },
+        };
+        const copy = bell[status];
+        if (copy) {
+          await createNotification({
+            userId: artistId,
+            kind: "order_status",
+            title: copy.title,
+            body: copy.body,
+            link: "/artist-portal/orders",
+          });
+        }
+      }
+    } catch (bellErr) {
+      console.error("[orders PATCH] artist bell:", bellErr);
     }
 
     // Phase 2.3 J1 audit fix: the dispatcher above (recordOrderEvent)

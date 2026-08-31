@@ -131,6 +131,7 @@ import OrderDisputeResolved from "./templates/orders/OrderDisputeResolved";
 // Phase 2 lifecycle templates — purpose-built per Phase 2.0c so the J1
 // dispatcher binds one logical event to one template.
 import ArtistOrderReceived from "./templates/orders/ArtistOrderReceived";
+import ArtistOrderDelivered from "./templates/orders/ArtistOrderDelivered";
 import CustomerOrderPlaced from "./templates/orders/CustomerOrderPlaced";
 import CustomerOrderProcessing from "./templates/orders/CustomerOrderProcessing";
 import CustomerOrderOutForDelivery from "./templates/orders/CustomerOrderOutForDelivery";
@@ -385,6 +386,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
 
   // Phase 2 lifecycle (Phase 2.0c)
   ArtistOrderReceived,
+  ArtistOrderDelivered,
   CustomerOrderPlaced,
   CustomerOrderProcessing,
   CustomerOrderOutForDelivery,
