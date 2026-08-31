@@ -170,6 +170,36 @@ function makeDbByColumn(byColumn: {
 }
 
 /**
+ * Finding 1 (review fix): like makeDbByColumn, but each column can also carry
+ * its own PostgREST-shaped error -- makeDbByColumn above always answers
+ * `{ error: null }`, which cannot express "this lookup's own query failed"
+ * (e.g. a phantom column, see tests/integration/phantom-columns.test.ts)
+ * distinctly from "this lookup legitimately found no row". Used to pin
+ * findBySubscription's and findByRequestId's error handling independently.
+ */
+function makeDbWithColumnResults(
+  byColumn: Record<
+    string,
+    { data: Record<string, unknown> | null; error: { message: string } | null }
+  >,
+) {
+  const db = {
+    from(table: string) {
+      if (table !== "curation_requests") throw new Error(`unexpected table ${table}`);
+      return {
+        select: () => ({
+          eq: (col: string) => ({
+            maybeSingle: async () => byColumn[col] ?? { data: null, error: null },
+          }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+    },
+  } as unknown as SupabaseClient;
+  return db;
+}
+
+/**
  * An invoice carrying a subscription id in the SDK-22 canonical shape, and
  * optionally the curation_request_id Stripe snapshots onto
  * parent.subscription_details.metadata from the subscription's own metadata
@@ -279,6 +309,96 @@ describe("handleCurationInvoicePaid", () => {
     expect(handled).toBe(true);
     expect(updates[0].status).toBe("in_progress");
     expect(sendAdminAlertMock).not.toHaveBeenCalled();
+  });
+});
+
+// Finding 1 (review fix): findBySubscription and findByRequestId used to
+// destructure only `{ data }` and never look at `{ error }`, so a query that
+// PostgREST rejected wholesale (e.g. a select naming a column the live schema
+// lacks -- see tests/integration/phantom-columns.test.ts) was indistinguishable
+// from a legitimate "no such row": both fell through the `?? null` and came
+// back as a quiet `false` from the handler, with nothing logged. These pin
+// that a query error is now logged loudly (so a real outage is diagnosable)
+// while a genuine no-row match stays exactly as quiet as before.
+describe("findBySubscription / findByRequestId — review fix: query errors are surfaced, not swallowed", () => {
+  it("findBySubscription logs the error and resolves null when its own select errors", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = makeDbWithColumnResults({
+      stripe_subscription_id: {
+        data: null,
+        error: { message: "column curation_requests.quoted_amount_gbp does not exist" },
+      },
+    });
+
+    const handled = await handleCurationInvoicePaid(invoice("sub_broken_select"), db);
+
+    expect(handled).toBe(false);
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledWith(
+      "[curation billing] findBySubscription query failed",
+      expect.objectContaining({
+        subId: "sub_broken_select",
+        error: "column curation_requests.quoted_amount_gbp does not exist",
+      }),
+    );
+    errSpy.mockRestore();
+  });
+
+  it("findBySubscription stays quiet and resolves null when the query legitimately finds no row", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = makeDbWithColumnResults({
+      stripe_subscription_id: { data: null, error: null },
+    });
+
+    const handled = await handleCurationInvoicePaid(invoice("sub_no_such_row"), db);
+
+    expect(handled).toBe(false);
+    expect(errSpy).not.toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it("findByRequestId logs the error and resolves null when its own select errors, after a clean subscription-id miss", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = makeDbWithColumnResults({
+      stripe_subscription_id: { data: null, error: null },
+      id: {
+        data: null,
+        error: { message: "column curation_requests.term_months does not exist" },
+      },
+    });
+
+    const handled = await handleCurationInvoicePaid(
+      invoice("sub_1", null, { curationRequestId: "cr_broken_select" }),
+      db,
+    );
+
+    expect(handled).toBe(false);
+    expect(errSpy).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledWith(
+      "[curation billing] findByRequestId query failed",
+      expect.objectContaining({
+        curationRequestId: "cr_broken_select",
+        error: "column curation_requests.term_months does not exist",
+      }),
+    );
+    errSpy.mockRestore();
+  });
+
+  it("findByRequestId stays quiet and resolves null when the query legitimately finds no row", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = makeDbWithColumnResults({
+      stripe_subscription_id: { data: null, error: null },
+      id: { data: null, error: null },
+    });
+
+    const handled = await handleCurationInvoicePaid(
+      invoice("sub_2", null, { curationRequestId: "cr_no_such_row" }),
+      db,
+    );
+
+    expect(handled).toBe(false);
+    expect(errSpy).not.toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 });
 

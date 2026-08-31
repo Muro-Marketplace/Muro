@@ -82,7 +82,7 @@ async function findBySubscription(
   db: SupabaseClient,
   subId: string,
 ): Promise<CurationRow | null> {
-  const { data } = await db
+  const { data, error } = await db
     .from("curation_requests")
     .select(
       "id, status, contact_email, contact_name, venue_name, tier, quoted_amount_gbp, " +
@@ -90,6 +90,19 @@ async function findBySubscription(
     )
     .eq("stripe_subscription_id", subId)
     .maybeSingle<CurationRow>();
+  // PostgREST rejects a `.select()` wholesale if any named column is unknown, so an
+  // error here usually means a schema mismatch, not "no such row" -- log it loudly
+  // rather than let the `?? null` fallback below make the two indistinguishable
+  // (see tests/integration/phantom-columns.test.ts). Still returns null rather than
+  // throwing: callers are webhook handlers whose contract is a boolean, and throwing
+  // would change reconciliation control flow.
+  if (error) {
+    console.error("[curation billing] findBySubscription query failed", {
+      subId,
+      error: error.message,
+    });
+    return null;
+  }
   return data ?? null;
 }
 
@@ -98,7 +111,7 @@ async function findByRequestId(
   db: SupabaseClient,
   curationRequestId: string,
 ): Promise<CurationRow | null> {
-  const { data } = await db
+  const { data, error } = await db
     .from("curation_requests")
     .select(
       "id, status, contact_email, contact_name, venue_name, tier, quoted_amount_gbp, " +
@@ -106,6 +119,15 @@ async function findByRequestId(
     )
     .eq("id", curationRequestId)
     .maybeSingle<CurationRow>();
+  // See findBySubscription above: a missing column fails the whole select, so this
+  // is logged rather than swallowed into a false "no row" result.
+  if (error) {
+    console.error("[curation billing] findByRequestId query failed", {
+      curationRequestId,
+      error: error.message,
+    });
+    return null;
+  }
   return data ?? null;
 }
 

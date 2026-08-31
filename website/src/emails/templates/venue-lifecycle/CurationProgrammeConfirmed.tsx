@@ -52,7 +52,7 @@ export function CurationProgrammeConfirmed({
     <EmailShell stream="tx" persona="venue" preview="Your Wallplace programme is confirmed">
       <H1>Your programme is confirmed, {contactFirstName}</H1>
       <P>
-        Thanks. Your first payment for {venueName}&rsquo;s Wallplace Programme has gone through,
+        Thanks. Your first payment for the Wallplace Programme at {venueName} has gone through,
         and the programme is now confirmed.
       </P>
       <InfoBox tone="info">
