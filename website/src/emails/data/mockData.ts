@@ -138,7 +138,7 @@ export const mockPlacement: Placement = {
   status: "active",
   startDate: "2026-05-01",
   endDate: "2026-08-01",
-  termsSummary: "Paid loan · £120/mo · 10% rev share on QR sales",
+  termsSummary: "Paid loan · £120/mo · 10% rev share on sales from the wall",
 };
 
 export const mockPendingPlacement: Placement = {
@@ -146,7 +146,7 @@ export const mockPendingPlacement: Placement = {
   id: "p_2026_05_foxglove",
   venueName: mockVenueSecondary.name,
   status: "pending",
-  termsSummary: "Revenue share · 15% on QR sales",
+  termsSummary: "Revenue share · 15% on sales from the wall",
 };
 
 export const mockChecklist: ChecklistStep[] = [

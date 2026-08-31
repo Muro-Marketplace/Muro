@@ -61,7 +61,7 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
         <Row label="Work" value={workTitle} />
         <Row label="Artist" value={artistName} />
         <Row label="Monthly fee" value={`£${monthlyFeeGbp}`} />
-        <Row label="QR sales" value={qrEnabled ? "On, a share of QR sales goes to your venue" : "Off"} />
+        <Row label="QR code" value={qrEnabled ? "On, so buyers can scan through to the artist's shop" : "Off"} />
         <Row label="Billing" value="Monthly, starting today. Cancels when you end the placement." />
       </div>
 

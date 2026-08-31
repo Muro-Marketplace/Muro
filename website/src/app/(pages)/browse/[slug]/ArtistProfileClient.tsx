@@ -19,6 +19,7 @@ import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 import { ENQUIRY_TYPES } from "@/lib/enquiry-types";
 import { filterWorksByTheme, largestPricedTier } from "./portfolio-filters";
+import { physicalSizeLabel } from "@/lib/physical-size";
 
 interface ArtistProfileClientProps {
   artistName: string;
@@ -610,7 +611,7 @@ export default function ArtistProfileClient({
                                     quantity: 1,
                                     quantityAvailable: typeof work.quantityAvailable === "number" ? work.quantityAvailable : null,
                                     shippingPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : undefined,
-                                    dimensions: sp.label || work.dimensions,
+                                    dimensions: sp.label || physicalSizeLabel(work.dimensions, ""),
                                     framed: false,
                                   });
                                   router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);

@@ -15,6 +15,7 @@ import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 import { slugify } from "@/lib/slugify";
 import { SIZE_BANDS, bandsForWork, type SizeBandKey } from "@/components/browse/SizeBands";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { physicalSizeLabel } from "@/lib/physical-size";
 
 type CollectionWork = ArtistWork & {
   selectedSize?: string;
@@ -321,7 +322,9 @@ export default function CollectionDetailPage() {
                                   quantity: 1,
                                   quantityAvailable: typeof work.quantityAvailable === "number" ? work.quantityAvailable : null,
                                   shippingPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : undefined,
-                                  dimensions: work.selectedSize || work.dimensions,
+                                  // Row 727 area: `dimensions` is derived from the uploaded IMAGE, so it is
+                                  // a pixel count on most rows and reached the basket as the size.
+                                  dimensions: work.selectedSize || physicalSizeLabel(work.dimensions, ""),
                                   framed: false,
                                 });
                                 router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);

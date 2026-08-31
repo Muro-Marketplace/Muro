@@ -17,6 +17,7 @@ import { orFilter } from "@/lib/db/safe-filter";
 import { defaultOfferExpiry } from "@/lib/offers/expiry";
 import { sendEmail } from "@/lib/email/send";
 import { OfferReceivedNotification } from "@/emails/templates/messages/OfferReceivedNotification";
+import { physicalSizeLabel } from "@/lib/physical-size";
 
 export const runtime = "nodejs";
 
@@ -487,7 +488,9 @@ export async function POST(request: Request) {
               workImages: workDetails.map((w) => w.image).filter((x): x is string => !!x),
               primaryImage: primary?.image || null,
               primaryTitle: collectionTitle || primary?.title || (workIds.length > 1 ? `${workIds.length} works` : "Artwork"),
-              primaryDimensions: primary?.dimensions || null,
+              // Row 727 area: this is the IMAGE's pixel size on most rows, and it is
+              // rendered as the work's size on the offer card in the thread.
+              primaryDimensions: physicalSizeLabel(primary?.dimensions, "") || null,
               primaryMedium: primary?.medium || null,
               sizeLabel: sizeLabel || null,
               collectionId: collectionId || null,

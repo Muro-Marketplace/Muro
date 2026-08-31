@@ -36,3 +36,29 @@ describe("physicalSizeLabel", () => {
     expect(physicalSizeLabel(null, "One-off piece")).toBe("One-off piece");
   });
 });
+
+// Row 727 / PASS2-placement-lifecycle-log. The pixel string reached further
+// than the basket: the Stripe hosted page, orders.items[].size, the subject
+// lines of two customer-facing emails, and the offer card in the message
+// thread. Every one of those reads a size that some call site built from
+// `artist_works.dimensions`, so the guard has to be applied at each of them,
+// and this pins the shape they all rely on.
+describe("the shapes production actually holds", () => {
+  it("refuses every pixel string seen in the live table", () => {
+    for (const raw of ["2795 × 4192 px", "4160 × 6240 px", "5141 × 3427 px", "1200x800 px"]) {
+      expect(isPixelDimensions(raw), raw).toBe(true);
+      expect(physicalSizeLabel(raw, ""), raw).toBe("");
+    }
+  });
+
+  it("keeps a real physical size", () => {
+    for (const raw of ["A2", "60 × 80 cm", 'Large (24" × 36")']) {
+      expect(physicalSizeLabel(raw, ""), raw).toBe(raw);
+    }
+  });
+
+  it("returns the caller's fallback rather than an empty label", () => {
+    expect(physicalSizeLabel("2795 × 4192 px")).toBe("Original");
+    expect(physicalSizeLabel(null, "")).toBe("");
+  });
+});

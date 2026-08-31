@@ -962,7 +962,7 @@ export default function VenuePlacementsPage() {
                   />
                   <div>
                     <p className="text-sm font-medium text-foreground">QR-enabled display</p>
-                    <p className="text-xs text-muted">Display the work with a QR code linking to the artist&rsquo;s shop. You split QR sales via the share below.</p>
+                    <p className="text-xs text-muted">Display the work with a QR code linking to the artist&rsquo;s shop. You take the share below on sales from the wall, however the buyer arrives.</p>
                   </div>
                 </label>
                 <label className={`flex items-start gap-3 p-3 border rounded-sm cursor-pointer transition-colors ${paidLoanEnabled ? "border-accent bg-accent/5" : "border-border hover:border-foreground/30"}`}>
@@ -1018,7 +1018,7 @@ export default function VenuePlacementsPage() {
             {/* Revenue share (only relevant when QR is on) */}
             {qrEnabled && (
               <div>
-                <label className="block text-sm font-medium mb-2">Revenue share on QR sales <span className="text-muted font-normal">(optional)</span></label>
+                <label className="block text-sm font-medium mb-2">Revenue share on sales from the wall <span className="text-muted font-normal">(optional)</span></label>
                 <p className="text-xs text-muted mb-3">Propose a revenue share percentage on QR-linked sales. Leave at 0 for a free display arrangement.</p>
                 <div className="flex items-center gap-2">
                   <input
@@ -1053,8 +1053,16 @@ export default function VenuePlacementsPage() {
                   <span className="text-accent ml-2 font-normal">{Object.keys(selectedWorkSizes).length} selected</span>
                 )}
               </label>
+              {/* Pass 2 item 3.5 (rows 2159, 1669). This said "Click a work to
+                  pick the size you'd like", and clicking a work only selects
+                  it: the size picker is the separate "Pick size" button that
+                  appears on a selected card. So a venue followed the
+                  instruction, saw no picker, and every placement they created
+                  stored work_size NULL. The control is a deliberate opt-in
+                  (see the comment on it below); the sentence describes it now. */}
               <p className="text-xs text-muted mb-3">
-                Click a work to pick the size you&rsquo;d like. The artist will confirm what&rsquo;s available.
+                Click a work to select it, then <strong>Pick size</strong> on the card if you want a
+                particular one. Leave it and the artist will offer what they have.
               </p>
               {worksLoading ? (
                 <p className="text-sm text-muted">Loading portfolio...</p>

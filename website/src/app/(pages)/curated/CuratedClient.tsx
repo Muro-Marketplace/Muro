@@ -104,7 +104,7 @@ const FAQ_ITEMS = [
   {
     question: "How does the art actually get on the wall?",
     answer:
-      "You pick from three placement methods: free QR-loan (the artist gets a share of QR sales, you pay nothing for the art), paid loan (a monthly fee to display), or outright purchase.",
+      "You pick from three placement methods: free loan (you take a share of sales from the wall, and pay nothing for the art), paid loan (a monthly fee to display), or outright purchase.",
   },
   {
     question: "Can I cancel a managed plan?",
@@ -685,7 +685,7 @@ export default function CuratedClient() {
 
                 {/* Placement method preferences. Three methods mirror the
                     core Wallplace commercial models: QR-enabled loan
-                    (free on wall, venue earns a share of QR sales), paid
+                    (free on wall, venue earns a share of sales from the wall), paid
                     loan (venue pays a monthly fee to display), direct
                     purchase (venue buys outright). Venues can pick more
                     than one. */}
@@ -698,7 +698,7 @@ export default function CuratedClient() {
                       checked={form.wantsQrLoan}
                       onChange={(v) => update("wantsQrLoan", v)}
                       title="QR-enabled loan"
-                      desc="Free on your wall. Share QR sales with the artist."
+                      desc="Free on your wall. You take a share of sales from it."
                     />
                     <MethodCheckbox
                       checked={form.wantsPaidLoan}

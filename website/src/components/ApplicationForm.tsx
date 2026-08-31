@@ -746,7 +746,7 @@ export default function ApplicationForm() {
             {fieldError("openTo")}
             <p className="text-xs text-muted mb-3">
               Three ways your work can reach venues. Revenue share means your
-              art is displayed free in a venue and you split QR-code sales
+              art is displayed free in a venue and you split sales from that wall
               with them. Paid loan means the venue pays you a monthly fee to
               display the work. Direct purchase means the venue buys the
               piece outright.

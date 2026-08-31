@@ -9,7 +9,7 @@ import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
-import { VENUE_SHARE_CAPTION, venueShareLabel } from "@/lib/revenue-share-labels";
+import { VENUE_SHARE_CAPTION, venueShareOnSalesLabel } from "@/lib/revenue-share-labels";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import PlacementLoanForm from "./PlacementLoanForm";
@@ -1007,7 +1007,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               <p className="text-lg font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
                 {placement.qr_enabled && placement.revenue_share_percent != null && placement.revenue_share_percent > 0 && (
-                  <>, {venueShareLabel(placement.revenue_share_percent)} on QR sales</>
+                  <>, {venueShareOnSalesLabel(placement.revenue_share_percent)}</>
                 )}
               </p>
             </div>

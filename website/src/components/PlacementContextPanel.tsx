@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
-import { venueShareLabel } from "@/lib/revenue-share-labels";
+import { venueShareOnSalesLabel } from "@/lib/revenue-share-labels";
 import { useConfirm } from "@/context/ConfirmContext";
 import type { ArtistWork } from "@/data/artists";
 import {
@@ -565,7 +565,7 @@ export default function PlacementContextPanel({
               <label className="flex items-center justify-between gap-2 cursor-pointer">
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-foreground">Add a QR code</p>
-                  <p className="text-[10px] text-muted leading-snug">Let visitors buy the piece. You&rsquo;ll split QR sales.</p>
+                  <p className="text-[10px] text-muted leading-snug">Let visitors buy the piece. You&rsquo;ll take your share of the sale.</p>
                 </div>
                 <Toggle checked={reqPaidLoanQr} onChange={setReqPaidLoanQr} ariaLabel="Add a QR code" size="compact" />
               </label>
@@ -906,7 +906,7 @@ export default function PlacementContextPanel({
               <span className="text-muted w-24 shrink-0">{ARRANGEMENT_LABEL.revenue_share}</span>
               {/* A4.2: was an unattributed percentage sitting next to two
                   surfaces that named the wrong party. */}
-              <span className="text-foreground font-medium">{venueShareLabel(p.revenue_share_percent)} on QR sales</span>
+              <span className="text-foreground font-medium">{venueShareOnSalesLabel(p.revenue_share_percent)}</span>
             </div>
           )}
           {/* QR indicator only matters on paid-loan rows, on revenue share

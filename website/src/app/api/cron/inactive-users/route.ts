@@ -38,6 +38,7 @@ import { CustomerInactive30d } from "@/emails/templates/re-engagement/CustomerIn
 import { CustomerInactive90d } from "@/emails/templates/re-engagement/CustomerInactive90d";
 import { requireCronAuth, runBatch, finishCronRun } from "../_auth";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { physicalSizeLabel } from "@/lib/physical-size";
 
 export const dynamic = "force-dynamic";
 
@@ -192,7 +193,7 @@ async function recentWorks(db: SupabaseClient): Promise<Work[]> {
       image: w.image,
       url: `${SITE}/browse/${a.slug}/${slugify(w.title)}`,
       priceLabel: w.price_band || undefined,
-      size: w.dimensions || undefined,
+      size: physicalSizeLabel(w.dimensions, "") || undefined,
     });
   }
   return out;

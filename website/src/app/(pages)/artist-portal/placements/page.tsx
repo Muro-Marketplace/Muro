@@ -948,7 +948,7 @@ export default function PlacementsPage() {
                 QR-enabled (no QR code = no QR-linked sales to share). */}
             {qrEnabled && (
               <div>
-                <label className="block text-sm font-medium mb-2">Revenue share on QR sales <span className="text-muted font-normal">(optional)</span></label>
+                <label className="block text-sm font-medium mb-2">Revenue share on sales from the wall <span className="text-muted font-normal">(optional)</span></label>
                 <p className="text-xs text-muted mb-3">Offer the venue a percentage of any QR-linked sales. Leave at 0 for a pure display arrangement.</p>
                 <div className="flex items-center gap-2">
                   <input

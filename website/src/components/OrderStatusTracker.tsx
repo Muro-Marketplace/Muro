@@ -27,16 +27,6 @@ export default function OrderStatusTracker({ currentStatus, statusHistory = [], 
   const currentIdx = ORDER_STEPS.findIndex((s) => s.key === currentStatus);
   const isOffPipeline = (OFF_PIPELINE as readonly string[]).includes(currentStatus);
 
-  if (isOffPipeline) {
-    const status = currentStatus as OffPipelineStatus;
-    return (
-      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${offPipelineToneClass(status)}`}>
-        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
-        {labelForStatus(status)}
-      </div>
-    );
-  }
-
   function getTimestamp(stepKey: string): string | null {
     const entry = statusHistory.find((h) => h.status === stepKey);
     return entry ? new Date(entry.timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
@@ -62,12 +52,43 @@ export default function OrderStatusTracker({ currentStatus, statusHistory = [], 
     );
   }
 
+  // Production pass 2, P4. An off-pipeline status used to return the badge and
+  // NOTHING else, so a refunded or disputed order lost its whole delivery
+  // history: when it was placed, when it shipped, whether it ever arrived. That
+  // is the record a buyer is arguing from, thrown away at the moment they need
+  // it. The badge stays, and the pipeline is drawn underneath it, frozen at the
+  // furthest step the order actually reached.
+  const historyIdx = statusHistory.reduce((furthest, h) => {
+    const i = ORDER_STEPS.findIndex((s) => s.key === h.status);
+    return i > furthest ? i : furthest;
+  }, -1);
+  const pipelineIdx = isOffPipeline ? historyIdx : currentIdx;
+
+  if (isOffPipeline && historyIdx < 0) {
+    // Nothing to draw. A row of grey pips would imply steps that were never
+    // reached, which is worse than the badge on its own.
+    const status = currentStatus as OffPipelineStatus;
+    return (
+      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${offPipelineToneClass(status)}`}>
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+        {labelForStatus(status)}
+      </div>
+    );
+  }
+
   return (
+    <div>
+    {isOffPipeline && (
+      <div className={`inline-flex items-center gap-2 px-3 py-1.5 mb-4 rounded-full text-xs font-medium ${offPipelineToneClass(currentStatus as OffPipelineStatus)}`}>
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
+        {labelForStatus(currentStatus)}
+      </div>
+    )}
     <div className="flex items-start gap-0">
       {ORDER_STEPS.map((step, i) => {
-        const isComplete = i < currentIdx;
-        const isCurrent = i === currentIdx;
-        const isPending = i > currentIdx;
+        const isComplete = i < pipelineIdx;
+        const isCurrent = i === pipelineIdx;
+        const isPending = i > pipelineIdx;
         const ts = getTimestamp(step.key);
 
         return (
@@ -94,6 +115,7 @@ export default function OrderStatusTracker({ currentStatus, statusHistory = [], 
           </div>
         );
       })}
+    </div>
     </div>
   );
 }

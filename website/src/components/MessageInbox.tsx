@@ -16,6 +16,7 @@ import PlacementContextPanel from "@/components/PlacementContextPanel";
 import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import CounterOfferDialog from "@/components/CounterOfferDialog";
 import { formatOfferDeadline, isPastExpiry } from "@/lib/offers/expiry";
+import { venueShareOnSalesLabel } from "@/lib/revenue-share-labels";
 
 interface Conversation {
   conversationId: string;
@@ -1394,7 +1395,7 @@ export default function MessageInbox({ userSlug, portalType, initialArtistSlug, 
                               });
                               const parts: string[] = [label];
                               if (hasFee) parts.push(`£${fee}/mo`);
-                              if ((qr || type === "revenue_share") && typeof rev === "number" && rev > 0) parts.push(`${rev}% on QR sales`);
+                              if ((qr || type === "revenue_share") && typeof rev === "number" && rev > 0) parts.push(venueShareOnSalesLabel(rev));
                               return parts.join(" · ");
                             })()}
                           </p>

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   VENUE_SHARE_CAPTION,
+  VENUE_SHARE_SCOPE,
   artistKeepsLabel,
   artistKeepsPercent,
   venueShareLabel,
+  venueShareOnSalesLabel,
   venueSharePercent,
 } from "./revenue-share-labels";
 
@@ -52,5 +54,31 @@ describe("revenue-share-labels", () => {
   it("names the party in the caption", () => {
     expect(VENUE_SHARE_CAPTION).toContain("Venue");
     expect(VENUE_SHARE_CAPTION).not.toContain("Artist");
+  });
+});
+
+// Row 727 settled what the share is earned ON, which every surface called "QR
+// sales". A customer who walks into the venue and buys the piece off the wall
+// scans nothing, and an offer on a placed work is not a QR sale either. Both
+// pay the venue now, so the copy names the wall rather than the QR code.
+describe("what the share is earned on", () => {
+  it("does not call it a QR sale", () => {
+    expect(VENUE_SHARE_CAPTION).not.toMatch(/QR/i);
+    expect(venueShareOnSalesLabel(24)).not.toMatch(/QR/i);
+  });
+
+  it("names the venue and the scope in one sentence", () => {
+    expect(venueShareOnSalesLabel(24)).toBe("24% to the venue on sales from the wall");
+  });
+
+  it("says Not set rather than inventing a scope for a missing share", () => {
+    expect(venueShareOnSalesLabel(null)).toBe("Not set");
+    expect(venueShareOnSalesLabel(undefined)).toBe("Not set");
+    expect(venueShareOnSalesLabel(-3)).toBe("Not set");
+  });
+
+  it("keeps the caption and the sentence saying the same thing", () => {
+    expect(VENUE_SHARE_CAPTION).toContain(VENUE_SHARE_SCOPE);
+    expect(venueShareOnSalesLabel(10)).toContain(VENUE_SHARE_SCOPE);
   });
 });

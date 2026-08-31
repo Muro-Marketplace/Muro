@@ -45,6 +45,7 @@ import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 import Image from "next/image";
 import Link from "next/link";
+import { physicalSizeLabel } from "@/lib/physical-size";
 
 interface ArtistWork {
   id: string;
@@ -280,7 +281,7 @@ export default function SpacesPlacementRequestForm({
         const extras = selectedWorks.slice(1).map((w) => ({
           title: w.title,
           image: w.image,
-          size: w.dimensions || null,
+          size: physicalSizeLabel(w.dimensions, "") || null,
         }));
         placement = {
           id: placementId,
@@ -694,7 +695,7 @@ export default function SpacesPlacementRequestForm({
                   }
                   className="w-20 px-2.5 py-1.5 text-sm border border-border rounded-sm bg-background focus:outline-none focus:border-accent"
                 />
-                <span className="text-xs text-muted">% of QR sales</span>
+                <span className="text-xs text-muted">% of sales from the wall</span>
               </div>
             </div>
           )}
@@ -767,7 +768,7 @@ export default function SpacesPlacementRequestForm({
                     className="w-20 px-2.5 py-1.5 text-sm border border-border rounded-sm bg-background focus:outline-none focus:border-accent"
                   />
                   <span className="text-xs text-muted">
-                    to venue, on QR sales
+                    to venue, on sales from the wall
                   </span>
                 </div>
               )}

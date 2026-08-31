@@ -71,7 +71,10 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
   { key: "delivered", label: "Delivered" },
-  { key: "cancelled", label: "Cancelled" },
+  // Production pass 2, P4: the tab covers cancelled, refunded and disputed
+  // (TERMINAL_NON_DELIVERED below), but its label named only one of the three,
+  // so a buyer looking for a refunded order had no tab that said so.
+  { key: "cancelled", label: "Cancelled or refunded" },
 ];
 
 const TERMINAL_NON_DELIVERED = new Set(["cancelled", "refunded", "disputed"]);
@@ -396,7 +399,11 @@ function CustomerPortalContent() {
               if (refundSuccess && orderRefund?.order_id === selected.id) {
                 return (
                   <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-sm px-3 py-2">
-                    Refund request submitted. The artist will review your request.
+                    {/* Row 1002. This named the artist. The request goes to
+                        /admin/refunds and an admin approves it; the artist is
+                        told the outcome, they do not decide it. */}
+                    Refund request submitted. The Wallplace team will review it and email you
+                    the outcome.
                   </p>
                 );
               }

@@ -194,7 +194,7 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           {qr && (
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted flex-1">{paidLoan ? "Share on QR sales" : ARRANGEMENT_LABEL.revenue_share}</span>
+                <span className="text-xs text-muted flex-1">{paidLoan ? "Share on sales from the wall" : ARRANGEMENT_LABEL.revenue_share}</span>
                 <input
                   type="number"
                   min={0}
