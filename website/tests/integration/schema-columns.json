@@ -1,5 +1,5 @@
 {
-  "blogs": ["id", "author_user_id", "slug", "title", "body_json", "body_markdown", "cover_image_url", "status", "published_at", "created_at", "updated_at"],
+  "blogs": ["id", "author_user_id", "slug", "title", "body_json", "body_markdown", "cover_image_url", "status", "published_at", "created_at", "updated_at", "rejection_reason"],
   "walls": ["id", "user_id", "owner_type", "name", "kind", "preset_id", "source_image_path", "width_cm", "height_cm", "wall_color_hex", "perspective_homography", "segmentation_mask_path", "notes", "created_at", "updated_at", "is_public_on_profile"],
   "orders": ["id", "buyer_email", "buyer_user_id", "items", "shipping", "subtotal", "shipping_cost", "total", "status", "created_at", "artist_slug", "artist_user_id", "venue_slug", "venue_revenue_share_percent", "venue_revenue", "artist_revenue", "platform_fee_percent", "platform_fee", "tracking_number", "status_history", "placement_id", "source", "stripe_payment_intent_id", "fulfilment_method", "collection_address", "collection_notes", "order_number", "delivered_at"],
   "reports": ["id", "reporter_user_id", "reported_user_id", "reported_entity_type", "reported_entity_id", "reason", "status", "reviewed_by_user_id", "reviewed_at", "created_at"],
@@ -31,7 +31,7 @@
   "placement_photos": ["id", "placement_id", "uploader_user_id", "url", "caption", "created_at"],
   "stripe_transfers": ["id", "order_id", "recipient_type", "recipient_user_id", "stripe_transfer_id", "stripe_connect_account_id", "amount_cents", "currency", "status", "created_at", "payout_after", "retry_count", "last_error", "next_attempt_at", "updated_at"],
   "visualizer_usage": ["id", "user_id", "action", "cost_units", "day_bucket", "month_bucket", "reference_id", "metadata", "created_at"],
-  "waitlist_signups": ["id", "name", "email", "user_type", "created_at"],
+  "waitlist_signups": ["id", "name", "email", "user_type", "created_at", "phone", "venue_name", "venue_location"],
   "curation_requests": ["id", "requester_user_id", "venue_name", "contact_name", "contact_email", "contact_phone", "tier", "venue_type", "location", "style_notes", "audience_notes", "mood_notes", "budget_gbp", "wall_count", "timeframe", "references_notes", "stripe_checkout_session_id", "stripe_payment_intent_id", "amount_paid_gbp", "paid_at", "status", "admin_notes", "created_at", "updated_at", "stripe_subscription_id", "last_invoice_paid_at", "cancelled_at"],
   "customer_profiles": ["id", "user_id", "name", "email", "created_at", "email_digest_enabled", "message_notifications_enabled", "order_notifications_enabled"],
   "email_preferences": ["user_id", "placements_enabled", "messages_enabled", "digests_enabled", "recommendations_enabled", "tips_enabled", "newsletter_enabled", "promotions_enabled", "digest_frequency", "vacation_until", "created_at", "updated_at"],
@@ -52,7 +52,7 @@
   "feature_request_upvotes": ["request_id", "user_id", "created_at"],
   "artwork_request_responses": ["id", "request_id", "artist_user_id", "artist_slug", "response_type", "message", "work_ids", "proposed_offer_amount_pence", "proposed_commission_amount_pence", "proposed_commission_timeline", "linked_offer_id", "linked_placement_id", "linked_commission_id", "status", "created_at", "updated_at", "metadata", "proposed_monthly_fee_pence", "proposed_qr_enabled", "proposed_revenue_share_percent"],
   "visualizer_quota_overrides": ["user_id", "daily_extra", "monthly_extra", "expires_at", "reason", "granted_by", "created_at"],
-  "placement_recurring_billings": ["id", "placement_id", "stripe_subscription_id", "stripe_customer_id", "payer_user_id", "payee_user_id", "monthly_amount_pence", "status", "current_period_start", "current_period_end", "created_at", "updated_at"],
+  "placement_recurring_billings": ["id", "placement_id", "stripe_subscription_id", "stripe_customer_id", "payer_user_id", "payee_user_id", "monthly_amount_pence", "status", "current_period_start", "current_period_end", "created_at", "updated_at", "cancel_at_period_end"],
   "conversation_reports": ["id", "reporter_user_id", "other_party", "conversation_id", "reason", "status", "reviewed_at", "reviewed_by", "created_at"],
   "user_blocks": ["blocker_user_id", "blocked_slug", "created_at"],
   "placement_record_versions": ["id", "placement_id", "version_of_record_id", "changed_by_user_id", "changed_by_role", "snapshot", "changed_fields", "created_at"]

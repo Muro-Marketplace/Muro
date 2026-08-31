@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { FOUNDING_TRIAL_DAYS, STANDARD_TRIAL_DAYS } from "@/lib/pricing";
 
 const PRICE_MAP: Record<string, string | undefined> = {
   core: process.env.STRIPE_PRICE_CORE,
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
 
     // Determine trial days, no trial if upgrading or had previous subscription
     const hadPreviousSub = hasActiveSubscription || profile.subscription_status === "canceled" || profile.subscription_status === "past_due";
-    const trialDays = hadPreviousSub ? 0 : profile.is_founding_artist ? 180 : 30;
+    const trialDays = hadPreviousSub ? 0 : profile.is_founding_artist ? FOUNDING_TRIAL_DAYS : STANDARD_TRIAL_DAYS;
 
     // Create Stripe Checkout Session in subscription mode
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";

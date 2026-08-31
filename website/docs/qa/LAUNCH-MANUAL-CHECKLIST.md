@@ -28,6 +28,74 @@ squash merge, which is expected and not a sign of unmerged work.
 The practical consequence for this list: **`ORDER_TOKEN_SECRET` now does
 something the moment you set it**, rather than waiting on an unmerged branch.
 
+**Amended 2026-08-31, later the same day.** A third body of work now exists and
+is NOT deployed: the remediation of both production passes, on branch
+`claude/production-pass-fixes-e6271e`. It carries two applied migrations (127
+`placement_recurring_billings.cancel_at_period_end`, 128
+`blogs.rejection_reason`), which are additive and already live in the database,
+and about twenty code fixes that are not. Every item below still stands
+regardless: none of them is waiting on that branch.
+
+---
+
+## 0a. LAUNCH BLOCKER: Supabase Auth still redirects to localhost — verified
+
+**Nobody in production can set or reset a password.** Both Supabase auth emails
+carry `redirect_to=http://localhost:3000`, so their only link points at the
+recipient's own machine.
+
+Proven on 2026-08-31 by accepting QA application id 29 and reading both emails
+in the applicant's inbox:
+
+- Accepting an artist application calls `inviteUserByEmail`, which creates an
+  `auth.users` row with **no password** and `confirmed_at` null. The invite is
+  that person's only way in, and it goes nowhere. **The artist acquisition
+  funnel dies at its last step.**
+- "Forgot password" produces the same broken link, so there is no way round it.
+  This is not limited to new artists: it is everyone.
+
+`/reset-password` exists and renders correctly on the live site. Nothing ever
+routes anyone to it.
+
+Both emails also arrive from `noreply@mail.app.supabase.io` with stock Supabase
+branding, two seconds before the branded `notifications@tx.wallplace.co.uk`
+welcome, so an accepted artist's first contact from Wallplace is an unbranded
+Supabase email carrying a dead link.
+
+### The fix, in order
+
+1. **Auth → URL Configuration**
+   - Site URL: `https://www.wallplace.co.uk` (www, the apex 307-redirects and a
+     redirect breaks the token exchange)
+   - Redirect URLs: add `https://www.wallplace.co.uk/**`
+
+2. **Auth → Email Templates.** Paste the four rendered files from
+   `website/scripts/auth-emails-rendered/`:
+
+   | Dashboard template | File |
+   |---|---|
+   | Invite user | `invite.html` |
+   | Confirm signup | `verification.html` |
+   | Reset password | `password-reset.html` |
+   | Change email address | `email-change.html` |
+
+   `invite.html` is new. The other three existed and were unused; all four are
+   regenerated with `npx tsx scripts/render-auth-email.ts all`, which is worth
+   re-running before pasting in case a template has moved since.
+
+   The invite one matters most: it is the mail an accepted artist receives, it
+   is their only way into the account, and it was the stock Supabase one.
+
+### How to verify
+
+Trigger a password reset for a throwaway address, open the email, and confirm
+
+- the link lands on `https://www.wallplace.co.uk/reset-password`, not localhost
+- setting a password there works, and signing in with it works
+- the email is the branded one, from the Wallplace sender
+
+Rows 2364, 534, 1050, 2580.
+
 ---
 
 ## 1. Delete public test content (5 minutes, live site) — verified
@@ -113,6 +181,8 @@ reach test mode at all.
 
 ## 4. Supabase dashboard
 
+- **Site URL and the four email templates: see section 0a.** That is the launch
+  blocker and it lives here, in this dashboard.
 - Enable **leaked-password protection** (dashboard only; the MCP has no
   auth-config tool). Confirmed still disabled by the security advisor.
 - **Email confirmation on or off** — no longer blocking anything, since sign-up
@@ -135,6 +205,27 @@ where o.buyer_user_id is null
 ```
 
 Nothing reads the column yet, so this is inert until something does.
+
+Two more, both safe, both from the 2026-08-31 remediation:
+
+```sql
+-- placements.cancelled_at / cancelled_by_user_id were never written. Nothing
+-- can recover WHO cancelled an old placement, but the WHEN is recoverable from
+-- the response timestamp, which is the same event for a cancellation.
+update placements
+set cancelled_at = coalesce(cancelled_at, responded_at)
+where status = 'cancelled' and cancelled_at is null and responded_at is not null;
+
+-- Offers created before the seven-day default. Every row has expires_at NULL,
+-- so every offer ever made is still open. Pick a date rather than back-dating
+-- one: an offer that lapsed months ago should not spring shut on the sender
+-- without warning.
+-- update purchase_offers set expires_at = now() + interval '7 days'
+--   where expires_at is null and status in ('pending','countered');
+```
+
+The second is commented out on purpose. It closes offers that people believe
+are open, so it is a decision, not a backfill.
 
 ---
 

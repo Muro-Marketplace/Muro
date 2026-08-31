@@ -238,7 +238,10 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="Your password"
-                minLength={6}
+                // Row A L484. Both signup forms require 8; this asked for 6,
+                // so the sign-in form implied a shorter password was valid
+                // than any account can actually have.
+                minLength={8}
                 className="w-full px-4 py-3 bg-background border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/60 transition-colors"
               />
             </div>

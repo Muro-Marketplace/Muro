@@ -78,7 +78,11 @@ export default function AdminApplicationsPage() {
     if (action === "accept") {
       const ok = await confirm({
         title: "Accept this artist?",
-        body: "An invite email will be sent.",
+        // Row G L2361. This asserted an invite unconditionally. The route only
+        // invites when the address has no account yet; an applicant who already
+        // has one is linked to their existing account and gets no invite, just
+        // the branded welcome.
+        body: "They'll be emailed. If they don't have an account yet, that email is their invite to set a password.",
         confirmLabel: "Accept",
       });
       if (!ok) return;

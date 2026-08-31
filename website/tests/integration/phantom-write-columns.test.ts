@@ -39,8 +39,9 @@
 // oversight.
 
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
+import { inlineWrites, walk } from "./db-write-scan";
 
 const SRC = path.resolve(__dirname, "../../src");
 const SCHEMA: Record<string, string[]> = JSON.parse(
@@ -59,105 +60,9 @@ const GRANDFATHERED: Array<{ file: string; table: string; phantom: string; why: 
   // side's entry as both said to do. Ratchet: shrink only.
 ];
 
-function walk(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir)) {
-    const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full);
-  }
-  return out;
-}
-
-/**
- * Every `.from("table").insert({ ... })` / `.update({ ... })` / `.upsert({ ... })`
- * where the payload is an INLINE object literal, with the keys it names.
- *
- * A payload passed as an IDENTIFIER (`insert(fullRow)`) is resolved when the file
- * declares it as an object literal in the same scope, which is the shape every
- * one of these used. That is not decoration: `api/apply` hid
- * `artist_applications.referred_by_code` behind exactly this indirection, and it
- * destroyed a referral code on every application ever submitted.
- *
- * An identifier that cannot be resolved to a literal is skipped rather than
- * guessed at, because a guess here produces the false positives that make a
- * guard ignorable.
- */
-/**
- * The TOP-LEVEL keys of the object literal whose `{` is at `openAt`.
- *
- * Top-level only, so `metadata: { foo: 1 }` contributes `metadata` and not
- * `foo`, which is what the table actually has a column for. Returns null when
- * the braces do not balance inside a sane window, so a parse failure skips the
- * write rather than inventing keys for it.
- */
-function topLevelKeys(source: string, openAt: number): string[] | null {
-  let depth = 0;
-  let end = -1;
-  for (let i = openAt; i < source.length && i < openAt + 8000; i++) {
-    if (source[i] === "{") depth++;
-    else if (source[i] === "}") {
-      depth--;
-      if (depth === 0) {
-        end = i;
-        break;
-      }
-    }
-  }
-  if (end < 0) return null;
-
-  const keys: string[] = [];
-  let d = 0;
-  for (const line of source.slice(openAt + 1, end).split("\n")) {
-    const before = d;
-    for (const ch of line) {
-      if (ch === "{" || ch === "[" || ch === "(") d++;
-      else if (ch === "}" || ch === "]" || ch === ")") d = Math.max(0, d - 1);
-    }
-    if (before !== 0) continue;
-    const km = line.match(/^\s*([a-z_][a-z0-9_]*)\s*:/);
-    if (km) keys.push(km[1]);
-  }
-  return keys;
-}
-
-function inlineWrites(source: string): { table: string; op: string; keys: string[]; line: number }[] {
-  const found: { table: string; op: string; keys: string[]; line: number }[] = [];
-  // The `.from(...)` must be the NEAREST one before the write: `[^]{0,200}?`
-  // happily spans an intervening `.from("other_table")`, which attributed a
-  // placements insert to venue_profiles two lines above it and produced eleven
-  // false positives on the first run.
-  const re =
-    /\.from\(\s*["'`]([a-z_]+)["'`]\s*\)((?:(?!\.from\()[\s\S]){0,200}?)\.(insert|update|upsert)\(\s*(\{|([A-Za-z_$][\w$]*)\s*[,)])/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(source)) !== null) {
-    const op = m[3];
-    // An identifier payload: resolve it to its `const x = { ... }` declaration.
-    if (m[5]) {
-      const decl = new RegExp(`\\b(?:const|let|var)\\s+${m[5]}\\s*(?::[^=]{0,120})?=\\s*\\{`).exec(source);
-      if (!decl) continue;
-      const keys = topLevelKeys(source, decl.index + decl[0].length - 1);
-      if (keys === null) continue;
-      found.push({
-        table: m[1],
-        op,
-        keys,
-        line: source.slice(0, m.index).split("\n").length,
-      });
-      continue;
-    }
-    const openAt = m.index + m[0].length - 1;
-    const keys = topLevelKeys(source, openAt);
-    if (keys === null) continue;
-    found.push({
-      table: m[1],
-      op,
-      keys,
-      line: source.slice(0, openAt).split("\n").length,
-    });
-  }
-  return found;
-}
+// `topLevelKeys` and `inlineWrites` live in ./db-write-scan.ts, shared with
+// not-null-writes.test.ts, which asks the other question of the same writes:
+// can the VALUE be null on a NOT NULL column? The doc comments moved with them.
 
 function scan() {
   const offences: string[] = [];

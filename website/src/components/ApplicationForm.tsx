@@ -83,22 +83,22 @@ const planOptions = [
     name: "Core",
     price: "£9.99",
     fee: "15% platform fee",
-    description: "Up to 8 works, standard profile, basic analytics.",
+    description: "2 active placements, up to 8 works, standard profile, basic analytics.",
   },
   {
     id: "premium",
     name: "Premium",
     price: "£24.99",
-    fee: "8% platform fee",
-    description: "Up to 20 works, featured profile, message venues, full analytics.",
+    fee: "15% platform fee",
+    description: "5 active placements, up to 20 works, featured profile, full analytics.",
     popular: true as const,
   },
   {
     id: "pro",
     name: "Pro",
     price: "£49.99",
-    fee: "5% platform fee",
-    description: "Up to 50 works, premium profile, message venues, dedicated support.",
+    fee: "15% platform fee",
+    description: "Unlimited placements, up to 50 works, Curated priority, dedicated support.",
   },
 ];
 
@@ -746,7 +746,7 @@ export default function ApplicationForm() {
             {fieldError("openTo")}
             <p className="text-xs text-muted mb-3">
               Three ways your work can reach venues. Revenue share means your
-              art is displayed free in a venue and you split QR-code sales
+              art is displayed free in a venue and you split sales from that wall
               with them. Paid loan means the venue pays you a monthly fee to
               display the work. Direct purchase means the venue buys the
               piece outright.

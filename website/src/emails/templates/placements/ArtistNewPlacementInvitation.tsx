@@ -62,7 +62,7 @@ export const mock: ArtistNewPlacementInvitationProps = {
   venue: mockVenue,
   placementUrl: "https://wallplace.co.uk/placements/p_example",
   requestedWorks: ["Last Light on Mare Street"],
-  proposedTerms: "Paid loan · £120/mo · 10% rev share on QR sales",
+  proposedTerms: "Paid loan · £120/mo · 10% rev share on sales from the wall",
   message: "We think this would sit beautifully in our front room.",
 };
 

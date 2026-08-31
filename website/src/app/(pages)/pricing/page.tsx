@@ -48,10 +48,16 @@ const comparisonRows = [
     pro: "Direct matching",
   },
   {
+    feature: "Active placements at a time",
+    core: "2",
+    premium: "5",
+    pro: "Unlimited",
+  },
+  {
     feature: "Platform fee on sales",
     core: "15%",
-    premium: "8%",
-    pro: "5%",
+    premium: "15%",
+    pro: "15%",
   },
   {
     feature: "Analytics",
@@ -77,7 +83,7 @@ const faqItems = [
   {
     question: "What is a platform fee?",
     answer:
-      "The platform fee is the percentage Wallplace takes when a sale is made through the platform, whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is separate from your membership cost. Core artists pay 15%, Premium 8%, and Pro artists pay 5%, so our fees run 5 to 15% depending on plan. You keep the rest.",
+      "The platform fee is the percentage Wallplace takes when a sale is made through the platform, whether that's a venue purchasing work outright, or a customer buying directly from a venue display. It is a flat 15% on every plan, separate from your membership cost. You keep the rest, minus any revenue share you have agreed with the venue hosting your work.",
   },
   {
     question: "How many venues can I approach?",
@@ -107,7 +113,7 @@ const faqItems = [
   {
     question: "Are there any other fees?",
     answer:
-      "No hidden fees. Your monthly membership and the platform fee on sales are the only costs. Delivery, framing, and any materials are your own costs as an artist. Wallplace does not add charges for these.",
+      "No hidden fees. Your monthly membership and the platform fee on sales are the only costs. Delivery, framing, and any materials are your own costs as an artist. Wallplace does not add charges for these. All prices and fees are exclusive of VAT. If Wallplace becomes VAT registered, VAT will be added at the prevailing rate.",
   },
 ];
 
@@ -293,17 +299,18 @@ export default function PricingPage() {
 
             <div className="bg-surface border border-border rounded-sm p-8 lg:p-10">
               <h3 className="text-2xl mb-4">
-                The Pro case: lowest platform fee
+                The Pro case: more walls, more often
               </h3>
               <p className="text-muted leading-relaxed mb-4">
-                At &pound;49.99/month, Pro pays for itself quickly for any artist with
-                regular sales. On a &pound;500 sale, Core would cost you &pound;75 in
-                platform fees, Premium &pound;40. Pro costs just &pound;25, keeping
-                &pound;475.
+                Every plan pays the same 15% fee on sales. What Pro buys is
+                capacity and distribution: unlimited active placements at a
+                time, up to 50 works, and priority inclusion when venues pay
+                for a Wallplace Curated shortlist. Every extra wall is extra
+                scans, enquiries and sale chances.
               </p>
               <p className="text-muted leading-relaxed mb-6">
-                For artists actively using the platform and generating consistent
-                venue enquiries, Pro is the commercially obvious choice.
+                For artists producing enough work to hang in several venues at
+                once, Pro is the commercially obvious choice.
               </p>
               <Button href="/apply?plan=pro" size="md">
                 Apply for Pro

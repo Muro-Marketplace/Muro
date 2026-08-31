@@ -19,6 +19,8 @@ import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 import { ENQUIRY_TYPES } from "@/lib/enquiry-types";
 import { filterWorksByTheme, largestPricedTier } from "./portfolio-filters";
+import { physicalSizeLabel } from "@/lib/physical-size";
+import { frameUpliftFor } from "@/app/(pages)/browse/[slug]/[workSlug]/frame-uplift";
 
 interface ArtistProfileClientProps {
   artistName: string;
@@ -67,7 +69,11 @@ export default function ArtistProfileClient({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedSizeIdx, setSelectedSizeIdx] = useState(0);
-  const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
+  // Rows B L690, B L721. This defaulted to 0, the artist's FIRST paid frame,
+  // so the lightbox offered no way to buy a piece unframed and preselected a
+  // charge. The artwork page for the same work defaults to "No frame" and
+  // offers it as an option. -1 is that option, the same sentinel it uses.
+  const [selectedFrameIdx, setSelectedFrameIdx] = useState(-1);
   const [showEnquiry, setShowEnquiry] = useState(false);
   const [selectedForPlacement, setSelectedForPlacement] = useState<Set<number>>(new Set());
   // Bulk-action sheet — drives Make Offer modal off the floating bar.
@@ -610,7 +616,7 @@ export default function ArtistProfileClient({
                                     quantity: 1,
                                     quantityAvailable: typeof work.quantityAvailable === "number" ? work.quantityAvailable : null,
                                     shippingPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : undefined,
-                                    dimensions: sp.label || work.dimensions,
+                                    dimensions: sp.label || physicalSizeLabel(work.dimensions, ""),
                                     framed: false,
                                   });
                                   router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
@@ -977,11 +983,24 @@ export default function ArtistProfileClient({
                     onChange={(e) => setSelectedFrameIdx(Number(e.target.value))}
                     className="w-full px-3 py-2.5 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
                   >
-                    {currentWork.frameOptions.map((f, i) => (
-                      <option key={f.label} value={i}>
-                        {f.label}{f.priceUplift > 0 ? `, +\u00a3${f.priceUplift}` : ""}
-                      </option>
-                    ))}
+                    <option value={-1}>No frame</option>
+                    {currentWork.frameOptions.map((f, i) => {
+                      // B10 / row B L721: the lightbox quoted the artist's
+                      // small-size BASELINE uplift while the artwork page
+                      // quoted the per-size figure, so the same frame on the
+                      // same work was priced differently on two screens. Same
+                      // function as the artwork page and as the charge.
+                      const scaled = frameUpliftFor(
+                        f,
+                        currentWork.pricing[selectedSizeIdx]?.label,
+                        currentWork.pricing,
+                      );
+                      return (
+                        <option key={f.label} value={i}>
+                          {f.label}{scaled > 0 ? `, +\u00a3${scaled}` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                   {currentWork.frameOptions[selectedFrameIdx]?.imageUrl && (
                     <div className="mt-2 relative aspect-video rounded-sm overflow-hidden border border-border/60 bg-surface select-none" onContextMenu={(e) => e.preventDefault()}>
@@ -1015,8 +1034,10 @@ export default function ArtistProfileClient({
                 {currentWork.available && currentWork.pricing.length > 0 && (() => {
                   const selected = currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0];
                   const frameOpts = currentWork.frameOptions || [];
-                  const currentFrame = frameOpts[selectedFrameIdx];
-                  const frameUplift = currentFrame?.priceUplift || 0;
+                  const currentFrame = selectedFrameIdx >= 0 ? frameOpts[selectedFrameIdx] : undefined;
+                  const frameUplift = currentFrame
+                    ? frameUpliftFor(currentFrame, selected?.label, currentWork.pricing)
+                    : 0;
                   const sizeLabel = currentFrame ? `${selected.label} + ${currentFrame.label}` : selected.label;
                   const totalPrice = Math.round((selected.price + frameUplift) * 100) / 100;
                   // Per-size stock cap with fallback to work-level

@@ -5,6 +5,7 @@ import { assertNotDemo } from "@/lib/demo-guard";
 import { stripe } from "@/lib/stripe";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
 import { canReceivePayout } from "@/lib/payouts/capability";
+import { PAID_LOAN_MIN_GBP } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // recomputes it from the artist's plan at that moment (their tier can change
   // between setup and any given month).
   const feePct = platformFeePercentForArtist(artistProfile);
+
+  // Floor guard (owner decision 2026-08-28). The Zod schemas enforce this on
+  // new placements and counters; this catches legacy rows created before the
+  // floor existed so we never start a subscription the fee maths cannot carry.
+  if (placement.monthly_fee_gbp < PAID_LOAN_MIN_GBP) {
+    return NextResponse.json(
+      {
+        error: `Monthly loan fees start at £${PAID_LOAN_MIN_GBP}. Ask the artist to update the placement terms.`,
+        reason: "monthly_fee_below_floor",
+      },
+      { status: 422 },
+    );
+  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   const monthlyFeePence = Math.round(placement.monthly_fee_gbp * 100);

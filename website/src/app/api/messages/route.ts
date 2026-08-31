@@ -8,6 +8,7 @@ import { checkArtistOutreachCap, outreachCapPayload } from "@/lib/outreach-cap";
 import { orFilter } from "@/lib/db/safe-filter";
 import { assertPlacementParty, handleAuthzError } from "@/lib/authz";
 import { canPlacementTransition } from "@/lib/placements/state-machine";
+import { placementCapDecision } from "@/app/api/placements/placement-cap";
 import { moderateMessage } from "@/lib/moderation";
 import { isFlagOn } from "@/lib/feature-flags";
 import { sendEmail } from "@/lib/email/send";
@@ -284,6 +285,46 @@ export async function POST(request: Request) {
     // ── Content moderation ──────────────────────────────────────────────────
     const moderation = moderateMessage(content);
     if (!moderation.allowed) {
+      // Pass 2 item 3.8 (row 2020). A blocked message wrote nothing: no
+      // `messages` row (right, it was refused), but also nothing to
+      // `moderation_queue` and nothing to `conversation_reports`. So a user
+      // repeatedly trying to take deals off-platform was invisible to admins,
+      // and /admin/moderation's Messages filter had nothing to show, while the
+      // MILDER flagged case (delivered, queued since owner decision 11) did.
+      //
+      // Only when `flagged` is set. "Too short" and "too long" are refusals
+      // about a string, not signals about a person, and queueing them would
+      // bury the ones that are.
+      //
+      // The sender's slug is not resolved yet at this point and resolving it
+      // here would change the error precedence for a blocked message to an
+      // unknown recipient. The user id and email identify the sender well
+      // enough for triage, which is what the queue is for.
+      if (moderation.flagged) {
+        const blockedPayload = parsePayload("message", {
+          message_id: null,
+          blocked: true,
+          conversation_id: conversationId || `to:${recipientSlug}`,
+          sender_slug: auth.user!.email || auth.user!.id,
+          recipient_slug: recipientSlug,
+          flag_reason: moderation.reason || "blocked",
+          excerpt: content.slice(0, 200),
+        });
+        if (blockedPayload) {
+          const { error: queueErr } = await getSupabaseAdmin().from("moderation_queue").insert({
+            entity_type: "message",
+            entity_id: conversationId || `to:${recipientSlug}`,
+            submitted_by_user_id: auth.user!.id,
+            submitted_by_email: auth.user!.email ?? null,
+            status: "pending",
+            payload: blockedPayload,
+          });
+          if (queueErr) {
+            console.error("[moderation] blocked message could not join the queue:", queueErr.message);
+          }
+        }
+        console.warn(`[moderation] Message blocked: reason="${moderation.reason}"`);
+      }
       return NextResponse.json(
         { error: moderation.reason || "Message not allowed" },
         { status: 400 },
@@ -695,6 +736,45 @@ export async function POST(request: Request) {
         const transition = canPlacementTransition(placement.status, responseStatus);
         if (!transition.ok) {
           return NextResponse.json({ error: transition.reason }, { status: 422 });
+        }
+
+        // Finding 1 (final whole-branch review): this branch is a second,
+        // unguarded door into pending → active, the whole point of E33
+        // above, so it must clear the same concurrent-placement cap as
+        // PATCH /api/placements (placement-cap.ts). Same decision helper,
+        // same 402 payload shapes, keyed on the placement's artist
+        // regardless of which party is accepting here.
+        if (responseStatus === "active" && placement.artist_user_id) {
+          const { data: capProfile } = await db
+            .from("artist_profiles")
+            .select("subscription_plan, subscription_status")
+            .eq("user_id", placement.artist_user_id)
+            .maybeSingle();
+          const { count: activeCount } = await db
+            .from("placements")
+            .select("id", { count: "exact", head: true })
+            .eq("artist_user_id", placement.artist_user_id)
+            .eq("status", "active");
+          const decision = placementCapDecision({
+            profile: capProfile ?? null,
+            activeCount: activeCount ?? 0,
+          });
+          if (!decision.allowed) {
+            const isOwnCap = placement.artist_user_id === auth.user!.id;
+            return NextResponse.json(
+              isOwnCap
+                ? {
+                    error: "placement_limit_reached",
+                    message: `Your plan includes ${decision.cap} active placements at a time. Upgrade to take on more walls.`,
+                    upgrade_url: "/artist-portal/billing",
+                  }
+                : {
+                    error: "placement_limit_reached",
+                    message: "This artist is at their plan's active placement limit right now. They can free a slot or upgrade, then you can accept.",
+                  },
+              { status: 402 },
+            );
+          }
         }
 
         // Compare-and-set on pending, so two concurrent responses cannot both

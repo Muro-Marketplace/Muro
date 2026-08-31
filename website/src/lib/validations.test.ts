@@ -14,6 +14,33 @@ import {
 } from "./validations";
 
 describe("waitlistSchema", () => {
+  // Row A L364 / migration 129. The form posts phone, venueName and
+  // venueLocation and this schema declared none of them, so zod stripped all
+  // three at the validation boundary and no writer ever saw them. A venue
+  // joining the waiting list gave us their venue's name and where it is, and we
+  // kept neither, which is what made the list unworkable.
+  it("keeps the three fields the form asks for", () => {
+    const r = waitlistSchema.safeParse({
+      name: "Hannah Reed",
+      email: "hannah@copperkettle.test",
+      userType: "venue",
+      phone: "07700900123",
+      venueName: "The Copper Kettle",
+      venueLocation: "Hampton",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.phone).toBe("07700900123");
+      expect(r.data.venueName).toBe("The Copper Kettle");
+      expect(r.data.venueLocation).toBe("Hampton");
+    }
+  });
+
+  it("still accepts an artist signup that gives none of them", () => {
+    const r = waitlistSchema.safeParse({ name: "Maya", email: "maya@x.com", userType: "artist" });
+    expect(r.success).toBe(true);
+  });
+
   it("accepts a valid signup", () => {
     const r = waitlistSchema.safeParse({ name: "Maya Chen", email: "maya@x.com", userType: "artist" });
     expect(r.success).toBe(true);
@@ -169,6 +196,34 @@ describe("placementUpdateSchema", () => {
     expect(
       placementUpdateSchema.safeParse({ id: "p1", counter: { arrangementType: "barter" } }).success,
     ).toBe(false);
+  });
+});
+
+describe("paid-loan monthly fee floor", () => {
+  const base = {
+    id: "pl-1",
+    workTitle: "Test work",
+    venueSlug: "test-venue",
+    type: "paid_loan" as const,
+  };
+
+  it("accepts zero (not a paid loan) and £15 and up", () => {
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 0 }).success).toBe(true);
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 15 }).success).toBe(true);
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 250 }).success).toBe(true);
+  });
+
+  it("rejects a rent between £0.01 and £14.99", () => {
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 5 }).success).toBe(false);
+    expect(placementSchema.safeParse({ ...base, monthlyFeeGbp: 14.99 }).success).toBe(false);
+  });
+
+  it("applies the same floor to counter offers", () => {
+    const counter = { id: "pl-1", counter: { monthlyFeeGbp: 10 } };
+    expect(placementUpdateSchema.safeParse(counter).success).toBe(false);
+    expect(
+      placementUpdateSchema.safeParse({ id: "pl-1", counter: { monthlyFeeGbp: 20 } }).success,
+    ).toBe(true);
   });
 });
 

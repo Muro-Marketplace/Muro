@@ -24,6 +24,7 @@ import { PlacementVenueDeclinedArtistRequest } from "@/emails/templates/placemen
 import { PlacementCancelled } from "@/emails/templates/placements/PlacementCancelled";
 import { PlacementCounterOfferReceived } from "@/emails/templates/placements/PlacementCounterOfferReceived";
 import { PlacementScheduled } from "@/emails/templates/placements/PlacementScheduled";
+import { PlacementLiveOnWall } from "@/emails/templates/placements/PlacementLiveOnWall";
 import { PlacementArtworkInstalled } from "@/emails/templates/placements/PlacementArtworkInstalled";
 import { PlacementEnded } from "@/emails/templates/placements/PlacementEnded";
 import { z } from "zod";
@@ -32,6 +33,7 @@ import { placementTermsSummary } from "@/lib/placements/terms-summary";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { afterResponse } from "@/lib/after-response";
+import { placementCapDecision } from "./placement-cap";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -812,7 +814,7 @@ export async function PATCH(request: Request) {
     // relied on (the phantom requester_user_id rejected the whole query) is gone.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at, revenue_share_percent, scheduled_for")
       .eq("id", id)
       .single();
 
@@ -1259,6 +1261,61 @@ export async function PATCH(request: Request) {
       // no-op but allowed
     }
 
+    // Tier capacity (launch pricing, owner decision 2026-08-28): a placement
+    // going live occupies one of the artist's concurrent-placement slots
+    // (Core 2, Premium 5, Pro unlimited). Enforced on ANY transition into
+    // active, not just pending -> active: paused -> active (resuming a
+    // paused placement) is equally a legal transition per the state machine
+    // and equally occupies a wall slot. Task 3's own notes-for-final-review
+    // flagged this directly: "paused->active would bypass the cap gate but
+    // no code path resumes paused today" (it does now). Regardless of which
+    // party clicks accept/resume, because the wall time is the artist's
+    // either way. The count is computed live from placements; no cached
+    // counter column (AGENTS.md data invariant).
+    //
+    // Placed after the F39 authz block above (self-placement / requester /
+    // not-authorised) rather than immediately after the pending-review gate,
+    // so an unauthorised caller gets the correct 400/403 instead of a 402
+    // that leaks the artist's capacity state.
+    //
+    // `existing.status === "active"` is excluded (rather than scoping to a
+    // specific prior status) so this is defence in depth against any future
+    // path that reaches here with status already active: the "Already
+    // accepted" no-op check above already returns first in the one case that
+    // matters today.
+    if (status === "active" && existing.status !== "active" && existing.artist_user_id) {
+      const { data: capProfile } = await db
+        .from("artist_profiles")
+        .select("subscription_plan, subscription_status")
+        .eq("user_id", existing.artist_user_id)
+        .maybeSingle();
+      const { count: activeCount } = await db
+        .from("placements")
+        .select("id", { count: "exact", head: true })
+        .eq("artist_user_id", existing.artist_user_id)
+        .eq("status", "active");
+      const decision = placementCapDecision({
+        profile: capProfile ?? null,
+        activeCount: activeCount ?? 0,
+      });
+      if (!decision.allowed) {
+        const isOwnCap = existing.artist_user_id === auth.user!.id;
+        return NextResponse.json(
+          isOwnCap
+            ? {
+                error: "placement_limit_reached",
+                message: `Your plan includes ${decision.cap} active placements at a time. Upgrade to take on more walls.`,
+                upgrade_url: "/artist-portal/billing",
+              }
+            : {
+                error: "placement_limit_reached",
+                message: "This artist is at their plan's active placement limit right now. They can free a slot or upgrade, then you can accept.",
+              },
+          { status: 402 },
+        );
+      }
+    }
+
     const updates: Record<string, unknown> = {};
 
     // Buy-off-the-wall offer (owner decision 2026-08-28). Setting a price
@@ -1274,6 +1331,18 @@ export async function PATCH(request: Request) {
     }
     if (status) updates.status = status;
     const now = new Date().toISOString();
+
+    // Row 3.4 (pass 2). `cancelled_at` and `cancelled_by_user_id` exist on the
+    // table and nothing has ever written them, so a cancelled placement carries
+    // no record of who ended it or when. Verified NULL on both columns for
+    // p-1788192191293-7xdf, which a venue cancelled during pass 2.
+    //
+    // Only on the transition INTO cancelled, and only when not already stamped,
+    // so a repeated PATCH cannot rewrite who did it.
+    if (status === "cancelled" && existing.status !== "cancelled" && !existing.cancelled_at) {
+      updates.cancelled_at = now;
+      updates.cancelled_by_user_id = auth.user!.id;
+    }
 
     if (existing.status === "pending" && (status === "active" || status === "declined")) {
       updates.responded_at = now;
@@ -1322,7 +1391,16 @@ export async function PATCH(request: Request) {
     // real timestamp immediately.
     if (stage) {
       const effectiveStatus = status || existing.status;
-      if (effectiveStatus !== "active") {
+      // Row 727. A placement sold off the wall goes to `sold`, which is
+      // terminal for billing and inventory but leaves the piece physically at
+      // the venue until the buyer picks it up. Refusing every stage from `sold`
+      // stranded the record at 5 of 6 with "Collected" permanently out of
+      // reach, and neither party could close the loan.
+      //
+      // Only the CLOSING stage is reachable from `sold`: scheduling or
+      // installing a piece that has already been sold means nothing.
+      const closingASoldPlacement = effectiveStatus === "sold" && stage === "collected";
+      if (effectiveStatus !== "active" && !closingASoldPlacement) {
         return NextResponse.json({ error: "Placement must be active to advance the stage" }, { status: 400 });
       }
 
@@ -1332,6 +1410,22 @@ export async function PATCH(request: Request) {
       // can pre-schedule installs, but reject dates in the past for the
       // `scheduled` stage so a typo (or a paste-bypass of the date
       // picker's `min` attribute) can't backdate an install.
+      // Production pass 2, P4: "Installed can precede the scheduled date with
+      // no complaint, producing 'Scheduled 2 Sept / Installed 31 Aug' in the
+      // progress bar." A stepper that reads backwards is worse than an
+      // unstamped one: the record is what both parties rely on later.
+      //
+      // The remedy is to move the schedule, not to refuse the install. Someone
+      // marking a piece installed is reporting a fact, so the fact wins and the
+      // plan follows it. Stamped to the same moment so the bar reads forward.
+      if (stage === "installed") {
+        const scheduled = (existing as { scheduled_for?: string | null }).scheduled_for;
+        const installedAt = stageDate || now;
+        if (scheduled && new Date(scheduled).getTime() > new Date(installedAt).getTime()) {
+          updates.scheduled_for = installedAt;
+        }
+      }
+
       if (stage === "scheduled" && stageDate) {
         const draftDay = stageDate.slice(0, 10);
         const todayDay = new Date(now).toISOString().slice(0, 10);
@@ -1366,6 +1460,47 @@ export async function PATCH(request: Request) {
       if (unsetStage === "installed") updates.installed_at = null;
       if (unsetStage === "live") updates.live_from = null;
       if (unsetStage === "collected") {
+        // Finding 1 (final whole-branch review): this undo drops the
+        // placement straight back to active by writing updates.status
+        // directly, a server-chosen write that bypasses both
+        // canPlacementTransition (completed has no outgoing transition,
+        // see the comment by the E20 gate) and the caller-supplied `status`
+        // capacity gate above, which never sees this field. It occupies a
+        // wall slot exactly like any other move into active, so it needs
+        // its own copy of the same check, run before the status write
+        // below so a capacity-blocked undo 402s rather than writing.
+        if (existing.status !== "active" && existing.artist_user_id) {
+          const { data: capProfile } = await db
+            .from("artist_profiles")
+            .select("subscription_plan, subscription_status")
+            .eq("user_id", existing.artist_user_id)
+            .maybeSingle();
+          const { count: activeCount } = await db
+            .from("placements")
+            .select("id", { count: "exact", head: true })
+            .eq("artist_user_id", existing.artist_user_id)
+            .eq("status", "active");
+          const decision = placementCapDecision({
+            profile: capProfile ?? null,
+            activeCount: activeCount ?? 0,
+          });
+          if (!decision.allowed) {
+            const isOwnCap = existing.artist_user_id === auth.user!.id;
+            return NextResponse.json(
+              isOwnCap
+                ? {
+                    error: "placement_limit_reached",
+                    message: `Your plan includes ${decision.cap} active placements at a time. Upgrade to take on more walls.`,
+                    upgrade_url: "/artist-portal/billing",
+                  }
+                : {
+                    error: "placement_limit_reached",
+                    message: "This artist is at their plan's active placement limit right now. They can free a slot or upgrade, then you can accept.",
+                  },
+              { status: 402 },
+            );
+          }
+        }
         updates.collected_at = null;
         // Undoing the final stage drops the placement back to active.
         updates.status = "active";
@@ -1445,16 +1580,28 @@ export async function PATCH(request: Request) {
     // updates silently no-op via the IF NOT EXISTS guard in the
     // migration; here the update will return an error which we swallow.
     try {
-      const becameActive = existing.status === "pending" && status === "active";
+      // Pass 2 item 3.3 (rows 2168, 2170). Undoing a collection correctly
+      // returned the placement to active and cleared collected_at, but the
+      // inventory hook keyed only on pending → active, so the work was left
+      // unlinked: placed_at_venue stayed null and current_placement_id stayed
+      // null while an ACTIVE placement pointed at it. The artwork page then
+      // said the piece was not on any wall, and the stock restored by the
+      // collection was never taken back.
+      //
+      // The undo is the exact inverse of the collection, so it runs the exact
+      // same hook.
+      const effectiveStatusForInventory = (updates.status as string | undefined) ?? existing.status;
+      const becameActive =
+        (existing.status === "pending" && status === "active") ||
+        (existing.status === "completed" && effectiveStatusForInventory === "active");
       // E23b. This keyed on the STAGE, so a direct {status:"completed"} write
       // left it false: quantity_available was never restored, `available`
       // stayed false where the decrement had hit zero, and placed_at_venue kept
       // pointing at a finished placement. Any party could burn an artist's
       // inventory with a legitimate-looking request. Keyed on the resulting
       // status now, whichever path produced it.
-      const effectiveStatus = (updates.status as string | undefined) ?? existing.status;
       const becameCollected =
-        existing.status === "active" && effectiveStatus === "completed";
+        existing.status === "active" && effectiveStatusForInventory === "completed";
       if (becameActive || becameCollected) {
         // Production schema stores work data denormalised on the
         // placement (work_title + extra_works JSONB), there is no
@@ -1626,6 +1773,36 @@ export async function PATCH(request: Request) {
                 artistName,
                 installedWorks: [],
                 qrLabelsUrl: `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`,
+              }),
+            });
+          }
+        }
+
+        // Production pass 2, P4. Scheduled, Installed and Collected each fan
+        // out to both parties; the stage in between did not, and it is the one
+        // that starts the arrangement earning. Not a duplicate of Installed:
+        // installed means the piece is hung, live means it is on display with
+        // its QR label up and open to buyers.
+        if (stage === "live") {
+          for (const party of [
+            { user: artistUser, name: artistName, uid: existing.artist_user_id },
+            { user: venueUser, name: venueName, uid: existing.venue_user_id },
+          ]) {
+            await sendToParty({
+              user: party.user,
+              firstName: (party.name).split(" ")[0] || "there",
+              userId: party.uid,
+              idempotencyKey: `placement_live_on_wall:${id}:${party.uid}`,
+              template: "placement_live_on_wall",
+              subject: `${existing.work_title || "Your work"} is live at ${venueName}`,
+              react: PlacementLiveOnWall({
+                firstName: (party.name).split(" ")[0] || "there",
+                placementUrl,
+                venueName,
+                artistName,
+                workTitle: existing.work_title || "The work",
+                qrLabelsUrl: `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`,
+                venueSharePercent: existing.revenue_share_percent ?? null,
               }),
             });
           }
@@ -2025,13 +2202,32 @@ export async function PATCH(request: Request) {
 
         // Bell notification. Fire first, independent of email, so a
         // flaky email service can't drop the in-app signal too.
+        const monthlyFee = Number(existing.monthly_fee_gbp ?? 0);
+        const billingLine =
+          monthlyFee > 0 ? ` The £${monthlyFee.toFixed(2)} monthly payment ends with it.` : "";
+
         createNotification({
           userId: otherPartyUserId,
           kind: "placement_cancelled",
           title: "Placement cancelled",
-          body: `${cancellerName} cancelled the placement`,
+          body: `${cancellerName} cancelled the placement.${billingLine}`,
           link: `/placements/${encodeURIComponent(id)}`,
         }).catch((err) => console.warn("[placements] cancel notification failed:", err));
+
+        // Rows 2179-2187. The CANCELLER got nothing at all, and on a paid loan
+        // they are usually the venue being charged. The placement page then
+        // told them "Monthly payment active, £12.00/mo. Next payment on 30
+        // September" underneath a heading saying Cancelled. Confirm the money
+        // has stopped to the person who stopped it.
+        if (monthlyFee > 0) {
+          createNotification({
+            userId: auth.user!.id,
+            kind: "placement_cancelled",
+            title: "Monthly payment cancelled",
+            body: `The £${monthlyFee.toFixed(2)} monthly payment for this placement has been cancelled. No further charges.`,
+            link: `/placements/${encodeURIComponent(id)}`,
+          }).catch((err) => console.warn("[placements] canceller billing notification failed:", err));
+        }
 
         // Email the other party. Idempotency keyed by id alone, the row
         // can only transition into cancelled once (the gate above blocks
@@ -2057,6 +2253,10 @@ export async function PATCH(request: Request) {
                 recipientPersona: otherPartyPersona,
                 placementUrl,
                 nextStepUrl,
+                // Rows 2179-2187: the cancellation said nothing about the money
+                // to either party, on a placement carrying a live monthly
+                // subscription.
+                monthlyFeeGbp: existing.monthly_fee_gbp ?? null,
               }),
               metadata: { placementId: id },
             });

@@ -128,7 +128,10 @@ export async function PATCH(
     const now = new Date().toISOString();
     await db
       .from("blogs")
-      .update({ status: "published", published_at: now })
+      // Migration 128: clear any earlier rejection reason, so a post that was
+      // rejected, edited and resubmitted cannot show a stale explanation
+      // beside a published badge.
+      .update({ status: "published", published_at: now, rejection_reason: null })
       .eq("id", id);
     await db
       .from("moderation_queue")
@@ -173,7 +176,14 @@ export async function PATCH(
     const now = new Date().toISOString();
     await db
       .from("blogs")
-      .update({ status: "rejected" })
+      // Pass 2 item 3.2 (migration 128). The prompt says "Reason (emailed to
+      // the author):" and the reason went only to admin_audit_log and the
+      // moderation_queue row, neither of which an artist can see. The one route
+      // out was the email, and the send throttle ate it (item 3.1), so on the
+      // occasion pass 2 tested the reason reached the author by no route at all.
+      // The schema requires the reason, so this column is never empty behind a
+      // Rejected badge.
+      .update({ status: "rejected", rejection_reason: parsed.data.reason })
       .eq("id", id);
     await db
       .from("moderation_queue")

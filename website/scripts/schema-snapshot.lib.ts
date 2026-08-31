@@ -13,6 +13,25 @@ export const SNAPSHOT_SQL =
   "from information_schema.columns where table_schema='public' group by table_name) t;";
 
 /**
+ * The query the NOT NULL guard's snapshot is built from
+ * (tests/integration/schema-not-null.json).
+ *
+ * Only base tables, only columns that are NOT NULL **and** have no default and
+ * are not identity columns. A NOT NULL column WITH a default is filled by
+ * Postgres when the key is absent, so it is not the shape that broke
+ * `/api/apply`; naming it here would flag every insert that sensibly omits it.
+ */
+export const NOT_NULL_SQL =
+  "select jsonb_object_agg(table_name, cols) as snapshot from (" +
+  "select c.table_name, jsonb_agg(c.column_name order by c.ordinal_position) cols " +
+  "from information_schema.columns c " +
+  "join information_schema.tables t on t.table_schema = c.table_schema " +
+  "and t.table_name = c.table_name and t.table_type = 'BASE TABLE' " +
+  "where c.table_schema='public' and c.is_nullable='NO' " +
+  "and c.column_default is null and c.is_identity='NO' " +
+  "group by c.table_name) t;";
+
+/**
  * Printed and returned exit 2 when the runner has no credential. D12 verified
  * SUPABASE_ACCESS_TOKEN is absent from this environment (only SUPABASE_URL and
  * SUPABASE_SERVICE_ROLE_KEY are exported), so this fires at exactly the moment a

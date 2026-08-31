@@ -274,19 +274,44 @@ describe("POST /api/messages placement_response authz (E33)", () => {
    * `visible` is what assertPlacementParty's party-filtered read returns: pass
    * null to model "the caller is not a party", which is the exploit.
    */
-  function setupPlacementDb(visible: PlacementRow | null, updateReturns: { id: string }[] = [{ id: "pl-1" }]) {
+  function setupPlacementDb(
+    visible: PlacementRow | null,
+    updateReturns: { id: string }[] = [{ id: "pl-1" }],
+    capOpts: { profile?: Record<string, unknown> | null; activeCount?: number } = {},
+  ) {
     updates.length = 0;
+    // Finding 1 (final whole-branch review): defaults an artist safely under
+    // any real cap (core/active, count 0), so every existing test in this
+    // describe block, none of which is exercising the cap gate itself, sees
+    // the gate allow through exactly as before it existed. Cap-specific
+    // tests below override both via capOpts.
+    const {
+      profile = { slug: "alice", user_id: "u-art-a", name: "Alice", subscription_plan: "core", subscription_status: "active" },
+      activeCount = 0,
+    } = capOpts;
     fromMock.mockImplementation((table: string) => {
       if (table === "placements") {
         return {
-          // assertPlacementParty: .select().eq("id").or(...).maybeSingle()
-          select: () => ({
-            eq: () => ({
-              or: () => ({ maybeSingle: async () => ({ data: visible, error: null }) }),
-              maybeSingle: async () => ({ data: visible, error: null }),
-              single: async () => ({ data: visible, error: null }),
-            }),
-          }),
+          // assertPlacementParty's row fetch and the cap gate's head:true
+          // count query are two shapes off the same .select(); branch on
+          // selectOpts.head so both live side by side.
+          select: (_columns?: unknown, selectOpts?: { head?: boolean }) => {
+            if (selectOpts?.head) {
+              const chain = {
+                eq: () => chain,
+                then: (resolve: (v: unknown) => unknown) =>
+                  Promise.resolve({ data: null, count: activeCount, error: null }).then(resolve),
+              };
+              return chain;
+            }
+            return {
+              eq: () => ({
+                or: () => ({ maybeSingle: async () => ({ data: visible, error: null }) }),
+                maybeSingle: async () => ({ data: visible, error: null }),
+                single: async () => ({ data: visible, error: null }),
+              }),
+            };
+          },
           update: (payload: Record<string, unknown>) => {
             const filters: Record<string, string> = {};
             const chain = {
@@ -307,7 +332,10 @@ describe("POST /api/messages placement_response authz (E33)", () => {
           },
         };
       }
-      if (table === "artist_profiles" || table === "venue_profiles") {
+      if (table === "artist_profiles") {
+        return chainSelectMaybe(profile);
+      }
+      if (table === "venue_profiles") {
         return chainSelectMaybe({ slug: "alice", user_id: "u-art-a", name: "Alice" });
       }
       return {
@@ -418,6 +446,47 @@ describe("POST /api/messages placement_response authz (E33)", () => {
     setupPlacementDb(null);
     const res = await POST(responseReq("declined"));
     expect(res.status).not.toBe(400);
+  });
+
+  // ─── Finding 1 (final whole-branch review): this branch is a second,
+  // unguarded door into pending → active, the whole point of E33 above, and
+  // it inherited the same gap the placements PATCH cap gate had: no
+  // capacity check. Same decision helper, same 402 payload shape as
+  // PATCH /api/placements (placement-cap.ts).
+  // Full fixture (not just the cap-relevant columns): "artist_profiles" is
+  // also queried earlier in POST to resolve the sender's own slug (line
+  // ~307), before this branch is ever reached, and every query against the
+  // table in this mock shares the one fixture. Dropping slug/user_id/name
+  // here would 403 as "account not set up to send messages" before the cap
+  // gate gets a chance to run.
+  const CORE_ARTIST_PROFILE = {
+    slug: "alice", user_id: "u-art-a", name: "Alice",
+    subscription_plan: "core", subscription_status: "active",
+  };
+
+  it("blocks a placement_response accept with 402 when the artist is at their Core cap", async () => {
+    setupPlacementDb(
+      { ...PENDING, proposed_by_user_id: "u-venue-b" },
+      [{ id: "pl-1" }],
+      { profile: CORE_ARTIST_PROFILE, activeCount: 2 },
+    );
+    const res = await POST(responseReq("active"));
+    expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body.error).toBe("placement_limit_reached");
+    expect(updates, "a capacity-blocked accept must not write").toEqual([]);
+  });
+
+  it("allows a placement_response accept when the artist is under their Core cap", async () => {
+    setupPlacementDb(
+      { ...PENDING, proposed_by_user_id: "u-venue-b" },
+      [{ id: "pl-1" }],
+      { profile: CORE_ARTIST_PROFILE, activeCount: 1 },
+    );
+    const res = await POST(responseReq("active"));
+    expect(res.status).toBeLessThan(400);
+    expect(updates).toHaveLength(1);
+    expect(updates[0].payload).toMatchObject({ status: "active" });
   });
 });
 
@@ -857,5 +926,110 @@ describe("POST /api/messages refuses support replies clearly (F50)", () => {
     const body = await res.json();
     expect(body.code).toBe("support_thread_readonly");
     expect(body.error).toContain("/contact");
+  });
+});
+
+// Pass 2 item 3.8 (row 2020). A message the filter BLOCKS writes nothing: no
+// `messages` row (correct, it was refused), but also nothing to
+// `moderation_queue` and nothing to `conversation_reports`. So a user
+// repeatedly trying to take deals off-platform is invisible to admins, and
+// /admin/moderation's Messages filter has nothing to show. A FLAGGED message,
+// which is delivered, has queued since owner decision 11; the blocked one, which
+// is the more serious signal, did not.
+describe("a BLOCKED message leaves a moderation trace (3.8)", () => {
+  const queueInserts: Record<string, unknown>[] = [];
+
+  function setupDb(opts: { queueError?: unknown; verdict?: { allowed: boolean; flagged: boolean; reason: string | undefined } } = {}) {
+    queueInserts.length = 0;
+    authMock.mockResolvedValue({ user: { id: "u-1", email: "sender@example.com" }, error: null });
+    // `@/lib/moderation` is mocked file-wide, so the verdict is set here.
+    // moderation.test.ts owns the patterns themselves; these tests own what the
+    // ROUTE does with a blocking verdict.
+    moderateMock.mockReturnValue(
+      opts.verdict ?? {
+        allowed: false,
+        flagged: true,
+        reason: "Message contains blocked content",
+      },
+    );
+    fromMock.mockImplementation((table: string) => {
+      if (table === "moderation_queue") {
+        return {
+          insert: async (row: Record<string, unknown>) => {
+            queueInserts.push(row);
+            return { error: opts.queueError ?? null };
+          },
+        };
+      }
+      return chainSelectMaybe(null);
+    });
+  }
+
+  function post(content: string) {
+    return POST(
+      new Request("http://localhost/api/messages", {
+        method: "POST",
+        headers: { authorization: "Bearer x", "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: "dm-alice__bob",
+          senderType: "venue",
+          recipientSlug: "bob",
+          content,
+        }),
+      }),
+    );
+  }
+
+  /**
+   * Trips a BLOCKED_PATTERN (phone-number solicitation moving off-platform),
+   * so `allowed: false, flagged: true`. Not a FLAGGED pattern: those are
+   * delivered and have queued since owner decision 11.
+   */
+  const OFF_PLATFORM = "Forget the platform fee, whatsapp me on 07700900123 and we'll sort it";
+
+  it("still refuses the message", async () => {
+    setupDb();
+
+    const res = await post(OFF_PLATFORM);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Message contains blocked content");
+  });
+
+  it("queues it for an admin with the sender, the reason and an excerpt", async () => {
+    setupDb();
+
+    await post(OFF_PLATFORM);
+
+    expect(queueInserts, "the block left no trace at all").toHaveLength(1);
+    expect(queueInserts[0]).toMatchObject({
+      entity_type: "message",
+      status: "pending",
+      submitted_by_user_id: "u-1",
+    });
+    const payload = queueInserts[0].payload as Record<string, unknown>;
+    expect(payload.blocked).toBe(true);
+    expect(payload.flag_reason).toBe("Message contains blocked content");
+    expect(String(payload.excerpt)).toContain("whatsapp me");
+  });
+
+  it("queues nothing for a message refused merely for being too short", async () => {
+    // "Too short" and "too long" are not moderation signals about a person;
+    // queueing them would bury the ones that are. moderateMessage marks those
+    // `flagged: false`, which is the distinction.
+    setupDb({ verdict: { allowed: false, flagged: false, reason: "Message too short" } });
+
+    const res = await post("a");
+
+    expect(res.status).toBe(400);
+    expect(queueInserts).toHaveLength(0);
+  });
+
+  it("still refuses the message when the queue write fails", async () => {
+    setupDb({ queueError: { message: "db down" } });
+
+    const res = await post(OFF_PLATFORM);
+
+    expect(res.status).toBe(400);
   });
 });

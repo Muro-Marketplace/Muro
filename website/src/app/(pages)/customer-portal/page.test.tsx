@@ -441,3 +441,119 @@ describe("CustomerPortalPage — failed orders fetch (C2)", () => {
     expect(screen.queryByText(ERROR_COPY)).toBeNull();
   });
 });
+
+// Rows 870-874 / PASS2-placement-lifecycle-log. A collect-from-venue order used
+// to be booked `delivered` at the moment of payment, so it needed no
+// confirmation and got none. Now it is booked `confirmed` and the buyer
+// confirms the handover, which is what releases the artist's payout and starts
+// the statutory 14-day refund window.
+//
+// A collection order never passes through `shipped`, so gating the control on
+// `status === "shipped"` would leave a collect buyer with no way to confirm at
+// all and every collect payout waiting the full 14 days on the cron.
+describe("CustomerPortalPage — confirming a collection (rows 870-874)", () => {
+  const collectOrder = {
+    ...mockOrder,
+    status: "confirmed",
+    status_history: [{ status: "confirmed", timestamp: deliveredAt }],
+    delivered_at: null,
+    fulfilment_method: "collect_venue",
+    collection_address: "The Copper Kettle, 1 High St, Hampton",
+  };
+
+  function serve(order: Record<string, unknown>) {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") return Promise.resolve(jsonResponse({ orders: [order] }));
+      if (url === "/api/refunds") {
+        return Promise.resolve(jsonResponse({ refundRequests: [], userType: "customer" }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+  }
+
+  it("offers the buyer a confirm control on a collection order awaiting collection", async () => {
+    serve(collectOrder);
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Confirm collection/i }).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("does not offer it once the collection is already confirmed", async () => {
+    serve({ ...collectOrder, status: "delivered", delivered_at: deliveredAt });
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+    await waitFor(() => expect(screen.getAllByText("WP-001").length).toBeGreaterThan(0));
+
+    expect(screen.queryByRole("button", { name: /Confirm collection/i })).toBeNull();
+  });
+
+  it("still calls the confirm control 'Confirm delivery' on a posted order", async () => {
+    serve({ ...mockOrder, status: "shipped", delivered_at: null, fulfilment_method: "ship" });
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Confirm delivery/i }).length).toBeGreaterThan(0);
+    });
+  });
+});
+
+// Row C L988 / Track A4.5. An open dispute was invisible on the dashboard.
+// `orders.status` stays `confirmed` while a dispute runs alongside the order,
+// so no off-pipeline badge renders, and /api/disputes had no GET, so nothing
+// could read one back. `/orders/<id>` looked like it knew, but only from local
+// state after the submit; a reload lost it.
+describe("CustomerPortalPage shows an open dispute (row C L988)", () => {
+  const DISPUTE = {
+    id: "d-1",
+    order_id: ORDER_ID,
+    status: "open",
+    category: "damaged",
+  };
+
+  function serve(disputes: unknown[]) {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") return Promise.resolve(jsonResponse({ orders: [mockOrder] }));
+      if (url === "/api/refunds") {
+        return Promise.resolve(jsonResponse({ refundRequests: [], userType: "customer" }));
+      }
+      if (url === "/api/disputes") return Promise.resolve(jsonResponse({ disputes }));
+      return Promise.resolve(jsonResponse({}));
+    });
+  }
+
+  it("says a problem has been reported on the order it belongs to", async () => {
+    serve([DISPUTE]);
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+
+    expect(await screen.findByText(/Problem reported/i)).toBeTruthy();
+  });
+
+  it("says nothing once the dispute is resolved", async () => {
+    serve([{ ...DISPUTE, status: "resolved" }]);
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+    await waitFor(() => expect(screen.getAllByText("WP-001").length).toBeGreaterThan(0));
+
+    expect(screen.queryByText(/Problem reported/i)).toBeNull();
+  });
+
+  it("does not attach another order's dispute to this one", async () => {
+    serve([{ ...DISPUTE, order_id: "some-other-order" }]);
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+    await waitFor(() => expect(screen.getAllByText("WP-001").length).toBeGreaterThan(0));
+
+    expect(screen.queryByText(/Problem reported/i)).toBeNull();
+  });
+});

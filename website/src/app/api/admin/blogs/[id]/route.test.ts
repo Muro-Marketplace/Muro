@@ -200,3 +200,52 @@ describe("editing sends nothing", () => {
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });
+
+// Pass 2 item 3.2 (row 2442). The admin prompt says "Reason (emailed to the
+// author):". The reason went to admin_audit_log and to the moderation_queue
+// row, neither of which an artist can see, and the artist's own portal showed a
+// bare "Rejected" badge with no explanation. The one route out was the email,
+// and on the occasion pass 2 tested it was eaten by the send throttle (item
+// 3.1), so the reason reached the author by no route at all.
+//
+// Migration 128 puts it on the blog, which is where the author looks.
+describe("the rejection reason reaches the author's own page (3.2)", () => {
+  it("stores the reason on the blog, not only in the audit log", async () => {
+    await PATCH(
+      req("PATCH", { action: "reject", reason: "It names a venue we have not placed with." }),
+      params,
+    );
+
+    const blogWrite = updateMock.mock.calls.find((c) => c[0] === "blogs");
+    expect(blogWrite?.[1]).toMatchObject({
+      status: "rejected",
+      rejection_reason: "It names a venue we have not placed with.",
+    });
+  });
+
+  it("refuses a rejection with no reason, so the column cannot land empty", async () => {
+    // The schema requires it (min 2 chars) and the admin page returns early
+    // when the prompt is cancelled, so "rejected with no explanation" is not a
+    // state the product can reach. Pinned, because the value of the column is
+    // that it is always populated when the badge says Rejected.
+    const res = await PATCH(req("PATCH", { action: "reject" }), params);
+
+    expect(res.status).toBe(400);
+    expect(updateMock.mock.calls.find((c) => c[0] === "blogs")).toBeUndefined();
+  });
+
+  it("clears a stale reason when the post is approved", async () => {
+    // A rejected post that is edited and resubmitted must not carry the old
+    // reason beside a published badge.
+    fromMock.mockImplementation((table: string) => {
+      if (table === "admin_users") return adminUsersChain();
+      if (table === "moderation_queue") return queueTable();
+      return blogsTable({ ...BLOG, status: "pending_review", rejection_reason: "Old reason." });
+    });
+
+    await PATCH(req("PATCH", { action: "approve" }), params);
+
+    const blogWrite = updateMock.mock.calls.find((c) => c[0] === "blogs");
+    expect(blogWrite?.[1]).toMatchObject({ rejection_reason: null });
+  });
+});

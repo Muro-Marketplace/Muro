@@ -1,0 +1,46 @@
+- generic [active] [ref=f50e1]:
+  - generic [ref=f50e2]:
+    - link "Skip to content" [ref=f50e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f50e4]:
+      - generic [ref=f50e6]:
+        - link "Wallplace" [ref=f50e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f50e8]:
+          - link "Marketplace" [ref=f50e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f50e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f50e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f50e13] [cursor=pointer]
+        - generic [ref=f50e16]:
+          - link "Saved" [ref=f50e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f50e21] [cursor=pointer]
+          - button "Notifications" [ref=f50e26] [cursor=pointer]
+          - generic [ref=f50e30]:
+            - link "Venue Portal" [ref=f50e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f50e32] [cursor=pointer]
+          - button "Logout" [ref=f50e35] [cursor=pointer]
+    - main [ref=f50e36]:
+      - generic [ref=f50e37]:
+        - generic [ref=f50e38]:
+          - generic [ref=f50e39]:
+            - link "← My Walls" [ref=f50e40] [cursor=pointer]:
+              - /url: /venue-portal/walls
+            - paragraph [ref=f50e42]: Loading…
+          - button "Delete" [ref=f50e44] [cursor=pointer]
+        - generic [ref=f50e45]: Loading wall…
+    - button "Feedback and feature requests" [ref=f50e47] [cursor=pointer]: Feedback
+  - generic [ref=f50e53]:
+    - paragraph [ref=f50e54]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f50e55] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f50e56]:
+      - button "Decline" [ref=f50e57] [cursor=pointer]
+      - button "Accept" [ref=f50e58] [cursor=pointer]
+  - alert [ref=f50e59]

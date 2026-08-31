@@ -21,6 +21,16 @@ export interface PlacementCancelledProps {
   placementUrl: string;
   // Where to send them next, browse other venues / artists.
   nextStepUrl: string;
+  /**
+   * The monthly fee that stops with the placement, in pounds, when there was a
+   * live paid-loan subscription. Omitted for a free loan or revenue share.
+   *
+   * Rows 2179-2187: cancelling a paid-loan placement produced no word about the
+   * money to either party. The artist got this email and it said nothing about
+   * the payments ending; the venue, who is the one being charged, got nothing
+   * at all.
+   */
+  monthlyFeeGbp?: number | null;
 }
 
 export function PlacementCancelled({
@@ -29,6 +39,7 @@ export function PlacementCancelled({
   recipientPersona,
   placementUrl,
   nextStepUrl,
+  monthlyFeeGbp,
 }: PlacementCancelledProps) {
   const isArtist = recipientPersona === "artist";
   const nextLabel = isArtist ? "Discover more venues" : "Browse artists";
@@ -47,6 +58,13 @@ export function PlacementCancelled({
         Hi {firstName}, {cancelledByName} has cancelled this placement. The placement is
         now closed on both sides.
       </P>
+      {typeof monthlyFeeGbp === "number" && monthlyFeeGbp > 0 && (
+        <P>
+          {isArtist
+            ? `The venue's monthly payment of £${monthlyFeeGbp.toFixed(2)} ends with it. Your last payment covers the month they have already paid for.`
+            : `Your monthly payment of £${monthlyFeeGbp.toFixed(2)} ends with it. You won't be charged again, and the month you have already paid for runs to the end of its period.`}
+        </P>
+      )}
       <P>
         It happens. Plans shift, schedules change. We&rsquo;ll keep helping you find the
         right {isArtist ? "wall" : "artist"} for the next one.
@@ -69,6 +87,7 @@ export const mock: PlacementCancelledProps = {
   recipientPersona: "artist",
   placementUrl: "https://wallplace.co.uk/placements/p_example",
   nextStepUrl: "https://wallplace.co.uk/spaces",
+  monthlyFeeGbp: 12,
 };
 
 const entry: TemplateEntry<PlacementCancelledProps> = {

@@ -9,7 +9,13 @@ import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/re
 
 const { mutateMock } = vi.hoisted(() => ({ mutateMock: vi.fn() }));
 
-vi.mock("@/lib/api-client", () => ({ mutate: mutateMock }));
+// 3.9: the layout also asks /api/account/roles whether this account owns a
+// venue profile, because two production accounts hold both profiles on one auth
+// user and `user_metadata.user_type` cannot say so.
+vi.mock("@/lib/api-client", () => ({
+  mutate: mutateMock,
+  authFetch: async () => ({ json: async () => ({ roles: ["venue"], ownRoles: ["venue"] }) }),
+}));
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
     user: { email_confirmed_at: "2026-01-01T00:00:00Z" },

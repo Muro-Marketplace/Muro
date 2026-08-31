@@ -248,6 +248,50 @@ export async function PUT(
       }
     }
 
+    // ─── Referral ledger (row G L2366) ───
+    // `artist_referrals` held 0 rows across the whole production database. The
+    // referrer's 30-day credit is applied later by the Stripe webhook
+    // (`extend_free_until`, on the referred artist's first paid subscription),
+    // but nothing ever recorded WHO referred WHOM, so there was no row to
+    // reconcile that credit against and no way for a referrer to see a referral
+    // in flight.
+    //
+    // Accept is the only moment both halves exist: the code sits on the
+    // application, and the new artist has a user id for the first time. Written
+    // before the status flip so a failure here is visible in the logs against a
+    // still-pending application rather than a silently half-done accept.
+    // Best-effort: a failure must not block admission.
+    const referredByCode = ((app as Record<string, unknown>).referred_by_code as string | null) || null;
+    if (referredByCode) {
+      try {
+        const { data: referrer } = await db
+          .from("artist_profiles")
+          .select("user_id, slug")
+          .eq("referral_code", referredByCode)
+          .maybeSingle<{ user_id: string; slug: string }>();
+
+        if (!referrer) {
+          // /api/apply validates the code now, so this is either a legacy row
+          // from before that landed or an artist who has since been removed.
+          console.warn("[accept] referral code on application matches no artist", { id });
+        } else {
+          const { error: ledgerErr } = await db.from("artist_referrals").insert({
+            referrer_user_id: referrer.user_id,
+            referrer_slug: referrer.slug,
+            referral_code: referredByCode,
+            referred_email: app.email,
+            referred_user_id: userId,
+            // The credit is not earned until the referred artist starts paying;
+            // the webhook's `extend_free_until` is what converts this.
+            status: "pending",
+          });
+          if (ledgerErr) console.error("Referral ledger insert error:", ledgerErr);
+        }
+      } catch (referralErr) {
+        console.error("Referral ledger error:", referralErr);
+      }
+    }
+
     // Mark application as accepted. Goes through the same helper as the
     // reject path so a missing reviewed_at / reviewed_by column (migration
     // 052 not yet deployed) doesn't silently swallow the status flip and
@@ -275,6 +319,12 @@ export async function PUT(
           firstName: (app.name || "there").split(" ")[0],
           goLiveUrl: `${SITE}/artist-portal`,
           welcomeMessage: (body.welcomeMessage as string | undefined) || undefined,
+          // Row 2362 / item 3.7. The plan on the application is an intent, not a
+          // purchase, and the profile is deliberately created on `none`. Nothing
+          // told the artist that, so someone who picked Pro on the form had no
+          // way to know they were on nothing.
+          selectedPlan: (app as Record<string, unknown>).selected_plan as string | null,
+          billingUrl: `${SITE}/artist-portal/billing`,
         }),
         metadata: { applicationId: id, userId },
       });

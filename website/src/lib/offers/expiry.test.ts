@@ -4,6 +4,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  OFFER_WINDOW_DAYS,
+  defaultOfferExpiry,
   formatOfferDeadline,
   isOfferLapsed,
   isOfferUnpayableAfterExpiry,
@@ -85,5 +87,28 @@ describe("formatOfferDeadline", () => {
 
   it("renders nothing when there is no deadline", () => {
     expect(formatOfferDeadline({ expires_at: null })).toBeNull();
+  });
+});
+
+// Row 2244. Enforcement (F41) landed without anything ever setting a deadline:
+// `purchase_offers.expires_at` was NULL on every row in production, so an offer
+// made today was still bindingly open next year. The default is what closes
+// that, and it belongs beside the predicates that read it.
+describe("defaultOfferExpiry", () => {
+  const NOW = Date.parse("2026-08-31T12:00:00.000Z");
+
+  it("is OFFER_WINDOW_DAYS from now", () => {
+    expect(defaultOfferExpiry(NOW)).toBe(
+      new Date(NOW + OFFER_WINDOW_DAYS * 86_400_000).toISOString(),
+    );
+  });
+
+  it("produces a deadline that has not already lapsed", () => {
+    expect(isPastExpiry({ expires_at: defaultOfferExpiry(NOW) }, NOW)).toBe(false);
+  });
+
+  it("produces a deadline that DOES lapse once the window passes", () => {
+    const at = defaultOfferExpiry(NOW);
+    expect(isPastExpiry({ expires_at: at }, NOW + (OFFER_WINDOW_DAYS + 1) * 86_400_000)).toBe(true);
   });
 });

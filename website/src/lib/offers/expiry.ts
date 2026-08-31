@@ -12,6 +12,26 @@
  * cannot drift.
  */
 
+/**
+ * How long an offer stays open when the sender names no deadline.
+ *
+ * Row 2244: `expires_at` was NULL on every row in production. The column, the
+ * type and (since F41) the enforcement all existed; nothing set a deadline,
+ * because `expiresAt` is an optional field on the create schema that no UI
+ * sends. An offer made today was still bindingly open next year.
+ *
+ * A week: long enough that an artist who checks in at the weekend does not miss
+ * it, short enough that a venue is not held to a price they named a season ago.
+ * A counter is a new row and gets its own fresh week, which is the behaviour a
+ * negotiation wants.
+ */
+export const OFFER_WINDOW_DAYS = 7;
+
+/** The default deadline for an offer created now. */
+export function defaultOfferExpiry(now: number = Date.now()): string {
+  return new Date(now + OFFER_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
 /** Terminal / non-open statuses: an expiry deadline is irrelevant once here. */
 const OPEN_STATUSES = new Set(["pending", "countered"]);
 

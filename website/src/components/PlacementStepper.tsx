@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { mutate, ApiError } from "@/lib/api-client";
+import { mutate, apiErrorMessage } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
 
 export interface PlacementStepperData {
@@ -113,7 +113,7 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
       }
       setSchedulePickerOpen(false);
     } catch (err) {
-      setError(err instanceof ApiError ? err.code || "Could not update stage" : "Network error. Please try again.");
+      setError(apiErrorMessage(err, "Could not update stage"));
     } finally {
       setBusy(null);
     }
@@ -139,7 +139,14 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
   // Next advanceable stage = first advanceable step without a timestamp.
   const nextAdvanceable = steps.find((s) => s.advanceable && !s.timestamp);
   const nextStage = nextAdvanceable ? (nextAdvanceable.key as Stage) : null;
-  const showAdvance = canAdvance && nextStage && placement.status === "active";
+  // Row 727. A placement sold off the wall is `sold`: terminal for billing and
+  // inventory, but the piece is still at the venue until the buyer picks it up.
+  // Hiding every control there left the bar at 5 of 6 with "Collected" out of
+  // reach and no way for either party to close the loan. Only the closing stage
+  // is offered from `sold`; /api/placements refuses the rest.
+  const isSold = placement.status === "sold";
+  const showAdvance =
+    canAdvance && nextStage && (placement.status === "active" || (isSold && nextStage === "collected"));
   const hasSchedule = !!placement.scheduledFor;
   const canEditSchedule = canAdvance && placement.status === "active" && hasSchedule && !placement.installedAt;
 
@@ -148,7 +155,10 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
   // never undo targets, those are decisions, not stage marks.
   const lastReached = [...steps].reverse().find((s) => s.advanceable && !!s.timestamp);
   const lastReachedStage = lastReached ? (lastReached.key as Stage) : null;
-  const showUndo = canAdvance && !!lastReachedStage && (placement.status === "active" || placement.status === "completed");
+  const showUndo =
+    canAdvance &&
+    !!lastReachedStage &&
+    (placement.status === "active" || placement.status === "completed" || isSold);
 
   async function undoStage(stage: Stage) {
     const ok = await confirm({
@@ -174,7 +184,7 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
         window.dispatchEvent(new CustomEvent("wallplace:placement-changed", { detail: { placementId: placement.id, action: "undo", stage } }));
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.code || "Could not undo stage" : "Network error. Please try again.");
+      setError(apiErrorMessage(err, "Could not undo stage"));
     } finally {
       setBusy(null);
     }
@@ -326,6 +336,16 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
           >
             Cancel
           </button>
+          {/* Row 2167. The picker rejects a past date and the API refuses one
+              with `400 {"error":"Install date can't be in the past."}`. Neither
+              message had anywhere to render: the only two error slots are in
+              the advance and undo rows, which this block replaces. So the
+              Confirm button did nothing and the bad date stayed in the box. */}
+          {error && (
+            <p role="alert" className="basis-full text-xs text-red-600">
+              {error}
+            </p>
+          )}
         </div>
       )}
     </div>

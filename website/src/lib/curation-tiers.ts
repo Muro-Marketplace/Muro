@@ -60,3 +60,17 @@ export const CURATION_TIER_KEYS = Object.keys(CURATION_TIERS) as [
   CurationTierKey,
   ...CurationTierKey[],
 ];
+
+/**
+ * Formats a tier's priceGbp for display: whole pounds render bare ("£49"),
+ * fractional pounds render to two decimal places ("£79.99").
+ *
+ * Task 9: this is the only place a Curated price is turned into a string.
+ * curated-tiers.ts (the marketing copy: priceLabel, cta, FAQ prose) builds
+ * every price string from this plus CURATION_TIERS instead of holding its
+ * own literal £ figures, so a reprice here cannot leave a stale figure in
+ * the marketing copy.
+ */
+export function gbp(n: number): string {
+  return `£${Number.isInteger(n) ? n : n.toFixed(2)}`;
+}

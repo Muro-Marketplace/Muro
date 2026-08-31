@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 import Accordion from "@/components/Accordion";
 import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
@@ -15,6 +16,7 @@ import {
   type CuratedTier,
   type CuratedTierKey,
 } from "@/lib/curated-tiers";
+import { CURATION_TIERS, gbp } from "@/lib/curation-tiers";
 
 const ONE_OFF_TIERS = CURATED_TIERS.filter((t) => t.group === "one_off");
 const MANAGED_TIERS = CURATED_TIERS.filter((t) => t.group === "managed");
@@ -98,12 +100,12 @@ const FAQ_ITEMS = [
   {
     question: "What if I don't love any of the shortlist?",
     answer:
-      "The £49 and £149 plans include one revision round. If nothing fits at all, we refund in full.",
+      `The ${gbp(CURATION_TIERS.single_wall.priceGbp)} and ${gbp(CURATION_TIERS.full_space.priceGbp)} plans include one revision round. If nothing fits at all, we refund in full.`,
   },
   {
     question: "How does the art actually get on the wall?",
     answer:
-      "You pick from three placement methods: free QR-loan (the artist gets a share of QR sales, you pay nothing for the art), paid loan (a monthly fee to display), or outright purchase.",
+      "You pick from three placement methods: free loan (you take a share of sales from the wall, and pay nothing for the art), paid loan (a monthly fee to display), or outright purchase.",
   },
   {
     question: "Can I cancel a managed plan?",
@@ -113,7 +115,12 @@ const FAQ_ITEMS = [
   {
     question: "Do you visit in person?",
     answer:
-      "Not on £49 to £199.99 plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.",
+      `Not on ${gbp(CURATION_TIERS.single_wall.priceGbp)} to ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)} plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.`,
+  },
+  {
+    question: "Are prices inclusive of VAT?",
+    answer:
+      "Prices are exclusive of VAT. If Wallplace becomes VAT registered, VAT will be added at the prevailing rate.",
   },
 ];
 
@@ -150,6 +157,37 @@ export default function CuratedClient() {
     wantsPaidLoan: false,
     wantsDirectPurchase: false,
   });
+
+  // Row 1924. "The curation brief form prefills nothing, though the venue
+  // profile holds the name, email and location." A signed-in venue retyped
+  // three things the account already knows, on a form whose first refusal is
+  // that those three are required. Fetched once on mount and never written over
+  // anything already typed, so it cannot fight the user.
+  useEffect(() => {
+    if (authLoading || userType !== "venue") return;
+    let cancelled = false;
+    authFetch("/api/venue-profile")
+      .then((r: Response) => r.json())
+      .then((data: { profile?: { name?: string | null; contact_name?: string | null; email?: string | null; phone?: string | null; type?: string | null; location?: string | null } }) => {
+        const p = data?.profile;
+        if (cancelled || !p) return;
+        setForm((prev) => ({
+          ...prev,
+          venueName: prev.venueName || p.name || "",
+          contactName: prev.contactName || p.contact_name || "",
+          contactEmail: prev.contactEmail || p.email || "",
+          contactPhone: prev.contactPhone || p.phone || "",
+          venueType: prev.venueType || p.type || "",
+          location: prev.location || p.location || "",
+        }));
+      })
+      .catch(() => {
+        /* Not signed in, or a network blip: the blank form still works. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, userType]);
 
   // Budget is only meaningful for arrangements where the venue actually
   // spends money — paid loan (monthly fee) or direct purchase (outright
@@ -316,7 +354,7 @@ export default function CuratedClient() {
               <p className="text-lg lg:text-xl text-white/65 leading-relaxed max-w-xl mb-10">
                 Tell us about your space, audience, and the feel you want.
                 Our curators hand-pick a shortlist of works from Wallplace
-                artists that fit. From £49.
+                artists that fit. From {gbp(CURATION_TIERS.single_wall.priceGbp)}.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Link
@@ -348,7 +386,7 @@ export default function CuratedClient() {
           </div>
           <div className="border-t border-white/10 bg-black/50 backdrop-blur-sm">
             <div className="max-w-[1200px] mx-auto px-6 py-3.5 flex items-center justify-center gap-3 text-xs text-white/40 tracking-wider uppercase flex-wrap">
-              <span>From £49</span>
+              <span>From {gbp(CURATION_TIERS.single_wall.priceGbp)}</span>
               <span className="w-1 h-1 rounded-full bg-white/30" />
               <span>Delivered in 5 business days</span>
               <span className="w-1 h-1 rounded-full bg-white/30" />
@@ -461,9 +499,7 @@ export default function CuratedClient() {
                     Included in any plan
                   </p>
                   <p className="text-sm text-foreground/85 leading-relaxed">
-                    A curator&rsquo;s time and judgement. A delivered
-                    shortlist with notes. One revision round on £49 and
-                    £149 plans. Refund in full if nothing fits.
+                    {`A curator’s time and judgement. A delivered shortlist with notes. One revision round on ${gbp(CURATION_TIERS.single_wall.priceGbp)} and ${gbp(CURATION_TIERS.full_space.priceGbp)} plans. Refund in full if nothing fits.`}
                   </p>
                 </div>
                 <div className="bg-background border border-border rounded-sm p-5">
@@ -681,7 +717,7 @@ export default function CuratedClient() {
 
                 {/* Placement method preferences. Three methods mirror the
                     core Wallplace commercial models: QR-enabled loan
-                    (free on wall, venue earns a share of QR sales), paid
+                    (free on wall, venue earns a share of sales from the wall), paid
                     loan (venue pays a monthly fee to display), direct
                     purchase (venue buys outright). Venues can pick more
                     than one. */}
@@ -694,7 +730,7 @@ export default function CuratedClient() {
                       checked={form.wantsQrLoan}
                       onChange={(v) => update("wantsQrLoan", v)}
                       title="QR-enabled loan"
-                      desc="Free on your wall. Share QR sales with the artist."
+                      desc="Free on your wall. You take a share of sales from it."
                     />
                     <MethodCheckbox
                       checked={form.wantsPaidLoan}
@@ -820,9 +856,9 @@ export default function CuratedClient() {
                         : selectedTier === "bespoke"
                           ? "Request quote"
                           : selectedTier === "managed_monthly"
-                            ? "Subscribe, £79.99/mo"
+                            ? `Subscribe, ${gbp(CURATION_TIERS.managed_monthly.priceGbp)}/mo`
                             : selectedTier === "managed_quarterly"
-                              ? "Subscribe, £199.99/qtr"
+                              ? `Subscribe, ${gbp(CURATION_TIERS.managed_quarterly.priceGbp)}/qtr`
                               : `Pay ${selectedTierData?.priceLabel}`}
                   </button>
                 </div>
@@ -849,7 +885,7 @@ export default function CuratedClient() {
               Hand-picked art for your space.
             </h2>
             <p className="text-white/60 max-w-lg mx-auto mb-10 leading-relaxed">
-              From £49 · 5 business days · No long-term commitment.
+              From {gbp(CURATION_TIERS.single_wall.priceGbp)} · 5 business days · No long-term commitment.
             </p>
             <Link
               href="#plans"

@@ -15,6 +15,7 @@ import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 import { slugify } from "@/lib/slugify";
 import { SIZE_BANDS, bandsForWork, type SizeBandKey } from "@/components/browse/SizeBands";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { physicalSizeLabel } from "@/lib/physical-size";
 
 type CollectionWork = ArtistWork & {
   selectedSize?: string;
@@ -321,7 +322,9 @@ export default function CollectionDetailPage() {
                                   quantity: 1,
                                   quantityAvailable: typeof work.quantityAvailable === "number" ? work.quantityAvailable : null,
                                   shippingPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : undefined,
-                                  dimensions: work.selectedSize || work.dimensions,
+                                  // Row 727 area: `dimensions` is derived from the uploaded IMAGE, so it is
+                                  // a pixel count on most rows and reached the basket as the size.
+                                  dimensions: work.selectedSize || physicalSizeLabel(work.dimensions, ""),
                                   framed: false,
                                 });
                                 router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
@@ -491,8 +494,17 @@ export default function CollectionDetailPage() {
                     href = "/artist-portal/placements";
                     label = "View your placements";
                   } else if (userType === "customer") {
-                    href = `/signup?next=${encodeURIComponent(venueHref)}`;
-                    label = "Switch to a venue account to request";
+                    // Row B L748. This linked to /signup, which redirects a
+                    // signed-in user straight back to their own portal, so the
+                    // button did nothing. /signup/venue bounces them the same
+                    // way. There is no link that works from here, so say what
+                    // actually has to happen instead of offering one.
+                    return (
+                      <p className="w-full px-5 py-3 text-sm text-muted border border-border rounded-sm text-center">
+                        Placements are arranged by venues. If you run one, sign out and register
+                        it at <span className="text-foreground">/signup/venue</span>.
+                      </p>
+                    );
                   }
                   return (
                     <Link

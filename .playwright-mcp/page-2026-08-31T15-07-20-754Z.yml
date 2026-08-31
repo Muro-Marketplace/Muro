@@ -1,0 +1,37 @@
+- generic [active] [ref=f5e1]:
+  - generic [ref=f5e2]:
+    - link "Skip to content" [ref=f5e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f5e4]:
+      - generic [ref=f5e6]:
+        - link "Wallplace" [ref=f5e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f5e8]:
+          - link "Marketplace" [ref=f5e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f5e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f5e12] [cursor=pointer]
+        - generic [ref=f5e15]:
+          - link "Saved" [ref=f5e16] [cursor=pointer]:
+            - /url: /artist-portal/saved
+          - button "Messages" [ref=f5e20] [cursor=pointer]
+          - button "Notifications" [ref=f5e25] [cursor=pointer]
+          - generic [ref=f5e29]:
+            - link "Artist Portal" [ref=f5e30] [cursor=pointer]:
+              - /url: /artist-portal
+            - button "Portal menu" [ref=f5e31] [cursor=pointer]
+          - button "Logout" [ref=f5e34] [cursor=pointer]
+    - main [ref=f5e35]:
+      - paragraph [ref=f5e39]: Loading admin portal...
+    - button "Feedback and feature requests" [ref=f5e40] [cursor=pointer]: Feedback
+  - generic [ref=f5e46]:
+    - paragraph [ref=f5e47]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f5e48] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f5e49]:
+      - button "Decline" [ref=f5e50] [cursor=pointer]
+      - button "Accept" [ref=f5e51] [cursor=pointer]
+  - alert [ref=f5e52]

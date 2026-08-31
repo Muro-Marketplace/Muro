@@ -1,0 +1,77 @@
+- generic [active] [ref=f21e1]:
+  - generic [ref=f21e2]:
+    - link "Skip to content" [ref=f21e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f21e4]:
+      - generic [ref=f21e6]:
+        - link "Wallplace" [ref=f21e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f21e8]:
+          - link "Marketplace" [ref=f21e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f21e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f21e12] [cursor=pointer]
+        - generic [ref=f21e15]:
+          - link "Saved" [ref=f21e16] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f21e20] [cursor=pointer]
+          - generic [ref=f21e24]:
+            - link "My Account" [ref=f21e25] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f21e26] [cursor=pointer]
+          - button "Logout" [ref=f21e29] [cursor=pointer]
+    - main [ref=f21e30]:
+      - generic [ref=f21e31]:
+        - complementary [ref=f21e32]:
+          - navigation [ref=f21e33]:
+            - list [ref=f21e34]:
+              - listitem [ref=f21e35]:
+                - link "My Orders" [ref=f21e36] [cursor=pointer]:
+                  - /url: /customer-portal
+              - listitem [ref=f21e37]:
+                - link "Saved" [ref=f21e38] [cursor=pointer]:
+                  - /url: /customer-portal/saved
+              - listitem [ref=f21e39]:
+                - link "Addresses" [ref=f21e40] [cursor=pointer]:
+                  - /url: /customer-portal/addresses
+              - listitem [ref=f21e41]:
+                - link "Messages" [ref=f21e42] [cursor=pointer]:
+                  - /url: /customer-portal/messages
+              - listitem [ref=f21e43]:
+                - link "Settings" [ref=f21e44] [cursor=pointer]:
+                  - /url: /customer-portal/settings
+            - list [ref=f21e46]:
+              - listitem [ref=f21e47]:
+                - link "Browse Art" [ref=f21e48] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f21e49]:
+                - button "Logout" [ref=f21e50] [cursor=pointer]
+          - generic [ref=f21e52]:
+            - generic [ref=f21e53]: Q
+            - generic [ref=f21e54]:
+              - paragraph [ref=f21e55]: QA-TEST Customer
+              - paragraph [ref=f21e56]: Customer
+        - generic [ref=f21e58]:
+          - generic [ref=f21e59]:
+            - heading "My Orders" [level=1] [ref=f21e60]
+            - paragraph [ref=f21e61]: Track your purchases and delivery status
+          - generic [ref=f21e62]:
+            - generic [ref=f21e63]:
+              - paragraph [ref=f21e64]: Total Orders
+              - paragraph [ref=f21e65]: "0"
+            - generic [ref=f21e66]:
+              - paragraph [ref=f21e67]: Total Spent
+              - paragraph [ref=f21e68]: £0.00
+          - paragraph [ref=f21e69]: Loading orders...
+    - button "Feedback and feature requests" [ref=f21e70] [cursor=pointer]: Feedback
+  - generic [ref=f21e76]:
+    - paragraph [ref=f21e77]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f21e78] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f21e79]:
+      - button "Decline" [ref=f21e80] [cursor=pointer]
+      - button "Accept" [ref=f21e81] [cursor=pointer]
+  - alert [ref=f21e82]

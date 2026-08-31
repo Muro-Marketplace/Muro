@@ -82,7 +82,26 @@ export async function POST(request: Request) {
     // so the column never reached the INSERT. Both are NOT NULL with no
     // default. Row building now lives in one tested place, see
     // `lib/artist-application-row.ts` for why "" is the right coercion.
-    const fullRow = buildArtistApplicationRow(d);
+    // Row G L2366. Resolve the claimed referral code against the codes that
+    // actually exist before it is stored. A code the applicant mistyped is
+    // worth losing; a code that looks credited and is not is worse than none,
+    // and `artist_referrals` held 0 rows across all of production because
+    // nothing downstream ever re-checked it.
+    const claimedCode = d.referralCode?.trim().toUpperCase() || "";
+    let referredByCode: string | null = null;
+    if (claimedCode) {
+      const { data: referrer } = await getSupabaseAdmin()
+        .from("artist_profiles")
+        .select("referral_code")
+        .eq("referral_code", claimedCode)
+        .maybeSingle();
+      referredByCode = referrer ? claimedCode : null;
+      if (!referrer) {
+        console.warn("[apply] referral code does not belong to any artist, dropped");
+      }
+    }
+
+    const fullRow = buildArtistApplicationRow(d, { referredByCode });
 
     // X3 / 074. Was the anon client. Migration 074 drops both
     // `WITH CHECK (true)` INSERT policies on artist_applications, so an anon

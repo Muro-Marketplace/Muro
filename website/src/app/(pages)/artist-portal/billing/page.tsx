@@ -7,6 +7,8 @@ import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { PLAN_PRICES, PLATFORM_FEE_PERCENT } from "@/lib/pricing";
+import { OUTREACH_WEEKLY_LIMIT } from "@/lib/outreach-cap";
 import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 
 interface ProfileSubscription {
@@ -19,15 +21,15 @@ interface ProfileSubscription {
 }
 
 // Monthly prices; annual saves ~17% (10 months' equivalent).
+// Prices, fee and the weekly approach allowance all come from their one
+// source. `approaches` is the plan's headline figure, shown next to the price
+// so the page says what the plan buys and not only what it costs; the live
+// remaining count comes from /api/outreach/allowance.
 const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAnnual: number; fee: string; approaches: number | null }> = {
-  // `approaches` mirrors WEEKLY_LIMITS in src/lib/outreach-cap.ts. The live
-  // remaining count comes from /api/outreach/allowance; this is the plan's
-  // headline figure, shown next to the price so the page says what the plan
-  // buys and not only what it costs.
-  core: { name: "Core", priceMonthly: 9.99, priceAnnual: 99.99, fee: "15%", approaches: 3 },
-  premium: { name: "Premium", priceMonthly: 24.99, priceAnnual: 249.99, fee: "8%", approaches: 6 },
-  pro: { name: "Pro", priceMonthly: 49.99, priceAnnual: 499.99, fee: "5%", approaches: 15 },
-  none: { name: "No plan", priceMonthly: 0, priceAnnual: 0, fee: "\u2014", approaches: null },
+  core: { name: "Core", priceMonthly: PLAN_PRICES.core.monthlyGbp, priceAnnual: PLAN_PRICES.core.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%`, approaches: OUTREACH_WEEKLY_LIMIT.core },
+  premium: { name: "Premium", priceMonthly: PLAN_PRICES.premium.monthlyGbp, priceAnnual: PLAN_PRICES.premium.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%`, approaches: OUTREACH_WEEKLY_LIMIT.premium },
+  pro: { name: "Pro", priceMonthly: PLAN_PRICES.pro.monthlyGbp, priceAnnual: PLAN_PRICES.pro.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%`, approaches: OUTREACH_WEEKLY_LIMIT.pro },
+  none: { name: "No plan", priceMonthly: 0, priceAnnual: 0, fee: "n/a", approaches: null },
 };
 
 function annualMonthlyEquivalent(priceAnnual: number): string {
@@ -377,7 +379,7 @@ export default function BillingPage() {
                 {statusBadge(status)}
               </div>
               <p className="text-sm text-muted">
-                {details.priceMonthly > 0 ? `\u00a3${details.priceMonthly}/mo or \u00a3${details.priceAnnual}/yr` : "\u2014"} &middot; {details.fee} platform fee on sales
+                {details.priceMonthly > 0 ? `\u00a3${details.priceMonthly}/mo or \u00a3${details.priceAnnual}/yr` : ""} &middot; {details.fee} platform fee on sales
                 {details.approaches !== null && ` \u00b7 ${details.approaches} new venue approaches a week`}
               </p>
             </div>
@@ -405,7 +407,7 @@ export default function BillingPage() {
               </div>
               <p className="text-sm text-accent">
                 {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} remaining
-                {sub?.trial_end && ` \u2014 trial ends ${new Date(sub.trial_end).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
+                {sub?.trial_end && `, trial ends ${new Date(sub.trial_end).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`}
               </p>
             </div>
           )}

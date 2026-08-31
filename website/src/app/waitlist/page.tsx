@@ -355,7 +355,7 @@ function HowItWorks() {
                     icon={
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
                     }
-                    title="5 to 15% Platform Fee on Sales"
+                    title="Flat 15% Platform Fee on Sales"
                     description="No gallery taking 50%. Transparent, fair pricing. Keep most of what you earn."
                   />
                 </div>

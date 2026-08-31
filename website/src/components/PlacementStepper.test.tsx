@@ -69,3 +69,79 @@ describe("PlacementStepper advance (05 mutate)", () => {
     expect(eventSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+// Row 727 / PASS2-placement-lifecycle-log. After a GBP 120 off-the-wall sale
+// the placement went to `sold` and every stage control vanished for both
+// parties, leaving the bar at 5 of 6 with "Collected" out of reach forever.
+// Only the closing stage is offered from `sold`; the API refuses the rest.
+describe("PlacementStepper on a SOLD placement (row 727)", () => {
+  const sold = {
+    id: "pl-sold",
+    status: "sold",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    acceptedAt: "2026-08-01T11:00:00.000Z",
+    scheduledFor: "2026-08-02T12:00:00.000Z",
+    installedAt: "2026-08-03T12:00:00.000Z",
+    liveFrom: "2026-08-04T12:00:00.000Z",
+    collectedAt: null,
+  };
+
+  it("still offers the closing stage so the loan can be shut", () => {
+    render(<PlacementStepper placement={sold} canAdvance />);
+
+    expect(screen.getByRole("button", { name: /Mark collected/i })).toBeTruthy();
+  });
+
+  it("offers nothing once the collection has been recorded", () => {
+    render(
+      <PlacementStepper
+        placement={{ ...sold, status: "completed", collectedAt: "2026-08-10T12:00:00.000Z" }}
+        canAdvance
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /Mark collected/i })).toBeNull();
+  });
+});
+
+// Row 2167 / PASS2 "silent failure" pattern. Typing a past install date and
+// pressing Confirm did nothing visible: the picker rejects it and the API
+// refuses it with `400 {"error":"Install date can't be in the past."}`, and
+// neither message had anywhere to render. The only two error slots sat in the
+// advance and undo rows, which the open picker replaces.
+describe("PlacementStepper install-date refusal is visible (row 2167)", () => {
+  const active = {
+    id: "pl-1",
+    status: "active",
+    createdAt: "2026-08-01T10:00:00.000Z",
+    acceptedAt: "2026-08-01T11:00:00.000Z",
+    scheduledFor: null,
+    installedAt: null,
+    liveFrom: null,
+    collectedAt: null,
+  };
+
+  it("shows the reason when the chosen date is in the past", async () => {
+    render(<PlacementStepper placement={active} canAdvance />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Schedule install/i }));
+    const input = document.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "2020-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Confirm$/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/Install date can't be in the past/i);
+  });
+
+  it("leaves the picker open so the date can be corrected", async () => {
+    render(<PlacementStepper placement={active} canAdvance />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Schedule install/i }));
+    const input = document.querySelector('input[type="date"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "2020-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Confirm$/i }));
+
+    await screen.findByRole("alert");
+    expect(document.querySelector('input[type="date"]')).toBeTruthy();
+  });
+});

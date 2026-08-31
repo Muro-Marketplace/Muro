@@ -9,7 +9,7 @@ import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
-import { VENUE_SHARE_CAPTION, venueShareLabel } from "@/lib/revenue-share-labels";
+import { VENUE_SHARE_CAPTION, venueShareOnSalesLabel } from "@/lib/revenue-share-labels";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import PlacementLoanForm from "./PlacementLoanForm";
@@ -20,7 +20,7 @@ import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import InStoreOfferCard from "@/components/InStoreOfferCard";
 import { isLoan, isPurchase } from "@/lib/arrangement-type";
 import { ARRANGEMENT_LABEL, labelForArrangement } from "@/lib/arrangement-labels";
-import { normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
+import { isBillingWindingDown, normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
 interface PlacementRow {
   id: string;
@@ -386,6 +386,20 @@ export default function PlacementDetailClient({ placementId }: Props) {
 
   async function handleRespond(accept: boolean) {
     if (!placement) return;
+    // Production pass 2, P4: "Decline has no confirmation step, unlike undo,
+    // which does." Declining ends the negotiation for the other party and
+    // cannot be taken back from this screen; the counter path is how it
+    // reopens. The context panel already prompts; these did not.
+    if (!accept) {
+      const ok = await confirm({
+        title: "Decline this placement request?",
+        body: "The other party will see it as declined. They can come back with new terms.",
+        confirmLabel: "Decline",
+        cancelLabel: "Keep it open",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     setResponding(accept ? "accept" : "decline");
     setRespondError(null);
     try {
@@ -1007,7 +1021,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               <p className="text-lg font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
                 {placement.qr_enabled && placement.revenue_share_percent != null && placement.revenue_share_percent > 0 && (
-                  <>, {venueShareLabel(placement.revenue_share_percent)} on QR sales</>
+                  <>, {venueShareOnSalesLabel(placement.revenue_share_percent)}</>
                 )}
               </p>
             </div>
@@ -1059,6 +1073,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           subscriptionStatus={placement.subscription_status}
           role={viewerRole}
           currentPeriodEnd={placement.subscription_current_period_end}
+          cancelAtPeriodEnd={isBillingWindingDown(placement.status)}
         />
       )}
 
@@ -1191,24 +1206,35 @@ export default function PlacementDetailClient({ placementId }: Props) {
         )}
       </div>
 
-      {/* Photos */}
+      {/* Photos. Production pass 2, P4: "photos can be uploaded to a pending
+          placement under the heading 'Photos in venue'". The work is not at the
+          venue until it has been installed, so before then the heading is
+          asserting something untrue and the upload invites a photo of nothing.
+          The panel still renders, so the section is discoverable and any photo
+          already attached is still visible; the control waits. */}
       <div className="mb-10">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl text-foreground">Photos in venue</h2>
-          <label className={`px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-            {uploading ? "Uploading…" : "+ Upload"}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => handlePhotoUpload(e.target.files)}
-              className="hidden"
-            />
-          </label>
+          <h2 className="font-serif text-xl text-foreground">
+            {placement.installed_at ? "Photos in venue" : "Photos"}
+          </h2>
+          {placement.installed_at && (
+            <label className={`px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+              {uploading ? "Uploading…" : "+ Upload"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => handlePhotoUpload(e.target.files)}
+                className="hidden"
+              />
+            </label>
+          )}
         </div>
         {photos.length === 0 ? (
           <div className="bg-surface border border-border rounded-sm p-6 text-center text-sm text-muted">
-            No photos yet.
+            {placement.installed_at
+              ? "No photos yet."
+              : "Photos can be added once the work is installed at the venue."}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">

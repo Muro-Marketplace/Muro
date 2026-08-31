@@ -121,9 +121,8 @@ export default function SustainabilityPage() {
               </h2>
               <p className="text-muted leading-relaxed">
                 We&rsquo;re working toward giving every artist + venue a
-                placement-history record so the lifetime journey of a work
-               , first studio, first wall, first buyer, future loans, is
-                tracked. The longer a piece stays in circulation, the better
+                placement-history record so the lifetime journey of a work, first
+                studio, first wall, first buyer, future loans, is tracked. The longer a piece stays in circulation, the better
                 it is for the planet and for the artist&rsquo;s residual income.
               </p>
             </div>

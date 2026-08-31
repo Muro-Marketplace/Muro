@@ -35,6 +35,31 @@ interface Order {
   delivered_at?: string | null;
   artist_slug?: string;
   venue_slug?: string;
+  fulfilment_method?: string | null;
+  collection_address?: string | null;
+}
+
+/**
+ * Rows 870-874. A collection order never passes through `shipped`: there is no
+ * dispatch leg, the buyer picks the piece up. Gating the confirm control on
+ * `shipped` therefore left a collect buyer with no way to confirm at all, and
+ * every collect payout waiting the full 14 days on the cron.
+ *
+ * Confirming is the buyer's act in both shapes, because it releases the
+ * artist's payout and (since row 727) the hosting venue's share, and a party
+ * that gets paid must not attest to the delivery that pays them.
+ */
+function isCollectionOrder(order: Order): boolean {
+  return order.fulfilment_method === "collection" || order.fulfilment_method === "collect_venue";
+}
+
+/** Can the buyer confirm the handover on this order right now? */
+function canConfirmHandover(order: Order): boolean {
+  if (order.status === "shipped") return true;
+  return (
+    isCollectionOrder(order) &&
+    ["confirmed", "artist_notified", "awaiting_dispatch", "processing"].includes(order.status)
+  );
 }
 
 // RefundRequest is now the canonical shared type from the API module.
@@ -46,7 +71,10 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
   { key: "delivered", label: "Delivered" },
-  { key: "cancelled", label: "Cancelled" },
+  // Production pass 2, P4: the tab covers cancelled, refunded and disputed
+  // (TERMINAL_NON_DELIVERED below), but its label named only one of the three,
+  // so a buyer looking for a refunded order had no tab that said so.
+  { key: "cancelled", label: "Cancelled or refunded" },
 ];
 
 const TERMINAL_NON_DELIVERED = new Set(["cancelled", "refunded", "disputed"]);
@@ -89,6 +117,13 @@ function CustomerPortalContent() {
   const [refundSuccess, setRefundSuccess] = useState(false);
   const [refundError, setRefundError] = useState<string | null>(null);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
+  /**
+   * Row C L988 / Track A4.5. An open dispute was invisible here. `orders.status`
+   * stays `confirmed` while a dispute runs alongside the order, so no
+   * off-pipeline badge renders, and /api/disputes had no GET, so nothing could
+   * read one back. The buyer had no way to see that their complaint had landed.
+   */
+  const [disputes, setDisputes] = useState<{ id: string; order_id: string | null; status: string; category: string | null }[]>([]);
   // E21: the buyer confirms delivery, because doing so releases the artist's
   // escrow and the artist must not attest it themselves.
   const [confirmingDelivery, setConfirmingDelivery] = useState(false);
@@ -122,6 +157,12 @@ function CustomerPortalContent() {
     authFetch("/api/refunds")
       .then((r) => r.json())
       .then((data: RefundsListResponse) => { if (data.refundRequests) setRefundRequests(data.refundRequests); })
+      .catch(() => {});
+    // Row C L988: the caller's own disputes, so an open one shows on the order
+    // it belongs to instead of only flashing after the submit.
+    authFetch("/api/disputes")
+      .then((r) => r.json())
+      .then((data: { disputes?: typeof disputes }) => { if (Array.isArray(data.disputes)) setDisputes(data.disputes); })
       .catch(() => {});
   }, []);
 
@@ -332,25 +373,56 @@ function CustomerPortalContent() {
           {/* Confirm delivery (E21). Only the buyer may move an order to
               `delivered`, because that release the artist's pending payout. An
               order left unconfirmed still pays out on the 14-day cron, so this
-              is an accelerator for honest buyers, not a gate on the artist. */}
-          {selected.status === "shipped" && (
+              is an accelerator for honest buyers, not a gate on the artist.
+              Rows 870-874: a collection order reaches this point at `confirmed`
+              rather than `shipped`, because it has no dispatch leg. */}
+          {canConfirmHandover(selected) && (
             <div className="mt-6 pt-4 border-t border-border">
-              <p className="text-xs text-muted uppercase tracking-wider mb-2">Delivery</p>
+              <p className="text-xs text-muted uppercase tracking-wider mb-2">
+                {isCollectionOrder(selected) ? "Collection" : "Delivery"}
+              </p>
               <p className="text-sm text-muted mb-3">
-                Has this arrived? Confirming releases payment to the artist.
+                {isCollectionOrder(selected)
+                  ? "Have you picked this up? Confirming releases payment to the artist."
+                  : "Has this arrived? Confirming releases payment to the artist."}
               </p>
               <button
                 onClick={() => confirmDelivery(selected.id)}
                 disabled={confirmingDelivery}
                 className="px-4 py-2 min-h-11 text-sm font-medium bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {confirmingDelivery ? "Confirming..." : "Confirm delivery"}
+                {confirmingDelivery
+                  ? "Confirming..."
+                  : isCollectionOrder(selected)
+                    ? "Confirm collection"
+                    : "Confirm delivery"}
               </button>
               {confirmError && (
                 <p className="text-xs text-red-600 mt-2">{confirmError}</p>
               )}
             </div>
           )}
+
+          {/* Row C L988: an open dispute, read from the database rather than
+              from post-submit local state, so it survives a reload. */}
+          {(() => {
+            const openDispute = disputes.find(
+              (d) => d.order_id === selected.id && d.status !== "resolved" && d.status !== "closed",
+            );
+            if (!openDispute) return null;
+            return (
+              <div className="mt-6 pt-4 border-t border-border">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 text-sm font-medium rounded-sm">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Problem reported{openDispute.category ? `: ${openDispute.category}` : ""}
+                </span>
+                <p className="text-xs text-muted mt-2">
+                  We&rsquo;re looking into it and will email you. The artist&rsquo;s payout is held
+                  while the case is open.
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Refund section */}
           <div className="mt-6 pt-4 border-t border-border">
@@ -361,7 +433,11 @@ function CustomerPortalContent() {
               if (refundSuccess && orderRefund?.order_id === selected.id) {
                 return (
                   <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-sm px-3 py-2">
-                    Refund request submitted. The artist will review your request.
+                    {/* Row 1002. This named the artist. The request goes to
+                        /admin/refunds and an admin approves it; the artist is
+                        told the outcome, they do not decide it. */}
+                    Refund request submitted. The Wallplace team will review it and email you
+                    the outcome.
                   </p>
                 );
               }

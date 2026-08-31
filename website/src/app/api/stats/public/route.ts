@@ -12,8 +12,16 @@ export async function GET(request: Request) {
   const limited = await checkRateLimit(request, 60, 60000);
   if (limited) return limited;
   try {
+    // Row A L123. This counted every artist_profiles row, including pending
+    // and rejected ones, which is not what a visitor can browse. The public
+    // marketplace filters on review_status = 'approved' (and so does the anon
+    // RLS policy); the count says the same thing explicitly rather than
+    // depending on which client happens to run it.
     const [artistsRes, worksRes, placementsRes, venuesRes] = await Promise.all([
-      supabase.from("artist_profiles").select("id", { count: "exact", head: true }),
+      supabase
+        .from("artist_profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("review_status", "approved"),
       supabase.from("artist_works").select("id", { count: "exact", head: true }),
       supabase.from("placements").select("id", { count: "exact", head: true }).eq("status", "active"),
       supabase.from("venue_profiles").select("id", { count: "exact", head: true }),

@@ -20,12 +20,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const { name, email, userType } = parsed.data;
+    const { name, email, userType, phone, venueName, venueLocation } = parsed.data;
 
     const { error } = await supabase.from("waitlist_signups").insert({
       name,
       email,
       user_type: userType,
+      // Migration 129. The form asks for these three and they were discarded
+      // at the validation boundary, so a venue's own name and location, the
+      // only things that make this list workable, were thrown away every time.
+      // `|| null` rather than "" so a blank field reads as "not given" instead
+      // of as an empty answer.
+      phone: phone || null,
+      venue_name: venueName || null,
+      venue_location: venueLocation || null,
       created_at: new Date().toISOString(),
     });
 

@@ -21,11 +21,22 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const WEEKLY_LIMITS: Record<string, number> = {
+/**
+ * Units of new-venue outreach allowed per rolling week, by plan.
+ *
+ * Exported because the pricing cards, the application form and the plan emails
+ * all quote these numbers to artists as a selling point. They were hardcoded in
+ * three places and a merge briefly dropped two of them; the enforcement and the
+ * promise have to come from one place, like `WORKS_CAP` and
+ * `ACTIVE_PLACEMENT_CAP` in `@/lib/pricing`.
+ */
+export const OUTREACH_WEEKLY_LIMIT: Record<string, number> = {
   core: 3,
   premium: 6,
   pro: 15,
 };
+
+const WEEKLY_LIMITS = OUTREACH_WEEKLY_LIMIT;
 
 /** Length of the rolling window, in days. */
 export const OUTREACH_WINDOW_DAYS = 7;

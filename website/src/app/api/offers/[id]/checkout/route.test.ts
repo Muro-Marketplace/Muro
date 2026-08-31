@@ -47,6 +47,9 @@ const OFFER = {
 const LIVE_PROFILE_COLUMNS = [
   "slug", "subscription_plan", "subscription_status", "user_id", "name",
   "stripe_connect_account_id", "stripe_connect_onboarding_complete",
+  // Rows 933-939: the offer session collects a delivery address, and the
+  // artist's own shipping scope decides which countries it may offer.
+  "ships_internationally",
 ];
 
 let profileSelects: string[] = [];
@@ -56,6 +59,8 @@ let offerUpdates: Array<{ payload: Record<string, unknown>; filters: Array<[stri
 let workRows: Array<Record<string, unknown>> = [];
 /** Row the artist_collections lookup returns. */
 let collectionRow: Record<string, unknown> | null = null;
+/** Row the placements lookup returns for venue-share resolution (Task 5). */
+let placementRow: Record<string, unknown> | null = null;
 
 function setupDb(
   offer: Record<string, unknown> | null = OFFER,
@@ -65,6 +70,7 @@ function setupDb(
   offerUpdates = [];
   workRows = [{ id: "w-1", title: "Sand Dunes", available: true, quantity_available: null }];
   collectionRow = null;
+  placementRow = null;
   fromMock.mockImplementation((table: string) => {
     if (table === "purchase_offers") {
       return {
@@ -89,6 +95,19 @@ function setupDb(
     if (table === "artist_collections") {
       return {
         select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: collectionRow }) }) }),
+      };
+    }
+    if (table === "placements") {
+      // Mirrors .select(...).eq("id", …).eq("status", "active").maybeSingle():
+      // both .eq() calls are stubbed through to the same fixture, since the
+      // mock doesn't model WHERE-clause filtering. A test simulates "no
+      // matching active placement" by setting placementRow to null.
+      return {
+        select: () => ({
+          eq: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: placementRow }) }),
+          }),
+        }),
       };
     }
     if (table === "artist_profiles") {
@@ -155,14 +174,16 @@ describe("POST /api/offers/[id]/checkout split (E6)", () => {
     expect(Number(m.offer_platform_fee_pence) + Number(m.offer_artist_net_pence)).toBe(OFFER.amount_pence);
   });
 
-  it("uses the artist's real plan rate, not a flat 15%", async () => {
-    // Pro AND active — the discount now requires a live subscription (D40/E52).
-    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "pro", subscription_status: "active" }); // 5%
+  it("charges the flat 15% for a pro artist too, now that the ladder is gone", async () => {
+    // Pro AND active — same shape as the old plan-discount check (D40/E52), but
+    // the flat fee (owner decision 2026-08-28) means pro resolves to 15% like
+    // every other plan rather than a lower ladder rate.
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "pro", subscription_status: "active" });
     await post();
     expect(metadata()).toMatchObject({
-      offer_platform_fee_percent: "5",
-      offer_platform_fee_pence: "165",
-      offer_artist_net_pence: "3135",
+      offer_platform_fee_percent: "15",
+      offer_platform_fee_pence: "495",
+      offer_artist_net_pence: "2805",
     });
   });
 
@@ -361,6 +382,133 @@ describe("POST /api/offers/[id]/checkout stock re-validation (D7)", () => {
   });
 });
 
+// ── Task 5: venue share on offer sales (work-on-wall rule) ───────────────────
+//
+// A work hanging on a venue's wall earns that venue its placement share on ANY
+// platform sale of the work, offers included. Resolved from the works' own
+// placements (artist_works.current_placement_id), the same source of truth the
+// cart path uses (payouts/legs.ts). Applies only when every offered work sits
+// on ONE single ACTIVE placement with a positive share and a venue user;
+// anything else (no placement, mixed placements, inactive, zero share) pays no
+// venue share, matching the long-standing offer behaviour.
+describe("POST /api/offers/[id]/checkout venue share (Task 5)", () => {
+  it("carries the venue share in metadata when every offered work hangs on one active placement", async () => {
+    setupDb({ ...OFFER, work_ids: ["w-1", "w-2"], amount_pence: 30000 });
+    workRows = [
+      { id: "w-1", title: "A", available: true, quantity_available: null, current_placement_id: "plc-1" },
+      { id: "w-2", title: "B", available: true, quantity_available: null, current_placement_id: "plc-1" },
+    ];
+    placementRow = {
+      id: "plc-1",
+      venue_slug: "copper-kettle",
+      venue_user_id: "venue-user-1",
+      revenue_share_percent: 10,
+      status: "active",
+    };
+    const res = await post();
+    expect(res.status).toBe(200);
+    const m = metadata();
+    expect(m.offer_venue_slug).toBe("copper-kettle");
+    expect(m.offer_venue_user_id).toBe("venue-user-1");
+    expect(m.offer_venue_cut_pence).toBe("3000"); // 10% of 30000
+    expect(m.offer_platform_fee_pence).toBe("4500"); // 15% of 30000
+    expect(m.offer_artist_net_pence).toBe("22500"); // 30000 - 4500 - 3000
+    expect(m.offer_venue_share_percent).toBe("10");
+    // Finding 3 (final review): the resolved placement id travels with the
+    // share so the webhook can stamp orders.placement_id, which is how the
+    // placements list sums venue earnings onto the right placement card.
+    expect(m.offer_placement_id).toBe("plc-1");
+  });
+
+  it("pays no venue share when works span two placements or none", async () => {
+    setupDb({ ...OFFER, work_ids: ["w-1", "w-2"], amount_pence: 30000 });
+    workRows = [
+      { id: "w-1", title: "A", available: true, quantity_available: null, current_placement_id: "plc-1" },
+      { id: "w-2", title: "B", available: true, quantity_available: null, current_placement_id: "plc-2" },
+    ];
+    const res = await post();
+    expect(res.status).toBe(200);
+    const m = metadata();
+    expect(m.offer_venue_cut_pence).toBe("0");
+    expect(m.offer_venue_slug).toBe("");
+    expect(m.offer_placement_id).toBe("");
+  });
+
+  it("pays no venue share when the offered work has no placement at all", async () => {
+    setupDb({ ...OFFER, work_ids: ["w-1"], amount_pence: 30000 });
+    workRows = [
+      { id: "w-1", title: "A", available: true, quantity_available: null, current_placement_id: null },
+    ];
+    const res = await post();
+    expect(res.status).toBe(200);
+    const m = metadata();
+    expect(m.offer_venue_cut_pence).toBe("0");
+    expect(m.offer_venue_slug).toBe("");
+    expect(m.offer_venue_share_percent).toBe("0");
+    expect(m.offer_placement_id).toBe("");
+  });
+
+  it("pays no venue share when the single shared placement is not active", async () => {
+    setupDb({ ...OFFER, work_ids: ["w-1"], amount_pence: 30000 });
+    workRows = [
+      { id: "w-1", title: "A", available: true, quantity_available: null, current_placement_id: "plc-1" },
+    ];
+    // The real query filters .eq("status", "active"); a pending placement
+    // never matches it, which is what this null return simulates.
+    placementRow = null;
+    const res = await post();
+    expect(res.status).toBe(200);
+    const m = metadata();
+    expect(m.offer_venue_cut_pence).toBe("0");
+    expect(m.offer_venue_slug).toBe("");
+    expect(m.offer_placement_id).toBe("");
+  });
+
+  it("pays no venue share when the placement's revenue share is zero", async () => {
+    setupDb({ ...OFFER, work_ids: ["w-1"], amount_pence: 30000 });
+    workRows = [
+      { id: "w-1", title: "A", available: true, quantity_available: null, current_placement_id: "plc-1" },
+    ];
+    placementRow = {
+      id: "plc-1",
+      venue_slug: "copper-kettle",
+      venue_user_id: "venue-user-1",
+      revenue_share_percent: 0,
+      status: "active",
+    };
+    const res = await post();
+    expect(res.status).toBe(200);
+    const m = metadata();
+    expect(m.offer_venue_cut_pence).toBe("0");
+    expect(m.offer_venue_slug).toBe("");
+    // No share (0%) means no venue earning, so no placement id either, even
+    // though every work still sits on one single active placement.
+    expect(m.offer_placement_id).toBe("");
+  });
+
+  it("takes the venue cut and the platform fee both from the artist's side, exactly", async () => {
+    // Sum invariant: gross = fee + venueCut + artistNet, no residual penny,
+    // even on an amount that does not divide evenly.
+    setupDb({ ...OFFER, work_ids: ["w-1"], amount_pence: 2505 });
+    workRows = [
+      { id: "w-1", title: "A", available: true, quantity_available: null, current_placement_id: "plc-1" },
+    ];
+    placementRow = {
+      id: "plc-1",
+      venue_slug: "copper-kettle",
+      venue_user_id: "venue-user-1",
+      revenue_share_percent: 10,
+      status: "active",
+    };
+    await post();
+    const m = metadata();
+    const fee = Number(m.offer_platform_fee_pence);
+    const cut = Number(m.offer_venue_cut_pence);
+    const net = Number(m.offer_artist_net_pence);
+    expect(fee + cut + net).toBe(2505);
+  });
+});
+
 // B31/F42 (WS8 item 8). The cancel_url pointed at /customer-portal/offers,
 // which has never existed; the payer on an offer is a venue, so backing out of
 // Stripe landed mid-payment on a 404.
@@ -448,5 +596,62 @@ describe("POST /api/offers/[id]/checkout refuses a non-positive amount (F49)", (
 
     expect(res.status).toBe(422);
     expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+});
+
+// Rows 933-939, 2245 / PASS2-offers-and-paid-loan-log. An accepted offer
+// produced an order nobody could fulfil. OFR-5A2LJH2CJ7KPVNMO carried
+// fulfilment_method "ship", shipping_cost 0, and a shipping block whose every
+// field was empty apart from the note "Accepted offer off_… . No delivery
+// address collected at checkout." The system knew; the artist did not, and the
+// portal showed "SHIP TO: ," above a live "Mark as Shipped" button.
+//
+// No delivery address is collected anywhere in the offer flow, so it is
+// collected on the Stripe page the buyer is already standing on. That is where
+// the cart path's own address form would otherwise have to be rebuilt, and
+// Stripe's is localised, validated and familiar.
+describe("POST /api/offers/[id]/checkout collects a delivery address (rows 933-939)", () => {
+  function session(): Record<string, unknown> {
+    return (sessionsCreateMock.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0];
+  }
+
+  it("asks Stripe for the buyer's shipping address", async () => {
+    setupDb();
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(session().shipping_address_collection).toBeTruthy();
+  });
+
+  it("offers only the UK for an artist who has not opted in to shipping abroad", async () => {
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "core", ships_internationally: false });
+
+    await post();
+
+    const collection = session().shipping_address_collection as { allowed_countries: string[] };
+    expect(collection.allowed_countries).toEqual(["GB"]);
+  });
+
+  it("offers the full destination list for an artist who does ship abroad", async () => {
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "core", ships_internationally: true });
+
+    await post();
+
+    const collection = session().shipping_address_collection as { allowed_countries: string[] };
+    expect(collection.allowed_countries.length).toBeGreaterThan(1);
+    expect(collection.allowed_countries).toContain("GB");
+  });
+
+  it("names the works on the Stripe page instead of only the offer id", async () => {
+    // Row 2245: the buyer saw "Wallplace offer · off_…" and "Accepted offer for
+    // 1 work", which tells them nothing about what they are paying for.
+    setupDb();
+    workRows = [{ id: "w-1", title: "Sand Dunes", available: true, quantity_available: null }];
+
+    await post();
+
+    const items = session().line_items as Array<{ price_data: { product_data: { name: string; description: string } } }>;
+    expect(items[0].price_data.product_data.name).toContain("Sand Dunes");
   });
 });

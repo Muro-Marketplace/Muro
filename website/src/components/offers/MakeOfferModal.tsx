@@ -114,6 +114,16 @@ function MakeOfferModalBody({
       setError("Enter a valid amount.");
       return;
     }
+    // Row 934. The 60% floor is the server's rule and it says so clearly
+    // (`minimumPence` on the rejection body), but the browser refused first and
+    // the user was left with a Send button that did nothing. Say the same thing
+    // the server would, without the round trip.
+    if (minPriceGbp != null && numericAmount < minPriceGbp) {
+      setError(
+        `Offers can be up to 40% below the listed price. The minimum for this work is £${minPriceGbp.toFixed(2)}.`,
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       // Making an offer creates an offer row (a bid), not a charge — the payment
@@ -179,7 +189,13 @@ function MakeOfferModalBody({
             <p className="text-sm text-muted">{artistName} will see it in their offers inbox.</p>
           </div>
         ) : (
-          <form onSubmit={submit}>
+          // Row 934 / PASS2 "silent failure" pattern. `min={minPriceGbp}` left
+          // the refusal to the browser: no request was sent, and the native
+          // bubble is not the error slot this modal already has three lines
+          // below the amount field. `noValidate` puts the refusal back in the
+          // product's own voice, with the exact figure, which is what the
+          // server's rejection does too.
+          <form onSubmit={submit} noValidate>
             <div className="flex items-start justify-between gap-2 mb-1">
               <h2 className="text-lg font-medium">Make an offer</h2>
               <button type="button" onClick={onClose} className="text-muted hover:text-foreground">

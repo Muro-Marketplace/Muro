@@ -1,0 +1,232 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - link "Skip to content" [ref=f2e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f2e4]:
+      - generic [ref=f2e6]:
+        - link "Wallplace" [ref=f2e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f2e8]:
+          - link "Galleries" [ref=f2e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Portfolios" [ref=f2e10] [cursor=pointer]:
+            - /url: /browse?view=portfolios
+          - link "Collections" [ref=f2e11] [cursor=pointer]:
+            - /url: /browse?view=collections
+          - link "Spaces" [ref=f2e12] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f2e14] [cursor=pointer]
+        - generic [ref=f2e17]:
+          - link "Saved" [ref=f2e18] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f2e22] [cursor=pointer]
+          - generic [ref=f2e26]:
+            - link "My Account" [ref=f2e27] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f2e28] [cursor=pointer]
+          - button "Logout" [ref=f2e31] [cursor=pointer]
+    - main [ref=f2e32]:
+      - generic [ref=f2e33]:
+        - navigation "Breadcrumb" [ref=f2e36]:
+          - list [ref=f2e37]:
+            - listitem [ref=f2e38]:
+              - link "Artists" [ref=f2e39] [cursor=pointer]:
+                - /url: /browse
+              - generic [ref=f2e40]: ›
+            - listitem [ref=f2e41]:
+              - link "Fin Coles" [ref=f2e42] [cursor=pointer]:
+                - /url: /browse/fin-coles
+              - generic [ref=f2e43]: ›
+            - listitem [ref=f2e44]:
+              - generic [ref=f2e45]: Gyeongbokgung Palace
+        - generic [ref=f2e48]:
+          - generic [ref=f2e49]:
+            - generic [ref=f2e51]:
+              - img "Gyeongbokgung Palace, Photography Print"
+            - button "View on your wall" [ref=f2e54] [cursor=pointer]
+          - generic [ref=f2e60]:
+            - paragraph [ref=f2e61]:
+              - link "Fin Coles" [ref=f2e62] [cursor=pointer]:
+                - /url: /browse/fin-coles
+            - heading "Gyeongbokgung Palace" [level=1] [ref=f2e63]
+            - paragraph [ref=f2e64]: Currently placed at Testing Venue
+            - generic [ref=f2e66]:
+              - generic [ref=f2e67]: Available
+              - button "Save" [ref=f2e69] [cursor=pointer]
+            - generic [ref=f2e72]: 8 views this week
+            - generic [ref=f2e78]:
+              - term [ref=f2e79]: Medium
+              - definition [ref=f2e80]: Photography Print
+            - generic [ref=f2e81]:
+              - paragraph [ref=f2e82]: Size & Price
+              - combobox "Choose size" [ref=f2e84] [cursor=pointer]:
+                - generic [ref=f2e85]: 4×6" (10×15 cm), £29.99
+            - generic [ref=f2e88]:
+              - paragraph [ref=f2e89]: UK shipping £3.50
+              - paragraph [ref=f2e90]: Ships to UK only
+            - generic [ref=f2e91]:
+              - generic [ref=f2e92]:
+                - button "Buy Now, £29.99" [ref=f2e93] [cursor=pointer]
+                - button "Add to basket" [ref=f2e94] [cursor=pointer]
+              - button "Buy off the wall at Testing Venue, £120.00 (framed)" [ref=f2e99] [cursor=pointer]
+              - button "Message the artist →" [ref=f2e100] [cursor=pointer]
+        - generic [ref=f2e102]:
+          - generic [ref=f2e103]:
+            - generic [ref=f2e104]:
+              - paragraph [ref=f2e105]: Continue exploring
+              - heading "More by Fin Coles" [level=2] [ref=f2e106]
+            - link "View full portfolio" [ref=f2e107] [cursor=pointer]:
+              - /url: /browse/fin-coles
+          - generic [ref=f2e110]:
+            - link "Vietnamese Village Sold Vietnamese Village Photography Print · From £29.99" [ref=f2e111] [cursor=pointer]:
+              - /url: /browse/fin-coles/vietnamese-village
+              - generic [ref=f2e112]:
+                - img "Vietnamese Village" [ref=f2e113]
+                - generic [ref=f2e114]: Sold
+              - paragraph [ref=f2e115]: Vietnamese Village
+              - paragraph [ref=f2e116]: Photography Print · From £29.99
+            - link "Mt. Fitz Roy Sold Mt. Fitz Roy Photography Print · From £29.99" [ref=f2e117] [cursor=pointer]:
+              - /url: /browse/fin-coles/mt-fitz-roy
+              - generic [ref=f2e118]:
+                - img "Mt. Fitz Roy" [ref=f2e119]
+                - generic [ref=f2e120]: Sold
+              - paragraph [ref=f2e121]: Mt. Fitz Roy
+              - paragraph [ref=f2e122]: Photography Print · From £29.99
+            - link "Guanaco in Patagonia Sold Guanaco in Patagonia Photography Print · From £29.99" [ref=f2e123] [cursor=pointer]:
+              - /url: /browse/fin-coles/guanaco-in-patagonia
+              - generic [ref=f2e124]:
+                - img "Guanaco in Patagonia" [ref=f2e125]
+                - generic [ref=f2e126]: Sold
+              - paragraph [ref=f2e127]: Guanaco in Patagonia
+              - paragraph [ref=f2e128]: Photography Print · From £29.99
+            - link [ref=f2e129] [cursor=pointer]:
+              - /url: /browse/fin-coles/giraffe-at-sunset
+              - img "Giraffe at Sunset" [ref=f2e131]
+              - paragraph [ref=f2e132]: Giraffe at Sunset
+              - paragraph [ref=f2e133]: Photography Print · From £29.99
+        - generic [ref=f2e136]:
+          - paragraph [ref=f2e137]: Seller information
+          - paragraph [ref=f2e138]:
+            - text: This artwork is sold by
+            - link "Fin Coles" [ref=f2e139] [cursor=pointer]:
+              - /url: /browse/fin-coles
+            - text: ", an independent artist listing on Wallplace. Your contract of sale is with the artist, not with Wallplace. Wallplace operates the platform, processes payments via Stripe, and facilitates customer service."
+          - paragraph [ref=f2e140]:
+            - text: Contact the artist via their
+            - link "profile" [ref=f2e141] [cursor=pointer]:
+              - /url: /browse/fin-coles
+            - text: or email
+            - link "hello@wallplace.co.uk" [ref=f2e142] [cursor=pointer]:
+              - /url: mailto:hello@wallplace.co.uk
+            - text: . For your 14-day right to cancel and other consumer rights, see our
+            - link "Returns & Refunds" [ref=f2e143] [cursor=pointer]:
+              - /url: /returns
+            - text: and
+            - link "Platform Terms" [ref=f2e144] [cursor=pointer]:
+              - /url: /terms
+            - text: .
+    - contentinfo "Site footer" [ref=f2e145]:
+      - generic [ref=f2e146]:
+        - generic [ref=f2e147]:
+          - generic [ref=f2e148]:
+            - link "Wallplace" [ref=f2e149] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f2e150]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f2e151]:
+              - paragraph [ref=f2e152]: Be first to see new works
+              - paragraph [ref=f2e153]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f2e155]:
+                - textbox "your@email.com" [ref=f2e156]
+                - button "Subscribe" [ref=f2e157] [cursor=pointer]
+            - link "Instagram" [ref=f2e158] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f2e163]:
+            - heading "For Artists" [level=4] [ref=f2e164]
+            - list [ref=f2e165]:
+              - listitem [ref=f2e166]:
+                - link "Apply to Join" [ref=f2e167] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f2e168]:
+                - link "Pricing" [ref=f2e169] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f2e170]:
+                - link "Browse Venues" [ref=f2e171] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f2e172]:
+                - link "FAQs" [ref=f2e173] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f2e174]:
+            - heading "For Venues" [level=4] [ref=f2e175]
+            - list [ref=f2e176]:
+              - listitem [ref=f2e177]:
+                - link "Discover Art" [ref=f2e178] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f2e179]:
+                - link "Register Your Venue" [ref=f2e180] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f2e181]:
+                - link "Wallplace Curated" [ref=f2e182] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f2e183]:
+                - link "How It Works" [ref=f2e184] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f2e185]:
+                - link "FAQs" [ref=f2e186] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f2e187]:
+            - heading "Company" [level=4] [ref=f2e188]
+            - list [ref=f2e189]:
+              - listitem [ref=f2e190]:
+                - link "About" [ref=f2e191] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f2e192]:
+                - link "Blog" [ref=f2e193] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f2e194]:
+                - link "How It Works" [ref=f2e195] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f2e196]:
+                - link "Sustainability" [ref=f2e197] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f2e198]:
+                - link "Partner with us" [ref=f2e199] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f2e200]:
+                - link "Contact" [ref=f2e201] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f2e202]:
+                - link "Complaints" [ref=f2e203] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f2e204]:
+                - link "Terms" [ref=f2e205] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f2e206]:
+                - link "Artist Agreement" [ref=f2e207] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f2e208]:
+                - link "Venue Agreement" [ref=f2e209] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f2e210]:
+                - link "Privacy" [ref=f2e211] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f2e212]:
+                - link "Cookies" [ref=f2e213] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f2e214]:
+                - link "Returns & Refunds" [ref=f2e215] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f2e216]:
+                - link "IP Policy" [ref=f2e217] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f2e219]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f2e220] [cursor=pointer]: Feedback
+  - generic [ref=f2e226]:
+    - paragraph [ref=f2e227]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f2e228] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f2e229]:
+      - button "Decline" [ref=f2e230] [cursor=pointer]
+      - button "Accept" [ref=f2e231] [cursor=pointer]
+  - alert [ref=f2e232]

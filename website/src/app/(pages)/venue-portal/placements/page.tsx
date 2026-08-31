@@ -12,7 +12,7 @@ import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { venueShareLabel } from "@/lib/revenue-share-labels";
 import { useAuth } from "@/context/AuthContext";
 import { canRespond, isRequester } from "@/lib/placement-permissions";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
+import { isBillingWindingDown, normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
@@ -713,6 +713,20 @@ export default function VenuePlacementsPage() {
   }
 
   async function respond(id: string, accept: boolean) {
+    // Production pass 2, P4: "Decline has no confirmation step, unlike undo,
+    // which does." Declining ends the negotiation for the other party and
+    // cannot be taken back from this screen; the counter path is how it
+    // reopens. The context panel already prompts; this did not.
+    if (!accept) {
+      const ok = await confirm({
+        title: "Decline this placement request?",
+        body: "The other party will see it as declined. They can come back with new terms.",
+        confirmLabel: "Decline",
+        cancelLabel: "Keep it open",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     setResponding(id);
     setRespondError(null);
     try {
@@ -896,6 +910,25 @@ export default function VenuePlacementsPage() {
 
   return (
     <VenuePortalLayout>
+      {/* Row 2187 / production pass 2, P4. The payment setup's success_url
+          returns here as ?payment=setup-complete and nothing on the page
+          acknowledged it, so a venue who had just entered card details landed
+          on an unchanged list with no confirmation that anything had happened.
+          The chip below eventually flips to "Monthly payment active", but only
+          once Stripe's webhook lands, which can be seconds later. */}
+      {searchParams.get("payment") === "setup-complete" && (
+        <div
+          role="status"
+          className="mb-6 rounded-sm border border-green-200 bg-green-50 px-4 py-3"
+        >
+          <p className="text-sm font-medium text-green-800">Card saved. Monthly payment is set up.</p>
+          <p className="text-xs text-green-700 mt-0.5">
+            The first payment is taken now and then on the same day each month. It will show on
+            the placement below once Stripe confirms it, usually within a few seconds.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">Placements</h1>
@@ -962,7 +995,7 @@ export default function VenuePlacementsPage() {
                   />
                   <div>
                     <p className="text-sm font-medium text-foreground">QR-enabled display</p>
-                    <p className="text-xs text-muted">Display the work with a QR code linking to the artist&rsquo;s shop. You split QR sales via the share below.</p>
+                    <p className="text-xs text-muted">Display the work with a QR code linking to the artist&rsquo;s shop. You take the share below on sales from the wall, however the buyer arrives.</p>
                   </div>
                 </label>
                 <label className={`flex items-start gap-3 p-3 border rounded-sm cursor-pointer transition-colors ${paidLoanEnabled ? "border-accent bg-accent/5" : "border-border hover:border-foreground/30"}`}>
@@ -1018,7 +1051,7 @@ export default function VenuePlacementsPage() {
             {/* Revenue share (only relevant when QR is on) */}
             {qrEnabled && (
               <div>
-                <label className="block text-sm font-medium mb-2">Revenue share on QR sales <span className="text-muted font-normal">(optional)</span></label>
+                <label className="block text-sm font-medium mb-2">Revenue share on sales from the wall <span className="text-muted font-normal">(optional)</span></label>
                 <p className="text-xs text-muted mb-3">Propose a revenue share percentage on QR-linked sales. Leave at 0 for a free display arrangement.</p>
                 <div className="flex items-center gap-2">
                   <input
@@ -1053,8 +1086,16 @@ export default function VenuePlacementsPage() {
                   <span className="text-accent ml-2 font-normal">{Object.keys(selectedWorkSizes).length} selected</span>
                 )}
               </label>
+              {/* Pass 2 item 3.5 (rows 2159, 1669). This said "Click a work to
+                  pick the size you'd like", and clicking a work only selects
+                  it: the size picker is the separate "Pick size" button that
+                  appears on a selected card. So a venue followed the
+                  instruction, saw no picker, and every placement they created
+                  stored work_size NULL. The control is a deliberate opt-in
+                  (see the comment on it below); the sentence describes it now. */}
               <p className="text-xs text-muted mb-3">
-                Click a work to pick the size you&rsquo;d like. The artist will confirm what&rsquo;s available.
+                Click a work to select it, then <strong>Pick size</strong> on the card if you want a
+                particular one. Leave it and the artist will offer what they have.
               </p>
               {worksLoading ? (
                 <p className="text-sm text-muted">Loading portfolio...</p>
@@ -1606,6 +1647,7 @@ export default function VenuePlacementsPage() {
                             monthlyFeeGbp={p.monthlyFeeGbp}
                             liveFrom={p.liveFrom}
                             subscriptionStatus={p.subscriptionStatus}
+                            cancelAtPeriodEnd={isBillingWindingDown(p.status)}
                             role="venue"
                           />
 
@@ -1921,6 +1963,7 @@ export default function VenuePlacementsPage() {
                       monthlyFeeGbp={p.monthlyFeeGbp}
                       liveFrom={p.liveFrom}
                       subscriptionStatus={p.subscriptionStatus}
+                      cancelAtPeriodEnd={isBillingWindingDown(p.status)}
                       role="venue"
                     />
 
@@ -2061,7 +2104,17 @@ export default function VenuePlacementsPage() {
       <ConfirmDialog
         open={pendingCancelId !== null}
         title="Cancel this placement?"
-        body="The other party will see it as cancelled."
+        // Rows 2179-2187: a placement carrying a live monthly subscription was
+        // cancelled behind a prompt that never mentioned money. Name the fee
+        // when there is one, so the venue knows what they are ending.
+        body={(() => {
+          const target = placements.find((p) => p.id === pendingCancelId);
+          const fee = target?.monthlyFeeGbp ?? 0;
+          const base = "The other party will see it as cancelled.";
+          return fee > 0
+            ? `${base} Your monthly payment of \u00a3${fee.toFixed(2)} stops too: you won't be charged again, and the month you have already paid for runs to the end of its period.`
+            : base;
+        })()}
         confirmLabel="Cancel placement"
         cancelLabel="Keep it"
         destructive

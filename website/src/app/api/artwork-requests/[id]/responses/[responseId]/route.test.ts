@@ -21,6 +21,13 @@ let venueProfileRow: { name: string } | null = { name: "Copper Kettle" };
 // artwork_request_responses row. Lets a test pin
 // proposed_qr_enabled: null without rewriting the whole fixture.
 let responseOverride: Record<string, unknown> = {};
+// Finding 1 (final whole-branch review): the two knobs the concurrent-
+// placement cap gate reads. Defaults model an artist safely under any real
+// cap (no profile row → Core cap via activePlacementCapForProfile(null);
+// count 0), so every existing test above, none of which exercises the cap
+// gate, is unaffected.
+let capProfileRow: Record<string, unknown> | null = null;
+let capActiveCount = 0;
 // F47: the artist's own profile, which the acceptance gates read.
 let artistProfileRow: { review_status: string | null } | null = { review_status: "approved" };
 let gatingV1On = false;
@@ -68,9 +75,33 @@ vi.mock("@/lib/supabase-admin", () => {
   //   artwork_request_responses .update.eq
   function makeChainable(table: string) {
     const chain: Record<string, unknown> = {};
-    chain.select = () => chain;
+    chain.select = (_columns?: unknown, selectOpts?: { head?: boolean }) => {
+      // Finding 1 (final whole-branch review): the cap gate's head:true
+      // count query against placements is a distinct shape from the rest
+      // of this mock (which is a self-referential chain resolving via
+      // .maybeSingle()/.single()), so it needs its own thenable chain.
+      if (table === "placements" && selectOpts?.head) {
+        const headChain: Record<string, unknown> = {};
+        headChain.eq = () => headChain;
+        headChain.then = (resolve: (v: unknown) => unknown) =>
+          Promise.resolve({ data: null, count: capActiveCount, error: null }).then(resolve);
+        return headChain;
+      }
+      return chain;
+    };
     chain.eq = () => chain;
     chain.maybeSingle = async () => {
+      if (table === "artist_profiles") {
+        // Two gates read this table with different columns: F47's review-status
+        // gate (`review_status`) and Task 3's concurrent-placement cap
+        // (`subscription_plan`, `subscription_status`). One mock row serves
+        // both; `capProfileRow` defaults to null, which is an artist safely
+        // under the Core cap, and `artistProfileRow` to approved.
+        if (artistProfileRow === null && capProfileRow === null) {
+          return { data: null, error: null };
+        }
+        return { data: { ...artistProfileRow, ...capProfileRow }, error: null };
+      }
       if (table === "artwork_requests") {
         return {
           data: {
@@ -82,7 +113,6 @@ vi.mock("@/lib/supabase-admin", () => {
           error: null,
         };
       }
-      if (table === "artist_profiles") return { data: artistProfileRow, error: null };
       if (table === "venue_profiles") return { data: venueAddressRow, error: null };
       if (table === "artist_works") return { data: firstWorkRow, error: null };
       if (table === "artwork_request_responses") {
@@ -150,6 +180,8 @@ beforeEach(async () => {
   updates = [];
   venueProfileRow = { name: "Copper Kettle" };
   responseOverride = {};
+  capProfileRow = null;
+  capActiveCount = 0;
   artistProfileRow = { review_status: "approved" };
   gatingV1On = false;
   artistSubscribed = true;
@@ -321,6 +353,67 @@ describe("PATCH /api/artwork-requests/[id]/responses/[responseId]", () => {
     expect(placementInsert).toBeTruthy();
     expect(placementInsert!.row.arrangement_type).toBe("revenue_share");
     expect(placementInsert!.row.qr_enabled).toBe(true);
+  });
+
+  // ─── Finding 1 (final whole-branch review): this accept inserts a
+  // placements row directly with status: "active" (line ~202), a third
+  // unguarded door into an artist's capacity alongside PATCH /api/placements
+  // and POST /api/messages. The feature is UI-parked but the API is live.
+  // Same decision helper, same 402 payload shape.
+  describe("concurrent placement cap (Finding 1)", () => {
+    it("blocks the accept with 402 when the artist is at their Core cap, and inserts no placement", async () => {
+      capProfileRow = { subscription_plan: "core", subscription_status: "active" };
+      capActiveCount = 2;
+      const { PATCH } = await import("./route");
+      const res = await PATCH(buildRequest("accept"), ctx);
+      expect(res.status).toBe(402);
+      const body = await res.json();
+      expect(body.error).toBe("placement_limit_reached");
+
+      expect(inserts.find((i) => i.table === "placements")).toBeUndefined();
+      // The response itself must stay "sent", not flip to "accepted": a
+      // blocked accept is not an accept.
+      expect(updates.find((u) => u.table === "artwork_request_responses")).toBeUndefined();
+    });
+
+    it("allows the accept when the artist is under their Core cap", async () => {
+      capProfileRow = { subscription_plan: "core", subscription_status: "active" };
+      capActiveCount = 1;
+      const { PATCH } = await import("./route");
+      const res = await PATCH(buildRequest("accept"), ctx);
+      expect(res.status).toBe(200);
+
+      const placementInsert = inserts.find((i) => i.table === "placements");
+      expect(placementInsert).toBeTruthy();
+      expect(placementInsert!.row.status).toBe("active");
+    });
+
+    it("never blocks a Pro artist, however high the active count", async () => {
+      capProfileRow = { subscription_plan: "pro", subscription_status: "active" };
+      capActiveCount = 40;
+      const { PATCH } = await import("./route");
+      const res = await PATCH(buildRequest("accept"), ctx);
+      expect(res.status).toBe(200);
+      expect(inserts.find((i) => i.table === "placements")).toBeTruthy();
+    });
+
+    it("does not gate a non-placement response type (offer)", async () => {
+      // The cap only means anything for the placement path, an accepted
+      // offer response never inserts a placements row.
+      capProfileRow = { subscription_plan: "core", subscription_status: "active" };
+      capActiveCount = 2;
+      responseOverride = {
+        response_type: "offer",
+        proposed_offer_amount_pence: 5000,
+        proposed_monthly_fee_pence: null,
+        proposed_qr_enabled: null,
+        proposed_revenue_share_percent: null,
+      };
+      const { PATCH } = await import("./route");
+      const res = await PATCH(buildRequest("accept"), ctx);
+      expect(res.status).toBe(200);
+      expect(inserts.find((i) => i.table === "purchase_offers")).toBeTruthy();
+    });
   });
 });
 

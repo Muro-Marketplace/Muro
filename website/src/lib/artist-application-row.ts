@@ -53,7 +53,7 @@ function buildPortfolioLink(d: ApplyData): string {
  */
 export function buildArtistApplicationRow(
   d: ApplyData,
-  opts: { now?: string } = {},
+  opts: { now?: string; referredByCode?: string | null } = {},
 ): Record<string, unknown> {
   const now = opts.now ?? new Date().toISOString();
   return {
@@ -82,7 +82,14 @@ export function buildArtistApplicationRow(
     themes: d.themes || [],
     hear_about: d.hearAbout || null,
     selected_plan: d.selectedPlan || "core",
-    referred_by_code: d.referralCode ? d.referralCode.toUpperCase() : null,
+    // Row G L2366. The code the applicant typed is NOT trusted here: the route
+    // resolves it against `artist_profiles.referral_code` first and passes the
+    // result. Application 29 carried `QATESTREF`, which no artist owns, and it
+    // was stored as if it were real, so the admin reviewing it saw an
+    // attribution that could never pay anyone. `undefined` (a caller that has
+    // not resolved anything) falls back to no code rather than to the raw
+    // input, because the wrong default here is the one that reintroduces the bug.
+    referred_by_code: opts.referredByCode ?? null,
     // Migration 126. Only recorded when the applicant actually ticked it;
     // null means we hold no record, which is not the same as a refusal.
     acknowledged_cooling_off: d.acknowledgedCoolingOff ?? null,

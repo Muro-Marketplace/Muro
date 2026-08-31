@@ -40,12 +40,13 @@ export default function ArtistAgreementPage() {
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>You must select one of the following membership plans:</p>
                   <ul className="list-disc pl-6 space-y-1">
-                    <li><strong className="text-foreground">Core:</strong> &pound;9.99/month, 15% platform fee on sales</li>
-                    <li><strong className="text-foreground">Premium:</strong> &pound;24.99/month, 8% platform fee on sales</li>
-                    <li><strong className="text-foreground">Pro:</strong> &pound;49.99/month, 5% platform fee on sales</li>
+                    <li><strong className="text-foreground">Core:</strong> &pound;9.99/month, 15% platform fee on sales, up to 2 active placements</li>
+                    <li><strong className="text-foreground">Premium:</strong> &pound;24.99/month, 15% platform fee on sales, up to 5 active placements</li>
+                    <li><strong className="text-foreground">Pro:</strong> &pound;49.99/month, 15% platform fee on sales, unlimited active placements</li>
                   </ul>
                   <p>Your first month is free on any plan. No commitment required during the trial period.</p>
                   <p>Membership is billed monthly via Stripe. Upgrades are prorated. Downgrades take effect at the next billing period. Wallplace may change pricing with 30 days&rsquo; notice. Existing subscriptions are honoured until the next renewal after the notice period.</p>
+                  <p>All prices and fees are exclusive of VAT. If Wallplace becomes VAT registered, VAT will be added at the prevailing rate.</p>
                 </div>
               </div>
 
@@ -140,8 +141,8 @@ export default function ArtistAgreementPage() {
                 <h2 className="text-2xl mb-4">9. Revenue Share Arrangements</h2>
                 <div className="space-y-3 text-muted leading-relaxed">
                   <p>You may agree a Revenue Share with a venue, where the venue receives a percentage of the sale price of artwork sold from their premises. The percentage is agreed directly between you and the venue.</p>
-                  <p>Revenue Share payments are processed via Stripe Connect after the platform fee has been deducted.</p>
-                  <p><strong className="text-foreground">Example:</strong> &pound;500 sale, 8% platform fee (Premium plan), 10% venue share. Platform fee = &pound;40. Venue share = &pound;46 (10% of &pound;460). You receive &pound;414.</p>
+                  <p>Revenue Share payments are processed via Stripe Connect. The venue&rsquo;s share is calculated on the sale price of the artwork; the platform fee is calculated on the same sale price. Both are deducted from your proceeds.</p>
+                  <p><strong className="text-foreground">Example:</strong> &pound;500 sale, 15% platform fee, 10% venue share. Platform fee = &pound;75. Venue share = &pound;50. You receive &pound;375.</p>
                 </div>
               </div>
 

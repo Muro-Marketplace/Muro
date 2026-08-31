@@ -20,6 +20,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { sendEmail } from "@/lib/email/send";
+import { FOUNDING_ARTIST_LIMIT } from "@/lib/pricing";
 import { OperationalAccountRestricted } from "@/emails/templates/legal/OperationalAccountRestricted";
 import { OperationalAccountRestored } from "@/emails/templates/legal/OperationalAccountRestored";
 
@@ -47,11 +48,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Failed to fetch artists" }, { status: 500 });
   }
 }
-
 // A reason is mandatory on the way down and meaningless on the way up: the
 // restriction email prints it, and "your account is restricted, no reason
 // given" is not something to put in an artist's inbox.
 const patchSchema = z.union([
+  // Task 8 / Step 2. `is_founding_artist` sits on ARTIST_PROFILE_SERVER_OWNED
+  // (lib/db/writable-fields.ts) precisely so no artist-facing route can set it;
+  // this admin toggle is the only write path. The flyer's "First 20 artists:
+  // 6 months free" claim is only true while this stays the sole path and the
+  // count guard in `setFoundingStatus` holds at FOUNDING_ARTIST_LIMIT.
+  z.object({
+    id: z.string().uuid(),
+    is_founding_artist: z.boolean(),
+  }),
   z.object({
     id: z.string().min(1).max(100),
     reviewStatus: z.literal("rejected"),
@@ -89,6 +98,11 @@ export async function PATCH(request: Request) {
   }
 
   const db = getSupabaseAdmin();
+
+  if ("is_founding_artist" in parsed.data) {
+    return setFoundingStatus(db, auth.user!.id, parsed.data.id, parsed.data.is_founding_artist);
+  }
+
   const { data: artist } = await db
     .from("artist_profiles")
     .select("id, user_id, name, slug, review_status")
@@ -218,6 +232,77 @@ async function notifyArtist(
       }),
       accountUrl: `${SITE}/artist-portal`,
     }),
-    metadata: { artistProfileId: artist.id },
+    metadata: { artistProfileId: artist.id },  });
+}
+
+/**
+ * Toggle the founding-artist flag, bounded by FOUNDING_ARTIST_LIMIT.
+ *
+ * The flyer promises "first 20 artists, 6 months free". That is only true while
+ * this is the only write path to the column and the count guard below holds, so
+ * the 409 is load-bearing marketing copy, not defensive tidiness.
+ */
+async function setFoundingStatus(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  adminUserId: string,
+  id: string,
+  isFounding: boolean,
+): Promise<Response> {
+  const { data: artist, error: fetchError } = await db
+    .from("artist_profiles")
+    .select("id, slug, is_founding_artist")
+    .eq("id", id)
+    .maybeSingle<{ id: string; slug: string | null; is_founding_artist: boolean | null }>();
+
+  if (fetchError) {
+    console.error("Admin artists PATCH fetch error:", fetchError);
+    return NextResponse.json({ error: "Failed to load artist" }, { status: 500 });
+  }
+  if (!artist) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Idempotent no-op: already at the requested value. Returning here rather
+  // than re-running the count guard means a retry on an already-founding
+  // artist can never be refused by counting its own row.
+  if (Boolean(artist.is_founding_artist) === isFounding) {
+    await recordAdminAction({
+      adminUserId,
+      action: "artist.founding_status",
+      context: { artist_id: artist.id, slug: artist.slug, is_founding_artist: isFounding, noop: true },
+    });
+    return NextResponse.json({ success: true, is_founding_artist: isFounding });
+  }
+
+  if (isFounding) {
+    const { count: foundingCount, error: countError } = await db
+      .from("artist_profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("is_founding_artist", true);
+    if (countError) {
+      console.error("Admin artists PATCH count error:", countError);
+      return NextResponse.json({ error: "Failed to check the founding cohort" }, { status: 500 });
+    }
+    if ((foundingCount ?? 0) >= FOUNDING_ARTIST_LIMIT) {
+      return NextResponse.json(
+        { error: `The founding cohort is full (${FOUNDING_ARTIST_LIMIT} artists).` },
+        { status: 409 },
+      );
+    }
+  }
+
+  const { error: updateError } = await db
+    .from("artist_profiles")
+    .update({ is_founding_artist: isFounding })
+    .eq("id", artist.id);
+
+  if (updateError) {
+    console.error("Admin artists PATCH update error:", updateError);
+    return NextResponse.json({ error: "Failed to update artist" }, { status: 500 });
+  }
+
+  await recordAdminAction({
+    adminUserId,
+    action: "artist.founding_status",
+    context: { artist_id: artist.id, slug: artist.slug, is_founding_artist: isFounding },
   });
+  return NextResponse.json({ success: true, is_founding_artist: isFounding });
 }

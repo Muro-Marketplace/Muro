@@ -90,10 +90,28 @@ describe("buildArtistApplicationRow", () => {
     expect(row.portfolio_link).toBe("Sample 1: https://b.test");
   });
 
-  it("upper-cases the referral code and defaults the plan", () => {
-    const row = buildArtistApplicationRow(parse({ ...MINIMAL, referralCode: "fin123" }));
+  it("stores the referral code the ROUTE resolved, not the one the applicant typed", () => {
+    // Row G L2366. The builder used to upper-case and store whatever was
+    // posted, so application 29 recorded QATESTREF, a code no artist owns. The
+    // route resolves it against artist_profiles.referral_code and passes the
+    // result; the raw input is not consulted here at all.
+    const row = buildArtistApplicationRow(parse({ ...MINIMAL, referralCode: "fin123" }), {
+      referredByCode: "FIN123",
+    });
     expect(row.referred_by_code).toBe("FIN123");
     expect(row.selected_plan).toBe("core");
+  });
+
+  it("drops an unresolved code rather than storing it as if it were valid", () => {
+    const row = buildArtistApplicationRow(parse({ ...MINIMAL, referralCode: "QATESTREF" }), {
+      referredByCode: null,
+    });
+    expect(row.referred_by_code).toBeNull();
+  });
+
+  it("defaults to no code when the caller resolved nothing, never to the raw input", () => {
+    const row = buildArtistApplicationRow(parse({ ...MINIMAL, referralCode: "QATESTREF" }));
+    expect(row.referred_by_code).toBeNull();
   });
 
   it("leaves the referral code null when none is given", () => {

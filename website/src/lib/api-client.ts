@@ -108,3 +108,37 @@ export async function mutate<T = unknown>(
 export function isTransient(err: unknown): boolean {
   return err instanceof NetworkError || (err instanceof ApiError && err.status >= 500);
 }
+
+/**
+ * The message to show a user for a failed request.
+ *
+ * Production pass 2 named a pattern: five separate refusals returned a correct,
+ * well-worded error that the UI never showed, so the user saw a button that did
+ * nothing and concluded the site was broken. A past install date
+ * (`400 "Install date can't be in the past."`), a blog body under 200
+ * characters (`422` with an `issues` array), a revenue share above 50%, an
+ * offer below the 60% floor, and the saved-walls cap (`402`). Message
+ * moderation was the one counter-example: it says "Message contains blocked
+ * content" and means it.
+ *
+ * Two shapes are unpacked, because the API uses both:
+ *
+ *   { error: "Install date can't be in the past." }
+ *   { error: "Not ready for review", issues: ["Body needs at least 200 characters…"] }
+ *
+ * The `issues` array is the specific one. A user told "Not ready for review"
+ * learns nothing; told "Body needs at least 200 characters before submitting"
+ * they know exactly what to do, and the server already said so.
+ */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof NetworkError) return "Network error. Please try again.";
+  if (!(err instanceof ApiError)) return fallback;
+
+  const payload = (err.payload ?? {}) as { issues?: unknown };
+  const issues = Array.isArray(payload.issues)
+    ? payload.issues.filter((i): i is string => typeof i === "string" && i.trim().length > 0)
+    : [];
+  if (issues.length > 0) return issues.join(" ");
+
+  return err.message || err.code || fallback;
+}

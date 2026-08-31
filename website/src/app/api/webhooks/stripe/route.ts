@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { WORKS_CAP } from "@/lib/pricing";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
 import { canReceivePayout } from "@/lib/payouts/capability";
@@ -280,6 +281,20 @@ async function handleWebhookEvent(
         const feePence = Number(session.metadata.offer_platform_fee_pence || 0);
         const netPence = Number(session.metadata.offer_artist_net_pence || 0);
         const artistUserId = session.metadata.offer_artist_user_id || null;
+        // Task 5 (owner decision 2026-08-28): venue share on offer sales. The
+        // checkout route already resolved this (every offered work on one
+        // active placement, with a positive share and a venue user) and
+        // stamped it onto the session metadata; this branch just reads it,
+        // same as the fee/net split above.
+        const offerVenueSlug = session.metadata.offer_venue_slug || null;
+        const offerVenueUserId = session.metadata.offer_venue_user_id || null;
+        const offerVenueCutPence = Number(session.metadata.offer_venue_cut_pence || 0);
+        const offerVenueSharePct = Number(session.metadata.offer_venue_share_percent || 0);
+        // Finding 3 (final review): the placement id travelling alongside the
+        // share, so this order can be attributed to the venue's placement
+        // card. Empty string on the metadata (Stripe values must be
+        // strings) becomes a real null on the nullable orders column.
+        const offerPlacementId = session.metadata.offer_placement_id || null;
 
         // E6. The order row is written FIRST and the offer is flipped to paid
         // only once it lands. The old order was the other way round with the
@@ -292,25 +307,32 @@ async function handleWebhookEvent(
           id: paidOrderId,
           stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,
           buyer_email: session.customer_email || session.metadata.offer_buyer_email || "",
+          // Row 933-939 / P4. This was {offer_id, work_ids, collection_id} and
+          // nothing else, so every reader of `orders.items` fell back to its
+          // defaults and the artist portal showed "Artwork × 1, £0.00" on a
+          // £26 order. The ids stay (they are the link back to the offer); the
+          // title and the amount are added so the line reads as a line. The
+          // enriched `lineTotal` shape is the one lib/order-items prefers.
           items: [{
             offer_id: offerId,
             work_ids: workIds,
             collection_id: session.metadata.offer_collection_id || null,
+            title:
+              session.metadata.offer_work_titles ||
+              (session.metadata.offer_collection_id
+                ? "Collection"
+                : workIds.length > 1
+                  ? `${workIds.length} works`
+                  : "Artwork"),
+            quantity: 1,
+            lineTotal: { amount: session.amount_total || 0, currency: (session.currency || "gbp").toUpperCase() },
           }],
-          // NOT NULL, and the offer flow collects no delivery address. Same
-          // nine-field shape the cart path writes so the order views, which all
-          // read shipping?.fullName and friends, keep working.
-          shipping: {
-            fullName: "",
-            email: session.customer_email || session.metadata.offer_buyer_email || "",
-            phone: "",
-            addressLine1: "",
-            addressLine2: "",
-            city: "",
-            postcode: "",
-            country: "GB",
-            notes: `Accepted offer ${offerId}. No delivery address collected at checkout.`,
-          },
+          // Rows 933-939. The offer session now asks Stripe for the buyer's
+          // delivery address (`shipping_address_collection`), so this reads it
+          // back rather than writing nine empty strings and a note explaining
+          // that the artist has nowhere to post to. Same nine-field shape the
+          // cart path writes, so every order view keeps working.
+          shipping: offerShipping(session, offerId),
           subtotal: totalGbp,
           shipping_cost: 0,
           total: totalGbp,
@@ -320,8 +342,10 @@ async function handleWebhookEvent(
           source: "purchase_offer",
           artist_slug: session.metadata.offer_artist_slug || null,
           artist_user_id: artistUserId,
-          venue_revenue: 0,
-          venue_revenue_share_percent: 0,
+          venue_slug: offerVenueSlug,
+          placement_id: offerPlacementId,
+          venue_revenue: offerVenueCutPence / 100,
+          venue_revenue_share_percent: offerVenueSharePct,
           platform_fee: feePence / 100,
           platform_fee_percent: Number(session.metadata.offer_platform_fee_percent || 0),
           artist_revenue: netPence / 100,
@@ -424,6 +448,43 @@ async function handleWebhookEvent(
             }
           } catch (transferErr) {
             console.error("[offer] artist transfer error:", transferErr);
+          }
+        }
+
+        // Task 5 / venue leg (owner decision 2026-08-28): the placement share
+        // applies to offer sales of works hanging on that venue's wall. Same
+        // gate and fallback semantics as the artist leg above: capability
+        // check first, blocked-leg ledger row when the venue cannot be paid
+        // yet. Its own try/catch, entirely separate from the artist leg's —
+        // a venue transfer failure must never affect the artist's payout or
+        // unwind the order already written above.
+        //
+        // canReceivePayout accepts a userId directly for a venue target (same
+        // as artist), so this skips the venue_profiles slug lookup the plan
+        // sketched: one fewer round trip, same capability answer.
+        if (offerVenueUserId && offerVenueCutPence > 0) {
+          try {
+            const vcap = await canReceivePayout(db, { kind: "venue", userId: offerVenueUserId });
+            if (vcap.ok && vcap.accountId) {
+              await scheduleTransfer({
+                orderId: paidOrderId,
+                recipientType: "venue",
+                recipientUserId: offerVenueUserId,
+                connectAccountId: vcap.accountId,
+                amountCents: offerVenueCutPence,
+                immediate: false,
+              });
+            } else {
+              await recordBlockedLeg(db, {
+                orderId: paidOrderId,
+                recipientType: "venue",
+                recipientUserId: offerVenueUserId,
+                amountCents: offerVenueCutPence,
+                reason: vcap.reason ?? "unknown",
+              });
+            }
+          } catch (venueTransferErr) {
+            console.error("[offer] venue transfer error:", venueTransferErr);
           }
         }
 
@@ -829,18 +890,28 @@ async function handleWebhookEvent(
           ? session.payment_intent
           : session.payment_intent?.id || "";
 
-        // Collection (in-store) sales hand the artwork over at the
-        // point of purchase, so there's no shipping/processing/shipped
-        // lifecycle to track. Mark the order delivered straight away
-        // and pin delivered_at so refund-window logic still works.
+        // Rows 870-874 / PASS2-placement-lifecycle-log. A collection order used
+        // to be booked `delivered` with `delivered_at` stamped at the moment of
+        // payment, and its artist transfer settled to `paid` seven seconds
+        // later with `payout_after` equal to its own creation time. The buyer
+        // had only just paid; the piece was still on the wall. There was no
+        // hold and no evidence anyone had collected anything.
+        //
+        // A collection order is now booked `confirmed` like any other, and the
+        // BUYER confirms the handover. That is the rule the posted path already
+        // follows, and the reason `delivered` is buyer-only in /api/orders: the
+        // parties who get paid, the artist and (since row 727) the hosting
+        // venue, must not attest to the delivery that releases their own money.
+        // If the buyer never confirms, the 14-day payout cron pays out anyway,
+        // exactly as it does for a posted order.
+        //
+        // The collection-shaped behaviour that remains lives downstream and
+        // keys off `orders.fulfilment_method`, not off a flag computed here:
+        // /api/orders reads it to allow the state machine's `collection` edge,
+        // which lets `delivered` follow straight from `confirmed` with no
+        // shipping leg in between.
         const fulfilmentMethod = (savedShipping as { fulfilmentMethod?: string })?.fulfilmentMethod || session.metadata?.fulfilment_method || "ship";
-        // T9 (8.5): collect-from-venue behaves like collect-from-artist for
-        // status and payout timing — the artwork is handed over at (or just
-        // after) purchase, there is no shipping lifecycle, and the artist's
-        // payout releases immediately rather than waiting the 14-day hold.
         const isVenueCollection = fulfilmentMethod === "collect_venue";
-        const isCollection = fulfilmentMethod === "collection" || isVenueCollection;
-        const initialStatus: "confirmed" | "delivered" = isCollection ? "delivered" : "confirmed";
         const nowIso = new Date().toISOString();
 
         const orderRow: Record<string, unknown> = {
@@ -867,17 +938,9 @@ async function handleWebhookEvent(
           subtotal,
           shipping_cost: shippingCost,
           total,
-          status: initialStatus,
+          status: "confirmed",
           // jsonb column — store the array raw (Plan B Task 13).
-          // For collection orders we record the confirmed → delivered
-          // jump in one go so the customer-facing tracker reads cleanly
-          // ("Order placed · Delivered") without intermediate pips.
-          status_history: isCollection
-            ? [
-                { status: "confirmed", timestamp: nowIso },
-                { status: "delivered", timestamp: nowIso },
-              ]
-            : [{ status: "confirmed", timestamp: nowIso }],
+          status_history: [{ status: "confirmed", timestamp: nowIso }],
           source,
           // Still null means neither the session nor any cart line named an
           // artist. The order is booked anyway (the customer HAS paid, and
@@ -899,7 +962,10 @@ async function handleWebhookEvent(
           collection_address: isVenueCollection
             ? (savedShipping as { collectionAddress?: string })?.collectionAddress || null
             : null,
-          delivered_at: isCollection ? nowIso : null,
+          // Stamped by /api/orders when the buyer confirms the handover. It is
+          // what the statutory 14-day refund window measures from, so stamping
+          // it at payment started the buyer's window before they had the piece.
+          delivered_at: null,
           created_at: nowIso,
         };
 
@@ -916,7 +982,7 @@ async function handleWebhookEvent(
             // the payout legs, so any leg the first pass missed (a ledger insert
             // that threw, a 500 after the order landed) gets scheduled now.
             // Idempotent via scheduleTransfer's (order_id, recipient_user_id) 23505.
-            await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
+            await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue });
             return NextResponse.json({ received: true, duplicate: true });
           }
         }
@@ -939,7 +1005,7 @@ async function handleWebhookEvent(
             if ((await classifyOrderIdConflict(db, orderId, paymentIntentId || null)) === "duplicate") {
               console.log("Order already exists (same payment intent), treating webhook as processed");
               // D52.3: re-attempt the payout legs on a redelivery (idempotent).
-              await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
+              await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue });
               return NextResponse.json({ received: true, duplicate: true });
             }
             console.error("[webhook] order id collision", { orderId, paymentIntentId });
@@ -1342,7 +1408,7 @@ async function handleWebhookEvent(
           // can re-run it and schedule any legs the first pass missed (C4/D52.3);
           // scheduleTransfer's (order_id, recipient_user_id) 23505 idempotency
           // makes already-scheduled legs no-ops, so a redelivery only fills gaps.
-          await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
+          await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue });
         }
       } catch (err) {
         // WS1.1 (audit F1, verified): this catch used to swallow the throw and
@@ -1712,7 +1778,7 @@ async function handleWebhookEvent(
               trialEndDate,
               upgradeUrl: `${SITE}/artist-portal/billing`,
               benefits: [
-                "Up to 50 works in your portfolio",
+                `Up to ${WORKS_CAP[planLabel.toLowerCase()] ?? WORKS_CAP.core} works in your portfolio`,
                 "Priority matching with venues",
                 "Advanced QR analytics",
               ],
@@ -2575,11 +2641,98 @@ async function handleWebhookEvent(
  * never double-pays. Best-effort per leg: one failing recipient never stops the
  * rest.
  */
+/**
+ * The delivery address for an offer order, read back off the Stripe session.
+ *
+ * Rows 933-939. OFR-5A2LJH2CJ7KPVNMO carried `fulfilment_method: "ship"`,
+ * `shipping_cost: 0`, and a shipping block whose every field was empty apart
+ * from `notes: "Accepted offer off_… . No delivery address collected at
+ * checkout."` The system knew; the artist saw "SHIP TO: ," above a live "Mark
+ * as Shipped" button.
+ *
+ * Stripe moved this field: newer API versions return it under
+ * `collected_information.shipping_details`, older ones under
+ * `shipping_details`. Both are read so the address survives an API-version bump
+ * in either direction, which is exactly the kind of silent regression that put
+ * the empty block there in the first place.
+ *
+ * The note is kept ONLY when Stripe returned nothing, because that is the case
+ * where the artist genuinely cannot post the piece and needs to be told why.
+ */
+interface StripeShippingDetails {
+  name?: string | null;
+  phone?: string | null;
+  address?: {
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
+  } | null;
+}
+
+function offerShipping(
+  session: Stripe.Checkout.Session,
+  offerId: string,
+): Record<string, string> {
+  const withShipping = session as unknown as {
+    collected_information?: { shipping_details?: StripeShippingDetails | null } | null;
+    shipping_details?: StripeShippingDetails | null;
+  };
+  const collected =
+    withShipping.collected_information?.shipping_details ?? withShipping.shipping_details ?? null;
+  const address = collected?.address ?? null;
+  const email = session.customer_email || session.metadata?.offer_buyer_email || "";
+
+  if (!address?.line1) {
+    console.warn("[webhook] offer paid with no shipping address on the session", { offerId });
+    return {
+      fullName: collected?.name || "",
+      email,
+      phone: collected?.phone || "",
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      postcode: "",
+      country: address?.country || "GB",
+      notes: `Accepted offer ${offerId}. No delivery address collected at checkout.`,
+    };
+  }
+
+  return {
+    fullName: collected?.name || "",
+    email,
+    phone: collected?.phone || "",
+    addressLine1: address.line1 || "",
+    addressLine2: address.line2 || "",
+    city: address.city || "",
+    postcode: address.postal_code || "",
+    country: address.country || "GB",
+    notes: `Accepted offer ${offerId}.`,
+  };
+}
+
 async function scheduleOrderLegs(
   db: ReturnType<typeof getSupabaseAdmin>,
-  params: { orderId: string; legs: ArtistLeg[]; venueSlug: string; venueRevenue: number; isCollection: boolean },
+  params: {
+    orderId: string;
+    legs: ArtistLeg[];
+    venueSlug: string;
+    venueRevenue: number;
+    /**
+     * Release the transfers now instead of holding them.
+     *
+     * Rows 870-874: this used to be `isCollection`, so a collect order settled
+     * its artist transfer seconds after payment with no hold and no proof the
+     * buyer had collected. Nothing sets it today; it stays as a parameter
+     * because releasing on a confirmed handover is a legitimate future caller,
+     * and /api/orders already does exactly that on the transition into
+     * `delivered`.
+     */
+    releaseImmediately?: boolean;
+  },
 ): Promise<void> {
-  const { orderId, legs, venueSlug, venueRevenue, isCollection } = params;
+  const { orderId, legs, venueSlug, venueRevenue, releaseImmediately = false } = params;
 
   const schedulingFailures: string[] = [];
 
@@ -2604,7 +2757,7 @@ async function scheduleOrderLegs(
           recipientUserId: venueUserId,
           connectAccountId: cap.accountId,
           amountCents: venuePence,
-          immediate: isCollection,
+          immediate: releaseImmediately,
         });
       } else if (venueUserId) {
         console.error("[cart] venue cannot be paid out, transfer skipped", {
@@ -2641,7 +2794,7 @@ async function scheduleOrderLegs(
           recipientUserId: leg.artistUserId,
           connectAccountId: cap.accountId,
           amountCents: leg.netPence,
-          immediate: isCollection,
+          immediate: releaseImmediately,
         });
       } else {
         console.error("[cart] artist cannot be paid out, transfer skipped", {

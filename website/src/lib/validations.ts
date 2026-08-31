@@ -1,9 +1,22 @@
 import { z } from "zod";
 import { isValidPostcode } from "./postcode";
+import { PAID_LOAN_MIN_GBP } from "@/lib/pricing";
 
 // Shared helpers
 const safeString = (max = 500) => z.string().trim().min(1).max(max);
 const email = z.string().trim().email().max(254);
+// Paid-loan rent floor (owner decision 2026-08-28): 0 means "no monthly fee,
+// not a paid loan"; any actual rent must be at least £15/mo. Below that,
+// Stripe's fixed fees eat the platform cut and cheap rent trains venues that
+// art costs nothing (the Artsicle failure mode). Shared by placementSchema
+// and placementUpdateSchema's counter so the rule cannot drift between them.
+const monthlyFeeGbp = z
+  .number()
+  .min(0)
+  .max(100000)
+  .refine((v) => v === 0 || v >= PAID_LOAN_MIN_GBP, {
+    message: `Monthly loan fees start at £${PAID_LOAN_MIN_GBP}. Set 0 for a free loan.`,
+  });
 // Accepts string / "" / undefined / null. Null is coerced to "" so callers
 // can safely serialise missing values as `null` (common when loading from
 // Postgres) without tripping the validator.
@@ -18,6 +31,15 @@ export const waitlistSchema = z.object({
   name: safeString(100),
   email,
   userType: z.enum(["artist", "venue", "both"]),
+  // Row A L364 / migration 129. The form posts these three and this schema
+  // declared none of them, so zod stripped them at the validation boundary and
+  // no writer ever saw them. A venue joining the waiting list was asked for
+  // their venue's name and where it is, and we kept neither, which is what made
+  // the list unworkable: nothing distinguished a venue in Hampton from one in
+  // Leeds and there was no way to ring anybody.
+  phone: optionalString(30),
+  venueName: optionalString(200),
+  venueLocation: optionalString(200),
 });
 
 export const contactSchema = z.object({
@@ -147,7 +169,7 @@ export const placementSchema = z.object({
   notes: optionalString(1000),
   message: optionalString(2000),
   qrEnabled: z.boolean().optional(),
-  monthlyFeeGbp: z.number().min(0).max(100000).optional(),
+  monthlyFeeGbp: monthlyFeeGbp.optional(),
   // Additional works covered by the same placement. The primary work
   // still lives in workTitle / workImage; extras ride along and share
   // terms + lifecycle. Capped at 20 so a single placement can't be
@@ -266,7 +288,7 @@ export const placementUpdateSchema = z.object({
     // bound here keeps old client tabs from 400ing a whole counter.
     revenueSharePercent: z.number().min(0).max(100).optional(),
     qrEnabled: z.boolean().optional(),
-    monthlyFeeGbp: z.number().min(0).max(100000).optional(),
+    monthlyFeeGbp: monthlyFeeGbp.optional(),
     // "mixed" (paid loan + revenue share) included since F27: clients now
     // send the derived canonical type. The route re-derives regardless.
     arrangementType: z.enum(["free_loan", "paid_loan", "revenue_share", "purchase", "mixed"]).optional(),

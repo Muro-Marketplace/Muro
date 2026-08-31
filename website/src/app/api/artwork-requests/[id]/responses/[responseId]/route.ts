@@ -15,6 +15,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
 import { createNotification } from "@/lib/notifications";
+import { placementCapDecision } from "@/app/api/placements/placement-cap";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
 import { sendEmail } from "@/lib/email/send";
@@ -396,6 +397,46 @@ export async function PATCH(
       const { data: firstWork } = firstWorkId
         ? await db.from("artist_works").select("title, image").eq("id", firstWorkId).maybeSingle<{ title: string | null; image: string | null }>()
         : { data: null };
+
+      // Finding 1 (final whole-branch review): this insert lands the
+      // placement straight into "active" below (no pending step), a third
+      // unguarded door into an artist's concurrent-placement capacity
+      // alongside PATCH /api/placements and POST /api/messages. The
+      // feature is UI-parked but the API is live. Same decision helper,
+      // same 402 payload shapes, gated before the insert so a
+      // capacity-blocked accept writes nothing at all: the response stays
+      // "sent" rather than "accepted", unlike the missing-venue-profile
+      // fallback above, which still completes the accept a different way.
+      const { data: capProfile } = await db
+        .from("artist_profiles")
+        .select("subscription_plan, subscription_status")
+        .eq("user_id", resp.artist_user_id)
+        .maybeSingle();
+      const { count: activeCount } = await db
+        .from("placements")
+        .select("id", { count: "exact", head: true })
+        .eq("artist_user_id", resp.artist_user_id)
+        .eq("status", "active");
+      const decision = placementCapDecision({
+        profile: capProfile ?? null,
+        activeCount: activeCount ?? 0,
+      });
+      if (!decision.allowed) {
+        const isOwnCap = resp.artist_user_id === auth.user!.id;
+        return NextResponse.json(
+          isOwnCap
+            ? {
+                error: "placement_limit_reached",
+                message: `Your plan includes ${decision.cap} active placements at a time. Upgrade to take on more walls.`,
+                upgrade_url: "/artist-portal/billing",
+              }
+            : {
+                error: "placement_limit_reached",
+                message: "This artist is at their plan's active placement limit right now. They can free a slot or upgrade, then you can accept.",
+              },
+          { status: 402 },
+        );
+      }
 
       const { error: placementErr } = await db.from("placements").insert({
         id: placementId,

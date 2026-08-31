@@ -24,6 +24,7 @@ const SELLER_STATUSES = new Set<string>([
 ]);
 const BUYER_STATUSES = new Set<string>(["delivered", "disputed", "cancelled"]);
 import { recordOrderEvent } from "@/lib/orders/lifecycle";
+import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import {
   CustomerOrderStatusUpdate,
@@ -298,6 +299,45 @@ export async function PATCH(request: Request) {
       console.error("[orders PATCH] lifecycle hook:", lifecycleErr);
     }
 
+    // Row 874. "NO email and no bell reached the artist on any transition,
+    // including the one that released their £50.99 payout." The email half is
+    // fixed in lib/orders/lifecycle (artist_order_delivered); this is the bell.
+    //
+    // Only for a transition the artist did NOT make. Telling someone what they
+    // have just clicked is noise, and the artist drives processing and shipped
+    // themselves.
+    try {
+      const artistId = (order as { artist_user_id?: string | null }).artist_user_id ?? null;
+      if (artistId && artistId !== auth.user!.id) {
+        const bell: Record<string, { title: string; body: string }> = {
+          delivered: {
+            title: "Order delivered",
+            body: `The buyer confirmed order ${orderId} arrived. Your payout is released.`,
+          },
+          cancelled: {
+            title: "Order cancelled",
+            body: `Order ${orderId} was cancelled.`,
+          },
+          disputed: {
+            title: "Problem reported on an order",
+            body: `The buyer reported a problem with order ${orderId}.`,
+          },
+        };
+        const copy = bell[status];
+        if (copy) {
+          await createNotification({
+            userId: artistId,
+            kind: "order_status",
+            title: copy.title,
+            body: copy.body,
+            link: "/artist-portal/orders",
+          });
+        }
+      }
+    } catch (bellErr) {
+      console.error("[orders PATCH] artist bell:", bellErr);
+    }
+
     // Phase 2.3 J1 audit fix: the dispatcher above (recordOrderEvent)
     // now owns shipped + delivered + processing customer emails via
     // the Phase 2.0c templates. The old inline sendEmail calls used
@@ -411,6 +451,40 @@ export async function PATCH(request: Request) {
         });
         if (rpcErr) console.error("Failed to attribute placement revenue:", rpcErr);
       }
+
+      // Row 727 / PASS2-placement-lifecycle-log. A placement sold off the wall
+      // went to `sold` and could never reach Collected: the progress bar sat at
+      // 5 of 6, every stage control vanished for both parties, and there was no
+      // way to close the loan.
+      //
+      // The buyer confirming they have picked the piece up IS the "Collected"
+      // event: that is the moment the work physically leaves the venue's wall.
+      // So the confirmation that releases the money also closes the loan.
+      // Either party can still mark it by hand (PATCH /api/placements accepts
+      // stage: "collected" from `sold`), so a buyer who never confirms cannot
+      // strand the venue's record.
+      //
+      // Best-effort: the order transition has already been written, and a
+      // placement that stays open is recoverable by hand while a failed
+      // delivery confirmation is not.
+      if (isCollectionOrder && order.placement_id) {
+        try {
+          const { data: placement } = await db
+            .from("placements")
+            .select("id, collected_at")
+            .eq("id", order.placement_id)
+            .maybeSingle<{ id: string; collected_at: string | null }>();
+          if (placement && !placement.collected_at) {
+            const { error: closeErr } = await db
+              .from("placements")
+              .update({ collected_at: new Date().toISOString(), status: "completed" })
+              .eq("id", placement.id);
+            if (closeErr) console.error("[orders PATCH] could not close the placement:", closeErr);
+          }
+        } catch (closeErr) {
+          console.error("[orders PATCH] placement close hook:", closeErr);
+        }
+      }
     }
 
     // On cancellation, cancel pending payouts
@@ -431,6 +505,15 @@ export async function PATCH(request: Request) {
       // with a pending refund problem needs a human, not a resurrected order.
       if (order.stripe_payment_intent_id && Number(order.total) > 0) {
         try {
+          // `refund_requests.requester_email` is NOT NULL with no default, and
+          // so is `orders.buyer_email`; this row came from `select("*")`, so
+          // the guard is unreachable. It is here because the alternative was
+          // `?? null`, which turns an impossible case into a constraint
+          // violation whose message names neither the order nor the buyer,
+          // inside the branch that returns a paying customer's money.
+          if (!order.buyer_email) {
+            throw new Error(`order ${orderId} has no buyer email; cannot file the cancellation refund`);
+          }
           const { data: refundRow, error: rrErr } = await db
             .from("refund_requests")
             .insert({
@@ -440,7 +523,7 @@ export async function PATCH(request: Request) {
               reason: "Order cancelled",
               requester_type: "system",
               requester_user_id: auth.user!.id,
-              requester_email: order.buyer_email ?? null,
+              requester_email: order.buyer_email,
               status: "pending",
             })
             .select("id")

@@ -59,7 +59,7 @@ const valueBlocks = [
       </svg>
     ),
     title: "Fair platform fees",
-    description: "5 to 15% platform fee. No gallery taking half. You keep the majority of every sale.",
+    description: "Flat 15% platform fee. No gallery taking half. You keep the majority of every sale.",
   },
   {
     icon: (
@@ -86,7 +86,7 @@ const comparisonData = [
     gallery: "40 to 60%",
     marketplace: "15 to 30%",
     instagram: "N/A",
-    wallplace: "5 to 15%",
+    wallplace: "15%",
   },
   {
     category: "Physical display",
@@ -134,7 +134,7 @@ const faqItems = [
   {
     question: "Why should I pay for this?",
     answer:
-      "Because a gallery would take 40 to 60% of every sale on top of significant upfront costs. Wallplace gives you a platform fee of 5 to 15%, ongoing commercial visibility, sales infrastructure, and access to a growing network of venues, for less than the cost of a round of drinks per month.",
+      "Because a gallery would take 40 to 60% of every sale on top of significant upfront costs. Wallplace gives you a flat 15% platform fee, ongoing commercial visibility, sales infrastructure, and access to a growing network of venues, for less than the cost of a round of drinks per month.",
   },
   {
     question: "Do you handle delivery and installation?",
@@ -409,7 +409,11 @@ export default function ArtistGuide() {
             <Link href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
               SEE VENUE DEMAND
             </Link>
-            <Link href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors">
+            {/* Row A L163: this was a second differently-labelled button to
+                the SAME /spaces URL, so the pair read as two things and did
+                one. The postcode search lives on that page, so the second CTA
+                is the quieter route to it rather than a rival to the first. */}
+            <Link href="/spaces#postcode" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 border border-foreground/25 text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:border-foreground/50 transition-colors">
               SEARCH BY POSTCODE
             </Link>
           </div>

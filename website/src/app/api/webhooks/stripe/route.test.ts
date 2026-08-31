@@ -320,13 +320,25 @@ function setupDbMock(state: DbState) {
   });
 }
 
-function buildSession(overrides: Partial<{ id: string; amount_total: number; metadata: Record<string, string>; payment_intent: string; customer_email: string }> = {}) {
+function buildSession(
+  overrides: Partial<{
+    id: string;
+    amount_total: number;
+    metadata: Record<string, string>;
+    payment_intent: string;
+    customer_email: string;
+    collected_information: unknown;
+  }> = {},
+) {
   return {
     id: overrides.id ?? "cs_test_multi",
     mode: "payment",
     amount_total: overrides.amount_total ?? 40000,
     customer_email: overrides.customer_email ?? "buyer@example.com",
     payment_intent: overrides.payment_intent ?? "pi_test_1",
+    ...(overrides.collected_information === undefined
+      ? {}
+      : { collected_information: overrides.collected_information }),
     metadata: overrides.metadata ?? {
       kind: "cart_checkout",
       artist_slugs: "alice,bob",
@@ -670,13 +682,170 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     offer_platform_fee_percent: "15",
   };
 
-  function fireOffer(metadata: Record<string, string> = OFFER_META, amountTotal = 3300) {
+  /**
+   * Task 5: £300.00 offer for a work on a venue's wall, 15% platform fee and a
+   * 10% venue placement share, both off the artist's side: fee 4500p, venue
+   * cut 3000p, artist net 22500p (30000 - 4500 - 3000). Mirrors what the
+   * checkout route now stamps onto the session per the venue-share tests in
+   * checkout/route.test.ts.
+   */
+  const OFFER_META_WITH_VENUE = {
+    ...OFFER_META,
+    offer_amount_pence: "30000",
+    offer_platform_fee_pence: "4500",
+    offer_artist_net_pence: "22500",
+    offer_platform_fee_percent: "15",
+    offer_venue_slug: "copper-kettle",
+    offer_venue_user_id: "u-venue-1",
+    offer_venue_cut_pence: "3000",
+    offer_venue_share_percent: "10",
+    // Finding 3 (final review): the single active placement id the checkout
+    // route resolved alongside the share, now travelling with it so the
+    // order row can be attributed back to the venue's placement card.
+    offer_placement_id: "plc-1",
+  };
+
+  function fireOffer(
+    metadata: Record<string, string> = OFFER_META,
+    amountTotal = 3300,
+    collectedInformation?: unknown,
+  ) {
     constructEventMock.mockReturnValue({
       type: "checkout.session.completed",
-      data: { object: buildSession({ id: "cs_offer_W45tsGG1", amount_total: amountTotal, metadata, customer_email: "" }) },
+      data: {
+        object: buildSession({
+          id: "cs_offer_W45tsGG1",
+          amount_total: amountTotal,
+          metadata,
+          customer_email: "",
+          collected_information: collectedInformation,
+        }),
+      },
     });
     return POST(buildRequest());
   }
+
+  // Rows 933-939, 2245 / PASS2-offers-and-paid-loan-log. An accepted offer
+  // produced an order nobody could fulfil: shipping was nine empty strings plus
+  // "No delivery address collected at checkout", while the artist portal showed
+  // "SHIP TO: ," above a live "Mark as Shipped" button. The offer session now
+  // asks Stripe for the address; this reads it back.
+  describe("the delivery address collected on the Stripe page reaches the order", () => {
+    const COLLECTED = {
+      shipping_details: {
+        name: "Copper Kettle Ltd",
+        phone: "+447700900000",
+        address: {
+          line1: "1 High Street",
+          line2: "Unit 4",
+          city: "Hampton",
+          postal_code: "TW12 2TH",
+          country: "GB",
+        },
+      },
+    };
+
+    it("writes the address the buyer gave Stripe", async () => {
+      const state = freshState();
+      setupOfferDb(state);
+
+      await fireOffer(OFFER_META, 3300, COLLECTED);
+
+      expect(state.orderInsert.row!.shipping).toMatchObject({
+        fullName: "Copper Kettle Ltd",
+        phone: "+447700900000",
+        addressLine1: "1 High Street",
+        addressLine2: "Unit 4",
+        city: "Hampton",
+        postcode: "TW12 2TH",
+        country: "GB",
+      });
+    });
+
+    it("drops the apology note once there is a real address", async () => {
+      const state = freshState();
+      setupOfferDb(state);
+
+      await fireOffer(OFFER_META, 3300, COLLECTED);
+
+      const shipping = state.orderInsert.row!.shipping as { notes: string };
+      expect(shipping.notes).not.toMatch(/No delivery address/i);
+    });
+
+    it("reads the older top-level shipping_details shape too", async () => {
+      // Stripe moved this field between API versions. Reading only one shape is
+      // how the empty block would come back on the next version bump.
+      const state = freshState();
+      setupOfferDb(state);
+
+      await fireOffer(OFFER_META, 3300, undefined);
+      const withoutAddress = state.orderInsert.row!.shipping as { addressLine1: string };
+      expect(withoutAddress.addressLine1).toBe("");
+
+      state.orderInsert.row = null;
+      constructEventMock.mockReturnValue({
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            ...buildSession({
+              id: "cs_offer_legacy",
+              amount_total: 3300,
+              metadata: OFFER_META,
+              customer_email: "",
+            }),
+            shipping_details: COLLECTED.shipping_details,
+          },
+        },
+      });
+      await POST(buildRequest());
+
+      expect(state.orderInsert.row!.shipping).toMatchObject({ addressLine1: "1 High Street" });
+    });
+
+    it("still books the order, and says why, when Stripe returned no address", async () => {
+      const state = freshState();
+      setupOfferDb(state);
+
+      const res = await fireOffer(OFFER_META, 3300, { shipping_details: null });
+
+      expect(res.status).toBe(200);
+      const shipping = state.orderInsert.row!.shipping as { notes: string; addressLine1: string };
+      expect(shipping.addressLine1).toBe("");
+      expect(shipping.notes).toMatch(/No delivery address collected at checkout/);
+    });
+  });
+
+  // Rows 933-939 / P4. `orders.items` for an offer was
+  // {offer_id, work_ids, collection_id} and nothing else, so every reader fell
+  // back to its defaults and the artist portal rendered "Artwork × 1, £0.00" on
+  // a £26 order. The email resolved the title fine, so the data existed.
+  it("writes an item line a person can read", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+
+    await fireOffer({ ...OFFER_META, offer_work_titles: "Harbour Light" }, 3300);
+
+    const items = state.orderInsert.row!.items as Array<Record<string, unknown>>;
+    expect(items[0]).toMatchObject({
+      title: "Harbour Light",
+      quantity: 1,
+      offer_id: OFFER_META.offer_id,
+    });
+    expect(items[0].lineTotal).toMatchObject({ amount: 3300 });
+  });
+
+  it("still names something when the titles did not travel", async () => {
+    // An order booked before the metadata carried titles, or one whose work was
+    // deleted between acceptance and payment.
+    const state = freshState();
+    setupOfferDb(state);
+
+    await fireOffer(OFFER_META, 3300);
+
+    const items = state.orderInsert.row!.items as Array<Record<string, unknown>>;
+    expect(items[0].title).toBe("Artwork");
+    expect(items[0].lineTotal).toMatchObject({ amount: 3300 });
+  });
 
   it("writes an order row at all, which is the live E6 defect", async () => {
     const state = freshState();
@@ -718,6 +887,10 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     await fireOffer();
     expect(state.orderInsert.row?.venue_revenue).toBe(0);
     expect(state.orderInsert.row?.venue_revenue_share_percent).toBe(0);
+    // Finding 3 (final review): no venue share means no venue placement to
+    // credit, so placement_id must be null rather than an empty string
+    // (the DB column, unlike the Stripe metadata carrying it, is nullable).
+    expect(state.orderInsert.row?.placement_id).toBeNull();
   });
 
   it("puts an email in buyer_email, never the buyer's UUID", async () => {
@@ -933,6 +1106,117 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     expect(row.platform_fee_percent).toBe(5);
     expect(scheduleTransferMock).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 2565 }));
   });
+
+  // ── Task 5: venue share on offer sales (work-on-wall rule) ──
+  //
+  // The checkout route resolves the venue share and stamps it onto the
+  // session metadata (checkout/route.test.ts); this webhook branch just
+  // reads those keys, writes them onto the order row, and pays the venue
+  // the same way it already pays the artist.
+
+  it("Task 5: writes the venue slug and share onto the order row, summing with the rest of the split", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer(OFFER_META_WITH_VENUE, 30000);
+    const row = state.orderInsert.row!;
+    expect(row.venue_slug).toBe("copper-kettle");
+    expect(row.venue_revenue).toBe(30);
+    expect(row.venue_revenue_share_percent).toBe(10);
+    expect(row.platform_fee).toBe(45);
+    expect(row.artist_revenue).toBe(225);
+    expect(row.total).toBe(300);
+    // Finding 3 (final review): the order carries the placement id so the
+    // placements list can sum venue earnings by orders.placement_id and
+    // show this offer's cut on the right placement card.
+    expect(row.placement_id).toBe("plc-1");
+    // total = artist_revenue + venue_revenue + platform_fee, in integer pence.
+    expect(
+      Math.round((row.artist_revenue as number) * 100) +
+        Math.round((row.venue_revenue as number) * 100) +
+        Math.round((row.platform_fee as number) * 100),
+    ).toBe(Math.round((row.total as number) * 100));
+  });
+
+  it("Task 5: schedules a venue transfer for the cut alongside the artist's, when the venue can be paid", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer(OFFER_META_WITH_VENUE, 30000);
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(2);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientType: "artist",
+        recipientUserId: "u-artist",
+        amountCents: 22500,
+      }),
+    );
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientType: "venue",
+        recipientUserId: "u-venue-1",
+        connectAccountId: "acct_venue-1",
+        amountCents: 3000,
+        immediate: false,
+      }),
+    );
+  });
+
+  it("Task 5: records a blocked leg for the venue, without touching the artist's payout, when the venue cannot be paid yet", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    blockedPayoutTargets.add("u-venue-1"); // canReceivePayout -> { ok: false, reason: "payouts_disabled" }
+    const res = await fireOffer(OFFER_META_WITH_VENUE, 30000);
+    expect(res.status).toBe(200);
+    // The artist leg is unaffected: still scheduled, for the full net.
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientType: "artist", recipientUserId: "u-artist", amountCents: 22500 }),
+    );
+    expect(recordBlockedLegMock).toHaveBeenCalledTimes(1);
+    expect(recordBlockedLegMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        recipientType: "venue",
+        recipientUserId: "u-venue-1",
+        amountCents: 3000,
+        reason: "payouts_disabled",
+      }),
+    );
+    // The order still exists; the sale is recorded and recoverable.
+    expect(state.orderInsert.row).not.toBeNull();
+  });
+
+  it("Task 5: a venue capability error does not affect the artist payout or the order (venue leg is best-effort)", async () => {
+    const state = freshState();
+    setupOfferDb(state);
+    canReceivePayoutMock.mockReset();
+    canReceivePayoutMock.mockImplementation(async (_db: unknown, target: { kind: string; userId?: string }) => {
+      if (target.kind === "venue") throw new Error("stripe unreachable");
+      return { ok: true, accountId: "acct_artist", reason: null };
+    });
+    const res = await fireOffer(OFFER_META_WITH_VENUE, 30000);
+    expect(res.status).toBe(200);
+    expect(state.orderInsert.row).not.toBeNull();
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientType: "artist", recipientUserId: "u-artist", amountCents: 22500 }),
+    );
+    // No blocked leg either: the throw is swallowed by the venue leg's own
+    // try/catch, not routed to recordBlockedLeg (that path is for a clean
+    // capability answer of "not ready", not for a thrown error).
+    expect(recordBlockedLegMock).not.toHaveBeenCalled();
+  });
+
+  it("Task 5: pays no venue share when the offer metadata carries none (unplaced or mixed-venue offer)", async () => {
+    // Same fixture as the rest of this describe block: OFFER_META has no
+    // offer_venue_* keys, matching what the checkout route stamps when no
+    // single active placement covers every offered work.
+    const state = freshState();
+    setupOfferDb(state);
+    await fireOffer();
+    expect(state.orderInsert.row?.venue_slug).toBeNull();
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1); // artist only
+    expect(recordBlockedLegMock).not.toHaveBeenCalled();
+  });
 });
 
 // ─── Characterisation: cart-checkout confirmations ───
@@ -1071,7 +1355,7 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
     {
       user_id: "u-bob",
       slug: "bob",
-      subscription_plan: "pro", // 5%
+      subscription_plan: "pro", // 15%
       subscription_status: "active",
       stripe_connect_account_id: "acct_bob",
       stripe_connect_onboarding_complete: true,
@@ -1123,11 +1407,11 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
 
     const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
     expect(artistTransfers).toHaveLength(2);
-    // Alice: 10000 - 15% = 8500. Bob: 10000 - 5% = 9500.
+    // Alice: 10000 - 15% = 8500. Bob: 10000 - 15% = 8500 (flat rate, owner decision 2026-08-28).
     expect(artistTransfers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ recipientUserId: "u-alice", connectAccountId: "acct_alice", amountCents: 8500 }),
-        expect.objectContaining({ recipientUserId: "u-bob", connectAccountId: "acct_bob", amountCents: 9500 }),
+        expect.objectContaining({ recipientUserId: "u-bob", connectAccountId: "acct_bob", amountCents: 8500 }),
       ]),
     );
   });
@@ -1161,9 +1445,9 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
     expect(venuePence + feePence + legTotal).toBe(20000);
     // The order row's blended figures are the sum of the legs, so what is
     // reported and what is transferred cannot disagree.
-    expect(row.artist_revenue).toBe(180);
-    expect(row.platform_fee).toBe(20);
-    expect(row.platform_fee_percent).toBe(10); // blended 15% / 5%
+    expect(row.artist_revenue).toBe(170);
+    expect(row.platform_fee).toBe(30);
+    expect(row.platform_fee_percent).toBe(15); // flat 15% on both legs now (owner decision 2026-08-28)
   });
 
   it("attributes shipping to the artist who posts the parcel", async () => {
@@ -1193,7 +1477,7 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
     expect(artistTransfers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ recipientUserId: "u-alice", amountCents: 8500 + 950 }),
-        expect.objectContaining({ recipientUserId: "u-bob", amountCents: 9500 + 450 }),
+        expect.objectContaining({ recipientUserId: "u-bob", amountCents: 8500 + 450 }),
       ]),
     );
   });
@@ -1210,7 +1494,7 @@ describe("Stripe webhook — per-artist payout legs (E9)", () => {
 
     const artistTransfers = transfers().filter((t) => t.recipientType === "artist");
     expect(artistTransfers).toHaveLength(1);
-    expect(artistTransfers[0]).toMatchObject({ recipientUserId: "u-bob", amountCents: 9500 });
+    expect(artistTransfers[0]).toMatchObject({ recipientUserId: "u-bob", amountCents: 8500 });
     // Alice's owed payout is recorded as a blocked leg, not lost.
     expect(recordBlockedLegMock).toHaveBeenCalledWith(
       expect.anything(),

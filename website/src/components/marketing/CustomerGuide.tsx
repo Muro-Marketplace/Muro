@@ -108,7 +108,7 @@ const faqItems = [
   {
     question: "Where does my money go?",
     answer:
-      "The majority goes to the artist. Wallplace takes a small platform fee (5 to 15%) that covers payments, support, and platform costs. Venues sometimes take a small revenue share too, depending on how they've arranged things with the artist.",
+      "The majority goes to the artist. Wallplace takes a flat 15% platform fee that covers payments, support, and platform costs. Venues sometimes take a small revenue share too, depending on how they've arranged things with the artist.",
   },
 ];
 

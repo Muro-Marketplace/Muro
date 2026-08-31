@@ -41,12 +41,13 @@ export function VenueCollectionPending({
         </div>
       </InfoBox>
       <P>
-        If you display a revenue share on this placement, your share is on its way as usual. The
-        wall space is yours again once the piece is collected.
+        If this placement carries a revenue share, your share of this sale is recorded against it
+        and is released once the buyer confirms they have picked the piece up. Do prompt them to,
+        it pays the artist too. The wall space is yours again from that moment.
       </P>
       <Button href={placementsUrl}>View the placement</Button>
       <P>
-        <Small>If anything about the collection doesn&rsquo;t look right, don&rsquo;t hand the piece over — get in touch instead.</Small>
+        <Small>If anything about the collection doesn&rsquo;t look right, don&rsquo;t hand the piece over. Get in touch instead.</Small>
       </P>
     </EmailShell>
   );

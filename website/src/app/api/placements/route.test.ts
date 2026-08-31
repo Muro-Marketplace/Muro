@@ -85,6 +85,10 @@ type Row = {
   monthly_fee_gbp?: number | null;
   qr_enabled?: boolean | null;
   revenue_share_percent?: number | null;
+  /** 3.4: read so a repeated cancel cannot rewrite who did it. */
+  cancelled_at?: string | null;
+  /** P4: read so an install cannot land before its own scheduled date. */
+  scheduled_for?: string | null;
 };
 
 const updates: Record<string, unknown>[] = [];
@@ -116,13 +120,37 @@ function setupDb(
     }
     if (table === "placements") {
       return {
-        select: () => ({
-          eq: () => ({
-            single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
-            maybeSingle: async () => ({ data: row, error: null }),
-            order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
-          }),
-        }),
+        // Two shapes. The head:true count is the concurrent-placement cap gate
+        // (Task 3), which every transition into `active` now runs, undo
+        // included; it chains a second .eq() the row-fetch shape does not have,
+        // and without it the gate throws and the whole PATCH answers 400.
+        // `setupCapDb` in the cap block below drives the count itself; here it
+        // answers 0, which is under every plan's cap.
+        select: (_cols?: unknown, selectOpts?: { head?: boolean }) => {
+          if (selectOpts?.head) {
+            const counting = {
+              eq: () => counting,
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
+            };
+            return counting;
+          }
+          return {
+            eq: () => ({
+              eq: () => ({
+                single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
+                maybeSingle: async () => ({ data: row, error: null }),
+              }),
+              single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
+              maybeSingle: async () => ({ data: row, error: null }),
+              contains: () => ({
+                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
+              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+            }),
+          };
+        },
         update: (payload: Record<string, unknown>) => {
           updates.push(payload);
           // Awaitable at .eq() for the plain paths, and .select()-able for
@@ -481,13 +509,27 @@ describe("PATCH /api/placements surfaces write failures (row 22)", () => {
     fromMock.mockImplementation((table: string) => {
       if (table === "placements") {
         return {
-          select: () => ({
-            eq: () => ({
-              single: async () => ({ data: row, error: null }),
-              maybeSingle: async () => ({ data: row, error: null }),
-              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
-            }),
-          }),
+          // The head:true branch is the concurrent-placement cap count, which
+          // runs on every transition into `active` (undo included). Answers 0,
+          // under every plan's cap, so the write failure below is what the
+          // test actually observes.
+          select: (_cols?: unknown, selectOpts?: { head?: boolean }) => {
+            if (selectOpts?.head) {
+              const counting = {
+                eq: () => counting,
+                then: (resolve: (v: unknown) => unknown) =>
+                  Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
+              };
+              return counting;
+            }
+            return {
+              eq: () => ({
+                single: async () => ({ data: row, error: null }),
+                maybeSingle: async () => ({ data: row, error: null }),
+                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+              }),
+            };
+          },
           update: (payload: Record<string, unknown>) => {
             updates.push(payload);
             // Deliberately NOT a "column does not exist" message: this is the
@@ -869,5 +911,549 @@ describe("POST /api/placements persists the caller's row id (E21)", () => {
     });
 
     expect(placementInserts[0].map((r) => r.id)).toEqual(ids);
+  });
+});
+
+// ─── Task 3: concurrent placement cap on the pending → active transition ───
+//
+// The gate keys on the placement's ARTIST (existing.artist_user_id), not the
+// caller, because whichever party clicks accept, the wall-slot being consumed
+// is the artist's. These tests use a dedicated DB mock rather than the shared
+// setupDb above, because the cap check needs two query shapes setupDb doesn't
+// model: a configurable artist_profiles row (plan/status) and a head:true
+// COUNT query against placements, alongside the existing "fetch by id" shape
+// the rest of the accept path also needs.
+describe("PATCH /api/placements concurrent placement cap (Task 3)", () => {
+  const CORE_PROFILE = { subscription_plan: "core", subscription_status: "active" };
+  const PRO_PROFILE = { subscription_plan: "pro", subscription_status: "active" };
+
+  /** Head-query args captured so a test can assert the count check is head:true (no row fetch). */
+  let headQueryCalls: Array<{ columns: unknown; opts: unknown }>;
+
+  function setupCapDb(
+    row: Row,
+    opts: {
+      profile?: { subscription_plan: string; subscription_status: string } | null;
+      activeCount?: number;
+      trail?: TrailMsg[];
+    } = {},
+  ) {
+    const { profile = null, activeCount = 0, trail = [] } = opts;
+    updates.length = 0;
+    headQueryCalls = [];
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        return {
+          select: (columns: unknown, selectOpts?: { head?: boolean }) => {
+            if (selectOpts?.head) {
+              // The concurrent-count query: head:true, no rows, count only.
+              headQueryCalls.push({ columns, opts: selectOpts });
+              const chain = {
+                eq: () => chain,
+                then: (resolve: (v: unknown) => unknown) =>
+                  Promise.resolve({ data: null, count: activeCount, error: null }).then(resolve),
+              };
+              return chain;
+            }
+            // The normal "fetch the placement by id" shape used everywhere else.
+            return {
+              eq: () => ({
+                single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
+                maybeSingle: async () => ({ data: row, error: null }),
+                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+              }),
+            };
+          },
+          update: (payload: Record<string, unknown>) => {
+            updates.push(payload);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      if (table === "artist_profiles") {
+        // Serves both the pending-review gate (review_status, absent here so
+        // it never blocks) and the cap gate (subscription_plan/status).
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: profile, error: profile ? null : { code: "PGRST116" } }),
+              maybeSingle: async () => ({ data: profile, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "messages") {
+        return {
+          select: () => ({
+            // Two shapes fork off the same .eq("message_type", ...): the F39
+            // requester-trail lookup goes straight to order/limit, the
+            // accept/decline auto-message goes via .contains() first to find
+            // the original placement_request thread.
+            eq: () => ({
+              order: () => ({ limit: async () => ({ data: trail, error: null }) }),
+              contains: () => ({
+                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+              }),
+            }),
+          }),
+          insert: async () => ({ error: null }),
+        };
+      }
+      // Everything else (venue_profiles, artist_works, placement_archives, ...)
+      // answers empty so side paths (notifications, emails, inventory) are inert.
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null, error: null }),
+            maybeSingle: async () => ({ data: null, error: null }),
+            eq: () => ({ maybeSingle: async () => ({ data: null }) }),
+            order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+          }),
+          in: async () => ({ data: [], error: null }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        delete: () => {
+          const chain = {
+            eq: () => chain,
+            then: (fn: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(fn),
+          };
+          return chain;
+        },
+      };
+    });
+  }
+
+  /** The venue proposed this placement, so the ARTIST is the one who may accept it. */
+  const PENDING_ARTIST_ACCEPTS: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "pending",
+    proposed_by_user_id: VENUE,
+  };
+
+  /** The artist proposed this placement, so the VENUE is the one who may accept it. */
+  const PENDING_VENUE_ACCEPTS: Row = {
+    ...PENDING_ARTIST_ACCEPTS,
+    proposed_by_user_id: ARTIST,
+  };
+
+  it("blocks the accept with 402 placement_limit_reached when the accepting artist is at their Core cap", async () => {
+    // auth defaults to ARTIST in the top-level beforeEach.
+    setupCapDb(PENDING_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 2 });
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body.error).toBe("placement_limit_reached");
+    expect(body.message).toMatch(/2 active placements/);
+    expect(body.upgrade_url).toBe("/artist-portal/billing");
+    expect(updates, "a capacity-blocked accept must not write").toEqual([]);
+  });
+
+  it("blocks the accept with the other-party payload when the VENUE clicks accept and the artist is at cap", async () => {
+    authMock.mockResolvedValue({ user: { id: VENUE, email: "v@example.com" }, error: null });
+    setupCapDb(PENDING_VENUE_ACCEPTS, { profile: CORE_PROFILE, activeCount: 2 });
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body.error).toBe("placement_limit_reached");
+    expect(body.message).toMatch(/this artist/i);
+    expect(body.message).not.toMatch(/your plan/i);
+    expect(body.upgrade_url).toBeUndefined();
+    expect(updates).toEqual([]);
+  });
+
+  it("allows the accept when the artist is under their Core cap, using a head:true count (no row fetch)", async () => {
+    setupCapDb(PENDING_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 1 });
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBeLessThan(400);
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates[0]).toMatchObject({ status: "active" });
+    expect(headQueryCalls).toHaveLength(1);
+    expect(headQueryCalls[0].opts).toMatchObject({ count: "exact", head: true });
+  });
+
+  it("never blocks a Pro artist, however high the active count", async () => {
+    setupCapDb(PENDING_ARTIST_ACCEPTS, { profile: PRO_PROFILE, activeCount: 40 });
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBeLessThan(400);
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates[0]).toMatchObject({ status: "active" });
+  });
+
+  it("does not gate a decline, even when the artist is at cap", async () => {
+    setupCapDb(PENDING_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 2 });
+    const res = await patch({ id: "pl-1", status: "declined" });
+    expect(res.status).toBeLessThan(400);
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates[0]).toMatchObject({ status: "declined" });
+  });
+
+  it("runs after the self-placement guard: a blocked self-placement gets its own 400, not the cap's 402", async () => {
+    setupCapDb(
+      {
+        artist_user_id: ARTIST,
+        venue_user_id: ARTIST,
+        artist_slug: "alice",
+        venue_slug: "own-venue",
+        venue: "Own Venue",
+        status: "pending",
+        proposed_by_user_id: null,
+      },
+      { profile: CORE_PROFILE, activeCount: 2 },
+    );
+    const res = await patch({ id: "pl-1", status: "active" });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/yourself/i);
+    expect(updates).toEqual([]);
+  });
+
+  // ─── Finding 1 (final whole-branch review): the gate above only fired on
+  // pending → active. Task 3's own notes-for-final-review flagged the first
+  // gap directly: "paused->active would bypass the cap gate but no code path
+  // resumes paused today" — a resume is now live. The unsetStage:"collected"
+  // undo is the second door: it sets updates.status = "active" directly
+  // (completed → active is server-chosen, bypassing canPlacementTransition,
+  // see the comment by the E20 gate), so the caller-supplied `status` gate
+  // above never sees it either. Both must clear the same capacity check,
+  // same decision helper, same 402 payloads, same setupCapDb harness.
+  describe("extended to paused → active and the collected-stage undo (Finding 1)", () => {
+    const PAUSED_ARTIST_ACCEPTS: Row = { ...PENDING_ARTIST_ACCEPTS, status: "paused" };
+    const COMPLETED_ARTIST_UNDO: Row = { ...PENDING_ARTIST_ACCEPTS, status: "completed" };
+
+    it("blocks resuming a paused placement with 402 when the artist is at their Core cap", async () => {
+      setupCapDb(PAUSED_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 2 });
+      const res = await patch({ id: "pl-1", status: "active" });
+      expect(res.status).toBe(402);
+      const body = await res.json();
+      expect(body.error).toBe("placement_limit_reached");
+      expect(body.message).toMatch(/2 active placements/);
+      expect(body.upgrade_url).toBe("/artist-portal/billing");
+      expect(updates, "a capacity-blocked resume must not write").toEqual([]);
+    });
+
+    it("allows resuming a paused placement when the artist is under their Core cap", async () => {
+      setupCapDb(PAUSED_ARTIST_ACCEPTS, { profile: CORE_PROFILE, activeCount: 1 });
+      const res = await patch({ id: "pl-1", status: "active" });
+      expect(res.status).toBeLessThan(400);
+      expect(updates.length).toBeGreaterThan(0);
+      expect(updates[0]).toMatchObject({ status: "active" });
+      expect(headQueryCalls).toHaveLength(1);
+      expect(headQueryCalls[0].opts).toMatchObject({ count: "exact", head: true });
+    });
+
+    it("never blocks a Pro artist resuming from paused, however high the active count", async () => {
+      setupCapDb(PAUSED_ARTIST_ACCEPTS, { profile: PRO_PROFILE, activeCount: 40 });
+      const res = await patch({ id: "pl-1", status: "active" });
+      expect(res.status).toBeLessThan(400);
+      expect(updates[0]).toMatchObject({ status: "active" });
+    });
+
+    it("blocks the collected-stage undo (completed -> active) with 402 when the artist is at cap", async () => {
+      setupCapDb(COMPLETED_ARTIST_UNDO, { profile: CORE_PROFILE, activeCount: 2 });
+      const res = await patch({ id: "pl-1", unsetStage: "collected" });
+      expect(res.status).toBe(402);
+      const body = await res.json();
+      expect(body.error).toBe("placement_limit_reached");
+      expect(updates, "a capacity-blocked undo must not write").toEqual([]);
+    });
+
+    it("still allows the collected-stage undo when the artist is under cap, stamping the same fields as before", async () => {
+      setupCapDb(COMPLETED_ARTIST_UNDO, { profile: CORE_PROFILE, activeCount: 0 });
+      const res = await patch({ id: "pl-1", unsetStage: "collected" });
+      expect(res.status).toBeLessThan(400);
+      expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+    });
+
+    it("never blocks a Pro artist's collected-stage undo, however high the active count", async () => {
+      setupCapDb(COMPLETED_ARTIST_UNDO, { profile: PRO_PROFILE, activeCount: 40 });
+      const res = await patch({ id: "pl-1", unsetStage: "collected" });
+      expect(res.status).toBeLessThan(400);
+      expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+    });
+  });
+});
+
+// Row 727 / PASS2-placement-lifecycle-log. After a GBP 120 off-the-wall sale
+// the placement went to `status: sold`, every stage control disappeared for
+// both parties, and the progress bar sat at 5 of 6 with "Collected"
+// permanently unreachable. There was no way for either side to close the loan.
+//
+// `sold` IS a terminal outcome (billing is cancelled, the work is unlinked,
+// reviews open), but the piece has still physically left the wall and the
+// record should say when. Two routes to that, and both are wired:
+//
+//   automatic  the buyer confirming collection of the collect order stamps
+//              collected_at on the placement (see /api/orders)
+//   manual     either party can still mark Collected on a sold placement,
+//              which is this block
+describe("PATCH /api/placements can still close a SOLD placement (row 727)", () => {
+  const SOLD: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "sold",
+  };
+
+  it("accepts stage: collected and lands the placement at completed", async () => {
+    setupDb(SOLD);
+
+    const res = await patch({ id: "pl-1", stage: "collected" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(updates[0]).toMatchObject({ status: "completed" });
+    expect(updates[0].collected_at).toEqual(expect.any(String));
+  });
+
+  it("still refuses an earlier stage on a sold placement", async () => {
+    // Scheduling or installing a piece that has been sold off the wall is
+    // meaningless; only the closing stage is reachable from here.
+    setupDb(SOLD);
+
+    const res = await patch({ id: "pl-1", stage: "installed" });
+
+    expect(res.status).toBe(400);
+    expect(updates).toHaveLength(0);
+  });
+
+  it("still refuses a stage on a cancelled placement", async () => {
+    setupDb({ ...SOLD, status: "cancelled" });
+
+    const res = await patch({ id: "pl-1", stage: "collected" });
+
+    expect(res.status).toBe(400);
+    expect(updates).toHaveLength(0);
+  });
+});
+
+// Pass 2 item 3.4. `placements.cancelled_at` and `cancelled_by_user_id` exist
+// and nothing had ever written them, so a cancelled placement carried no record
+// of who ended it or when. Verified NULL on both for p-1788192191293-7xdf,
+// which a venue cancelled during the pass.
+describe("PATCH /api/placements records who cancelled and when (3.4)", () => {
+  const ACTIVE: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+  };
+
+  it("stamps both columns on the transition into cancelled", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", status: "cancelled" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(updates[0].cancelled_at).toEqual(expect.any(String));
+    expect(updates[0].cancelled_by_user_id).toBe(ARTIST);
+  });
+
+  it("stamps nothing on any other transition", async () => {
+    setupDb(ACTIVE);
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("cancelled_at");
+    expect(updates[0]).not.toHaveProperty("cancelled_by_user_id");
+  });
+
+  it("does not rewrite who cancelled on a repeated PATCH", async () => {
+    setupDb({ ...ACTIVE, status: "cancelled", cancelled_at: "2026-08-01T00:00:00.000Z" });
+
+    await patch({ id: "pl-1", status: "cancelled" });
+
+    expect(updates[0] ?? {}).not.toHaveProperty("cancelled_by_user_id");
+  });
+});
+
+// Pass 2 item 3.3 (rows 2168, 2170). Undoing a collection correctly returned
+// the placement to active and cleared collected_at, but left the WORK unlinked:
+// placed_at_venue and current_placement_id both stayed null while an active
+// placement pointed at it, so the artwork page said the piece was on no wall
+// and the stock the collection restored was never taken back.
+//
+// The inventory hook keyed on pending → active only, and an undo is
+// completed → active.
+/** artist_works UPDATE payloads captured by setupInventoryDb. */
+const workWrites: Record<string, unknown>[] = [];
+
+/**
+ * A DB mock that models the inventory hook's four reads: the placement's own
+ * row, the placement's titles, the artist's profile id, and the artist_works
+ * rows matched by title. Separate from setupDb because that one answers every
+ * non-placements table with nothing, which makes the hook a no-op.
+ */
+function setupInventoryDb(row: Row, works: Array<Record<string, unknown>>) {
+  updates.length = 0;
+  workWrites.length = 0;
+  fromMock.mockImplementation((table: string) => {
+    if (table === "placements") {
+      return {
+        select: (_cols?: unknown, selectOpts?: { head?: boolean }) => {
+          if (selectOpts?.head) {
+            const counting = {
+              eq: () => counting,
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
+            };
+            return counting;
+          }
+          return {
+            eq: () => ({
+              single: async () => ({ data: row, error: null }),
+              maybeSingle: async () => ({
+                data: { ...row, work_title: "Sunset", extra_works: [] },
+                error: null,
+              }),
+              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+            }),
+          };
+        },
+        update: (payload: Record<string, unknown>) => {
+          updates.push(payload);
+          return { eq: async () => ({ error: null }) };
+        },
+      };
+    }
+    if (table === "artist_profiles") {
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: "ap-1" }, error: null }) }) }),
+      };
+    }
+    if (table === "venue_profiles") {
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { name: "Kings Arms" }, error: null }) }),
+        }),
+      };
+    }
+    if (table === "artist_works") {
+      return {
+        select: () => ({ eq: () => ({ in: async () => ({ data: works, error: null }) }) }),
+        update: (payload: Record<string, unknown>) => {
+          workWrites.push(payload);
+          return { eq: async () => ({ error: null }) };
+        },
+      };
+    }
+    const chain: Record<string, unknown> = {
+      single: async () => ({ data: null, error: null }),
+      maybeSingle: async () => ({ data: null, error: null }),
+      then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+    };
+    chain.eq = () => chain;
+    chain.or = () => chain;
+    chain.in = () => chain;
+    chain.order = () => chain;
+    chain.limit = () => chain;
+    chain.contains = () => chain;
+    return {
+      select: () => chain,
+      insert: async () => ({ error: null }),
+      update: () => ({ eq: async () => ({ error: null }) }),
+      delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+    };
+  });
+}
+
+describe("PATCH /api/placements re-links the work when a collection is undone (3.3)", () => {
+  const COMPLETED: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "completed",
+  };
+
+  /** Every artist_works UPDATE the request made. */
+  function workUpdates(): Record<string, unknown>[] {
+    return workWrites;
+  }
+
+  it("stamps the work back onto the placement", async () => {
+    setupInventoryDb(COMPLETED, [
+      { id: "w-1", quantity_available: 2, current_placement_id: null },
+    ]);
+
+    const res = await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(workUpdates()).toHaveLength(1);
+    expect(workUpdates()[0]).toMatchObject({
+      current_placement_id: "pl-1",
+      placed_at_venue: "Kings Arms",
+    });
+  });
+
+  it("takes the stock back that the collection restored", async () => {
+    setupInventoryDb(COMPLETED, [
+      { id: "w-1", quantity_available: 2, current_placement_id: null },
+    ]);
+
+    await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(workUpdates()[0]).toMatchObject({ quantity_available: 1, available: true });
+  });
+
+  it("still clears the timestamp and returns the placement to active", async () => {
+    setupInventoryDb(COMPLETED, []);
+
+    await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+  });
+});
+
+// Production pass 2, P4. "Installed can precede the scheduled date with no
+// complaint, producing 'Scheduled 2 Sept / Installed 31 Aug' in the progress
+// bar." A stepper that reads backwards is worse than an unstamped one: the
+// record is what both parties rely on later.
+//
+// The remedy is to move the plan, not to refuse the fact. Somebody marking a
+// piece installed is reporting what happened.
+describe("PATCH /api/placements keeps the stepper reading forward", () => {
+  const ACTIVE_SCHEDULED: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+    scheduled_for: "2099-09-02T12:00:00.000Z",
+  };
+
+  it("pulls a future scheduled date back to the install it just recorded", async () => {
+    setupDb(ACTIVE_SCHEDULED);
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0].installed_at).toEqual(expect.any(String));
+    expect(updates[0].scheduled_for).toBe(updates[0].installed_at);
+  });
+
+  it("leaves a schedule that already precedes the install alone", async () => {
+    setupDb({ ...ACTIVE_SCHEDULED, scheduled_for: "2020-01-01T00:00:00.000Z" });
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("scheduled_for");
+  });
+
+  it("touches nothing when no install date was ever scheduled", async () => {
+    setupDb({ ...ACTIVE_SCHEDULED, scheduled_for: null });
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("scheduled_for");
   });
 });

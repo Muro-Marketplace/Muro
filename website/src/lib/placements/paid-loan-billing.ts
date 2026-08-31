@@ -214,9 +214,30 @@ export async function cancelPaidLoanBilling(
   await stripe.subscriptions.update(billing.stripe_subscription_id, {
     cancel_at_period_end: true,
   });
-  // The DB row keeps "active" until the webhook confirms cancellation
-  // — that way a webhook race doesn't tear down the period that the
-  // venue has already paid for.
+
+  // The DB row keeps "active" until the webhook confirms cancellation: that way
+  // a webhook race doesn't tear down the period the venue has already paid for.
+  //
+  // Rows 2179-2187: that left every reader looking at status='active' with a
+  // future current_period_end and drawing the only conclusion available to it,
+  // "next payment on that date". The placement page said exactly that,
+  // underneath a banner reading Cancelled. Migration 127 adds the column that
+  // separates "running" from "winding down".
+  //
+  // Written AFTER the Stripe call, never before: it is a claim about Stripe's
+  // state, and setting it on a call that then failed would tell a venue they
+  // are not being charged when they still are.
+  const { error: flagErr } = await db
+    .from("placement_recurring_billings")
+    .update({ cancel_at_period_end: true })
+    .eq("id", billing.id);
+  if (flagErr) {
+    // The subscription IS cancelled in Stripe, which is the part that costs
+    // money. A stale flag makes the UI over-report, which is the safer of the
+    // two wrong answers, so this is logged rather than thrown.
+    console.error("[paid-loan] could not flag the billing row as winding down:", flagErr);
+  }
+
   return { status: "cancelled" };
 }
 

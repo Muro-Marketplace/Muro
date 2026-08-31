@@ -187,8 +187,39 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       .in("status", ["sent", "queued"])
       .gte("created_at", since);
     if ((count ?? 0) >= rules.throttleCount) {
-      await logEvent(db, input, to, rules.stream, "skipped_throttled", eventMetadata);
-      return { ok: true, skipped: true, reason: "throttled" };
+      // Pass 2 item 3.1. Only three of production's 388 email events had ever
+      // been skipped_throttled. All three happened on one day, all to the same
+      // artist, and every one was the FIRST and only send of its kind:
+      // `placement_ended` (never told their placement ended),
+      // `artist_new_placement_invitation` (never told a venue wanted their
+      // work), and `artist_blog_rejected`, whose reason is stored nowhere the
+      // artist can see, so it reached them by no route at all.
+      //
+      // The cap is the right guard against a runaway batch of the SAME nudge.
+      // It is the wrong guard against a person having a busy day: ten distinct
+      // placement events in twenty-four hours is a good day, not an incident,
+      // and dropping the eleventh loses the event rather than deferring it.
+      //
+      // So the cap stands, and the first send of each distinct template inside
+      // the window is exempt from it. The worst case stays bounded at the cap
+      // plus at most one of each template, and the query only runs on the path
+      // that was about to drop the mail.
+      const { count: sameTemplate } = await db
+        .from("email_events")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", input.userId)
+        .eq("template", input.template)
+        .in("status", ["sent", "queued"])
+        .gte("created_at", since);
+
+      if ((sameTemplate ?? 0) > 0) {
+        await logEvent(db, input, to, rules.stream, "skipped_throttled", eventMetadata);
+        return { ok: true, skipped: true, reason: "throttled" };
+      }
+      console.warn("[email] over the category cap but first of its template, sending", {
+        template: input.template,
+        category,
+      });
     }
   }
 

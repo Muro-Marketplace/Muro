@@ -90,3 +90,46 @@ describe("<CounterPlacementDialog />", () => {
     expect(sentCounter()).toMatchObject({ arrangementType: "free_loan", qrEnabled: false });
   });
 });
+
+// Row 2144 / PASS2 "silent failure" pattern. Typing 70 into the revenue-share
+// box silently became 50. No request was sent and nothing was said, so a venue
+// asking for 70% saw the number change under their cursor with no explanation
+// and no way to tell whether it was a typo of their own.
+describe("CounterPlacementDialog says when it caps the share (row 2144)", () => {
+  function shareInput(container: HTMLElement): HTMLInputElement {
+    return container.querySelector('input[type="number"][max="50"]') as HTMLInputElement;
+  }
+
+  it("explains the cap when the typed value is above it", () => {
+    const { container, getByText } = render(
+      <CounterPlacementDialog placementId="p1" onClose={() => {}} />,
+    );
+
+    fireEvent.change(shareInput(container), { target: { value: "70" } });
+
+    expect(getByText(/capped/i)).toBeTruthy();
+    expect(shareInput(container).value).toBe("50");
+  });
+
+  it("says nothing for a value inside the cap", () => {
+    const { container, queryByText } = render(
+      <CounterPlacementDialog placementId="p1" onClose={() => {}} />,
+    );
+
+    fireEvent.change(shareInput(container), { target: { value: "20" } });
+
+    expect(queryByText(/capped/i)).toBeNull();
+  });
+
+  it("clears the explanation once the value is corrected", () => {
+    const { container, getByText, queryByText } = render(
+      <CounterPlacementDialog placementId="p1" onClose={() => {}} />,
+    );
+
+    fireEvent.change(shareInput(container), { target: { value: "70" } });
+    expect(getByText(/capped/i)).toBeTruthy();
+
+    fireEvent.change(shareInput(container), { target: { value: "20" } });
+    expect(queryByText(/capped/i)).toBeNull();
+  });
+});

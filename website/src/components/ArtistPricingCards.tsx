@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
+import { PLAN_PRICES, PLATFORM_FEE_PERCENT, WORKS_CAP, ACTIVE_PLACEMENT_CAP } from "@/lib/pricing";
+import { OUTREACH_WEEKLY_LIMIT } from "@/lib/outreach-cap";
 
 interface Plan {
   key: "core" | "premium" | "pro";
@@ -14,51 +16,55 @@ interface Plan {
   badge?: string;
 }
 
+const FEE_LINE = `${PLATFORM_FEE_PERCENT}% platform fee on sales`;
+
 const PLANS: Plan[] = [
   {
     key: "core",
     name: "Core",
-    priceMonthly: 9.99,
-    priceAnnual: 99.99,
-    fee: "15% platform fee on sales",
+    priceMonthly: PLAN_PRICES.core.monthlyGbp,
+    priceAnnual: PLAN_PRICES.core.annualGbp,
+    fee: FEE_LINE,
     features: [
-      "Up to 8 works in your portfolio",
+      `Up to ${ACTIVE_PLACEMENT_CAP.core} active venue placements at a time`,
+      `Up to ${WORKS_CAP.core} works in your portfolio`,
       "Standard artist profile",
-      "Approach 3 new venues a week",
+      `Approach ${OUTREACH_WEEKLY_LIMIT.core} new venues a week`,
       "Visibility to venues browsing the platform",
-      "Curated matching",
       "Basic analytics dashboard",
     ],
   },
   {
     key: "premium",
     name: "Premium",
-    priceMonthly: 24.99,
-    priceAnnual: 249.99,
-    fee: "8% platform fee on sales",
+    priceMonthly: PLAN_PRICES.premium.monthlyGbp,
+    priceAnnual: PLAN_PRICES.premium.annualGbp,
+    fee: FEE_LINE,
     highlighted: true,
     badge: "Most Popular",
     features: [
-      "Up to 20 works in your portfolio",
-      "Featured artist profile + badge",
+      `Up to ${ACTIVE_PLACEMENT_CAP.premium} active venue placements at a time`,
+      `Up to ${WORKS_CAP.premium} works in your portfolio`,
+      "Featured artist profile and badge",
       "Priority visibility in venue recommendations",
-      "Approach 6 new venues a week",
+      `Approach ${OUTREACH_WEEKLY_LIMIT.premium} new venues a week`,
       "Full analytics, views, enquiries, conversion",
-      "Priority response from Wallplace team",
+      "Priority response from the Wallplace team",
     ],
   },
   {
     key: "pro",
     name: "Pro",
-    priceMonthly: 49.99,
-    priceAnnual: 499.99,
-    fee: "5% platform fee on sales",
+    priceMonthly: PLAN_PRICES.pro.monthlyGbp,
+    priceAnnual: PLAN_PRICES.pro.annualGbp,
+    fee: FEE_LINE,
     features: [
-      "Up to 50 works in your portfolio",
+      "Unlimited active venue placements",
+      `Up to ${WORKS_CAP.pro} works in your portfolio`,
+      "Priority inclusion in Wallplace Curated shortlists",
       "Premium profile with enhanced presentation",
-      "Maximum visibility across the platform",
-      "Approach 15 new venues a week",
-      "Full analytics + venue breakdown + export",
+      `Approach ${OUTREACH_WEEKLY_LIMIT.pro} new venues a week`,
+      "Full analytics with venue breakdown and export",
       "Dedicated account support",
     ],
   },

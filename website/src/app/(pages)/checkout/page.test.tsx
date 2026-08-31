@@ -216,3 +216,46 @@ describe("collect-from-venue tile names the venue (B18)", () => {
     );
   });
 });
+
+// PASS2-placement-lifecycle-log. Under a SELECTED "Collect from the venue"
+// option the page read "Your order will be fulfilled directly by the artist.
+// They'll pack and ship your artwork within 5 to 7 working days." Nothing was
+// going to be packed or shipped: the piece was on a wall the buyer was about to
+// walk into. The confirmation page already got this right.
+describe("the fulfilment notice matches the chosen fulfilment", () => {
+  const collectLine = {
+    ...cartItem,
+    lineFulfilment: "collect_venue",
+    collectVenueSlug: "the-copper-kettle",
+    collectVenueName: "The Copper Kettle",
+    collectPlacementId: "p-1",
+  };
+
+  it("does not promise postage on a collect-from-venue basket", async () => {
+    cartItems = [collectLine];
+    render(<CheckoutPage />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Show your order number at The Copper Kettle/i)).toBeTruthy(),
+    );
+    expect(screen.queryByText(/pack and ship your artwork/i)).toBeNull();
+  });
+
+  it("tells the collect buyer what actually happens next", async () => {
+    cartItems = [collectLine];
+    render(<CheckoutPage />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/collect it from The Copper Kettle/i)).toBeTruthy(),
+    );
+  });
+
+  it("still promises postage on a shipped basket", async () => {
+    cartItems = [cartItem];
+    render(<CheckoutPage />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/pack and ship your artwork/i)).toBeTruthy(),
+    );
+  });
+});

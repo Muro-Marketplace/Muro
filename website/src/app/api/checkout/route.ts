@@ -66,6 +66,10 @@ export async function POST(request: Request) {
     // send any pair — so the placement row is the authority on venue, artist,
     // liveness and size.
     let collectVenueAddress: string | null = null;
+    // Row 727. The venue slug taken from the PLACEMENT row, not from the
+    // client. Set only on a collect order, where the placement is already the
+    // authority on venue, artist, liveness, size and price.
+    let collectVenueSlug: string | null = null;
     // 121: the placement's buy-off-the-wall price, keyed by placement id, for
     // the pricing ladder below. The PLACEMENT is the price authority for a
     // collect line; the work-level paths further down are legacy fallbacks.
@@ -119,6 +123,7 @@ export async function POST(request: Request) {
           );
         }
         collectVenueAddress = pl.collection_address ?? collectVenueAddress;
+        collectVenueSlug = pl.venue_slug;
         if (typeof pl.in_store_price === "number" && pl.in_store_price > 0) {
           offerByPlacementId.set(pl.id, pl.in_store_price);
         }
@@ -174,6 +179,30 @@ export async function POST(request: Request) {
       }
     } else if (process.env.QR_ATTRIBUTION_ENFORCE !== "1") {
       venueSlug = parsed.data.venueSlug || "";
+    }
+    // Row 727 / PASS2-placement-lifecycle-log. A GBP 120 off-the-wall sale
+    // produced an order with placement_id NULL, venue_slug NULL,
+    // venue_revenue_share_percent 0 and venue_revenue 0, and no venue transfer,
+    // while the venue was emailed to say the piece had sold and would be
+    // collected from them. The venue was credited nothing for the sale it
+    // physically facilitated.
+    //
+    // The cause is the block above: `venueSlug` came only from a QR attribution
+    // token or a raw client field, and an off-the-wall purchase starts on the
+    // public artwork page rather than a QR scan. The webhook then filters
+    // placements by `.eq("venue_slug", venueSlug)`, finds nothing, and every
+    // venue figure on the order lands at zero.
+    //
+    // The rule is the one offer sales already follow (see the venue-share block
+    // in api/offers/[id]/checkout): a work hanging on a venue's wall earns that
+    // venue its placement share on ANY platform sale of the work. It does NOT
+    // need the QR attribution token, because there is nothing to attribute:
+    // this order names the placement, the placement has been validated above,
+    // and the piece is handed over by the venue. Overriding rather than
+    // defaulting is deliberate — a collect line's venue is a fact about where
+    // the work is, so a QR token naming a different venue must not win.
+    if (collectVenueSlug) {
+      venueSlug = collectVenueSlug;
     }
     const collectionNotes = parsed.data.collectionNotes || "";
     const expectedShippingCost = parsed.data.expectedShippingCost;

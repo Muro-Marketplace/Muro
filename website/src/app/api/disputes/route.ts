@@ -53,6 +53,43 @@ const NEXT_STEPS = [
   "If it stays unresolved we make a final call and refund or release accordingly",
 ];
 
+/**
+ * GET /api/disputes
+ *
+ * Row C L988 / Track A4.5. An open dispute was invisible on the customer's
+ * orders dashboard. `orders.status` deliberately stays `confirmed` when a
+ * dispute is opened (the order is still live and the dispute runs alongside
+ * it), so no off-pipeline badge renders. `/orders/<id>` looked like it knew,
+ * but only from local state after the submit; a reload lost it.
+ *
+ * The reason nothing could show it is that this route had a POST and no GET.
+ * `disputes` has existed since migration 060 and was write-only from the
+ * customer's side, so the buyer had no way to see that their own complaint had
+ * been received.
+ *
+ * Scoped to `opener_user_id`, so this is the caller's own list and nothing
+ * else. The counterparty's view of a dispute belongs to the admin surface,
+ * which already has one.
+ */
+export async function GET(request: Request) {
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return auth.error;
+
+  try {
+    const { data } = await getSupabaseAdmin()
+      .from("disputes")
+      .select("id, order_id, placement_id, status, category, description, resolution, created_at, resolved_at")
+      .eq("opener_user_id", auth.user!.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    return NextResponse.json({ disputes: data ?? [] });
+  } catch (err) {
+    // A dashboard that cannot load its disputes must still load its orders.
+    console.error("[disputes GET]", err);
+    return NextResponse.json({ disputes: [] });
+  }
+}
+
 export async function POST(request: Request) {
   // Opening a dispute writes a row and mails two people, so it is worth a limit
   // even though it is authenticated.

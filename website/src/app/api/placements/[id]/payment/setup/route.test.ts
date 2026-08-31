@@ -289,6 +289,31 @@ describe("POST /api/placements/[id]/payment/setup payout capability (E8)", () =>
   });
 });
 
+// Defence in depth (owner decision 2026-08-28). The Zod schemas block new
+// placements and counters from setting a fee between £0.01 and £14.99, but a
+// legacy row written before the floor existed could still carry one; this
+// guard stops that row from ever starting a subscription.
+describe("POST /api/placements/[id]/payment/setup floor guard (owner decision 2026-08-28)", () => {
+  it("422s a legacy placement with a fee below the £15 floor, and creates no session", async () => {
+    state.placement = { ...PLACEMENT, monthly_fee_gbp: 10 };
+    const res = await post();
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ reason: "monthly_fee_below_floor" });
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("proceeds when the fee is exactly the £15 floor", async () => {
+    state.placement = { ...PLACEMENT, monthly_fee_gbp: 15 };
+    expect((await post()).status).toBe(200);
+    expect(sessionsCreateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("still proceeds for fees comfortably above the floor (regression: PLACEMENT fixture is £45)", async () => {
+    expect((await post()).status).toBe(200);
+    expect(sessionsCreateMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("POST /api/placements/[id]/payment/setup billing model (E8, §B6 decision)", () => {
   /** The subscription_data the session was created with. */
   function subscriptionData(): Record<string, unknown> {

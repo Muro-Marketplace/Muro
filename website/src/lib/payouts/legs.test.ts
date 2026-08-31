@@ -29,7 +29,7 @@ const db = {
 
 // Active subscriptions: the discount only applies while active/trialing (D40/E52).
 const ALICE = { user_id: "u-alice", slug: "alice", subscription_plan: "core", subscription_status: "active", trial_end: null }; // 15%
-const BOB = { user_id: "u-bob", slug: "bob", subscription_plan: "pro", subscription_status: "active", trial_end: null }; //  5%
+const BOB = { user_id: "u-bob", slug: "bob", subscription_plan: "pro", subscription_status: "active", trial_end: null }; // 15%
 
 beforeEach(() => {
   profileRows = [ALICE, BOB];
@@ -61,16 +61,17 @@ const bySlug = (legs: ArtistLeg[], slug: string) => legs.find((l) => l.artistSlu
 
 describe("buildArtistLegs, per-artist fee rates", () => {
   it("charges each artist their own plan rate, not the first artist's", async () => {
-    // The whole finding in one assertion. £100 from Alice (core, 15%) and £100
-    // from Bob (pro, 5%). The old code billed both at 15%.
+    // The whole finding in one assertion. £100 from Alice (core) and £100 from
+    // Bob (pro); both resolve to the flat 15% (owner decision 2026-08-28), each
+    // computed independently per artist rather than pooled from the first line.
     const legs = await build([
       { artistSlug: "alice", price: 100, quantity: 1 },
       { artistSlug: "bob", price: 100, quantity: 1 },
     ]);
     expect(bySlug(legs, "alice").platformFeePercent).toBe(15);
     expect(bySlug(legs, "alice").platformFeePence).toBe(1500);
-    expect(bySlug(legs, "bob").platformFeePercent).toBe(5);
-    expect(bySlug(legs, "bob").platformFeePence).toBe(500);
+    expect(bySlug(legs, "bob").platformFeePercent).toBe(15);
+    expect(bySlug(legs, "bob").platformFeePence).toBe(1500);
   });
 
   it("pays each artist their own net, so nobody receives another's money", async () => {
@@ -79,7 +80,7 @@ describe("buildArtistLegs, per-artist fee rates", () => {
       { artistSlug: "bob", price: 100, quantity: 1 },
     ]);
     expect(bySlug(legs, "alice").netPence).toBe(8500);
-    expect(bySlug(legs, "bob").netPence).toBe(9500);
+    expect(bySlug(legs, "bob").netPence).toBe(8500);
     expect(bySlug(legs, "alice").artistUserId).toBe("u-alice");
     expect(bySlug(legs, "bob").artistUserId).toBe("u-bob");
   });
@@ -189,9 +190,9 @@ describe("buildArtistLegs, venue revenue share", () => {
     );
     expect(bySlug(legs, "alice").venueCutPence).toBe(2000);
     expect(bySlug(legs, "bob").venueCutPence).toBe(1000);
-    // Alice: 10000 - 2000 - 1500. Bob: 10000 - 1000 - 500.
+    // Alice: 10000 - 2000 - 1500. Bob: 10000 - 1000 - 1500.
     expect(bySlug(legs, "alice").netPence).toBe(6500);
-    expect(bySlug(legs, "bob").netPence).toBe(8500);
+    expect(bySlug(legs, "bob").netPence).toBe(7500);
   });
 
   it("takes no venue cut from an artist with no placement at the venue", async () => {

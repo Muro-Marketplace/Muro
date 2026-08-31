@@ -4,8 +4,10 @@
 // Stripe Checkout Session at the agreed amount. The webhook flips the
 // offer to 'paid' and threads the resulting order id back.
 
+import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { COUNTRIES } from "@/lib/iso-countries";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
@@ -114,6 +116,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
   }
 
+  // Row 2245: kept so the Stripe page can name what the buyer is paying for.
+  // It read "Wallplace offer · off_1788192000823_qyzr33" and "Accepted offer
+  // for 1 work", which identifies the row and not the artwork.
+  let workTitles: string[] = [];
   let soldOrMissing = collectionWithdrawn;
   if (!soldOrMissing && workIds.length > 0) {
     const { data: works } = await db
@@ -126,6 +132,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       available: boolean | null;
       quantity_available: number | null;
     }>;
+    workTitles = found.map((w) => (w.title || "").trim()).filter(Boolean);
     // A work deleted since the offer was accepted counts as gone too, hence the
     // length comparison. work_ids is de-duplicated above so a repeated id cannot
     // fake a shortfall and close a live offer.
@@ -166,9 +173,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // reward to offers is a separate decision from creating the column.
   const { data: artistProfile } = await db
     .from("artist_profiles")
-    .select("slug, subscription_plan, subscription_status")
+    .select("slug, subscription_plan, subscription_status, ships_internationally")
     .eq("user_id", offer.artist_user_id)
-    .maybeSingle<{ slug: string; subscription_plan: string | null; subscription_status: string | null }>();
+    .maybeSingle<{
+      slug: string;
+      subscription_plan: string | null;
+      subscription_status: string | null;
+      ships_internationally: boolean | null;
+    }>();
 
   if (!artistProfile) {
     return NextResponse.json({ error: "Artist profile unavailable" }, { status: 500 });
@@ -186,11 +198,53 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
   }
 
+  // Venue share on offers (owner decision 2026-08-28): a work hanging on a
+  // venue's wall earns that venue its placement share on ANY platform sale of
+  // the work, offers included. Resolved from the works' own placements
+  // (current_placement_id), the same source of truth the cart path uses
+  // (payouts/legs.ts). Applied only when every offered work sits on ONE
+  // active placement; a mixed-venue or unplaced offer pays no share, matching
+  // prior behaviour. `workIds` is already fully resolved here (direct offer
+  // or collection offer, both branches above land on the same variable).
+  let venueShare: { venueSlug: string; venueUserId: string; percent: number; placementId: string } | null = null;
+  if (workIds.length > 0) {
+    const { data: shareWorks } = await db
+      .from("artist_works")
+      .select("id, current_placement_id")
+      .in("id", workIds);
+    const worksForShare = (shareWorks || []) as Array<{ current_placement_id: string | null }>;
+    const placementIds = [
+      ...new Set(worksForShare.map((w) => w.current_placement_id).filter((v): v is string => !!v)),
+    ];
+    const allPlaced =
+      worksForShare.length === workIds.length && worksForShare.every((w) => w.current_placement_id);
+    if (allPlaced && placementIds.length === 1) {
+      const { data: pl } = await db
+        .from("placements")
+        .select("id, venue_slug, venue_user_id, revenue_share_percent, status")
+        .eq("id", placementIds[0])
+        .eq("status", "active")
+        .maybeSingle<{
+          venue_slug: string | null;
+          venue_user_id: string | null;
+          revenue_share_percent: number | null;
+        }>();
+      const percent = Math.max(0, Number(pl?.revenue_share_percent || 0));
+      if (pl?.venue_slug && pl.venue_user_id && percent > 0) {
+        venueShare = { venueSlug: pl.venue_slug, venueUserId: pl.venue_user_id, percent, placementId: placementIds[0] };
+      }
+    }
+  }
+
   // Integer pence throughout, and the net is the remainder rather than a second
-  // rounding, so fee + net is exactly the amount charged with no lost penny.
+  // rounding, so fee + venue cut + net is exactly the amount charged with no
+  // lost penny. Both the fee and the venue cut come off the artist's side.
   const feePercent = platformFeePercentForArtist(artistProfile);
   const platformFeePence = Math.round(offer.amount_pence * (feePercent / 100));
-  const artistNetPence = offer.amount_pence - platformFeePence;
+  const venueCutPence = venueShare
+    ? Math.round(offer.amount_pence * (venueShare.percent / 100))
+    : 0;
+  const artistNetPence = offer.amount_pence - platformFeePence - venueCutPence;
 
   // Build a single-line Stripe session for the agreed amount. We intentionally
   // collapse the items into one line — the offer is an aggregate price, not a
@@ -198,20 +252,53 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const requestOrigin = request.headers.get("origin");
   const origin = requestOrigin || process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
+  // Rows 933-939, 2245. The buyer's Stripe page said "Wallplace offer ·
+  // off_1788192000823_qyzr33" and "Accepted offer for 1 work": the offer's row
+  // id and a count, telling them nothing about what they were buying. The
+  // titles are already loaded above for the sold-out check.
+  const titleList = workTitles.join(", ");
+  const productName = titleList
+    ? `${titleList} by ${offer.artist_slug ?? "the artist"}`
+    : `Wallplace offer · ${offer.id}`;
   const description = offer.collection_id
     ? `Accepted offer for collection ${offer.collection_id}`
-    : `Accepted offer for ${offer.work_ids.length} work${offer.work_ids.length === 1 ? "" : "s"}`;
+    : titleList
+      ? `Accepted offer for ${titleList}`
+      : `Accepted offer for ${offer.work_ids.length} work${offer.work_ids.length === 1 ? "" : "s"}`;
+
+  // Rows 933-939. The offer flow collected no delivery address anywhere, so the
+  // order it produced carried an empty shipping block and the artist was shown
+  // "SHIP TO: ," above a live "Mark as Shipped" button. Collect it on the
+  // Stripe page the buyer is already standing on rather than rebuilding the
+  // cart path's address form: Stripe's is localised, validated and familiar.
+  //
+  // Destinations follow the ARTIST's own scope, the same fail-closed rule
+  // lib/shipping-scope.ts applies to the cart: an artist who has not opted in
+  // to international shipping can only be sent a UK address, because we cannot
+  // confirm consent to ship anywhere else.
+  const allowedCountries = artistProfile.ships_internationally
+    ? COUNTRIES.map((c) => c.code)
+    : ["GB"];
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: offer.buyer_email || auth.user!.email || undefined,
+    shipping_address_collection: {
+      // COUNTRIES is the project's own ISO-3166 alpha-2 list (lib/iso-countries),
+      // the same one the cart's country picker renders from. Stripe types this
+      // as a closed union of every code it accepts; ours is a subset of it.
+      allowed_countries:
+        allowedCountries as NonNullable<
+          Stripe.Checkout.SessionCreateParams["shipping_address_collection"]
+        >["allowed_countries"],
+    },
     line_items: [
       {
         price_data: {
           currency: offer.currency.toLowerCase(),
           product_data: {
-            name: `Wallplace offer · ${offer.id}`,
+            name: productName,
             description,
           },
           unit_amount: offer.amount_pence,
@@ -232,9 +319,29 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       offer_platform_fee_pence: String(platformFeePence),
       offer_artist_net_pence: String(artistNetPence),
       offer_platform_fee_percent: String(feePercent),
+      // Venue share (Task 5): empty string / "0", not omitted, when no share
+      // applies — Stripe metadata values must be strings, and the webhook
+      // reads these unconditionally.
+      offer_venue_slug: venueShare?.venueSlug || "",
+      offer_venue_user_id: venueShare?.venueUserId || "",
+      offer_venue_cut_pence: String(venueCutPence),
+      offer_venue_share_percent: String(venueShare?.percent || 0),
+      // Finding 3 (final review): the single active placement id the share
+      // above was resolved from, so the webhook can stamp orders.placement_id
+      // and this offer's earnings show up on the venue's placement card,
+      // which sums by that column. Empty string, not omitted, when no share
+      // applies, matching the other offer_venue_* keys.
+      offer_placement_id: venueShare?.placementId || "",
       // orders.buyer_email is NOT NULL. The webhook used to fall back to
       // offer_buyer_user_id, which put a UUID in an email column.
       offer_buyer_email: offer.buyer_email || auth.user!.email || "",
+      // Row 933-939 / P4. `orders.items` for an offer was
+      // {offer_id, work_ids, collection_id} with no title and no price, so the
+      // artist portal rendered "Artwork × 1, £0.00". The titles are already
+      // resolved above for the sold-out check; carry them so the webhook can
+      // write a line a person can read. Stripe caps a metadata value at 500
+      // characters, hence the trim.
+      offer_work_titles: titleList.slice(0, 480),
       // Flag so the Stripe webhook knows to treat this differently from a
       // standard cart checkout — no shipping line, link back to the offer row.
       checkout_kind: "purchase_offer",

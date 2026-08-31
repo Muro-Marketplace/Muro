@@ -1,0 +1,101 @@
+- generic [active] [ref=f46e1]:
+  - generic [ref=f46e2]:
+    - link "Skip to content" [ref=f46e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f46e4]:
+      - generic [ref=f46e6]:
+        - link "Wallplace" [ref=f46e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f46e8]:
+          - link "Marketplace" [ref=f46e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f46e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f46e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f46e13] [cursor=pointer]
+        - generic [ref=f46e16]:
+          - link "Saved" [ref=f46e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f46e21] [cursor=pointer]
+          - button "Notifications" [ref=f46e26] [cursor=pointer]
+          - generic [ref=f46e30]:
+            - link "Venue Portal" [ref=f46e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f46e32] [cursor=pointer]
+          - button "Logout" [ref=f46e35] [cursor=pointer]
+    - main [ref=f46e36]:
+      - generic [ref=f46e37]:
+        - complementary [ref=f46e38]:
+          - navigation [ref=f46e39]:
+            - paragraph [ref=f46e41]: Venue Portal
+            - generic [ref=f46e42]:
+              - list [ref=f46e43]:
+                - listitem [ref=f46e44]:
+                  - link "Dashboard" [ref=f46e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f46e46]:
+                  - link "Venue Profile" [ref=f46e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f46e48]:
+                  - link "Messages" [ref=f46e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f46e50]:
+                  - link "Placements" [ref=f46e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f46e52]:
+                  - link "My Offers" [ref=f46e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f46e54]:
+                  - link "My Walls" [ref=f46e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f46e56]:
+                  - link "Saved" [ref=f46e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f46e58]:
+                  - link "QR Labels" [ref=f46e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f46e60]:
+                  - link "Analytics" [ref=f46e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f46e62]:
+                  - link "My Orders" [ref=f46e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f46e65]:
+                - listitem [ref=f46e66]:
+                  - link "Settings" [ref=f46e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f46e68]:
+                  - button "Logout" [ref=f46e69] [cursor=pointer]
+        - generic [ref=f46e71]:
+          - generic [ref=f46e72]:
+            - heading "Placements" [level=1] [ref=f46e73]
+            - generic [ref=f46e74]:
+              - generic [ref=f46e75]: …
+              - button "+ Request Placement" [ref=f46e76] [cursor=pointer]
+          - generic [ref=f46e77]:
+            - button "Current0" [ref=f46e78] [cursor=pointer]
+            - button "Pending0" [ref=f46e79] [cursor=pointer]
+            - button "Active0" [ref=f46e80] [cursor=pointer]
+            - button "Completed0" [ref=f46e81] [cursor=pointer]
+            - button "Archived0" [ref=f46e82] [cursor=pointer]
+          - generic [ref=f46e83]:
+            - searchbox "Search by artist, work or type…" [ref=f46e88]
+            - combobox [ref=f46e89] [cursor=pointer]:
+              - option "All time" [selected]
+              - option "Last 7 days"
+              - option "Last 30 days"
+              - option "Last 90 days"
+              - option "This year"
+          - paragraph [ref=f46e90]: Loading placements...
+    - button "Feedback and feature requests" [ref=f46e91] [cursor=pointer]: Feedback
+  - generic [ref=f46e97]:
+    - paragraph [ref=f46e98]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f46e99] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f46e100]:
+      - button "Decline" [ref=f46e101] [cursor=pointer]
+      - button "Accept" [ref=f46e102] [cursor=pointer]
+  - alert [ref=f46e103]

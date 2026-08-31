@@ -15,6 +15,9 @@
  */
 export const DISPATCHER_NAME_TO_REGISTRY_ID: Readonly<Record<string, string>> = {
   artist_order_received: "artist_order_received",
+  // Row 874: the artist heard nothing on any transition, including the one
+  // that releases their payout.
+  artist_order_delivered: "artist_order_delivered",
   order_placed: "customer_order_placed",
   order_processing: "customer_order_processing",
   order_out_for_delivery: "customer_order_out_for_delivery",
@@ -25,6 +28,7 @@ export const DISPATCHER_NAME_TO_REGISTRY_ID: Readonly<Record<string, string>> = 
 
 export const DISPATCHER_TEMPLATE_IDS: ReadonlySet<string> = new Set([
   "artist_order_received",
+  "artist_order_delivered",
   "customer_order_placed",
   "customer_order_processing",
   "customer_order_out_for_delivery",

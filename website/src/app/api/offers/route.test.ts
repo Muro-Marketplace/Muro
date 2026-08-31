@@ -24,6 +24,7 @@ vi.mock("@/emails/templates/messages/OfferReceivedNotification", () => ({
 }));
 
 import { GET, POST } from "./route";
+import { OFFER_WINDOW_DAYS } from "@/lib/offers/expiry";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -103,7 +104,10 @@ function setupDb(overrides: {
       // Stub the insert and any follow-up selects so the venue-caller test
       // can reach a response without crashing on missing chain methods.
       return {
-        insert: async () => ({ error: null }),
+        insert: async (row: Record<string, unknown>) => {
+          offerInserts.push(row);
+          return { error: null };
+        },
         select: () => ({
           eq: () => ({
             single: async () => ({ data: { buyer_user_id: "u-test", artist_user_id: "u-alice" } }),
@@ -126,8 +130,12 @@ function setupDb(overrides: {
   });
 }
 
+/** Every row handed to purchase_offers.insert, for the expiry tests. */
+const offerInserts: Record<string, unknown>[] = [];
+
 beforeEach(() => {
   fromMock.mockReset();
+  offerInserts.length = 0;
 });
 
 // ---------------------------------------------------------------------------
@@ -259,5 +267,43 @@ describe("GET /api/offers — collection enrichment (row 19 #7)", () => {
     // Fail-before: the old select named artist_collections.title, so PostgREST
     // rejected the whole query and every offer's collection came back null.
     expect(body.offers[0].collection).toMatchObject({ id: "c1", name: "Spring Set" });
+  });
+});
+
+// Row 2244 / PASS2-offers-and-paid-loan-log. `purchase_offers.expires_at` is
+// NULL on every row in production, both of pass 2's own offers included. The
+// column exists, the row type carries it, and F41 wired the enforcement (the
+// PATCH refuses a lapsed offer, the checkout refuses to take money for one),
+// but nothing ever SET a deadline: `expiresAt` is an optional field on the
+// create schema that no UI sends. An offer made today is still bindingly open
+// next year.
+describe("POST /api/offers sets an expiry (row 2244)", () => {
+  function asVenue() {
+    setupDb({
+      venue_profiles: { user_id: "u-test", slug: "test-venue" },
+      artist_profiles: null,
+    });
+  }
+
+  it("stamps a deadline on an offer that names none", async () => {
+    asVenue();
+
+    await POST(makeRequest(validBody));
+
+    expect(offerInserts).toHaveLength(1);
+    const expiresAt = offerInserts[0].expires_at as string;
+    expect(expiresAt, "every offer must carry a deadline").toBeTruthy();
+    const days = (new Date(expiresAt).getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(OFFER_WINDOW_DAYS - 0.1);
+    expect(days).toBeLessThan(OFFER_WINDOW_DAYS + 0.1);
+  });
+
+  it("honours a deadline the sender chose", async () => {
+    asVenue();
+    const chosen = new Date(Date.now() + 2 * 86_400_000).toISOString();
+
+    await POST(makeRequest({ ...validBody, expiresAt: chosen }));
+
+    expect(offerInserts[0].expires_at).toBe(chosen);
   });
 });

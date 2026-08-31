@@ -20,6 +20,7 @@ const {
   applicationInsertMock,
   profilesSelectMock,
   profilesSelectBySlugMock,
+  profilesSelectByReferralCodeMock,
   profilesInsertMock,
   getAuthenticatedUserMock,
   sendEmailMock,
@@ -28,6 +29,7 @@ const {
   applicationInsertMock: vi.fn(),
   profilesSelectMock: vi.fn(),
   profilesSelectBySlugMock: vi.fn(),
+  profilesSelectByReferralCodeMock: vi.fn(),
   profilesInsertMock: vi.fn(),
   getAuthenticatedUserMock: vi.fn(),
   sendEmailMock: vi.fn(),
@@ -77,6 +79,11 @@ vi.mock("@/lib/supabase-admin", () => ({
           // hoisted fns.
           select: () => ({
             eq: (column: string) => {
+              // Row G L2366: the route resolves a claimed referral code
+              // against the codes that actually exist before storing it.
+              if (column === "referral_code") {
+                return { maybeSingle: async () => profilesSelectByReferralCodeMock() };
+              }
               if (column === "user_id") {
                 return {
                   maybeSingle: async () => {
@@ -161,6 +168,7 @@ beforeEach(() => {
   insertAttempts.length = 0;
   profilesSelectMock.mockReset();
   profilesSelectBySlugMock.mockReset();
+  profilesSelectByReferralCodeMock.mockReset();
   profilesInsertMock.mockReset();
   getAuthenticatedUserMock.mockReset();
   sendEmailMock.mockReset();
@@ -173,6 +181,12 @@ beforeEach(() => {
   });
   profilesSelectMock.mockReturnValue({ data: null, error: null });
   profilesSelectBySlugMock.mockReturnValue({ data: null, error: null });
+  // Default: the claimed code belongs to a real artist, so the tests written
+  // before the code was validated still exercise the stored path.
+  profilesSelectByReferralCodeMock.mockReturnValue({
+    data: { referral_code: "WP-ABC123" },
+    error: null,
+  });
 });
 
 describe("POST /api/apply creates the artist_profiles bridge row", () => {
@@ -442,5 +456,40 @@ describe("POST /api/apply application email idempotency keys (R4.15)", () => {
 
     expect(sendEmailMock).not.toHaveBeenCalled();
     expect(notifyAdminMock).not.toHaveBeenCalled();
+  });
+});
+
+// Row G L2366. Application 29 carried the code `QATESTREF`. No artist owns it
+// (`select count(*) from artist_profiles where referral_code='QATESTREF'` is 0)
+// and it was stored anyway, so the admin reviewing the application saw an
+// attribution that could never pay anyone, and `artist_referrals` held 0 rows
+// across the whole production database.
+describe("POST /api/apply validates the referral code (row G L2366)", () => {
+  it("stores a code that a real artist owns", async () => {
+    profilesSelectByReferralCodeMock.mockReturnValue({
+      data: { referral_code: "REALCODE" },
+      error: null,
+    });
+
+    await POST(req({ ...VALID_BODY, referralCode: "realcode" }));
+
+    expect(applicationInsertMock.mock.calls[0][0]).toMatchObject({
+      referred_by_code: "REALCODE",
+    });
+  });
+
+  it("drops a code no artist owns rather than storing it as if it were valid", async () => {
+    profilesSelectByReferralCodeMock.mockReturnValue({ data: null, error: null });
+
+    const res = await POST(req({ ...VALID_BODY, referralCode: "QATESTREF" }));
+
+    expect(res.status).toBe(200);
+    expect(applicationInsertMock.mock.calls[0][0]).toHaveProperty("referred_by_code", null);
+  });
+
+  it("does not look a code up when none was given", async () => {
+    await POST(req(VALID_BODY));
+
+    expect(profilesSelectByReferralCodeMock).not.toHaveBeenCalled();
   });
 });
