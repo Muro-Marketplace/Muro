@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { venueShareLabel } from "@/lib/revenue-share-labels";
 import { useConfirm } from "@/context/ConfirmContext";
 import type { ArtistWork } from "@/data/artists";
 import {
@@ -902,7 +903,9 @@ export default function PlacementContextPanel({
           {p.qr_enabled && p.revenue_share_percent != null && p.revenue_share_percent > 0 && (
             <div className="flex gap-3 py-0.5">
               <span className="text-muted w-24 shrink-0">{ARRANGEMENT_LABEL.revenue_share}</span>
-              <span className="text-foreground font-medium">{p.revenue_share_percent}% on QR sales</span>
+              {/* A4.2: was an unattributed percentage sitting next to two
+                  surfaces that named the wrong party. */}
+              <span className="text-foreground font-medium">{venueShareLabel(p.revenue_share_percent)} on QR sales</span>
             </div>
           )}
           {/* QR indicator only matters on paid-loan rows, on revenue share
