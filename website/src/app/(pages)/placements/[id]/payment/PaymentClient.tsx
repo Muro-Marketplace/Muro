@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authFetch } from "@/lib/api-client";
 
@@ -15,6 +16,11 @@ interface Props {
 export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, artistName, qrEnabled }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Row 2187 area. The setup route's cancel_url returns here as ?cancelled=1
+  // and nothing read it, so backing out of Stripe landed on an unchanged page
+  // with no word either way. Same silent return as ?payment=setup-complete on
+  // the placements list, which is fixed alongside this.
+  const cancelled = useSearchParams().get("cancelled") === "1";
 
   async function startCheckout() {
     setBusy(true);
@@ -43,6 +49,12 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
 
   return (
     <div className="max-w-[640px] mx-auto px-6 py-14">
+      {cancelled && (
+        <div role="status" className="mb-6 rounded-sm border border-border bg-surface px-4 py-3">
+          <p className="text-sm text-foreground">Payment setup cancelled. Nothing was charged.</p>
+          <p className="text-xs text-muted mt-0.5">You can start it again whenever you are ready.</p>
+        </div>
+      )}
       <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-3">Monthly payment setup</p>
       <h1 className="font-serif text-3xl sm:text-4xl text-foreground leading-tight mb-3">
         Pay {artistName} monthly for this placement

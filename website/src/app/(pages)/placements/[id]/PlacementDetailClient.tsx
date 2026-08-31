@@ -386,6 +386,20 @@ export default function PlacementDetailClient({ placementId }: Props) {
 
   async function handleRespond(accept: boolean) {
     if (!placement) return;
+    // Production pass 2, P4: "Decline has no confirmation step, unlike undo,
+    // which does." Declining ends the negotiation for the other party and
+    // cannot be taken back from this screen; the counter path is how it
+    // reopens. The context panel already prompts; these did not.
+    if (!accept) {
+      const ok = await confirm({
+        title: "Decline this placement request?",
+        body: "The other party will see it as declined. They can come back with new terms.",
+        confirmLabel: "Decline",
+        cancelLabel: "Keep it open",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     setResponding(accept ? "accept" : "decline");
     setRespondError(null);
     try {

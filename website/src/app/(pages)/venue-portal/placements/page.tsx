@@ -713,6 +713,20 @@ export default function VenuePlacementsPage() {
   }
 
   async function respond(id: string, accept: boolean) {
+    // Production pass 2, P4: "Decline has no confirmation step, unlike undo,
+    // which does." Declining ends the negotiation for the other party and
+    // cannot be taken back from this screen; the counter path is how it
+    // reopens. The context panel already prompts; this did not.
+    if (!accept) {
+      const ok = await confirm({
+        title: "Decline this placement request?",
+        body: "The other party will see it as declined. They can come back with new terms.",
+        confirmLabel: "Decline",
+        cancelLabel: "Keep it open",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     setResponding(id);
     setRespondError(null);
     try {
@@ -896,6 +910,25 @@ export default function VenuePlacementsPage() {
 
   return (
     <VenuePortalLayout>
+      {/* Row 2187 / production pass 2, P4. The payment setup's success_url
+          returns here as ?payment=setup-complete and nothing on the page
+          acknowledged it, so a venue who had just entered card details landed
+          on an unchanged list with no confirmation that anything had happened.
+          The chip below eventually flips to "Monthly payment active", but only
+          once Stripe's webhook lands, which can be seconds later. */}
+      {searchParams.get("payment") === "setup-complete" && (
+        <div
+          role="status"
+          className="mb-6 rounded-sm border border-green-200 bg-green-50 px-4 py-3"
+        >
+          <p className="text-sm font-medium text-green-800">Card saved. Monthly payment is set up.</p>
+          <p className="text-xs text-green-700 mt-0.5">
+            The first payment is taken now and then on the same day each month. It will show on
+            the placement below once Stripe confirms it, usually within a few seconds.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">Placements</h1>

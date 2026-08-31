@@ -24,6 +24,7 @@ import { PlacementVenueDeclinedArtistRequest } from "@/emails/templates/placemen
 import { PlacementCancelled } from "@/emails/templates/placements/PlacementCancelled";
 import { PlacementCounterOfferReceived } from "@/emails/templates/placements/PlacementCounterOfferReceived";
 import { PlacementScheduled } from "@/emails/templates/placements/PlacementScheduled";
+import { PlacementLiveOnWall } from "@/emails/templates/placements/PlacementLiveOnWall";
 import { PlacementArtworkInstalled } from "@/emails/templates/placements/PlacementArtworkInstalled";
 import { PlacementEnded } from "@/emails/templates/placements/PlacementEnded";
 import { z } from "zod";
@@ -813,7 +814,7 @@ export async function PATCH(request: Request) {
     // relied on (the phantom requester_user_id rejected the whole query) is gone.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at, revenue_share_percent")
       .eq("id", id)
       .single();
 
@@ -1756,6 +1757,36 @@ export async function PATCH(request: Request) {
                 artistName,
                 installedWorks: [],
                 qrLabelsUrl: `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`,
+              }),
+            });
+          }
+        }
+
+        // Production pass 2, P4. Scheduled, Installed and Collected each fan
+        // out to both parties; the stage in between did not, and it is the one
+        // that starts the arrangement earning. Not a duplicate of Installed:
+        // installed means the piece is hung, live means it is on display with
+        // its QR label up and open to buyers.
+        if (stage === "live") {
+          for (const party of [
+            { user: artistUser, name: artistName, uid: existing.artist_user_id },
+            { user: venueUser, name: venueName, uid: existing.venue_user_id },
+          ]) {
+            await sendToParty({
+              user: party.user,
+              firstName: (party.name).split(" ")[0] || "there",
+              userId: party.uid,
+              idempotencyKey: `placement_live_on_wall:${id}:${party.uid}`,
+              template: "placement_live_on_wall",
+              subject: `${existing.work_title || "Your work"} is live at ${venueName}`,
+              react: PlacementLiveOnWall({
+                firstName: (party.name).split(" ")[0] || "there",
+                placementUrl,
+                venueName,
+                artistName,
+                workTitle: existing.work_title || "The work",
+                qrLabelsUrl: `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`,
+                venueSharePercent: existing.revenue_share_percent ?? null,
               }),
             });
           }

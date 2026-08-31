@@ -53,6 +53,7 @@ import PlacementCancelled from "./templates/placements/PlacementCancelled";
 import PlacementCounterOfferReceived from "./templates/placements/PlacementCounterOfferReceived";
 import PlacementScheduled from "./templates/placements/PlacementScheduled";
 import PlacementArtworkInstalled from "./templates/placements/PlacementArtworkInstalled";
+import PlacementLiveOnWall from "./templates/placements/PlacementLiveOnWall";
 import PlacementMidwayCheckin from "./templates/placements/PlacementMidwayCheckin";
 import PlacementEndingSoon from "./templates/placements/PlacementEndingSoon";
 import PlacementEnded from "./templates/placements/PlacementEnded";
@@ -336,6 +337,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   PlacementCounterOfferReceived,
   PlacementScheduled,
   PlacementArtworkInstalled,
+  PlacementLiveOnWall,
   PlacementMidwayCheckin,
   PlacementEndingSoon,
   PlacementEnded,
