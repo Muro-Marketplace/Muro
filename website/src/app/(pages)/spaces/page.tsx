@@ -86,6 +86,11 @@ function SpacesPageContent() {
 
   const [postcode, setPostcode] = useState("");
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  // QA bug 32b: the banner used to render the live input box, so after a failed
+  // lookup it announced "Showing venues near ZZ99 9ZZ" next to "Postcode not
+  // found" — the failure and a success for the same made-up postcode, at once.
+  // This holds the postcode actually geocoded, and only that is ever shown.
+  const [searchedPostcode, setSearchedPostcode] = useState("");
   const [postcodeError, setPostcodeError] = useState(false);
   const [searching, setSearching] = useState(false);
 
@@ -148,7 +153,11 @@ function SpacesPageContent() {
     const stored = readPersistedCoords();
     if (!stored) return;
     setUserCoords(stored.coords);
-    if (stored.label) setPostcode(stored.label);
+    // A restored search is a SUCCESSFUL one, so the banner may name it.
+    if (stored.label) {
+      setPostcode(stored.label);
+      setSearchedPostcode(stored.label);
+    }
   }, []);
 
   // Venues shouldn't browse other venues, this page is for artists.
@@ -229,8 +238,12 @@ function SpacesPageContent() {
     const coords = await geocodePostcode(trimmed);
     if (coords) {
       setUserCoords(coords);
+      setSearchedPostcode(trimmed);
       persistLocation(coords, trimmed);
     } else {
+      // Leave any previous successful search in place (clearing it would throw
+      // away a good result because of a typo), but never let this failed input
+      // reach the banner.
       setPostcodeError(true);
     }
     setSearching(false);
@@ -310,8 +323,13 @@ function SpacesPageContent() {
             <div className="mt-4 space-y-3">
               <p className="text-accent text-xs flex items-center justify-center gap-1.5">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                Showing venues near {postcode}
-                <button onClick={() => { setUserCoords(null); setPostcode(""); setMaxDistance(9999); clearPersistedLocation(); }} className="ml-1 text-white/50 underline">clear</button>
+                {/* QA bug 31: with no radius chosen nothing is filtered, only
+                    sorted, so "Showing venues near X" was a false statement
+                    about an unchanged list of every venue. Say which it is. */}
+                {maxDistance >= 9999
+                  ? `Sorted by distance from ${searchedPostcode}`
+                  : `Showing venues within ${maxDistance} miles of ${searchedPostcode}`}
+                <button onClick={() => { setUserCoords(null); setPostcode(""); setSearchedPostcode(""); setMaxDistance(9999); clearPersistedLocation(); }} className="ml-1 text-white/50 underline">clear</button>
               </p>
               {/* Distance toggle */}
               <div className="flex items-center justify-center gap-1.5">
@@ -505,9 +523,18 @@ function SpacesPageContent() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
                         <h3 className="text-base font-medium text-foreground">
-                          {canSeeDetails ? venue.name : `${venue.type} in ${venue.location}`}
+                          {canSeeDetails
+                            ? venue.name
+                            : /* QA bug 2: "Venue in" with a dangling preposition when a
+                                 venue has not set its type or location. Three of nine
+                                 live venues have no type. */
+                              [venue.type || "Venue", venue.location && `in ${venue.location}`]
+                                .filter(Boolean)
+                                .join(" ")}
                         </h3>
-                        <p className="text-xs text-muted">{venue.type} &middot; {venue.location}</p>
+                        <p className="text-xs text-muted">
+                          {[venue.type, venue.location].filter(Boolean).join(" · ") || "Location not given"}
+                        </p>
                       </div>
                       {"distance" in venue && (
                         <span className="text-xs text-accent font-medium shrink-0">{(venue as DemandVenue & { distance: number }).distance.toFixed(1)} mi</span>
