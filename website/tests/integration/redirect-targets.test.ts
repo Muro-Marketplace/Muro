@@ -68,4 +68,17 @@ describe("next.config.ts redirects (K8)", () => {
       permanent: true,
     });
   });
+
+  // Review finding (Task 3 follow-up). /curated/programme resolved via the
+  // generic /curated/[tier] deep-dive and pointed its CTA at the shared
+  // /curated brief form, which has no fields for site count, piece
+  // estimate, sector, or rotation cadence: a second, weaker submission path
+  // for the same tier. Redirect it to the dedicated /programmes page.
+  it("redirects /curated/programme to /programmes, permanently", () => {
+    expect(redirects()).toContainEqual({
+      source: "/curated/programme",
+      destination: "/programmes",
+      permanent: true,
+    });
+  });
 });

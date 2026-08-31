@@ -81,23 +81,18 @@ const WHATS_INCLUDED = [
   },
 ];
 
-// Illustrative placements, not real client claims (same convention as the
-// /curated and /venues photo strips: generic captions until we have
-// attributed placements to show). Images are reused from those pages;
-// both are venue-facing surfaces so a small overlap is acceptable.
+// Review finding: these three images used to carry invented location
+// captions ("Office reception, Manchester" and so on), and the same
+// Unsplash photo IDs are captioned as different invented places on
+// /curated and /venues. A sceptical buyer evaluating a 12-month
+// commitment notices that, and it undermines the section's actual
+// point, that the network is real. The images now run as unattributed
+// atmosphere with no caption; the real, checkable proof is the link
+// into /browse below, where every artist has a genuine portfolio.
 const PROOF_PLACEMENTS = [
-  {
-    caption: "Boutique hotel, Bath",
-    image: "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=600&h=450&fit=crop&crop=center",
-  },
-  {
-    caption: "Restaurant dining room, Bristol",
-    image: "https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=600&h=450&fit=crop&crop=center",
-  },
-  {
-    caption: "Office reception, Manchester",
-    image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&h=450&fit=crop&crop=center",
-  },
+  "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=600&h=450&fit=crop&crop=center",
+  "https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=600&h=450&fit=crop&crop=center",
+  "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&h=450&fit=crop&crop=center",
 ];
 
 const FAQ_ITEMS = [
@@ -351,7 +346,7 @@ export default function ProgrammesClient() {
                   Why it&rsquo;s different
                 </p>
                 <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white leading-[1.1] mb-6">
-                  Not another art-rental agency
+                  Agencies rent stock. We pay artists.
                 </h2>
                 <p className="text-white/70 leading-relaxed text-lg mb-5">
                   Most art-for-business suppliers are rental agencies. They license stock prints
@@ -369,31 +364,32 @@ export default function ProgrammesClient() {
           </div>
         </section>
 
-        {/* Proof: the live network, not a stock library. */}
+        {/* Proof: every artist has a real, checkable portfolio. The
+            images below are unattributed atmosphere, not claims about
+            any specific venue; the actual proof is the link into
+            /browse, where the portfolios are real and open to check. */}
         <section className="py-20 lg:py-28">
           <div className="max-w-[1200px] mx-auto px-6">
             <AnimateIn>
               <span className="text-xs font-medium text-accent uppercase tracking-wider">
                 See it for yourself
               </span>
-              <h2 className="text-3xl md:text-4xl mt-2 mb-3">A live network, not a stock library</h2>
+              <h2 className="text-3xl md:text-4xl mt-2 mb-3">Every artist has a real portfolio</h2>
               <p className="text-muted leading-relaxed mb-10 max-w-xl">
-                Every artist on Wallplace has a real portfolio, already placed on real walls.
-                Browse it before you commit to a programme.
+                No stock libraries and no anonymous pool. Every piece on Wallplace comes from a
+                named artist with their own portfolio, open for you to look through before you
+                commit to a programme.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {PROOF_PLACEMENTS.map((p) => (
-                  <div key={p.caption} className="group">
-                    <div className="aspect-[4/3] rounded-sm overflow-hidden relative">
-                      <Image
-                        src={p.image}
-                        alt={p.caption}
-                        fill
-                        className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
-                        sizes="(max-width: 768px) 100vw, 33vw"
-                      />
-                    </div>
-                    <p className="mt-3 text-sm text-muted">{p.caption}</p>
+                {PROOF_PLACEMENTS.map((src) => (
+                  <div key={src} className="aspect-[4/3] rounded-sm overflow-hidden relative">
+                    <Image
+                      src={src}
+                      alt="Original art displayed in a venue"
+                      fill
+                      className="object-cover hover:scale-[1.03] transition-transform duration-500"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
                   </div>
                 ))}
               </div>
@@ -435,8 +431,9 @@ export default function ProgrammesClient() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className={labelCls}>Company or venue name *</label>
+                    <label htmlFor="venueName" className={labelCls}>Company or venue name *</label>
                     <input
+                      id="venueName"
                       required
                       value={form.venueName}
                       onChange={(e) => update("venueName", e.target.value)}
@@ -444,8 +441,9 @@ export default function ProgrammesClient() {
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Sector</label>
+                    <label htmlFor="sector" className={labelCls}>Sector</label>
                     <select
+                      id="sector"
                       value={form.sector}
                       onChange={(e) => update("sector", e.target.value)}
                       className={inputCls + " cursor-pointer"}
@@ -462,8 +460,9 @@ export default function ProgrammesClient() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className={labelCls}>Your name *</label>
+                    <label htmlFor="contactName" className={labelCls}>Your name *</label>
                     <input
+                      id="contactName"
                       required
                       value={form.contactName}
                       onChange={(e) => update("contactName", e.target.value)}
@@ -471,8 +470,9 @@ export default function ProgrammesClient() {
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Work email *</label>
+                    <label htmlFor="contactEmail" className={labelCls}>Work email *</label>
                     <input
+                      id="contactEmail"
                       type="email"
                       required
                       value={form.contactEmail}
@@ -484,8 +484,9 @@ export default function ProgrammesClient() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className={labelCls}>Phone</label>
+                    <label htmlFor="contactPhone" className={labelCls}>Phone</label>
                     <input
+                      id="contactPhone"
                       type="tel"
                       value={form.contactPhone}
                       onChange={(e) => update("contactPhone", e.target.value)}
@@ -493,8 +494,9 @@ export default function ProgrammesClient() {
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Number of sites</label>
+                    <label htmlFor="siteCount" className={labelCls}>Number of sites</label>
                     <input
+                      id="siteCount"
                       type="number"
                       min={1}
                       max={50}
@@ -505,8 +507,9 @@ export default function ProgrammesClient() {
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Roughly how many pieces?</label>
+                    <label htmlFor="piecesEstimate" className={labelCls}>Roughly how many pieces?</label>
                     <input
+                      id="piecesEstimate"
                       type="number"
                       min={1}
                       max={60}
@@ -519,8 +522,9 @@ export default function ProgrammesClient() {
                 </div>
 
                 <div>
-                  <label className={labelCls}>Rotation preference</label>
+                  <label htmlFor="rotationCadence" className={labelCls}>Rotation preference</label>
                   <select
+                    id="rotationCadence"
                     value={form.rotationCadence}
                     onChange={(e) => update("rotationCadence", e.target.value)}
                     className={inputCls + " cursor-pointer"}
@@ -535,8 +539,9 @@ export default function ProgrammesClient() {
                 </div>
 
                 <div>
-                  <label className={labelCls}>Anything else?</label>
+                  <label htmlFor="notes" className={labelCls}>Anything else?</label>
                   <textarea
+                    id="notes"
                     rows={3}
                     value={form.notes}
                     onChange={(e) => update("notes", e.target.value)}

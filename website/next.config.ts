@@ -133,6 +133,15 @@ const nextConfig: NextConfig = {
       // and slide decks already point at /workplaces, so redirect rather
       // than 404 the guess.
       { source: "/workplaces", destination: "/programmes", permanent: true },
+      // Review finding (Task 3 follow-up). /curated/programme still resolves
+      // via the generic /curated/[tier] deep-dive, but its CTA points at the
+      // shared /curated brief form, which has no fields for site count,
+      // piece estimate, sector, or rotation cadence, so it produces a
+      // lower-quality programme enquiry than the dedicated /programmes page.
+      // Redirect rather than leave two submission paths live for the same
+      // tier. `redirects()` is checked before the filesystem, so this exact
+      // path is matched and served ahead of the [tier] dynamic route.
+      { source: "/curated/programme", destination: "/programmes", permanent: true },
     ];
   },
 };

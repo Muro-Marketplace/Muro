@@ -442,7 +442,6 @@ export default function CuratedClient() {
                       key={t.key}
                       tier={t}
                       selected={selectedTier === t.key}
-                      onSelect={() => setSelectedTier(t.key)}
                       href={t.key === "programme" ? "/programmes" : undefined}
                     />
                   ))}
@@ -602,8 +601,9 @@ export default function CuratedClient() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className={labelCls}>Venue name *</label>
+                    <label htmlFor="venueName" className={labelCls}>Venue name *</label>
                     <input
+                      id="venueName"
                       required
                       value={form.venueName}
                       onChange={(e) => update("venueName", e.target.value)}
@@ -611,8 +611,9 @@ export default function CuratedClient() {
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Venue type</label>
+                    <label htmlFor="venueType" className={labelCls}>Venue type</label>
                     <select
+                      id="venueType"
                       value={form.venueType}
                       onChange={(e) => update("venueType", e.target.value)}
                       className={inputCls + " cursor-pointer"}
@@ -629,8 +630,9 @@ export default function CuratedClient() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className={labelCls}>Your name *</label>
+                    <label htmlFor="contactName" className={labelCls}>Your name *</label>
                     <input
+                      id="contactName"
                       required
                       value={form.contactName}
                       onChange={(e) => update("contactName", e.target.value)}
@@ -638,8 +640,9 @@ export default function CuratedClient() {
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Email *</label>
+                    <label htmlFor="contactEmail" className={labelCls}>Email *</label>
                     <input
+                      id="contactEmail"
                       type="email"
                       required
                       value={form.contactEmail}
@@ -651,8 +654,9 @@ export default function CuratedClient() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className={labelCls}>Phone</label>
+                    <label htmlFor="contactPhone" className={labelCls}>Phone</label>
                     <input
+                      id="contactPhone"
                       type="tel"
                       value={form.contactPhone}
                       onChange={(e) => update("contactPhone", e.target.value)}
@@ -660,8 +664,9 @@ export default function CuratedClient() {
                     />
                   </div>
                   <div>
-                    <label className={labelCls}>Location (town/city)</label>
+                    <label htmlFor="location" className={labelCls}>Location (town/city)</label>
                     <input
+                      id="location"
                       value={form.location}
                       onChange={(e) => update("location", e.target.value)}
                       className={inputCls}
@@ -705,8 +710,9 @@ export default function CuratedClient() {
                   className={`grid grid-cols-1 gap-4 ${budgetRelevant ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
                 >
                   <div>
-                    <label className={labelCls}>Wall count</label>
+                    <label htmlFor="wallCount" className={labelCls}>Wall count</label>
                     <input
+                      id="wallCount"
                       type="number"
                       min={0}
                       value={form.wallCount}
@@ -717,8 +723,9 @@ export default function CuratedClient() {
                   </div>
                   {budgetRelevant && (
                     <div>
-                      <label className={labelCls}>Budget (£)</label>
+                      <label htmlFor="budgetGbp" className={labelCls}>Budget (£)</label>
                       <input
+                        id="budgetGbp"
                         value={form.budgetGbp}
                         onChange={(e) => update("budgetGbp", e.target.value)}
                         className={inputCls}
@@ -727,8 +734,9 @@ export default function CuratedClient() {
                     </div>
                   )}
                   <div>
-                    <label className={labelCls}>Timeframe</label>
+                    <label htmlFor="timeframe" className={labelCls}>Timeframe</label>
                     <input
+                      id="timeframe"
                       value={form.timeframe}
                       onChange={(e) => update("timeframe", e.target.value)}
                       className={inputCls}
@@ -738,8 +746,9 @@ export default function CuratedClient() {
                 </div>
 
                 <div>
-                  <label className={labelCls}>Style you like</label>
+                  <label htmlFor="styleNotes" className={labelCls}>Style you like</label>
                   <textarea
+                    id="styleNotes"
                     rows={2}
                     value={form.styleNotes}
                     onChange={(e) => update("styleNotes", e.target.value)}
@@ -749,8 +758,9 @@ export default function CuratedClient() {
                 </div>
 
                 <div>
-                  <label className={labelCls}>Audience / guests</label>
+                  <label htmlFor="audienceNotes" className={labelCls}>Audience / guests</label>
                   <textarea
+                    id="audienceNotes"
                     rows={2}
                     value={form.audienceNotes}
                     onChange={(e) => update("audienceNotes", e.target.value)}
@@ -760,8 +770,9 @@ export default function CuratedClient() {
                 </div>
 
                 <div>
-                  <label className={labelCls}>Mood / atmosphere</label>
+                  <label htmlFor="moodNotes" className={labelCls}>Mood / atmosphere</label>
                   <textarea
+                    id="moodNotes"
                     rows={2}
                     value={form.moodNotes}
                     onChange={(e) => update("moodNotes", e.target.value)}
@@ -771,10 +782,11 @@ export default function CuratedClient() {
                 </div>
 
                 <div>
-                  <label className={labelCls}>
+                  <label htmlFor="referencesNotes" className={labelCls}>
                     References, links, or anything else
                   </label>
                   <textarea
+                    id="referencesNotes"
                     rows={3}
                     value={form.referencesNotes}
                     onChange={(e) =>
@@ -855,7 +867,11 @@ function TierCard({
 }: {
   tier: CuratedTier;
   selected: boolean;
-  onSelect: () => void;
+  /** Only called by the inner <button> branch below, which only renders
+   *  when `href` is unset. Omit it (as the Programmes card does) when
+   *  `href` is always set, since it would otherwise be dead: the <Link>
+   *  branch never calls onSelect. */
+  onSelect?: () => void;
   /** When set, the card navigates to its own dedicated marketing page
    *  (currently just Programmes → /programmes) instead of selecting the
    *  tier inline and scrolling to the shared brief form. Used when a tier
