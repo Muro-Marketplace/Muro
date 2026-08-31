@@ -285,3 +285,55 @@ reversal 502; concurrent-claim 409s; anything needing a declined card or a Strip
 webhook failure; the 14-day payout cron; the 429 render limit and burst limiter;
 wall creation (the venue is at its 3-wall cap); and the parked surfaces pass 1
 already listed, artwork requests, showroom, demo mode and OAuth.
+
+---
+
+# Remediation addendum, 2026-08-31 (same day, after both passes)
+
+Branch `claude/production-pass-fixes-e6271e`. The full account is
+`../../plans/2026-08-31-production-pass-remediation-done.md`; this is the part
+that changes how the two passes above should be read.
+
+## The branch both passes tested is not the branch the plan was written against
+
+The remediation branch was cut from a local `main` that had diverged from
+`origin/main`: 22 local commits against 15 on the trunk (PRs #70 to #81).
+Production runs the trunk. So several findings in this document were already
+fixed there and are recorded as such in column 3 rather than fixed twice:
+the `/api/apply` 500 (A L514), the item line totals (B L834 / C L990), the
+forged shipping price, `orders.buyer_user_id`, the signed unsubscribe link, the
+`#cancellation` anchor, the contact reference, `og:image` and "Message the
+artist". Each was checked in the merged tree, not assumed.
+
+## Two of this document's readings are amended
+
+- **Row 1844 (the wall cap).** The control WAS gated, since May. It was a
+  `<span aria-disabled="true">` styled to look disabled: not a button, so
+  nothing announced it as one and nothing inspecting the page could read its
+  state, which is why the pass read it as live. It is a real disabled button now.
+- **Row 1860 (the 402 panel) is not fixed and is not claimed as fixed.** That
+  page has rendered the amber panel with a /pricing link since May and has not
+  changed since, so the plain inline line the pass saw cannot be explained from
+  the code. It needs re-testing against the deploy.
+
+## One finding was checked before being believed, as the fix prompt asked
+
+The cancelled paid loan (rows 2179-2187). Stripe HAD received
+`cancel_at_period_end`, so the venue is NOT still on the hook for £12 a month:
+this is a display and local-state bug, which is the lighter of the two readings
+the prompt offered. The row correctly stays `active` until the paid-for period
+ends, which is exactly why no reader could tell "running" from "winding down".
+The test-mode subscription could not be read a second way, because the Stripe
+MCP in that session is pinned to live mode.
+
+## Two migrations are applied to production
+
+127 `placement_recurring_billings.cancel_at_period_end` and 128
+`blogs.rejection_reason`. Both additive, both needed by code on the branch, and
+127 backfills the one live row that was already winding down. Prod is at 128.
+
+## Nothing else is deployed
+
+Every fix carries a test that was watched failing first. None has been driven
+through the live UI, because production runs a different commit. What to drive
+first once it ships is listed at the end of the remediation-done document.

@@ -4,13 +4,15 @@
 // template variables baked in (e.g. `{{ .ConfirmationURL }}`), so you
 // can paste the output straight into the Supabase dashboard:
 //
-//   Auth → Email Templates → Confirm signup / Reset Password / Change Email
+//   Auth → Email Templates → Confirm signup / Reset Password / Change Email /
+//   Invite user
 //
 // Usage:
 //
 //   npx tsx scripts/render-auth-email.ts verification > out/confirm-signup.html
 //   npx tsx scripts/render-auth-email.ts password-reset > out/reset-password.html
 //   npx tsx scripts/render-auth-email.ts email-change > out/email-change.html
+//   npx tsx scripts/render-auth-email.ts invite > out/invite.html
 //   npx tsx scripts/render-auth-email.ts all
 //     # writes all three into website/scripts/auth-emails-rendered/
 //
@@ -30,6 +32,7 @@ import { fileURLToPath } from "node:url";
 import { AccountEmailVerification } from "../src/emails/templates/account/AccountEmailVerification";
 import { AccountPasswordReset } from "../src/emails/templates/account/AccountPasswordReset";
 import { AccountEmailChangeVerify } from "../src/emails/templates/account/AccountEmailChangeVerify";
+import { AccountInvite } from "../src/emails/templates/account/AccountInvite";
 
 const SUPPORT_URL = "https://wallplace.co.uk/support";
 // Supabase template tokens. Keep these as raw strings — the dashboard
@@ -38,7 +41,11 @@ const SUPA_FIRST_NAME = '{{ .Data.first_name | default: "there" }}';
 const SUPA_CONFIRM_URL = "{{ .ConfirmationURL }}";
 const SUPA_NEW_EMAIL = "{{ .Email }}";
 
-type Variant = "verification" | "password-reset" | "email-change";
+// `invite` is the one production pass 2 found missing, and it is the one that
+// matters most: accepting an artist application sends GoTrue's invite mail, and
+// that mail carries the accepted artist's ONLY way into their new account. It
+// arrived unbranded from noreply@mail.app.supabase.io.
+type Variant = "verification" | "password-reset" | "email-change" | "invite";
 
 // React Email's HTML renderer escapes attribute values, so `{{ .Data.first_name | default: "there" }}`
 // comes out as `{{ .Data.first_name | default: &quot;there&quot; }}`. Supabase's template
@@ -73,6 +80,15 @@ async function renderVariant(name: Variant): Promise<string> {
         })
       );
       return fixSupabaseTokens(html);
+    case "invite":
+      html = await render(
+        AccountInvite({
+          firstName: SUPA_FIRST_NAME,
+          inviteUrl: SUPA_CONFIRM_URL,
+          supportUrl: SUPPORT_URL,
+        })
+      );
+      return fixSupabaseTokens(html);
     case "email-change":
       html = await render(
         AccountEmailChangeVerify({
@@ -95,7 +111,7 @@ async function main() {
   const arg = process.argv[2];
   if (!arg) {
     process.stderr.write(
-      "Usage: tsx scripts/render-auth-email.ts <verification|password-reset|email-change|all>\n"
+      "Usage: tsx scripts/render-auth-email.ts <verification|password-reset|email-change|invite|all>\n"
     );
     process.exit(1);
   }
@@ -104,7 +120,7 @@ async function main() {
     const here = dirname(fileURLToPath(import.meta.url));
     const outDir = resolve(here, "auth-emails-rendered");
     mkdirSync(outDir, { recursive: true });
-    for (const v of ["verification", "password-reset", "email-change"] as Variant[]) {
+    for (const v of ["verification", "password-reset", "email-change", "invite"] as Variant[]) {
       const html = await renderVariant(v);
       const file = resolve(outDir, `${v}.html`);
       writeFileSync(file, html, "utf8");
