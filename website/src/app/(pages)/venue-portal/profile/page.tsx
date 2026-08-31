@@ -210,6 +210,11 @@ export default function VenueProfilePage() {
   const [freeLoan, setFreeLoan] = useState(true);
   const [revenueShare, setRevenueShare] = useState(true);
   const [directPurchase, setDirectPurchase] = useState(true);
+  // Row E L1606. `interested_in_collections` exists, is served by
+  // /api/venues/demand and is what /spaces filters on, and the portal had no
+  // control for it: the value a venue set at registration could never be
+  // changed, and the word "collection" did not appear on this page at all.
+  const [openToCollections, setOpenToCollections] = useState(true);
   const [localArtists, setLocalArtists] = useState(false);
   const [styles, setStyles] = useState<string[]>([]);
   const [themes, setThemes] = useState<string[]>([]);
@@ -244,6 +249,7 @@ export default function VenueProfilePage() {
   useEffect(() => {
     if (venue && !loaded) {
       setFreeLoan(venue.interestedInFreeLoan ?? true);
+      setOpenToCollections(venue.interestedInCollections ?? true);
       setRevenueShare(venue.interestedInRevenueShare ?? true);
       setDirectPurchase(venue.interestedInDirectPurchase ?? true);
       setLocalArtists(venue.interestedInLocalArtists ?? false);
@@ -362,6 +368,7 @@ export default function VenueProfilePage() {
           interested_in_free_loan: freeLoan,
           interested_in_revenue_share: revenueShare,
           interested_in_direct_purchase: directPurchase,
+          interested_in_collections: openToCollections,
           // Row 23a: the control has always been on this form; until migration
           // 103 there was no column to send it to, so this line was missing and
           // the tick was silently discarded.
@@ -601,6 +608,13 @@ export default function VenueProfilePage() {
                   checked={directPurchase}
                   onChange={(v) => { setDirectPurchase(v); markDirty(); }}
                   label={ARRANGEMENT_LABEL.purchase}
+                />
+                {/* Row E L1606: /spaces filters artists' collection offers on
+                    this, and it could only ever be set at registration. */}
+                <Toggle
+                  checked={openToCollections}
+                  onChange={(v) => { setOpenToCollections(v); markDirty(); }}
+                  label="Curated collections"
                 />
               </div>
             </div>

@@ -26,7 +26,7 @@ origin/main" was checked in the merged tree and left alone, per AGENTS.md's rule
 about not re-doing work. Where the finding was PARTLY fixed the remaining half is
 named.
 
-**3. Nothing here is deployed.** The two migrations are applied to production
+**3. Nothing here is deployed.** The three migrations are applied to production
 (they are additive and the code needs them), the code is not. Every fix is
 covered by a test that was watched failing first; none has been driven through
 the live UI, because production runs a different commit. What still needs a
@@ -45,6 +45,14 @@ email, which is the mail an accepted artist receives and their only way into
 the account. `scripts/auth-emails-rendered/` held three templates and the
 dashboard needs four. `AccountInvite` is written and rendered, and the other
 three are regenerated (they were stale from before an em-dash sweep).
+
+Migrations applied to production while doing this work, all additive:
+
+| | |
+|---|---|
+| 127 | `placement_recurring_billings.cancel_at_period_end`, plus a backfill of the one live row already winding down |
+| 128 | `blogs.rejection_reason` |
+| 129 | `waitlist_signups.phone`, `.venue_name`, `.venue_location` |
 
 ---
 
@@ -112,6 +120,23 @@ Two P4 items are recorded rather than changed, with reasons in the code:
   already declined.
 - "No success confirmation after sending an offer" could not be reproduced. The
   modal renders a success state, fires a toast, and auto-closes after 1.8s.
+
+## Track A5, the standing flags
+
+Fixed: the blog draft with no delete control (the API existed and nothing called
+it, which is why the QA post on the public journal needed SQL), the duplicate
+"Total subs MRR" tile, the collections "Clear all" that counted the default
+location mode as a filter, the collection CTA that sent a signed-in customer to
+a page that bounces them, the missing `interested_in_collections` control (the
+value could only ever be set at registration, and /spaces filters on it), the
+waitlist's three discarded fields (migration 129), the "Update Availability"
+label that opened Placements, the accept modal's unconditional invite claim, and
+both stray spaces before commas.
+
+Already on origin/main and verified there: the mobile marketplace tabs, the
+`<a href="#">` empty state, the raw lower-case placement statuses, the
+"largest tier" assumption, `/api/enquiry`'s discarded sender name, and the
+"Other" venue-type description.
 
 ## P5, Track A
 
