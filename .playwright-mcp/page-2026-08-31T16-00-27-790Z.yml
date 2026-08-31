@@ -1,0 +1,28 @@
+- generic [active] [ref=f25e1]:
+  - generic [ref=f25e2]:
+    - link "Skip to content" [ref=f25e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f25e4]:
+      - generic [ref=f25e6]:
+        - link "Wallplace" [ref=f25e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f25e8]:
+          - link "Marketplace" [ref=f25e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f25e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f25e12] [cursor=pointer]
+        - generic [ref=f25e15]:
+          - link "Saved" [ref=f25e16] [cursor=pointer]:
+            - /url: /artist-portal/saved
+          - button "Messages" [ref=f25e20] [cursor=pointer]
+          - button "Notifications" [ref=f25e25] [cursor=pointer]
+          - generic [ref=f25e29]:
+            - link "Artist Portal" [ref=f25e30] [cursor=pointer]:
+              - /url: /artist-portal
+            - button "Portal menu" [ref=f25e31] [cursor=pointer]
+          - button "Logout" [ref=f25e34] [cursor=pointer]
+    - main [ref=f25e35]:
+      - paragraph [ref=f25e38]: Loading your portal...
+    - button "Feedback and feature requests" [ref=f25e39] [cursor=pointer]: Feedback
+  - alert [ref=f25e42]
