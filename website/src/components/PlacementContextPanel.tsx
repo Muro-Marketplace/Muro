@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
 import { venueShareLabel } from "@/lib/revenue-share-labels";
 import { useConfirm } from "@/context/ConfirmContext";
 import type { ArtistWork } from "@/data/artists";
@@ -937,7 +938,7 @@ export default function PlacementContextPanel({
           {/* Mobile: single inline row */}
           <div className="flex items-baseline justify-between gap-3 lg:hidden">
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted">Earned to date</p>
-            <p className="text-sm font-medium text-foreground">&pound;{(p.revenue_earned_gbp ?? 0).toLocaleString()}</p>
+            <p className="text-sm font-medium text-foreground">{formatPounds(p.revenue_earned_gbp ?? 0)}</p>
           </div>
           {/* Desktop: full block */}
           <div className="hidden lg:block">
@@ -951,7 +952,7 @@ export default function PlacementContextPanel({
               )}
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-muted">Earned to date</span>
-                <span className="text-foreground font-medium">&pound;{(p.revenue_earned_gbp ?? 0).toLocaleString()}</span>
+                <span className="text-foreground font-medium">{formatPounds(p.revenue_earned_gbp ?? 0)}</span>
               </div>
             </div>
           </div>

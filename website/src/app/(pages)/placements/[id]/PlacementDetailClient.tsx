@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
 import { VENUE_SHARE_CAPTION, venueShareLabel } from "@/lib/revenue-share-labels";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
@@ -992,7 +993,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                 return (
                   <>
                     <p className="text-lg font-medium text-foreground">
-                      {isPaidLoan ? `\u00a3${stored.toLocaleString()}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
+                      {isPaidLoan ? `${formatPounds(stored)}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
                     </p>
                     <p className="text-[11px] text-muted mt-1">
                       {isPaidLoan ? "Venue pays artist to display the work" : "No rental fee agreed"}

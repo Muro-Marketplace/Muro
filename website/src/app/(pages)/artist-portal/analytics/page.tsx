@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { authFetch } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { artistPayoutPounds } from "@/lib/finance/order-money";
 
@@ -341,7 +342,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Total Sales</p>
-          <p className="text-2xl font-medium">£{totalEarnings.toLocaleString()}</p>
+          <p className="text-2xl font-medium">{formatPounds(totalEarnings)}</p>
           <p className="text-xs text-muted mt-1">All time, your share after fees</p>
         </div>
         <div className="bg-surface border border-border rounded-sm p-5">

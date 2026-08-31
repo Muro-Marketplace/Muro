@@ -8,6 +8,7 @@ import Button from "@/components/Button";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
 import { artistPayoutPounds } from "@/lib/finance/order-money";
 
 interface ActivityItem {
@@ -127,7 +128,7 @@ export default function ArtistPortalPage() {
       if (data.stats) {
         setStats({
           placements: data.stats.activePlacements || 0,
-          sales: `\u00a3${(data.stats.totalRevenue || 0).toLocaleString()}`,
+          sales: formatPounds(data.stats.totalRevenue || 0),
           enquiries: data.stats.enquiries || 0,
           views: data.stats.views || 0,
         });
