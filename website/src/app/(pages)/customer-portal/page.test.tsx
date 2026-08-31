@@ -503,3 +503,57 @@ describe("CustomerPortalPage — confirming a collection (rows 870-874)", () => 
     });
   });
 });
+
+// Row C L988 / Track A4.5. An open dispute was invisible on the dashboard.
+// `orders.status` stays `confirmed` while a dispute runs alongside the order,
+// so no off-pipeline badge renders, and /api/disputes had no GET, so nothing
+// could read one back. `/orders/<id>` looked like it knew, but only from local
+// state after the submit; a reload lost it.
+describe("CustomerPortalPage shows an open dispute (row C L988)", () => {
+  const DISPUTE = {
+    id: "d-1",
+    order_id: ORDER_ID,
+    status: "open",
+    category: "damaged",
+  };
+
+  function serve(disputes: unknown[]) {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") return Promise.resolve(jsonResponse({ orders: [mockOrder] }));
+      if (url === "/api/refunds") {
+        return Promise.resolve(jsonResponse({ refundRequests: [], userType: "customer" }));
+      }
+      if (url === "/api/disputes") return Promise.resolve(jsonResponse({ disputes }));
+      return Promise.resolve(jsonResponse({}));
+    });
+  }
+
+  it("says a problem has been reported on the order it belongs to", async () => {
+    serve([DISPUTE]);
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+
+    expect(await screen.findByText(/Problem reported/i)).toBeTruthy();
+  });
+
+  it("says nothing once the dispute is resolved", async () => {
+    serve([{ ...DISPUTE, status: "resolved" }]);
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+    await waitFor(() => expect(screen.getAllByText("WP-001").length).toBeGreaterThan(0));
+
+    expect(screen.queryByText(/Problem reported/i)).toBeNull();
+  });
+
+  it("does not attach another order's dispute to this one", async () => {
+    serve([{ ...DISPUTE, order_id: "some-other-order" }]);
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+    await waitFor(() => expect(screen.getAllByText("WP-001").length).toBeGreaterThan(0));
+
+    expect(screen.queryByText(/Problem reported/i)).toBeNull();
+  });
+});

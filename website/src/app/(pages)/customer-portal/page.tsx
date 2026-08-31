@@ -117,6 +117,13 @@ function CustomerPortalContent() {
   const [refundSuccess, setRefundSuccess] = useState(false);
   const [refundError, setRefundError] = useState<string | null>(null);
   const [refundRequests, setRefundRequests] = useState<RefundRequest[]>([]);
+  /**
+   * Row C L988 / Track A4.5. An open dispute was invisible here. `orders.status`
+   * stays `confirmed` while a dispute runs alongside the order, so no
+   * off-pipeline badge renders, and /api/disputes had no GET, so nothing could
+   * read one back. The buyer had no way to see that their complaint had landed.
+   */
+  const [disputes, setDisputes] = useState<{ id: string; order_id: string | null; status: string; category: string | null }[]>([]);
   // E21: the buyer confirms delivery, because doing so releases the artist's
   // escrow and the artist must not attest it themselves.
   const [confirmingDelivery, setConfirmingDelivery] = useState(false);
@@ -150,6 +157,12 @@ function CustomerPortalContent() {
     authFetch("/api/refunds")
       .then((r) => r.json())
       .then((data: RefundsListResponse) => { if (data.refundRequests) setRefundRequests(data.refundRequests); })
+      .catch(() => {});
+    // Row C L988: the caller's own disputes, so an open one shows on the order
+    // it belongs to instead of only flashing after the submit.
+    authFetch("/api/disputes")
+      .then((r) => r.json())
+      .then((data: { disputes?: typeof disputes }) => { if (Array.isArray(data.disputes)) setDisputes(data.disputes); })
       .catch(() => {});
   }, []);
 
@@ -389,6 +402,27 @@ function CustomerPortalContent() {
               )}
             </div>
           )}
+
+          {/* Row C L988: an open dispute, read from the database rather than
+              from post-submit local state, so it survives a reload. */}
+          {(() => {
+            const openDispute = disputes.find(
+              (d) => d.order_id === selected.id && d.status !== "resolved" && d.status !== "closed",
+            );
+            if (!openDispute) return null;
+            return (
+              <div className="mt-6 pt-4 border-t border-border">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 text-sm font-medium rounded-sm">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Problem reported{openDispute.category ? `: ${openDispute.category}` : ""}
+                </span>
+                <p className="text-xs text-muted mt-2">
+                  We&rsquo;re looking into it and will email you. The artist&rsquo;s payout is held
+                  while the case is open.
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Refund section */}
           <div className="mt-6 pt-4 border-t border-border">
