@@ -161,3 +161,127 @@ nothing.
 
 The published QA blog is the only item that is publicly visible; deleting it
 needs the database, since the artist UI has no delete control.
+
+---
+
+# Pass 2 addendum, 2026-08-31
+
+Pass 2 reopened the rows pass 1 left BLOCKED because it read the
+destructive-action rule as covering the whole money surface. Stripe is in test
+mode, and the rule already permits records created in-session, so eight chains
+were built end to end and driven through every stage.
+
+**122 rows moved off BLOCKED**, 845 → 721. New distribution:
+
+| | WORKS | FIXED | DIFFERS | FLAG STANDS | BROKEN | BLOCKED | NOT SAFE |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| after pass 1 | 729 | 87 | 49 | 48 | 7 | 843 | 18 |
+| after pass 2 | 822 | 89 | 69 | 48 | 14 | 721 | 18 |
+
+Three sessions were held at once (artist, venue, and admin or customer) so every
+state change could be read back from the counterparty within seconds, and every
+write was confirmed in Postgres rather than trusted from a toast.
+
+## The launch blocker pass 1 could not have found
+
+**Every Supabase auth email in production redirects to `http://localhost:3000`.**
+Accepting an artist application creates an account with no password whose only
+way in is an invite link pointing at the applicant's own machine. The password
+reset link does the same, so there is no way round it, and it is not limited to
+new artists: **nobody in production can recover a forgotten password.** Both
+emails arrive from `noreply@mail.app.supabase.io` with stock Supabase branding
+while the branded templates sit unused in `scripts/auth-emails-rendered/`.
+
+It is a dashboard fix, Auth → URL Configuration plus the three templates, and it
+belongs above every other owner action.
+
+This also amends pass 1's row 534, which read the outbound
+`resetPasswordForEmail` call and marked it WORKS. The call is fine; the delivered
+link is not.
+
+## The other seven new BROKEN rows
+
+- **A placement sold off the wall is stranded and pays the venue nothing.** After
+  a £120 collect sale the placement went to `status: sold`, lost every stage
+  control and can never reach Collected. The order carries no `placement_id` and
+  no `venue_slug`, so the hosting venue is credited £0 while being emailed that
+  the piece sold.
+- **A collect order is stamped `delivered` on payment** and the artist transfer
+  settled seven seconds later, no hold, no proof of collection.
+- **An accepted offer produces an unfulfillable order.** No delivery address is
+  collected anywhere in the flow; the artist sees "SHIP TO: ," above a Mark as
+  Shipped button.
+- **Offers never expire.** `expires_at` is NULL on every row in the table.
+- **A venue that cancels a paid-loan placement is still told it will be charged**
+  £12 again next month, on the same page that says Cancelled.
+- **Editing a consignment record clears the approval ticked in the same save.**
+- **The portal switcher never renders for accounts that do hold two profiles.**
+  `/api/account/roles` returns only `["artist"]` for an account owning both an
+  artist and a venue profile, and `/venue-portal` redirects it away. Pass 1's
+  stated cause, that no email holds two roles, is wrong: two do.
+
+## A pattern worth naming: silent failure
+
+Five separate refusals return a correct, well-worded error that the UI never
+shows. A past install date (`400 "Install date can't be in the past."`), a blog
+body under 200 characters (`422` with an excellent `issues` array), a revenue
+share above 50% (clamped, no request sent), an offer below the 60% floor (no
+request sent), and the wall cap (form completed, then `402`). Message moderation
+is the single counter-example: it says "Message contains blocked content" and
+means it.
+
+## A second pattern: the send throttle eats consequential mail
+
+Only three of production's 388 email events have ever been `skipped_throttled`,
+and all three happened today, all to the artist: `placement_ended`,
+`artist_new_placement_invitation`, and `artist_blog_rejected`. The last one
+mattered most: the blog rejection reason is stored only in `admin_audit_log`, the
+portal shows a bare "Rejected" badge, so on that occasion the reason reached the
+artist by no route at all.
+
+## Confirmed working, first time in production
+
+The refund path end to end, including a Stripe refund and the **reversal of an
+already-settled transfer**. Payout release on delivery confirmation. The full
+placement negotiation in both directions with counter-after-decline. Consignment
+record and bilateral countersign. Reviews after completion, which now have a
+wind-down gate the inventory said did not exist. The collect-from-venue purchase.
+The offer negotiation with its 60% floor and self-counter block. Paid-loan
+subscription setup. Curation booking. The wall render and its quota ledger.
+Twenty-six distinct email templates fired with correct fan-out.
+
+## Everything pass 2 created in production
+
+| Table | Rows |
+|---|---|
+| `placements` | `p-1788184190657-6iwn` Gyeongbokgung Palace (**sold**), `p-1788185323045-jmqm` Huaraz Peru (**completed**), `p-1788192191293-7xdf` Sand Dunes at Dusk (**cancelled**, live Stripe sub `sub_1UAXhSFP3rMcNTgSp3qrmrQt`) |
+| `orders` | `WS-UAKK1KDSC32PDT5R` £120 collect (delivered), `OFR-5A2LJH2CJ7KPVNMO` £26 offer (confirmed) |
+| `refund_requests` | `13c5d3e3-…` on `WS-J6CRQS4XTX2DJRO7`, **approved**, Stripe `re_3UAG8jFP3rMcNTgS0s84yXhS` |
+| `purchase_offers` | `off_1788191955308_3aky7j` £22 (countered), `off_1788192000823_qyzr33` £26 (**paid**) |
+| `curation_requests` | `8c307cca-…` Single wall, **paid £49**, `pi_3UAXqFFP3rMcNTgS1HCRvIo5` |
+| `placement_records` | `605d6792-…` approved by both parties |
+| `placement_reviews` | `fa64089e-…` 4 stars, artist → venue |
+| `placement_photos` | `efb6bc94-…` |
+| `blogs` | `894c4f52-…` "QA-TEST PASS2 reject-path blog (delete me)", **rejected** |
+| `auth.users` | **1 account**: `fcoles2598+qaref@gmail.com`, invited, no password, unconfirmed |
+| `artist_profiles` | `qa-test-referral`, approved (from accepting application 29) |
+| `artist_applications` | id 29 flipped pending → **accepted** |
+| `wall_renders` | `45403984-…`; `visualizer_usage` id 27; one item added to the venue's "Untitled wall" |
+| `messages` | 5 rows into `dm-fin-coles__testing-venue` |
+| Stripe (test) | 3 payments, 1 refund, 1 transfer reversal, 1 subscription, 3 abandoned sessions |
+
+**Changed on pre-existing records:** order `WS-J6CRQS4XTX2DJRO7` (pass 1's own)
+was driven to delivered and then refunded; three of the artist's works were
+placed and released again. Nothing belonging to a third party was touched.
+
+**Left alone as instructed:** the two pre-existing refund requests (£149.99 on
+`WS-H7RgZntN`, £169.90 on `WS-q0g0tqwD`), Leya Rubin's application id 12, the
+artist's live Pro subscription, and every account.
+
+## Honestly still blocked
+
+Partial refunds and therefore the pro-rated reversal arithmetic; the failed
+reversal 502; concurrent-claim 409s; anything needing a declined card or a Stripe
+webhook failure; the 14-day payout cron; the 429 render limit and burst limiter;
+wall creation (the venue is at its 3-wall cap); and the parked surfaces pass 1
+already listed, artwork requests, showroom, demo mode and OAuth.
