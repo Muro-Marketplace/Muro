@@ -2,11 +2,15 @@ import { describe, expect, it, vi, beforeEach, beforeAll, afterEach } from "vite
 
 // vi.hoisted runs before vi.mock factories so refs in the factories
 // below are initialised when the factory is evaluated.
-const { stripeCreate, fromMock, canReceivePayoutMock, saveCartSessionMock } = vi.hoisted(() => ({
+const { stripeCreate, fromMock, canReceivePayoutMock, saveCartSessionMock, shippingMock } = vi.hoisted(() => ({
   stripeCreate: vi.fn(async () => ({ id: "sess_test", url: "https://stripe.example/session" })),
   fromMock: vi.fn(),
   canReceivePayoutMock: vi.fn(async (): Promise<{ ok: boolean; reason?: string }> => ({ ok: true })),
   saveCartSessionMock: vi.fn(async () => undefined),
+  // A1.2: spied rather than stubbed, so the shipping tests can assert what
+  // the route hands the shared helper. The helper's own arithmetic is
+  // covered in lib/shipping-checkout.test.ts.
+  shippingMock: vi.fn(() => ({ totalShipping: 0, artistGroups: [] })),
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -31,7 +35,7 @@ vi.mock("@/lib/payouts/capability", () => ({
 }));
 
 vi.mock("@/lib/shipping-checkout", () => ({
-  calculateOrderShipping: () => ({ totalShipping: 0, artistGroups: [] }),
+  calculateOrderShipping: shippingMock,
 }));
 
 vi.mock("@/lib/validations", () => ({
@@ -52,6 +56,7 @@ beforeEach(() => {
   canReceivePayoutMock.mockReset();
   canReceivePayoutMock.mockResolvedValue({ ok: true });
   saveCartSessionMock.mockClear();
+  shippingMock.mockClear();
 });
 
 function req(body: unknown, auth: string | null = null): Request {
@@ -1723,5 +1728,166 @@ describe("POST /api/checkout collect claim under a ship order (B27)", () => {
       [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
     >)[0]?.[0]?.line_items ?? [];
     expect(sent[0]?.price_data?.unit_amount).toBe(10000);
+  });
+});
+
+// A1.2 (production pass, 2026-08-30). Shipping was the last money input the
+// route took on trust. A cart posted to the live site with `shippingPrice: 0`
+// minted a Stripe session for £49.99 against an honest £53.49, with no
+// shipping line on it at all. Item prices were already re-priced from the
+// database, which is why forging those did nothing.
+//
+// The arithmetic lives in lib/shipping-checkout.ts and was never wrong. What
+// these tests pin is the input: what the route hands that helper must come
+// from artist_works, not from the request body.
+describe("POST /api/checkout shipping inputs come from the database (A1.2)", () => {
+  const WORK_ID = "w-ship";
+
+  /** A work row whose shipping and dimensions disagree with the cart. */
+  function installWorksDb(row: Record<string, unknown>) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return profilesTable();
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [{
+                id: WORK_ID,
+                available: true,
+                quantity_available: 10,
+                pricing: [{ label: "S", price: 100 }],
+                title: "Untitled",
+                shipping_price: 9.95,
+                dimensions: "100x150cm",
+                ...row,
+              }],
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
+    });
+  }
+
+  const forgedItem = {
+    ...baseItem,
+    workId: WORK_ID,
+    price: 100,
+    shippingPrice: 0,
+    internationalShippingPrice: 0,
+    dimensions: "1x1cm",
+  };
+
+  function shippingArgs(): Array<Record<string, unknown>> {
+    expect(shippingMock).toHaveBeenCalledTimes(1);
+    return (shippingMock.mock.calls as unknown as unknown[][])[0][0] as Array<
+      Record<string, unknown>
+    >;
+  }
+
+  it("ignores a forged shippingPrice of 0 and uses the work's own price", async () => {
+    installWorksDb({});
+    const res = await POST(req({
+      items: [forgedItem],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(shippingArgs()[0].shippingPrice).toBe(9.95);
+  });
+
+  it("prefers the selected size's own shipping price over the work-level one", async () => {
+    installWorksDb({ pricing: [{ label: "S", price: 100, shippingPrice: 4.5 }] });
+    await POST(req({
+      items: [forgedItem],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(shippingArgs()[0].shippingPrice).toBe(4.5);
+  });
+
+  it("ignores forged dimensions, which drive the estimate when there is no manual price", async () => {
+    installWorksDb({ shipping_price: null });
+    await POST(req({
+      items: [forgedItem],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    const line = shippingArgs()[0];
+    expect(line.shippingPrice).toBeNull();
+    expect(line.dimensions).toBe("100x150cm");
+  });
+
+  it("passes the re-priced figure, not the cart's, so the signature threshold cannot be dodged", async () => {
+    // The order-level signature uplift keys off the subtotal, so a forged
+    // price would have suppressed it even though the line itself was corrected.
+    installWorksDb({ pricing: [{ label: "S", price: 250 }] });
+    await POST(req({
+      items: [{ ...forgedItem, price: 1 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(shippingArgs()[0].price).toBe(250);
+  });
+
+  it("keeps a genuine free-shipping zero set by the artist", async () => {
+    installWorksDb({ shipping_price: 0 });
+    await POST(req({
+      items: [{ ...forgedItem, shippingPrice: 20 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(shippingArgs()[0].shippingPrice).toBe(0);
+  });
+
+  it("discards the cart's international price rather than passing it through", async () => {
+    // The lookup is skipped on a UK order, because international shipping is
+    // artist-level and unused here. The cart's own figure is still dropped:
+    // once a work row is known, nothing from the body survives.
+    installWorksDb({});
+    await POST(req({
+      items: [{ ...forgedItem, internationalShippingPrice: 0 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(shippingArgs()[0].internationalShippingPrice).toBeNull();
+  });
+
+  it("still falls back to the cart for a collection bundle, which has no work row", async () => {
+    // A bundle prices from artist_collections and has no artist_works row to
+    // read shipping from. Narrowing that is tracked separately; this pins the
+    // current behaviour so a later change to it is deliberate.
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return profilesTable();
+      if (table === "artist_collections") {
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [{ id: "c-1", available: true, bundle_price: 100, name: "Bundle" }],
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
+    });
+    const res = await POST(req({
+      items: [{ ...baseItem, collectionId: "c-1", shippingPrice: 7.5, dimensions: "20x30cm" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    const line = shippingArgs()[0];
+    expect(line.shippingPrice).toBe(7.5);
+    expect(line.dimensions).toBe("20x30cm");
+  });
+
+  it("never reaches the shipping calculation for an unidentified cart line", async () => {
+    // A line with neither workId nor collectionId is rejected upstream, so
+    // there is no path on which shipping is computed from an unverifiable
+    // line. Asserted here because the fallback above would otherwise be the
+    // one place the request body could still reach the helper.
+    installWorksDb({});
+    const res = await POST(req({
+      items: [{ ...baseItem }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ code: "cart_line_unidentified" });
+    expect(shippingMock).not.toHaveBeenCalled();
   });
 });
