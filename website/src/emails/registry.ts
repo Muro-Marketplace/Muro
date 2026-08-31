@@ -96,6 +96,10 @@ import CurationPaymentReceived from "./templates/venue-lifecycle/CurationPayment
 // Wallplace Programmes, Task 4: the quote-first flow's third leg, between the
 // enquiry acknowledgement above and the payment receipt below.
 import CurationQuoteReady from "./templates/venue-lifecycle/CurationQuoteReady";
+// Review fix (Finding 2): the flow's fourth leg, programme-specific copy for
+// the same first-invoice event CurationPaymentReceived's "shortlist in N
+// days" framing does not fit.
+import CurationProgrammeConfirmed from "./templates/venue-lifecycle/CurationProgrammeConfirmed";
 import VenueCollectionPending from "./templates/venue-lifecycle/VenueCollectionPending";
 // D18: the counterpart to CurationPaymentReceived, sent by the admin refund endpoint.
 import CurationRefundIssued from "./templates/venue-lifecycle/CurationRefundIssued";
@@ -209,6 +213,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   CurationEnquiryReceived,
   CurationQuoteReady,
   CurationPaymentReceived,
+  CurationProgrammeConfirmed,
   VenueCollectionPending,
   CurationRefundIssued,
   // Account

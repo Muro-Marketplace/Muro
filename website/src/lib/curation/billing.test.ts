@@ -10,12 +10,28 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 
-const { sendAdminAlertMock } = vi.hoisted(() => ({
+const { sendAdminAlertMock, sendEmailMock } = vi.hoisted(() => ({
   sendAdminAlertMock: vi.fn(
     async (_input: {
       idempotencyKey: string;
       subject: string;
       fields?: { label: string; value: string }[];
+    }) => ({ ok: true as const, skipped: false as const, messageId: "m" }),
+  ),
+  // Review fix: handleCurationInvoicePaid now also sends the programme
+  // client's own payment confirmation via sendEmail directly (not through
+  // sendAdminAlert), so it needs its own mock -- without one, the real
+  // sendEmail would run against the {} supabase-admin stub below, throw, and
+  // be silently swallowed by the handler's own try/catch, leaving the send
+  // untested.
+  sendEmailMock: vi.fn(
+    async (_input: {
+      idempotencyKey: string;
+      template: string;
+      to: string;
+      subject: string;
+      react: unknown;
+      metadata?: Record<string, unknown>;
     }) => ({ ok: true as const, skipped: false as const, messageId: "m" }),
   ),
 }));
@@ -25,11 +41,17 @@ function lastAlert() {
   return sendAdminAlertMock.mock.calls.at(-1)?.[0];
 }
 
+/** The single email the call under test sent, or undefined if it sent none. */
+function lastEmail() {
+  return sendEmailMock.mock.calls.at(-1)?.[0];
+}
+
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({}) }));
 // K1: both were near-identical hand-written admin notifiers in the deleted
 // @/lib/email. One helper now, so the two mocks collapse into one and the tests
 // tell them apart by the alert's subject.
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: sendAdminAlertMock }));
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 
 import {
   handleCurationInvoicePaid,
@@ -60,6 +82,14 @@ const PROGRAMME_ROW = {
   contact_name: "Sam Okafor",
   venue_name: "Riverside Offices",
   tier: "programme",
+  // Review fix: the fields Task 4's admin quote route writes (PROGRAMME_LADDER's
+  // 10-piece rung), needed now that the first-payment admin alert and customer
+  // receipt read them off the row.
+  quoted_amount_gbp: 250,
+  billing_interval: "month" as const,
+  pieces_estimate: 10,
+  rotation_cadence: "quarterly",
+  term_months: 12,
 };
 
 /** A curation_requests-only fake that records every update payload. */
@@ -209,6 +239,20 @@ describe("handleCurationInvoicePaid", () => {
     expect(values).toContain("Managed subscription renewal");
   });
 
+  it("review fix: the renewal alert's Kind field reflects a programme row instead of the hardcoded managed-tier literal", async () => {
+    const { db } = makeDb(PROGRAMME_ROW);
+
+    await handleCurationInvoicePaid(
+      invoice("sub_prog_1", null, { billingReason: "subscription_cycle", amountPaid: 25000 }),
+      db,
+    );
+
+    const alert = lastAlert();
+    const values = (alert?.fields ?? []).map((f) => f.value).join(" | ");
+    expect(values).toContain("Programme renewal");
+    expect(values).not.toContain("Managed subscription renewal");
+  });
+
   it("D23: does NOT ping the admin on the first invoice (subscription_create)", async () => {
     const { db, updates } = makeDb(ROW);
 
@@ -240,6 +284,7 @@ describe("handleCurationInvoicePaid — Task 5 programme metadata resolution", (
       invoice("sub_prog_1", null, {
         curationRequestId: "cr_prog_1",
         billingReason: "subscription_create",
+        amountPaid: 25000,
       }),
       db,
     );
@@ -257,12 +302,46 @@ describe("handleCurationInvoicePaid — Task 5 programme metadata resolution", (
     // webhook writes for a managed tier at signup (D20, migration 099).
     expect(updates[0].stripe_subscription_id).toBe("sub_prog_1");
     expect(updateTargets).toEqual(["cr_prog_1"]);
-    // Known, flagged gap (see billing.ts's header comment): unlike a managed
-    // tier, nothing alerted the admin about this payment before now (the
-    // checkout webhook's curation branch never ran), and this reconciler
-    // still only pings on a subscription_cycle renewal. Pinned here so a
-    // future change to that guard has to touch this assertion deliberately.
-    expect(sendAdminAlertMock).not.toHaveBeenCalled();
+    // Review fix: this used to assert sendAdminAlertMock was NOT called here,
+    // pinning the exact gap the review flagged as if it were intended
+    // behaviour. Unlike a managed tier, a programme's checkout session never
+    // runs the webhook's curation branch (see billing.ts's header comment),
+    // so this reconciler is the ONLY place anyone is ever told the client
+    // paid -- both sends below now fire on exactly this event.
+    const alert = lastAlert();
+    expect(alert?.subject).toContain("Programme confirmed");
+    expect(alert?.subject).toContain("250.00");
+    const alertValues = (alert?.fields ?? []).map((f) => `${f.label}: ${f.value}`).join(" | ");
+    expect(alertValues).toContain("Venue: Riverside Offices");
+    expect(alertValues).toContain("Quote: £250.00 per month");
+    expect(alertValues).toContain("Pieces: 10");
+    expect(alertValues).toContain("Rotation: quarterly");
+    expect(alertValues).toContain("Request: cr_prog_1");
+
+    // Finding 2: the client gets their own confirmation on the same event,
+    // via the same sendEmail mechanism the other curation lifecycle emails use.
+    const email = lastEmail();
+    expect(email?.template).toBe("curation_programme_confirmed");
+    expect(email?.to).toBe("sam@example.com");
+    expect(email?.idempotencyKey).toBe("curation_programme_confirmed:cr_prog_1");
+  });
+
+  it("review fix: alerts the admin but skips the client email when the programme row has no contact email", async () => {
+    const rowWithoutEmail = { ...PROGRAMME_ROW, contact_email: null };
+    const { db } = makeDbByColumn({ stripe_subscription_id: null, id: rowWithoutEmail });
+
+    const handled = await handleCurationInvoicePaid(
+      invoice("sub_prog_9", null, {
+        curationRequestId: "cr_prog_1",
+        billingReason: "subscription_create",
+        amountPaid: 25000,
+      }),
+      db,
+    );
+
+    expect(handled).toBe(true);
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("prefers the stripe_subscription_id match over metadata when both could resolve a row", async () => {
@@ -363,6 +442,26 @@ describe("handleCurationSubscriptionDeleted — Task 5 programme metadata resolu
     expect(alert?.subject).toContain("Curation subscription cancelled");
     const values = (alert?.fields ?? []).map((f) => f.value).join(" | ");
     expect(values).toContain("Riverside Offices");
+  });
+
+  // Finding 3: both invoice handlers' own "Task 5 programme metadata
+  // resolution" blocks have this counterpart (see "ignores an invoice whose
+  // metadata names no known curation request, without throwing" above); this
+  // one was missing it.
+  it("resolves neither subscription id nor metadata, ignored gracefully", async () => {
+    const { db, updates } = makeDbByColumn({ stripe_subscription_id: null, id: null });
+
+    const handled = await handleCurationSubscriptionDeleted(
+      {
+        id: "sub_orphan",
+        metadata: { curation_request_id: "cr_does_not_exist" },
+      } as unknown as Stripe.Subscription,
+      db,
+    );
+
+    expect(handled).toBe(false);
+    expect(updates).toHaveLength(0);
+    expect(sendAdminAlertMock).not.toHaveBeenCalled();
   });
 });
 

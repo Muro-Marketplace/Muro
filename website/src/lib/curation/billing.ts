@@ -36,22 +36,27 @@
 //
 // Out of scope (feature, not this reconcile bug): the customer renewal receipt
 // and the curation refund path (D57.4 / D56.3). The renewal-paid customer
-// notification belongs with D23. Also out of scope, and a genuine gap this
-// task surfaced rather than fixed: because checkout.session.completed never
-// fires for a programme, a programme's FIRST payment (unlike a managed
-// tier's) triggers neither of the two things that branch does -- no admin
-// alert, no customer receipt email. handleCurationInvoicePaid below still
-// deliberately does not alert on billing_reason "subscription_create", for
-// the same reason the D23 comment there gives (avoiding a double send) --
-// except for a programme there is no first send to double up on. Flagged for
-// a follow-up decision, not fixed here: it touches notification copy and an
-// idempotency key, not the reconcile logic this task is scoped to.
+// notification belongs with D23.
+//
+// Review fix: because checkout.session.completed never fires for a programme
+// (this file's header above), a programme's FIRST payment used to trigger
+// neither of the two things that branch does for every other tier -- no
+// admin alert, no customer receipt email. The row still flipped to
+// in_progress, silently: nobody at Wallplace was told to start curating, and
+// the client who had just committed to a year got no confirmation.
+// handleCurationInvoicePaid below now alerts the admin and emails the client
+// when `row.tier === "programme"` on billing_reason "subscription_create" --
+// the one case where there is no earlier send to double up on, unlike the
+// subscription_cycle guard just below, which still deliberately skips a
+// renewal's first invoice for exactly that reason.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { readSubscriptionIdFromInvoice } from "@/lib/stripe-subscription-period";
 import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { sendEmail } from "@/lib/email/send";
+import { CurationProgrammeConfirmed } from "@/emails/templates/venue-lifecycle/CurationProgrammeConfirmed";
 import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
 
 interface CurationRow {
@@ -61,6 +66,15 @@ interface CurationRow {
   contact_name: string | null;
   venue_name: string | null;
   tier: string | null;
+  // Review fix: a programme's first invoice.paid is the only place its admin
+  // alert and customer receipt are ever built (see this file's header), so
+  // these Task-4-quoted fields need to travel with the row from here, not
+  // just from the checkout route that (for every other tier) already had them.
+  quoted_amount_gbp: number | null;
+  billing_interval: "month" | "quarter" | null;
+  pieces_estimate: number | null;
+  rotation_cadence: string | null;
+  term_months: number | null;
 }
 
 async function findBySubscription(
@@ -69,7 +83,10 @@ async function findBySubscription(
 ): Promise<CurationRow | null> {
   const { data } = await db
     .from("curation_requests")
-    .select("id, status, contact_email, contact_name, venue_name, tier")
+    .select(
+      "id, status, contact_email, contact_name, venue_name, tier, quoted_amount_gbp, " +
+        "billing_interval, pieces_estimate, rotation_cadence, term_months",
+    )
     .eq("stripe_subscription_id", subId)
     .maybeSingle<CurationRow>();
   return data ?? null;
@@ -82,7 +99,10 @@ async function findByRequestId(
 ): Promise<CurationRow | null> {
   const { data } = await db
     .from("curation_requests")
-    .select("id, status, contact_email, contact_name, venue_name, tier")
+    .select(
+      "id, status, contact_email, contact_name, venue_name, tier, quoted_amount_gbp, " +
+        "billing_interval, pieces_estimate, rotation_cadence, term_months",
+    )
     .eq("id", curationRequestId)
     .maybeSingle<CurationRow>();
   return data ?? null;
@@ -187,11 +207,86 @@ export async function handleCurationInvoicePaid(
           label: "Contact",
           value: `${row.contact_name ?? ""}${row.contact_email ? ` <${row.contact_email}>` : ""}`,
         },
-        { label: "Kind", value: "Managed subscription renewal" },
+        // Review fix: this literal used to read "Managed subscription renewal"
+        // unconditionally, which was wrong for a programme row (this same
+        // reconciler services both). Reflects the row it is actually about.
+        {
+          label: "Kind",
+          value: row.tier === "programme" ? "Programme renewal" : "Managed subscription renewal",
+        },
       ],
       actionPath: "/admin/curation",
       actionLabel: "View in admin",
     });
+  }
+
+  // Review fix: a programme's checkout session never carries
+  // `kind: "curation_request"` (this file's header comment), so its first
+  // invoice is the only event anyone is ever told about it. Unlike the
+  // subscription_cycle guard above, there is no earlier send to double up on
+  // here — this IS the first send, for this one tier only.
+  if (row.tier === "programme" && invoice.billing_reason === "subscription_create") {
+    const intervalLabel = row.billing_interval === "quarter" ? "quarter" : "month";
+
+    // Independent try/catches: the admin alert and the customer receipt are
+    // two unrelated failure domains (one admin inbox, one client inbox), so
+    // one must not stop the other being attempted, and neither may throw back
+    // into the reconciler — the status write above already landed and must
+    // stand regardless of whether either send succeeds. Mirrors the pattern
+    // the venue/artist payout legs use in the webhook route for the same
+    // reason, and matches how sendEmail is guarded on the equivalent send in
+    // ../../app/api/admin/curation/quote/route.ts.
+    try {
+      await sendAdminAlert({
+        idempotencyKey: `admin_curation_paid:programme_first:${invoice.id}`,
+        subject: `Programme confirmed, first payment (£${((invoice.amount_paid ?? 0) / 100).toFixed(2)}): ${row.venue_name ?? ""}`,
+        summary: `${row.venue_name ?? "A venue"} paid their first Wallplace Programme invoice. Time to arrange curation and installation.`,
+        fields: [
+          { label: "Venue", value: row.venue_name ?? "" },
+          {
+            label: "Quote",
+            value:
+              row.quoted_amount_gbp != null
+                ? `£${row.quoted_amount_gbp.toFixed(2)} per ${intervalLabel}`
+                : "",
+          },
+          { label: "Pieces", value: row.pieces_estimate != null ? String(row.pieces_estimate) : "" },
+          { label: "Rotation", value: row.rotation_cadence ?? "" },
+          { label: "Request", value: row.id },
+          {
+            label: "Contact",
+            value: `${row.contact_name ?? ""}${row.contact_email ? ` <${row.contact_email}>` : ""}`,
+          },
+        ],
+        actionPath: "/admin/curation",
+        actionLabel: "View in admin",
+      });
+    } catch (err) {
+      console.error("[curation billing] programme first-payment admin alert failed", { requestId: row.id, err });
+    }
+
+    if (row.contact_email) {
+      try {
+        await sendEmail({
+          idempotencyKey: `curation_programme_confirmed:${row.id}`,
+          template: "curation_programme_confirmed",
+          category: "orders_and_payouts",
+          to: row.contact_email,
+          subject: "Your Wallplace programme is confirmed",
+          react: CurationProgrammeConfirmed({
+            contactFirstName: (row.contact_name || "there").split(" ")[0],
+            venueName: row.venue_name ?? "",
+            quotedAmount: { amount: Math.round((row.quoted_amount_gbp ?? 0) * 100), currency: "GBP" },
+            billingInterval: intervalLabel,
+            rotationCadence: row.rotation_cadence,
+            termMonths: row.term_months ?? CURATION_TIERS.programme.termMonths,
+          }),
+          metadata: { curationRequestId: row.id },
+        });
+      } catch (err) {
+        console.error("[curation billing] programme first-payment receipt failed", { requestId: row.id, err });
+      }
+    }
   }
   return true;
 }
