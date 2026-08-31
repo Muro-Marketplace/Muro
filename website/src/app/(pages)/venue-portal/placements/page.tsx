@@ -12,7 +12,7 @@ import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { venueShareLabel } from "@/lib/revenue-share-labels";
 import { useAuth } from "@/context/AuthContext";
 import { canRespond, isRequester } from "@/lib/placement-permissions";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
+import { isBillingWindingDown, normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
@@ -1606,6 +1606,7 @@ export default function VenuePlacementsPage() {
                             monthlyFeeGbp={p.monthlyFeeGbp}
                             liveFrom={p.liveFrom}
                             subscriptionStatus={p.subscriptionStatus}
+                            cancelAtPeriodEnd={isBillingWindingDown(p.status)}
                             role="venue"
                           />
 
@@ -1921,6 +1922,7 @@ export default function VenuePlacementsPage() {
                       monthlyFeeGbp={p.monthlyFeeGbp}
                       liveFrom={p.liveFrom}
                       subscriptionStatus={p.subscriptionStatus}
+                      cancelAtPeriodEnd={isBillingWindingDown(p.status)}
                       role="venue"
                     />
 
@@ -2061,7 +2063,17 @@ export default function VenuePlacementsPage() {
       <ConfirmDialog
         open={pendingCancelId !== null}
         title="Cancel this placement?"
-        body="The other party will see it as cancelled."
+        // Rows 2179-2187: a placement carrying a live monthly subscription was
+        // cancelled behind a prompt that never mentioned money. Name the fee
+        // when there is one, so the venue knows what they are ending.
+        body={(() => {
+          const target = placements.find((p) => p.id === pendingCancelId);
+          const fee = target?.monthlyFeeGbp ?? 0;
+          const base = "The other party will see it as cancelled.";
+          return fee > 0
+            ? `${base} Your monthly payment of \u00a3${fee.toFixed(2)} stops too: you won't be charged again, and the month you have already paid for runs to the end of its period.`
+            : base;
+        })()}
         confirmLabel="Cancel placement"
         cancelLabel="Keep it"
         destructive

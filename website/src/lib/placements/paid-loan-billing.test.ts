@@ -253,6 +253,47 @@ describe("cancelPaidLoanBilling()", () => {
       cancel_at_period_end: true,
     });
   });
+
+  // Rows 2179-2187 / PASS2-offers-and-paid-loan-log. After the venue cancelled
+  // placement p-1788192191293-7xdf, the page showed "Cancelled" at the top and,
+  // further down, "Monthly payment active, £12.00/mo. Next payment on 30
+  // September. Manage it any time from this page."
+  //
+  // Stripe HAD been told: `cancel_at_period_end: true` was sent, which is why
+  // the row deliberately stays `active` (tearing it down early would cut short
+  // a period the venue has paid for). But nothing recorded that a cancellation
+  // was scheduled, so every reader saw a healthy subscription and
+  // `current_period_end` was rendered as "next payment" when it is in fact the
+  // last day of cover. Migration 127 adds the column; this writes it.
+  it("records that a cancellation is scheduled, so readers stop calling it healthy", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    subscriptionsUpdateMock.mockResolvedValue({});
+    const { db, updates } = buildDb({
+      liveBillings: [{ id: "row1", stripe_subscription_id: "sub_111", status: "active" }],
+    });
+
+    await cancelPaidLoanBilling("p1", db as Parameters<typeof cancelPaidLoanBilling>[1]);
+
+    const flagged = (updates as Array<{ table: string; row: Record<string, unknown> }>).find(
+      (u) => u.table === "placement_recurring_billings" && u.row.cancel_at_period_end === true,
+    );
+    expect(flagged, "nothing recorded that the subscription is winding down").toBeTruthy();
+  });
+
+  it("does not flag the row when Stripe refused the cancellation", async () => {
+    // The flag is a claim about Stripe's state. Writing it after a failed call
+    // would tell the venue they are not being charged when they still are.
+    isFlagOnMock.mockReturnValue(true);
+    subscriptionsUpdateMock.mockRejectedValue(new Error("stripe down"));
+    const { db, updates } = buildDb({
+      liveBillings: [{ id: "row1", stripe_subscription_id: "sub_111", status: "active" }],
+    });
+
+    await expect(
+      cancelPaidLoanBilling("p1", db as Parameters<typeof cancelPaidLoanBilling>[1]),
+    ).rejects.toThrow();
+    expect(updates).toHaveLength(0);
+  });
 });
 
 describe("handleInvoicePaid()", () => {

@@ -813,7 +813,7 @@ export async function PATCH(request: Request) {
     // relied on (the phantom requester_user_id rejected the whole query) is gone.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at")
       .eq("id", id)
       .single();
 
@@ -1330,6 +1330,18 @@ export async function PATCH(request: Request) {
     }
     if (status) updates.status = status;
     const now = new Date().toISOString();
+
+    // Row 3.4 (pass 2). `cancelled_at` and `cancelled_by_user_id` exist on the
+    // table and nothing has ever written them, so a cancelled placement carries
+    // no record of who ended it or when. Verified NULL on both columns for
+    // p-1788192191293-7xdf, which a venue cancelled during pass 2.
+    //
+    // Only on the transition INTO cancelled, and only when not already stamped,
+    // so a repeated PATCH cannot rewrite who did it.
+    if (status === "cancelled" && existing.status !== "cancelled" && !existing.cancelled_at) {
+      updates.cancelled_at = now;
+      updates.cancelled_by_user_id = auth.user!.id;
+    }
 
     if (existing.status === "pending" && (status === "active" || status === "declined")) {
       updates.responded_at = now;
@@ -2131,13 +2143,32 @@ export async function PATCH(request: Request) {
 
         // Bell notification. Fire first, independent of email, so a
         // flaky email service can't drop the in-app signal too.
+        const monthlyFee = Number(existing.monthly_fee_gbp ?? 0);
+        const billingLine =
+          monthlyFee > 0 ? ` The £${monthlyFee.toFixed(2)} monthly payment ends with it.` : "";
+
         createNotification({
           userId: otherPartyUserId,
           kind: "placement_cancelled",
           title: "Placement cancelled",
-          body: `${cancellerName} cancelled the placement`,
+          body: `${cancellerName} cancelled the placement.${billingLine}`,
           link: `/placements/${encodeURIComponent(id)}`,
         }).catch((err) => console.warn("[placements] cancel notification failed:", err));
+
+        // Rows 2179-2187. The CANCELLER got nothing at all, and on a paid loan
+        // they are usually the venue being charged. The placement page then
+        // told them "Monthly payment active, £12.00/mo. Next payment on 30
+        // September" underneath a heading saying Cancelled. Confirm the money
+        // has stopped to the person who stopped it.
+        if (monthlyFee > 0) {
+          createNotification({
+            userId: auth.user!.id,
+            kind: "placement_cancelled",
+            title: "Monthly payment cancelled",
+            body: `The £${monthlyFee.toFixed(2)} monthly payment for this placement has been cancelled. No further charges.`,
+            link: `/placements/${encodeURIComponent(id)}`,
+          }).catch((err) => console.warn("[placements] canceller billing notification failed:", err));
+        }
 
         // Email the other party. Idempotency keyed by id alone, the row
         // can only transition into cancelled once (the gate above blocks
@@ -2163,6 +2194,10 @@ export async function PATCH(request: Request) {
                 recipientPersona: otherPartyPersona,
                 placementUrl,
                 nextStepUrl,
+                // Rows 2179-2187: the cancellation said nothing about the money
+                // to either party, on a placement carrying a live monthly
+                // subscription.
+                monthlyFeeGbp: existing.monthly_fee_gbp ?? null,
               }),
               metadata: { placementId: id },
             });

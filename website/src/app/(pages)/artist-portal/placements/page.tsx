@@ -12,7 +12,7 @@ import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { artistKeepsLabel, venueShareLabel } from "@/lib/revenue-share-labels";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
+import { isBillingWindingDown, normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
@@ -1799,6 +1799,7 @@ export default function PlacementsPage() {
                   monthlyFeeGbp={p.monthlyFeeGbp}
                   liveFrom={p.liveFrom}
                   subscriptionStatus={p.subscriptionStatus}
+                  cancelAtPeriodEnd={isBillingWindingDown(p.status)}
                   role="artist"
                 />
 
@@ -1934,7 +1935,17 @@ export default function PlacementsPage() {
       <ConfirmDialog
         open={pendingCancelId !== null}
         title="Cancel this placement?"
-        body="The other party will see it as cancelled."
+        // Rows 2179-2187: the prompt never mentioned money on a placement
+        // carrying a live monthly subscription. The artist is the one being
+        // paid, so name what stops.
+        body={(() => {
+          const target = placements.find((p) => p.id === pendingCancelId);
+          const fee = target?.monthlyFeeGbp ?? 0;
+          const base = "The other party will see it as cancelled.";
+          return fee > 0
+            ? `${base} The venue's monthly payment of \u00a3${fee.toFixed(2)} stops with it, after the month they have already paid for.`
+            : base;
+        })()}
         confirmLabel="Cancel placement"
         cancelLabel="Keep it"
         destructive

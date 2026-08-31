@@ -20,7 +20,7 @@ import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import InStoreOfferCard from "@/components/InStoreOfferCard";
 import { isLoan, isPurchase } from "@/lib/arrangement-type";
 import { ARRANGEMENT_LABEL, labelForArrangement } from "@/lib/arrangement-labels";
-import { normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
+import { isBillingWindingDown, normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
 interface PlacementRow {
   id: string;
@@ -1059,6 +1059,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           subscriptionStatus={placement.subscription_status}
           role={viewerRole}
           currentPeriodEnd={placement.subscription_current_period_end}
+          cancelAtPeriodEnd={isBillingWindingDown(placement.status)}
         />
       )}
 

@@ -85,6 +85,8 @@ type Row = {
   monthly_fee_gbp?: number | null;
   qr_enabled?: boolean | null;
   revenue_share_percent?: number | null;
+  /** 3.4: read so a repeated cancel cannot rewrite who did it. */
+  cancelled_at?: string | null;
 };
 
 const updates: Record<string, unknown>[] = [];
@@ -1226,5 +1228,47 @@ describe("PATCH /api/placements can still close a SOLD placement (row 727)", () 
 
     expect(res.status).toBe(400);
     expect(updates).toHaveLength(0);
+  });
+});
+
+// Pass 2 item 3.4. `placements.cancelled_at` and `cancelled_by_user_id` exist
+// and nothing had ever written them, so a cancelled placement carried no record
+// of who ended it or when. Verified NULL on both for p-1788192191293-7xdf,
+// which a venue cancelled during the pass.
+describe("PATCH /api/placements records who cancelled and when (3.4)", () => {
+  const ACTIVE: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+  };
+
+  it("stamps both columns on the transition into cancelled", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", status: "cancelled" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(updates[0].cancelled_at).toEqual(expect.any(String));
+    expect(updates[0].cancelled_by_user_id).toBe(ARTIST);
+  });
+
+  it("stamps nothing on any other transition", async () => {
+    setupDb(ACTIVE);
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("cancelled_at");
+    expect(updates[0]).not.toHaveProperty("cancelled_by_user_id");
+  });
+
+  it("does not rewrite who cancelled on a repeated PATCH", async () => {
+    setupDb({ ...ACTIVE, status: "cancelled", cancelled_at: "2026-08-01T00:00:00.000Z" });
+
+    await patch({ id: "pl-1", status: "cancelled" });
+
+    expect(updates[0] ?? {}).not.toHaveProperty("cancelled_by_user_id");
   });
 });

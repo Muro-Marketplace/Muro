@@ -15,6 +15,29 @@ export const STAGE_LABEL: Record<Stage, string> = {
   collected: "Collected",
 };
 
+/**
+ * Statuses from which a paid-loan subscription has already been asked to stop.
+ *
+ * Rows 2179-2187: after a venue cancelled a paid-loan placement, the page said
+ * "Cancelled" at the top and "Monthly payment active, £12.00/mo. Next payment
+ * on 30 September" further down. Both readings came from the same row, because
+ * `cancelPaidLoanBilling` correctly sends `cancel_at_period_end: true` and
+ * correctly leaves the subscription `active` until the period the venue has
+ * paid for runs out. Status alone therefore cannot tell "running" from
+ * "winding down".
+ *
+ * Every terminal transition runs that cancellation (the D8 hook in
+ * /api/placements), so the placement's own status answers it for the UI.
+ * `placement_recurring_billings.cancel_at_period_end` (migration 127) is the
+ * durable record of what Stripe was actually told.
+ */
+const BILLING_STOPPED_STATUSES = new Set(["cancelled", "completed", "sold"]);
+
+/** True when this placement's status means its monthly billing is ending. */
+export function isBillingWindingDown(raw: string | null | undefined): boolean {
+  return BILLING_STOPPED_STATUSES.has((raw || "").toLowerCase());
+}
+
 export function normaliseStatus(raw: string | null | undefined): DisplayStatus {
   const key = (raw || "").toLowerCase();
   switch (key) {

@@ -52,7 +52,7 @@
   "feature_request_upvotes": ["request_id", "user_id", "created_at"],
   "artwork_request_responses": ["id", "request_id", "artist_user_id", "artist_slug", "response_type", "message", "work_ids", "proposed_offer_amount_pence", "proposed_commission_amount_pence", "proposed_commission_timeline", "linked_offer_id", "linked_placement_id", "linked_commission_id", "status", "created_at", "updated_at", "metadata", "proposed_monthly_fee_pence", "proposed_qr_enabled", "proposed_revenue_share_percent"],
   "visualizer_quota_overrides": ["user_id", "daily_extra", "monthly_extra", "expires_at", "reason", "granted_by", "created_at"],
-  "placement_recurring_billings": ["id", "placement_id", "stripe_subscription_id", "stripe_customer_id", "payer_user_id", "payee_user_id", "monthly_amount_pence", "status", "current_period_start", "current_period_end", "created_at", "updated_at"],
+  "placement_recurring_billings": ["id", "placement_id", "stripe_subscription_id", "stripe_customer_id", "payer_user_id", "payee_user_id", "monthly_amount_pence", "status", "current_period_start", "current_period_end", "created_at", "updated_at", "cancel_at_period_end"],
   "conversation_reports": ["id", "reporter_user_id", "other_party", "conversation_id", "reason", "status", "reviewed_at", "reviewed_by", "created_at"],
   "user_blocks": ["blocker_user_id", "blocked_slug", "created_at"],
   "placement_record_versions": ["id", "placement_id", "version_of_record_id", "changed_by_user_id", "changed_by_role", "snapshot", "changed_fields", "created_at"]
