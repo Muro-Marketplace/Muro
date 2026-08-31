@@ -1,0 +1,222 @@
+- generic [active] [ref=f8e1]:
+  - generic [ref=f8e2]:
+    - link "Skip to content" [ref=f8e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f8e4]:
+      - generic [ref=f8e6]:
+        - link "Wallplace" [ref=f8e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f8e8]:
+          - link "Marketplace" [ref=f8e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f8e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f8e12] [cursor=pointer]
+        - generic [ref=f8e15]:
+          - link "Saved" [ref=f8e16] [cursor=pointer]:
+            - /url: /artist-portal/saved
+          - button "Messages" [ref=f8e20] [cursor=pointer]:
+            - generic [ref=f8e116]: "7"
+          - button "Notifications" [ref=f8e25] [cursor=pointer]:
+            - generic [ref=f8e117]: "5"
+          - generic [ref=f8e29]:
+            - link "Artist Portal" [ref=f8e30] [cursor=pointer]:
+              - /url: /artist-portal
+            - button "Portal menu" [ref=f8e31] [cursor=pointer]
+          - button "Logout" [ref=f8e34] [cursor=pointer]
+    - main [ref=f8e35]:
+      - generic [ref=f8e36]:
+        - navigation "Breadcrumb" [ref=f8e120]:
+          - list [ref=f8e121]:
+            - listitem [ref=f8e122]:
+              - link "Artist portal" [ref=f8e123] [cursor=pointer]:
+                - /url: /artist-portal
+              - generic [ref=f8e124]: ›
+            - listitem [ref=f8e125]:
+              - link "Placements" [ref=f8e126] [cursor=pointer]:
+                - /url: /artist-portal/placements
+              - generic [ref=f8e127]: ›
+            - listitem [ref=f8e128]:
+              - generic [ref=f8e129]: Gyeongbokgung Palace
+        - generic [ref=f8e130]:
+          - generic [ref=f8e131]:
+            - img "Gyeongbokgung Palace" [ref=f8e133]
+            - generic [ref=f8e134]:
+              - paragraph [ref=f8e135]: Revenue share (25%)
+              - paragraph [ref=f8e136]: On loan from artist
+              - heading "Gyeongbokgung Palace" [level=1] [ref=f8e137]
+              - generic [ref=f8e138]:
+                - link "Fin Coles" [ref=f8e139] [cursor=pointer]:
+                  - /url: /browse/fin-coles
+                - generic [ref=f8e140]: ·
+                - generic [ref=f8e141]: Testing Venue
+                - generic [ref=f8e142]: ·
+                - generic [ref=f8e143]: London
+              - generic [ref=f8e144]:
+                - generic [ref=f8e145]: Pending
+                - link "QR label" [ref=f8e146] [cursor=pointer]:
+                  - /url: /artist-portal/labels?works=Gyeongbokgung%20Palace&venue=Testing%20Venue&venueSlug=testing-venue
+          - generic [ref=f8e152]:
+            - generic [ref=f8e153]:
+              - heading "Progress" [level=2] [ref=f8e154]
+              - generic [ref=f8e155]: Awaiting response
+            - list [ref=f8e156]:
+              - listitem [ref=f8e157]:
+                - generic [ref=f8e163]:
+                  - paragraph [ref=f8e164]: Requested
+                  - paragraph [ref=f8e165]: 31 Aug
+              - listitem [ref=f8e166]:
+                - generic [ref=f8e167]: "2"
+                - paragraph [ref=f8e172]: Accepted
+              - listitem [ref=f8e173]:
+                - generic [ref=f8e174]: "3"
+                - paragraph [ref=f8e179]: Scheduled
+              - listitem [ref=f8e180]:
+                - generic [ref=f8e181]: "4"
+                - paragraph [ref=f8e186]: Installed
+              - listitem [ref=f8e187]:
+                - generic [ref=f8e188]: "5"
+                - paragraph [ref=f8e193]: Live on wall
+              - listitem [ref=f8e194]:
+                - generic [ref=f8e195]: "6"
+                - paragraph [ref=f8e199]: Collected
+          - generic [ref=f8e200]:
+            - heading "Respond to this request" [level=2] [ref=f8e201]
+            - generic [ref=f8e202]:
+              - button "Accept" [ref=f8e203] [cursor=pointer]
+              - button "Counter" [ref=f8e204] [cursor=pointer]
+              - button "Decline" [ref=f8e205] [cursor=pointer]
+          - generic [ref=f8e206]:
+            - generic [ref=f8e207]:
+              - paragraph [ref=f8e208]: Revenue share
+              - paragraph [ref=f8e209]: 25%
+              - paragraph [ref=f8e210]: Artist’s share of QR-code sales
+            - generic [ref=f8e211]:
+              - paragraph [ref=f8e212]: Earned so far
+              - paragraph [ref=f8e213]: £0.00
+            - generic [ref=f8e214]:
+              - paragraph [ref=f8e215]: Created
+              - paragraph [ref=f8e216]: 31 Aug 2026
+          - generic [ref=f8e217]:
+            - generic [ref=f8e218]:
+              - heading "Negotiation log" [level=2] [ref=f8e219]
+              - generic [ref=f8e220]: 1 entry
+            - list [ref=f8e221]:
+              - listitem [ref=f8e222]:
+                - generic [ref=f8e223]:
+                  - paragraph [ref=f8e224]: Initial request
+                  - paragraph [ref=f8e225]: 31 Aug 2026 · 15:49
+                - paragraph [ref=f8e226]: From testing-venue
+                - paragraph [ref=f8e227]: 25% revenue share · QR enabled
+                - paragraph [ref=f8e228]: "QA-TEST PASS2 chain 1: placement lifecycle. Please ignore, this is a QA record."
+          - generic [ref=f8e230]:
+            - paragraph [ref=f8e231]: Request message
+            - paragraph [ref=f8e232]: "QA-TEST PASS2 chain 1: placement lifecycle. Please ignore, this is a QA record."
+          - generic [ref=f8e234]:
+            - button "Loan / consignment record (not yet created)" [ref=f8e235] [cursor=pointer]:
+              - heading "Loan / consignment record" [level=2] [ref=f8e238]
+              - generic [ref=f8e239]: (not yet created)
+            - button "+ Add record" [ref=f8e240] [cursor=pointer]
+          - generic [ref=f8e241]:
+            - generic [ref=f8e242]:
+              - heading "Photos in venue" [level=2] [ref=f8e243]
+              - generic [ref=f8e244] [cursor=pointer]: + Upload
+            - generic [ref=f8e246]:
+              - img "Placement photo"
+              - generic: Quick View
+    - contentinfo "Site footer" [ref=f8e37]:
+      - generic [ref=f8e38]:
+        - generic [ref=f8e39]:
+          - generic [ref=f8e40]:
+            - link "Wallplace" [ref=f8e41] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f8e42]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f8e43]:
+              - paragraph [ref=f8e44]: Be first to see new works
+              - paragraph [ref=f8e45]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f8e47]:
+                - textbox "your@email.com" [ref=f8e48]
+                - button "Subscribe" [ref=f8e49] [cursor=pointer]
+            - link "Instagram" [ref=f8e50] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f8e55]:
+            - heading "For Artists" [level=4] [ref=f8e56]
+            - list [ref=f8e57]:
+              - listitem [ref=f8e58]:
+                - link "Apply to Join" [ref=f8e59] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f8e60]:
+                - link "Pricing" [ref=f8e61] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f8e62]:
+                - link "Browse Venues" [ref=f8e63] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f8e64]:
+                - link "FAQs" [ref=f8e65] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f8e66]:
+            - heading "For Venues" [level=4] [ref=f8e67]
+            - list [ref=f8e68]:
+              - listitem [ref=f8e69]:
+                - link "Discover Art" [ref=f8e70] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f8e71]:
+                - link "Register Your Venue" [ref=f8e72] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f8e73]:
+                - link "Wallplace Curated" [ref=f8e74] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f8e75]:
+                - link "How It Works" [ref=f8e76] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f8e77]:
+                - link "FAQs" [ref=f8e78] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f8e79]:
+            - heading "Company" [level=4] [ref=f8e80]
+            - list [ref=f8e81]:
+              - listitem [ref=f8e82]:
+                - link "About" [ref=f8e83] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f8e84]:
+                - link "Blog" [ref=f8e85] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f8e86]:
+                - link "How It Works" [ref=f8e87] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f8e88]:
+                - link "Sustainability" [ref=f8e89] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f8e90]:
+                - link "Partner with us" [ref=f8e91] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f8e92]:
+                - link "Contact" [ref=f8e93] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f8e94]:
+                - link "Complaints" [ref=f8e95] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f8e96]:
+                - link "Terms" [ref=f8e97] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f8e98]:
+                - link "Artist Agreement" [ref=f8e99] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f8e100]:
+                - link "Venue Agreement" [ref=f8e101] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f8e102]:
+                - link "Privacy" [ref=f8e103] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f8e104]:
+                - link "Cookies" [ref=f8e105] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f8e106]:
+                - link "Returns & Refunds" [ref=f8e107] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f8e108]:
+                - link "IP Policy" [ref=f8e109] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f8e111]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f8e112] [cursor=pointer]: Feedback
+  - alert [ref=f8e115]
