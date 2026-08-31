@@ -1902,7 +1902,9 @@ describe("POST /api/checkout shipping inputs come from the database (A1.2)", () 
 // webhook that creates the order, so that is where the id has to ride.
 describe("POST /api/checkout carries the buyer's identity to the order", () => {
   function sessionMetadata(): Record<string, string> {
-    const arg = stripeCreate.mock.calls[0][0] as { metadata?: Record<string, string> };
+    const arg = (stripeCreate.mock.calls as unknown as unknown[][])[0][0] as {
+      metadata?: Record<string, string>;
+    };
     return arg.metadata || {};
   }
 

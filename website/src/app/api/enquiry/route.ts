@@ -165,7 +165,12 @@ export async function POST(request: Request) {
     const { data: insertedMessage } = await db.from("messages").insert({
       conversation_id: cid,
       sender_id: null,
-      sender_name: senderEmail.split("@")[0],
+      // C L1124. Was senderEmail.split("@")[0], so an enquiry from Finlay Coles
+      // reached the artist's inbox as "fcoles2598" while the name the form had
+      // just collected sat buried in the message body. The enquiries row two
+      // writes above already stores senderName; these two disagreed about the
+      // same person.
+      sender_name: senderName,
       sender_type: "anonymous",
       recipient_slug: artistSlug,
       content: `${workTitle ? `Re: ${workTitle}\n\n` : ""}${message}\n\nFrom ${senderName} (${senderEmail})`,

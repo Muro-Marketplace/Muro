@@ -86,3 +86,34 @@ describe("ContactForm artist messaging (A28)", () => {
     expect(screen.queryByText(/message sent/i)).toBeNull();
   });
 });
+
+// A2.3. /api/contact mints a reference, writes it to the row and prints it in
+// the acknowledgement email, but the response carried only { success }. Anyone
+// whose acknowledgement never arrived, or who closed it, was invited to quote
+// a reference they had never been shown.
+describe("ContactForm shows the reference it was given (A2.3)", () => {
+  it("displays the reference on the success screen", async () => {
+    installFetch({
+      enquiry: async () => reply(200),
+      contact: async () => reply(200, { success: true, reference: "WP-ABC123" }),
+    });
+    render(<ContactForm />);
+    await submit();
+
+    await waitFor(() => expect(screen.getByText(/message sent/i)).toBeTruthy());
+    expect(screen.getByText("WP-ABC123")).toBeTruthy();
+  });
+
+  it("still confirms the send when no reference comes back", async () => {
+    // Any response that drops the field must not take the confirmation with it.
+    installFetch({
+      enquiry: async () => reply(200),
+      contact: async () => reply(200, { success: true }),
+    });
+    render(<ContactForm />);
+    await submit();
+
+    await waitFor(() => expect(screen.getByText(/message sent/i)).toBeTruthy());
+    expect(screen.queryByText(/Your reference is/)).toBeNull();
+  });
+});
