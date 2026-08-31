@@ -285,6 +285,46 @@ export async function POST(request: Request) {
     // ── Content moderation ──────────────────────────────────────────────────
     const moderation = moderateMessage(content);
     if (!moderation.allowed) {
+      // Pass 2 item 3.8 (row 2020). A blocked message wrote nothing: no
+      // `messages` row (right, it was refused), but also nothing to
+      // `moderation_queue` and nothing to `conversation_reports`. So a user
+      // repeatedly trying to take deals off-platform was invisible to admins,
+      // and /admin/moderation's Messages filter had nothing to show, while the
+      // MILDER flagged case (delivered, queued since owner decision 11) did.
+      //
+      // Only when `flagged` is set. "Too short" and "too long" are refusals
+      // about a string, not signals about a person, and queueing them would
+      // bury the ones that are.
+      //
+      // The sender's slug is not resolved yet at this point and resolving it
+      // here would change the error precedence for a blocked message to an
+      // unknown recipient. The user id and email identify the sender well
+      // enough for triage, which is what the queue is for.
+      if (moderation.flagged) {
+        const blockedPayload = parsePayload("message", {
+          message_id: null,
+          blocked: true,
+          conversation_id: conversationId || `to:${recipientSlug}`,
+          sender_slug: auth.user!.email || auth.user!.id,
+          recipient_slug: recipientSlug,
+          flag_reason: moderation.reason || "blocked",
+          excerpt: content.slice(0, 200),
+        });
+        if (blockedPayload) {
+          const { error: queueErr } = await getSupabaseAdmin().from("moderation_queue").insert({
+            entity_type: "message",
+            entity_id: conversationId || `to:${recipientSlug}`,
+            submitted_by_user_id: auth.user!.id,
+            submitted_by_email: auth.user!.email ?? null,
+            status: "pending",
+            payload: blockedPayload,
+          });
+          if (queueErr) {
+            console.error("[moderation] blocked message could not join the queue:", queueErr.message);
+          }
+        }
+        console.warn(`[moderation] Message blocked: reason="${moderation.reason}"`);
+      }
       return NextResponse.json(
         { error: moderation.reason || "Message not allowed" },
         { status: 400 },

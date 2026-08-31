@@ -55,8 +55,14 @@ interface DbConfig {
   /** Whether the conditional re-claim UPDATE matches a row. */
   reclaim?: boolean;
   reclaimError?: { message: string } | null;
-  /** Count the throttle query reports. */
+  /** Count the per-CATEGORY throttle query reports. */
   throttleCount?: number;
+  /**
+   * Count the per-TEMPLATE query reports (3.1). Zero means the recipient has
+   * had none of this template inside the window, which is the first-of-its-kind
+   * case the throttle must not eat.
+   */
+  sameTemplateCount?: number;
   /** email_suppressions row for the recipient. */
   supp?: { scope: string } | null;
   /** email_preferences row for the user. */
@@ -76,6 +82,7 @@ function setupDb(cfg: DbConfig = {}) {
     reclaim = false,
     reclaimError = null,
     throttleCount = 0,
+    sameTemplateCount = 0,
     supp = null,
     prefs = null,
   } = cfg;
@@ -95,6 +102,12 @@ function setupDb(cfg: DbConfig = {}) {
               throttleFilters.push(filter);
               return { count: throttleCount, error: null };
             },
+          }),
+        }),
+        // 3.1 first-of-template chain: .eq(user).eq(template).in(...).gte(...)
+        eq: () => ({
+          in: () => ({
+            gte: async () => ({ count: sameTemplateCount, error: null }),
           }),
         }),
         gte: async () => ({ count: throttleCount, error: null }),
@@ -414,14 +427,63 @@ describe("throttle per category (R4.16)", () => {
     );
   });
 
-  it("skips as throttled once the category cap is reached", async () => {
-    setupDb({ throttleCount: 8 }); // digests cap: 8 per 168h
+  it("skips as throttled once the category cap is reached AND the recipient has had this template", async () => {
+    setupDb({ throttleCount: 8, sameTemplateCount: 1 }); // digests cap: 8 per 168h
 
     const res = await sendEmail(DIGEST_INPUT);
 
     expect(res).toEqual({ ok: true, skipped: true, reason: "throttled" });
     expect(sendMock).not.toHaveBeenCalled();
     expect(logged.some((r) => r.status === "skipped_throttled")).toBe(true);
+  });
+
+  // Pass 2 item 3.1. Only three of production's 388 email events have ever been
+  // skipped_throttled. All three happened on one day, all to the same artist,
+  // and every one was the FIRST and only send of its kind:
+  //
+  //   placement_ended                    never told their placement ended
+  //   artist_new_placement_invitation    never told a venue wanted their work
+  //   artist_blog_rejected               and the rejection reason is stored
+  //                                      nowhere else, so it reached them by no
+  //                                      route at all
+  //
+  // The category cap is the right guard against a runaway batch of the SAME
+  // nudge. It is the wrong guard against a person having a busy day: ten
+  // distinct placement events in 24 hours is a good day, not an incident, and
+  // binning the eleventh loses the event rather than deferring it.
+  //
+  // So the cap still applies, and the first send of each distinct template
+  // inside the window is exempt from it. The worst case stays bounded: the cap,
+  // plus at most one of each template.
+  it("does NOT eat the first email of its kind, even over the category cap", async () => {
+    setupDb({ throttleCount: 99, sameTemplateCount: 0 });
+
+    const res = await sendEmail(DIGEST_INPUT);
+
+    expect(res).toMatchObject({ ok: true });
+    expect("skipped" in res && res.skipped).not.toBe(true);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(logged.some((r) => r.status === "skipped_throttled")).toBe(false);
+  });
+
+  it("still throttles the second and later copies of the same template", async () => {
+    setupDb({ throttleCount: 99, sameTemplateCount: 3 });
+
+    const res = await sendEmail(DIGEST_INPUT);
+
+    expect(res).toEqual({ ok: true, skipped: true, reason: "throttled" });
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("does not run the first-of-template query at all while under the cap", async () => {
+    // The exemption is a rescue, not a second gate: under the cap nothing
+    // changes and the extra round trip is not spent.
+    setupDb({ throttleCount: 0, sameTemplateCount: 99 });
+
+    const res = await sendEmail(DIGEST_INPUT);
+
+    expect("skipped" in res && res.skipped).not.toBe(true);
+    expect(sendMock).toHaveBeenCalledTimes(1);
   });
 });
 

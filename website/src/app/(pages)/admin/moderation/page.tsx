@@ -343,13 +343,20 @@ function PayloadDetail({ payload }: { payload: ModerationPayload | null }) {
     case "message":
       return (
         <>
-          <Block label="Flagged message" body={payload.excerpt} />
+          {/* 3.8: a BLOCKED attempt never became a message, so it has no id and
+              the recipient never saw it. Say which of the two this is: a
+              delivered-but-flagged message and a refused one need different
+              responses from an admin. */}
+          <Block
+            label={payload.blocked ? "Blocked message (never delivered)" : "Flagged message"}
+            body={payload.excerpt}
+          />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <Field label="Flagged for" value={payload.flag_reason} />
+            <Field label={payload.blocked ? "Blocked for" : "Flagged for"} value={payload.flag_reason} />
             <Field label="Sender" value={payload.sender_slug} />
             <Field label="Recipient" value={payload.recipient_slug} />
             <Field label="Conversation" value={payload.conversation_id} />
-            <Field label="Message id" value={payload.message_id} />
+            <Field label="Message id" value={payload.message_id ?? "not delivered"} />
           </div>
         </>
       );

@@ -1563,16 +1563,28 @@ export async function PATCH(request: Request) {
     // updates silently no-op via the IF NOT EXISTS guard in the
     // migration; here the update will return an error which we swallow.
     try {
-      const becameActive = existing.status === "pending" && status === "active";
+      // Pass 2 item 3.3 (rows 2168, 2170). Undoing a collection correctly
+      // returned the placement to active and cleared collected_at, but the
+      // inventory hook keyed only on pending → active, so the work was left
+      // unlinked: placed_at_venue stayed null and current_placement_id stayed
+      // null while an ACTIVE placement pointed at it. The artwork page then
+      // said the piece was not on any wall, and the stock restored by the
+      // collection was never taken back.
+      //
+      // The undo is the exact inverse of the collection, so it runs the exact
+      // same hook.
+      const effectiveStatusForInventory = (updates.status as string | undefined) ?? existing.status;
+      const becameActive =
+        (existing.status === "pending" && status === "active") ||
+        (existing.status === "completed" && effectiveStatusForInventory === "active");
       // E23b. This keyed on the STAGE, so a direct {status:"completed"} write
       // left it false: quantity_available was never restored, `available`
       // stayed false where the decrement had hit zero, and placed_at_venue kept
       // pointing at a finished placement. Any party could burn an artist's
       // inventory with a legitimate-looking request. Keyed on the resulting
       // status now, whichever path produced it.
-      const effectiveStatus = (updates.status as string | undefined) ?? existing.status;
       const becameCollected =
-        existing.status === "active" && effectiveStatus === "completed";
+        existing.status === "active" && effectiveStatusForInventory === "completed";
       if (becameActive || becameCollected) {
         // Production schema stores work data denormalised on the
         // placement (work_title + extra_works JSONB), there is no

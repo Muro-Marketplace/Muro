@@ -18,6 +18,8 @@ interface BlogRow {
   status: string;
   created_at: string;
   published_at: string | null;
+  /** Migration 128. Why an admin rejected it, so the badge is not the whole story. */
+  rejection_reason?: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -87,7 +89,7 @@ export default function ArtistBlogsPage() {
         ) : (
           <ul className="divide-y divide-border bg-surface border border-border rounded-sm">
             {rows.map((r) => (
-              <li key={r.id} className="p-4 flex items-center justify-between gap-3">
+              <li key={r.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
                 <Link
                   href={`/artist-portal/blogs/${r.id}/edit`}
                   className="flex-1 min-w-0 hover:text-accent"
@@ -104,6 +106,17 @@ export default function ArtistBlogsPage() {
                 >
                   {STATUS_LABELS[r.status] ?? r.status}
                 </span>
+                {/* Pass 2 item 3.2 (migration 128). A rejected post showed a
+                    bare "Rejected" badge. The reason existed, in
+                    admin_audit_log and on the moderation_queue row, neither of
+                    which an artist can read, and the email carrying it was
+                    eaten by the send throttle. */}
+                {r.status === "rejected" && r.rejection_reason && (
+                  <p className="basis-full text-xs text-red-700 bg-red-50 border border-red-200 rounded-sm px-3 py-2 mt-2">
+                    <span className="font-medium">Why: </span>
+                    {r.rejection_reason}
+                  </p>
+                )}
               </li>
             ))}
           </ul>

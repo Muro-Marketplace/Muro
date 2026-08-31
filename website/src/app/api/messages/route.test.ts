@@ -928,3 +928,108 @@ describe("POST /api/messages refuses support replies clearly (F50)", () => {
     expect(body.error).toContain("/contact");
   });
 });
+
+// Pass 2 item 3.8 (row 2020). A message the filter BLOCKS writes nothing: no
+// `messages` row (correct, it was refused), but also nothing to
+// `moderation_queue` and nothing to `conversation_reports`. So a user
+// repeatedly trying to take deals off-platform is invisible to admins, and
+// /admin/moderation's Messages filter has nothing to show. A FLAGGED message,
+// which is delivered, has queued since owner decision 11; the blocked one, which
+// is the more serious signal, did not.
+describe("a BLOCKED message leaves a moderation trace (3.8)", () => {
+  const queueInserts: Record<string, unknown>[] = [];
+
+  function setupDb(opts: { queueError?: unknown; verdict?: { allowed: boolean; flagged: boolean; reason: string | undefined } } = {}) {
+    queueInserts.length = 0;
+    authMock.mockResolvedValue({ user: { id: "u-1", email: "sender@example.com" }, error: null });
+    // `@/lib/moderation` is mocked file-wide, so the verdict is set here.
+    // moderation.test.ts owns the patterns themselves; these tests own what the
+    // ROUTE does with a blocking verdict.
+    moderateMock.mockReturnValue(
+      opts.verdict ?? {
+        allowed: false,
+        flagged: true,
+        reason: "Message contains blocked content",
+      },
+    );
+    fromMock.mockImplementation((table: string) => {
+      if (table === "moderation_queue") {
+        return {
+          insert: async (row: Record<string, unknown>) => {
+            queueInserts.push(row);
+            return { error: opts.queueError ?? null };
+          },
+        };
+      }
+      return chainSelectMaybe(null);
+    });
+  }
+
+  function post(content: string) {
+    return POST(
+      new Request("http://localhost/api/messages", {
+        method: "POST",
+        headers: { authorization: "Bearer x", "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: "dm-alice__bob",
+          senderType: "venue",
+          recipientSlug: "bob",
+          content,
+        }),
+      }),
+    );
+  }
+
+  /**
+   * Trips a BLOCKED_PATTERN (phone-number solicitation moving off-platform),
+   * so `allowed: false, flagged: true`. Not a FLAGGED pattern: those are
+   * delivered and have queued since owner decision 11.
+   */
+  const OFF_PLATFORM = "Forget the platform fee, whatsapp me on 07700900123 and we'll sort it";
+
+  it("still refuses the message", async () => {
+    setupDb();
+
+    const res = await post(OFF_PLATFORM);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Message contains blocked content");
+  });
+
+  it("queues it for an admin with the sender, the reason and an excerpt", async () => {
+    setupDb();
+
+    await post(OFF_PLATFORM);
+
+    expect(queueInserts, "the block left no trace at all").toHaveLength(1);
+    expect(queueInserts[0]).toMatchObject({
+      entity_type: "message",
+      status: "pending",
+      submitted_by_user_id: "u-1",
+    });
+    const payload = queueInserts[0].payload as Record<string, unknown>;
+    expect(payload.blocked).toBe(true);
+    expect(payload.flag_reason).toBe("Message contains blocked content");
+    expect(String(payload.excerpt)).toContain("whatsapp me");
+  });
+
+  it("queues nothing for a message refused merely for being too short", async () => {
+    // "Too short" and "too long" are not moderation signals about a person;
+    // queueing them would bury the ones that are. moderateMessage marks those
+    // `flagged: false`, which is the distinction.
+    setupDb({ verdict: { allowed: false, flagged: false, reason: "Message too short" } });
+
+    const res = await post("a");
+
+    expect(res.status).toBe(400);
+    expect(queueInserts).toHaveLength(0);
+  });
+
+  it("still refuses the message when the queue write fails", async () => {
+    setupDb({ queueError: { message: "db down" } });
+
+    const res = await post(OFF_PLATFORM);
+
+    expect(res.status).toBe(400);
+  });
+});

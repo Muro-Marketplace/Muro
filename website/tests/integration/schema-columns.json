@@ -1,5 +1,5 @@
 {
-  "blogs": ["id", "author_user_id", "slug", "title", "body_json", "body_markdown", "cover_image_url", "status", "published_at", "created_at", "updated_at"],
+  "blogs": ["id", "author_user_id", "slug", "title", "body_json", "body_markdown", "cover_image_url", "status", "published_at", "created_at", "updated_at", "rejection_reason"],
   "walls": ["id", "user_id", "owner_type", "name", "kind", "preset_id", "source_image_path", "width_cm", "height_cm", "wall_color_hex", "perspective_homography", "segmentation_mask_path", "notes", "created_at", "updated_at", "is_public_on_profile"],
   "orders": ["id", "buyer_email", "buyer_user_id", "items", "shipping", "subtotal", "shipping_cost", "total", "status", "created_at", "artist_slug", "artist_user_id", "venue_slug", "venue_revenue_share_percent", "venue_revenue", "artist_revenue", "platform_fee_percent", "platform_fee", "tracking_number", "status_history", "placement_id", "source", "stripe_payment_intent_id", "fulfilment_method", "collection_address", "collection_notes", "order_number", "delivered_at"],
   "reports": ["id", "reporter_user_id", "reported_user_id", "reported_entity_type", "reported_entity_id", "reason", "status", "reviewed_by_user_id", "reviewed_at", "created_at"],

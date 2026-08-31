@@ -13,7 +13,10 @@ export async function GET(request: Request) {
   const db = getSupabaseAdmin();
   const { data, error } = await db
     .from("blogs")
-    .select("id, slug, title, status, created_at, published_at")
+    // Migration 128: the rejection reason, so the author sees WHY rather than a
+    // bare "Rejected" badge. It was written to admin_audit_log and the
+    // moderation_queue row, neither of which an artist can read.
+    .select("id, slug, title, status, created_at, published_at, rejection_reason")
     .eq("author_user_id", auth.user!.id)
     .order("created_at", { ascending: false })
     .limit(200);

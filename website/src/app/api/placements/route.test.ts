@@ -1272,3 +1272,142 @@ describe("PATCH /api/placements records who cancelled and when (3.4)", () => {
     expect(updates[0] ?? {}).not.toHaveProperty("cancelled_by_user_id");
   });
 });
+
+// Pass 2 item 3.3 (rows 2168, 2170). Undoing a collection correctly returned
+// the placement to active and cleared collected_at, but left the WORK unlinked:
+// placed_at_venue and current_placement_id both stayed null while an active
+// placement pointed at it, so the artwork page said the piece was on no wall
+// and the stock the collection restored was never taken back.
+//
+// The inventory hook keyed on pending → active only, and an undo is
+// completed → active.
+/** artist_works UPDATE payloads captured by setupInventoryDb. */
+const workWrites: Record<string, unknown>[] = [];
+
+/**
+ * A DB mock that models the inventory hook's four reads: the placement's own
+ * row, the placement's titles, the artist's profile id, and the artist_works
+ * rows matched by title. Separate from setupDb because that one answers every
+ * non-placements table with nothing, which makes the hook a no-op.
+ */
+function setupInventoryDb(row: Row, works: Array<Record<string, unknown>>) {
+  updates.length = 0;
+  workWrites.length = 0;
+  fromMock.mockImplementation((table: string) => {
+    if (table === "placements") {
+      return {
+        select: (_cols?: unknown, selectOpts?: { head?: boolean }) => {
+          if (selectOpts?.head) {
+            const counting = {
+              eq: () => counting,
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
+            };
+            return counting;
+          }
+          return {
+            eq: () => ({
+              single: async () => ({ data: row, error: null }),
+              maybeSingle: async () => ({
+                data: { ...row, work_title: "Sunset", extra_works: [] },
+                error: null,
+              }),
+              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+            }),
+          };
+        },
+        update: (payload: Record<string, unknown>) => {
+          updates.push(payload);
+          return { eq: async () => ({ error: null }) };
+        },
+      };
+    }
+    if (table === "artist_profiles") {
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: "ap-1" }, error: null }) }) }),
+      };
+    }
+    if (table === "venue_profiles") {
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { name: "Kings Arms" }, error: null }) }),
+        }),
+      };
+    }
+    if (table === "artist_works") {
+      return {
+        select: () => ({ eq: () => ({ in: async () => ({ data: works, error: null }) }) }),
+        update: (payload: Record<string, unknown>) => {
+          workWrites.push(payload);
+          return { eq: async () => ({ error: null }) };
+        },
+      };
+    }
+    const chain: Record<string, unknown> = {
+      single: async () => ({ data: null, error: null }),
+      maybeSingle: async () => ({ data: null, error: null }),
+      then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+    };
+    chain.eq = () => chain;
+    chain.or = () => chain;
+    chain.in = () => chain;
+    chain.order = () => chain;
+    chain.limit = () => chain;
+    chain.contains = () => chain;
+    return {
+      select: () => chain,
+      insert: async () => ({ error: null }),
+      update: () => ({ eq: async () => ({ error: null }) }),
+      delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+    };
+  });
+}
+
+describe("PATCH /api/placements re-links the work when a collection is undone (3.3)", () => {
+  const COMPLETED: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "completed",
+  };
+
+  /** Every artist_works UPDATE the request made. */
+  function workUpdates(): Record<string, unknown>[] {
+    return workWrites;
+  }
+
+  it("stamps the work back onto the placement", async () => {
+    setupInventoryDb(COMPLETED, [
+      { id: "w-1", quantity_available: 2, current_placement_id: null },
+    ]);
+
+    const res = await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(workUpdates()).toHaveLength(1);
+    expect(workUpdates()[0]).toMatchObject({
+      current_placement_id: "pl-1",
+      placed_at_venue: "Kings Arms",
+    });
+  });
+
+  it("takes the stock back that the collection restored", async () => {
+    setupInventoryDb(COMPLETED, [
+      { id: "w-1", quantity_available: 2, current_placement_id: null },
+    ]);
+
+    await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(workUpdates()[0]).toMatchObject({ quantity_available: 1, available: true });
+  });
+
+  it("still clears the timestamp and returns the placement to active", async () => {
+    setupInventoryDb(COMPLETED, []);
+
+    await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+  });
+});
