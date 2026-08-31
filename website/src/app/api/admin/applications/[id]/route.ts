@@ -319,6 +319,12 @@ export async function PUT(
           firstName: (app.name || "there").split(" ")[0],
           goLiveUrl: `${SITE}/artist-portal`,
           welcomeMessage: (body.welcomeMessage as string | undefined) || undefined,
+          // Row 2362 / item 3.7. The plan on the application is an intent, not a
+          // purchase, and the profile is deliberately created on `none`. Nothing
+          // told the artist that, so someone who picked Pro on the form had no
+          // way to know they were on nothing.
+          selectedPlan: (app as Record<string, unknown>).selected_plan as string | null,
+          billingUrl: `${SITE}/artist-portal/billing`,
         }),
         metadata: { applicationId: id, userId },
       });

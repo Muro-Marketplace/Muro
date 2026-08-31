@@ -64,7 +64,8 @@ vi.mock("@/lib/admin-auth", () => ({
   ) => handler({ user: { id: "admin-1" }, audit: () => {} }),
 }));
 vi.mock("@/lib/auth/find-user-by-email", () => ({ findUserByEmail: findUserMock }));
-vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
+const { sendEmailMock } = vi.hoisted(() => ({ sendEmailMock: vi.fn(async () => ({ ok: true })) }));
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 
 import { PUT } from "@/app/api/admin/applications/[id]/route";
 
@@ -96,6 +97,7 @@ function insertsInto(table: string): Record<string, unknown>[] {
 }
 
 beforeEach(() => {
+  sendEmailMock.mockClear();
   insertMock.mockClear();
   updateMock.mockClear();
   selectSingleMock.mockClear();
@@ -155,5 +157,43 @@ describe("accepting an application with a referral code", () => {
 
     expect(res.status).toBe(200);
     expect(insertsInto("artist_referrals")).toHaveLength(0);
+  });
+});
+
+// Row 2362 / pass 2 item 3.7. The application detail shows "SELECTED PLAN Pro"
+// and the profile it creates carries subscription_plan 'none'. That is right:
+// picking a plan on a form is an intent, not a purchase, and provisioning one
+// on acceptance would assert a subscription nobody has paid for. What was
+// missing is that nothing told the accepted artist they still have to start it.
+describe("the approval email says the chosen plan is not running yet", () => {
+  function approvalEmail() {
+    return sendEmailMock.mock.calls
+      .map((c) => c[0] as { template?: string; react?: unknown })
+      .find((c) => c.template === "artist_application_approved");
+  }
+
+  it("names the plan the applicant picked", async () => {
+    selectSingleMock.mockImplementation(async (table: string) =>
+      table === "artist_applications"
+        ? { data: { ...APPLICATION, referred_by_code: null, selected_plan: "pro" } as Row, error: null }
+        : { data: null as Row, error: null },
+    );
+
+    await put();
+
+    expect(JSON.stringify(approvalEmail()?.react)).toContain("pro");
+  });
+
+  it("says nothing about a plan when the application named none", async () => {
+    selectSingleMock.mockImplementation(async (table: string) =>
+      table === "artist_applications"
+        ? { data: { ...APPLICATION, referred_by_code: null, selected_plan: null } as Row, error: null }
+        : { data: null as Row, error: null },
+    );
+
+    await put();
+
+    const react = JSON.stringify(approvalEmail()?.react);
+    expect(react).not.toContain("selectedPlan\":\"");
   });
 });
