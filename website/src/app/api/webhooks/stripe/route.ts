@@ -312,20 +312,12 @@ async function handleWebhookEvent(
             work_ids: workIds,
             collection_id: session.metadata.offer_collection_id || null,
           }],
-          // NOT NULL, and the offer flow collects no delivery address. Same
-          // nine-field shape the cart path writes so the order views, which all
-          // read shipping?.fullName and friends, keep working.
-          shipping: {
-            fullName: "",
-            email: session.customer_email || session.metadata.offer_buyer_email || "",
-            phone: "",
-            addressLine1: "",
-            addressLine2: "",
-            city: "",
-            postcode: "",
-            country: "GB",
-            notes: `Accepted offer ${offerId}. No delivery address collected at checkout.`,
-          },
+          // Rows 933-939. The offer session now asks Stripe for the buyer's
+          // delivery address (`shipping_address_collection`), so this reads it
+          // back rather than writing nine empty strings and a note explaining
+          // that the artist has nowhere to post to. Same nine-field shape the
+          // cart path writes, so every order view keeps working.
+          shipping: offerShipping(session, offerId),
           subtotal: totalGbp,
           shipping_cost: 0,
           total: totalGbp,
@@ -2634,6 +2626,77 @@ async function handleWebhookEvent(
  * never double-pays. Best-effort per leg: one failing recipient never stops the
  * rest.
  */
+/**
+ * The delivery address for an offer order, read back off the Stripe session.
+ *
+ * Rows 933-939. OFR-5A2LJH2CJ7KPVNMO carried `fulfilment_method: "ship"`,
+ * `shipping_cost: 0`, and a shipping block whose every field was empty apart
+ * from `notes: "Accepted offer off_… . No delivery address collected at
+ * checkout."` The system knew; the artist saw "SHIP TO: ," above a live "Mark
+ * as Shipped" button.
+ *
+ * Stripe moved this field: newer API versions return it under
+ * `collected_information.shipping_details`, older ones under
+ * `shipping_details`. Both are read so the address survives an API-version bump
+ * in either direction, which is exactly the kind of silent regression that put
+ * the empty block there in the first place.
+ *
+ * The note is kept ONLY when Stripe returned nothing, because that is the case
+ * where the artist genuinely cannot post the piece and needs to be told why.
+ */
+interface StripeShippingDetails {
+  name?: string | null;
+  phone?: string | null;
+  address?: {
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
+  } | null;
+}
+
+function offerShipping(
+  session: Stripe.Checkout.Session,
+  offerId: string,
+): Record<string, string> {
+  const withShipping = session as unknown as {
+    collected_information?: { shipping_details?: StripeShippingDetails | null } | null;
+    shipping_details?: StripeShippingDetails | null;
+  };
+  const collected =
+    withShipping.collected_information?.shipping_details ?? withShipping.shipping_details ?? null;
+  const address = collected?.address ?? null;
+  const email = session.customer_email || session.metadata?.offer_buyer_email || "";
+
+  if (!address?.line1) {
+    console.warn("[webhook] offer paid with no shipping address on the session", { offerId });
+    return {
+      fullName: collected?.name || "",
+      email,
+      phone: collected?.phone || "",
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      postcode: "",
+      country: address?.country || "GB",
+      notes: `Accepted offer ${offerId}. No delivery address collected at checkout.`,
+    };
+  }
+
+  return {
+    fullName: collected?.name || "",
+    email,
+    phone: collected?.phone || "",
+    addressLine1: address.line1 || "",
+    addressLine2: address.line2 || "",
+    city: address.city || "",
+    postcode: address.postal_code || "",
+    country: address.country || "GB",
+    notes: `Accepted offer ${offerId}.`,
+  };
+}
+
 async function scheduleOrderLegs(
   db: ReturnType<typeof getSupabaseAdmin>,
   params: {

@@ -14,7 +14,7 @@ import { artistPayoutPounds, formatPounds } from "@/lib/finance/order-money";
 interface Order {
   id: string;
   items: RawOrderItem[];
-  shipping: { fullName: string; email: string; phone: string; addressLine1: string; addressLine2?: string; city: string; postcode: string; country: string };
+  shipping: { fullName: string; email: string; phone: string; addressLine1: string; addressLine2?: string; city: string; postcode: string; country: string; notes?: string };
   // Subtotal and shipping_cost expose the split that makes up `total`,
   // so the revenue breakdown can show how the items-line and "Sale
   // total" tie together. Optional because older order rows may not
@@ -470,9 +470,37 @@ function ArtistOrdersContent() {
           ) : (
             <div className="mt-5">
               <p className="text-xs text-muted uppercase tracking-wider mb-2">Ship to</p>
-              <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
-              <p className="text-sm text-muted">{selected.shipping?.addressLine1}{selected.shipping?.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}</p>
-              <p className="text-sm text-muted">{selected.shipping?.city}, {selected.shipping?.postcode}</p>
+              {/* Rows 933-939. The offer flow collected no delivery address, so
+                  this rendered "SHIP TO: ," above a live "Mark as Shipped"
+                  button and the artist had no way to know why. The address is
+                  collected on the Stripe page now, but an order booked before
+                  that (or one where Stripe returned nothing) still has none,
+                  and the reason already sits in shipping.notes. Say it. */}
+              {selected.shipping?.addressLine1 ? (
+                <>
+                  <p className="text-sm font-medium">{selected.shipping?.fullName}</p>
+                  <p className="text-sm text-muted">{selected.shipping?.addressLine1}{selected.shipping?.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}</p>
+                  <p className="text-sm text-muted">{selected.shipping?.city}, {selected.shipping?.postcode}</p>
+                </>
+              ) : (
+                <div className="rounded-sm border border-amber-300 bg-amber-50 px-3 py-2">
+                  <p className="text-sm text-amber-900">
+                    No delivery address is on this order, so there is nothing to post to yet.
+                  </p>
+                  <p className="text-xs text-amber-800 mt-1">
+                    {selected.shipping?.notes ||
+                      "Contact the buyer for their address before marking it shipped."}
+                  </p>
+                  {selected.shipping?.email && (
+                    <a
+                      href={`mailto:${encodeURIComponent(selected.shipping.email)}?subject=${encodeURIComponent(`Delivery address for order ${selected.id}`)}`}
+                      className="inline-block mt-2 text-xs font-medium text-amber-900 underline"
+                    >
+                      Email the buyer for their address
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

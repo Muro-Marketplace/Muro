@@ -14,6 +14,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { createNotification } from "@/lib/notifications";
 import { orFilter } from "@/lib/db/safe-filter";
+import { defaultOfferExpiry } from "@/lib/offers/expiry";
 import { sendEmail } from "@/lib/email/send";
 import { OfferReceivedNotification } from "@/emails/templates/messages/OfferReceivedNotification";
 
@@ -365,7 +366,11 @@ export async function POST(request: Request) {
     currency: "GBP",
     message: message || null,
     status: "pending",
-    expires_at: expiresAt || null,
+    // Row 2244. `expires_at` was NULL on every row in production: the column,
+    // the type and F41's enforcement all existed, but nothing ever set a
+    // deadline, so an offer made today stayed bindingly open indefinitely. A
+    // sender-chosen deadline still wins; this is the floor, not an override.
+    expires_at: expiresAt || defaultOfferExpiry(),
     parent_offer_id: parentOfferId || null,
     created_by_user_id: buyerId,
   };

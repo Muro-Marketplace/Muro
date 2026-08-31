@@ -320,13 +320,25 @@ function setupDbMock(state: DbState) {
   });
 }
 
-function buildSession(overrides: Partial<{ id: string; amount_total: number; metadata: Record<string, string>; payment_intent: string; customer_email: string }> = {}) {
+function buildSession(
+  overrides: Partial<{
+    id: string;
+    amount_total: number;
+    metadata: Record<string, string>;
+    payment_intent: string;
+    customer_email: string;
+    collected_information: unknown;
+  }> = {},
+) {
   return {
     id: overrides.id ?? "cs_test_multi",
     mode: "payment",
     amount_total: overrides.amount_total ?? 40000,
     customer_email: overrides.customer_email ?? "buyer@example.com",
     payment_intent: overrides.payment_intent ?? "pi_test_1",
+    ...(overrides.collected_information === undefined
+      ? {}
+      : { collected_information: overrides.collected_information }),
     metadata: overrides.metadata ?? {
       kind: "cart_checkout",
       artist_slugs: "alice,bob",
@@ -693,13 +705,115 @@ describe("Stripe webhook — purchase offer (T3 / E6, E10)", () => {
     offer_placement_id: "plc-1",
   };
 
-  function fireOffer(metadata: Record<string, string> = OFFER_META, amountTotal = 3300) {
+  function fireOffer(
+    metadata: Record<string, string> = OFFER_META,
+    amountTotal = 3300,
+    collectedInformation?: unknown,
+  ) {
     constructEventMock.mockReturnValue({
       type: "checkout.session.completed",
-      data: { object: buildSession({ id: "cs_offer_W45tsGG1", amount_total: amountTotal, metadata, customer_email: "" }) },
+      data: {
+        object: buildSession({
+          id: "cs_offer_W45tsGG1",
+          amount_total: amountTotal,
+          metadata,
+          customer_email: "",
+          collected_information: collectedInformation,
+        }),
+      },
     });
     return POST(buildRequest());
   }
+
+  // Rows 933-939, 2245 / PASS2-offers-and-paid-loan-log. An accepted offer
+  // produced an order nobody could fulfil: shipping was nine empty strings plus
+  // "No delivery address collected at checkout", while the artist portal showed
+  // "SHIP TO: ," above a live "Mark as Shipped" button. The offer session now
+  // asks Stripe for the address; this reads it back.
+  describe("the delivery address collected on the Stripe page reaches the order", () => {
+    const COLLECTED = {
+      shipping_details: {
+        name: "Copper Kettle Ltd",
+        phone: "+447700900000",
+        address: {
+          line1: "1 High Street",
+          line2: "Unit 4",
+          city: "Hampton",
+          postal_code: "TW12 2TH",
+          country: "GB",
+        },
+      },
+    };
+
+    it("writes the address the buyer gave Stripe", async () => {
+      const state = freshState();
+      setupOfferDb(state);
+
+      await fireOffer(OFFER_META, 3300, COLLECTED);
+
+      expect(state.orderInsert.row!.shipping).toMatchObject({
+        fullName: "Copper Kettle Ltd",
+        phone: "+447700900000",
+        addressLine1: "1 High Street",
+        addressLine2: "Unit 4",
+        city: "Hampton",
+        postcode: "TW12 2TH",
+        country: "GB",
+      });
+    });
+
+    it("drops the apology note once there is a real address", async () => {
+      const state = freshState();
+      setupOfferDb(state);
+
+      await fireOffer(OFFER_META, 3300, COLLECTED);
+
+      const shipping = state.orderInsert.row!.shipping as { notes: string };
+      expect(shipping.notes).not.toMatch(/No delivery address/i);
+    });
+
+    it("reads the older top-level shipping_details shape too", async () => {
+      // Stripe moved this field between API versions. Reading only one shape is
+      // how the empty block would come back on the next version bump.
+      const state = freshState();
+      setupOfferDb(state);
+
+      await fireOffer(OFFER_META, 3300, undefined);
+      const withoutAddress = state.orderInsert.row!.shipping as { addressLine1: string };
+      expect(withoutAddress.addressLine1).toBe("");
+
+      state.orderInsert.row = null;
+      constructEventMock.mockReturnValue({
+        type: "checkout.session.completed",
+        data: {
+          object: {
+            ...buildSession({
+              id: "cs_offer_legacy",
+              amount_total: 3300,
+              metadata: OFFER_META,
+              customer_email: "",
+            }),
+            shipping_details: COLLECTED.shipping_details,
+          },
+        },
+      });
+      await POST(buildRequest());
+
+      expect(state.orderInsert.row!.shipping).toMatchObject({ addressLine1: "1 High Street" });
+    });
+
+    it("still books the order, and says why, when Stripe returned no address", async () => {
+      const state = freshState();
+      setupOfferDb(state);
+
+      const res = await fireOffer(OFFER_META, 3300, { shipping_details: null });
+
+      expect(res.status).toBe(200);
+      const shipping = state.orderInsert.row!.shipping as { notes: string; addressLine1: string };
+      expect(shipping.addressLine1).toBe("");
+      expect(shipping.notes).toMatch(/No delivery address collected at checkout/);
+    });
+  });
 
   it("writes an order row at all, which is the live E6 defect", async () => {
     const state = freshState();

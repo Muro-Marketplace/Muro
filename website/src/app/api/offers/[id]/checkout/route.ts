@@ -4,8 +4,10 @@
 // Stripe Checkout Session at the agreed amount. The webhook flips the
 // offer to 'paid' and threads the resulting order id back.
 
+import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { COUNTRIES } from "@/lib/iso-countries";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
@@ -114,6 +116,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
   }
 
+  // Row 2245: kept so the Stripe page can name what the buyer is paying for.
+  // It read "Wallplace offer · off_1788192000823_qyzr33" and "Accepted offer
+  // for 1 work", which identifies the row and not the artwork.
+  let workTitles: string[] = [];
   let soldOrMissing = collectionWithdrawn;
   if (!soldOrMissing && workIds.length > 0) {
     const { data: works } = await db
@@ -126,6 +132,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       available: boolean | null;
       quantity_available: number | null;
     }>;
+    workTitles = found.map((w) => (w.title || "").trim()).filter(Boolean);
     // A work deleted since the offer was accepted counts as gone too, hence the
     // length comparison. work_ids is de-duplicated above so a repeated id cannot
     // fake a shortfall and close a live offer.
@@ -166,9 +173,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // reward to offers is a separate decision from creating the column.
   const { data: artistProfile } = await db
     .from("artist_profiles")
-    .select("slug, subscription_plan, subscription_status")
+    .select("slug, subscription_plan, subscription_status, ships_internationally")
     .eq("user_id", offer.artist_user_id)
-    .maybeSingle<{ slug: string; subscription_plan: string | null; subscription_status: string | null }>();
+    .maybeSingle<{
+      slug: string;
+      subscription_plan: string | null;
+      subscription_status: string | null;
+      ships_internationally: boolean | null;
+    }>();
 
   if (!artistProfile) {
     return NextResponse.json({ error: "Artist profile unavailable" }, { status: 500 });
@@ -240,20 +252,53 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const requestOrigin = request.headers.get("origin");
   const origin = requestOrigin || process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
+  // Rows 933-939, 2245. The buyer's Stripe page said "Wallplace offer ·
+  // off_1788192000823_qyzr33" and "Accepted offer for 1 work": the offer's row
+  // id and a count, telling them nothing about what they were buying. The
+  // titles are already loaded above for the sold-out check.
+  const titleList = workTitles.join(", ");
+  const productName = titleList
+    ? `${titleList} by ${offer.artist_slug ?? "the artist"}`
+    : `Wallplace offer · ${offer.id}`;
   const description = offer.collection_id
     ? `Accepted offer for collection ${offer.collection_id}`
-    : `Accepted offer for ${offer.work_ids.length} work${offer.work_ids.length === 1 ? "" : "s"}`;
+    : titleList
+      ? `Accepted offer for ${titleList}`
+      : `Accepted offer for ${offer.work_ids.length} work${offer.work_ids.length === 1 ? "" : "s"}`;
+
+  // Rows 933-939. The offer flow collected no delivery address anywhere, so the
+  // order it produced carried an empty shipping block and the artist was shown
+  // "SHIP TO: ," above a live "Mark as Shipped" button. Collect it on the
+  // Stripe page the buyer is already standing on rather than rebuilding the
+  // cart path's address form: Stripe's is localised, validated and familiar.
+  //
+  // Destinations follow the ARTIST's own scope, the same fail-closed rule
+  // lib/shipping-scope.ts applies to the cart: an artist who has not opted in
+  // to international shipping can only be sent a UK address, because we cannot
+  // confirm consent to ship anywhere else.
+  const allowedCountries = artistProfile.ships_internationally
+    ? COUNTRIES.map((c) => c.code)
+    : ["GB"];
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: offer.buyer_email || auth.user!.email || undefined,
+    shipping_address_collection: {
+      // COUNTRIES is the project's own ISO-3166 alpha-2 list (lib/iso-countries),
+      // the same one the cart's country picker renders from. Stripe types this
+      // as a closed union of every code it accepts; ours is a subset of it.
+      allowed_countries:
+        allowedCountries as NonNullable<
+          Stripe.Checkout.SessionCreateParams["shipping_address_collection"]
+        >["allowed_countries"],
+    },
     line_items: [
       {
         price_data: {
           currency: offer.currency.toLowerCase(),
           product_data: {
-            name: `Wallplace offer · ${offer.id}`,
+            name: productName,
             description,
           },
           unit_amount: offer.amount_pence,

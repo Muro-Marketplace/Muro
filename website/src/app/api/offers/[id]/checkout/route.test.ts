@@ -47,6 +47,9 @@ const OFFER = {
 const LIVE_PROFILE_COLUMNS = [
   "slug", "subscription_plan", "subscription_status", "user_id", "name",
   "stripe_connect_account_id", "stripe_connect_onboarding_complete",
+  // Rows 933-939: the offer session collects a delivery address, and the
+  // artist's own shipping scope decides which countries it may offer.
+  "ships_internationally",
 ];
 
 let profileSelects: string[] = [];
@@ -593,5 +596,62 @@ describe("POST /api/offers/[id]/checkout refuses a non-positive amount (F49)", (
 
     expect(res.status).toBe(422);
     expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+});
+
+// Rows 933-939, 2245 / PASS2-offers-and-paid-loan-log. An accepted offer
+// produced an order nobody could fulfil. OFR-5A2LJH2CJ7KPVNMO carried
+// fulfilment_method "ship", shipping_cost 0, and a shipping block whose every
+// field was empty apart from the note "Accepted offer off_… . No delivery
+// address collected at checkout." The system knew; the artist did not, and the
+// portal showed "SHIP TO: ," above a live "Mark as Shipped" button.
+//
+// No delivery address is collected anywhere in the offer flow, so it is
+// collected on the Stripe page the buyer is already standing on. That is where
+// the cart path's own address form would otherwise have to be rebuilt, and
+// Stripe's is localised, validated and familiar.
+describe("POST /api/offers/[id]/checkout collects a delivery address (rows 933-939)", () => {
+  function session(): Record<string, unknown> {
+    return (sessionsCreateMock.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0];
+  }
+
+  it("asks Stripe for the buyer's shipping address", async () => {
+    setupDb();
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(session().shipping_address_collection).toBeTruthy();
+  });
+
+  it("offers only the UK for an artist who has not opted in to shipping abroad", async () => {
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "core", ships_internationally: false });
+
+    await post();
+
+    const collection = session().shipping_address_collection as { allowed_countries: string[] };
+    expect(collection.allowed_countries).toEqual(["GB"]);
+  });
+
+  it("offers the full destination list for an artist who does ship abroad", async () => {
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "core", ships_internationally: true });
+
+    await post();
+
+    const collection = session().shipping_address_collection as { allowed_countries: string[] };
+    expect(collection.allowed_countries.length).toBeGreaterThan(1);
+    expect(collection.allowed_countries).toContain("GB");
+  });
+
+  it("names the works on the Stripe page instead of only the offer id", async () => {
+    // Row 2245: the buyer saw "Wallplace offer · off_…" and "Accepted offer for
+    // 1 work", which tells them nothing about what they are paying for.
+    setupDb();
+    workRows = [{ id: "w-1", title: "Sand Dunes", available: true, quantity_available: null }];
+
+    await post();
+
+    const items = session().line_items as Array<{ price_data: { product_data: { name: string; description: string } } }>;
+    expect(items[0].price_data.product_data.name).toContain("Sand Dunes");
   });
 });

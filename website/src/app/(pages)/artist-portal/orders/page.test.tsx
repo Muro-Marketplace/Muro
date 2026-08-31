@@ -271,3 +271,66 @@ describe("artist orders ?order= alias + deep-link scroll (D4)", () => {
     expect(screen.queryByText("Order o1")).toBeNull();
   });
 });
+
+// Rows 933-939 / PASS2-offers-and-paid-loan-log. An accepted offer produced an
+// order with no delivery address, and the artist portal rendered "SHIP TO: ,"
+// above a live "Mark as Shipped" button. The system knew exactly why (the note
+// on the shipping blob said so) and told the artist nothing.
+//
+// Offers now collect an address on the Stripe page, but orders booked before
+// that, and any where Stripe returns nothing, still have none.
+describe("an order with no delivery address says so (rows 933-939)", () => {
+  const ADDRESSLESS = {
+    ...ORDER,
+    id: "o-offer",
+    shipping: {
+      fullName: "",
+      email: "venue@example.com",
+      phone: "",
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      postcode: "",
+      country: "GB",
+      notes: "Accepted offer off_123. No delivery address collected at checkout.",
+    },
+  };
+
+  function serve(order: Record<string, unknown>) {
+    authFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(url.includes("refunds") ? { refundRequests: [] } : { orders: [order] }),
+          { status: 200 },
+        ),
+      ),
+    );
+  }
+
+  it("explains the gap instead of printing an empty address", async () => {
+    serve(ADDRESSLESS);
+    render(<ArtistOrdersPage />);
+    fireEvent.click(await screen.findByText("o-offer"));
+
+    expect(await screen.findByText(/nothing to post to yet/i)).toBeTruthy();
+    expect(screen.getByText(/No delivery address collected at checkout/i)).toBeTruthy();
+  });
+
+  it("offers a way to ask the buyer for it", async () => {
+    serve(ADDRESSLESS);
+    render(<ArtistOrdersPage />);
+    fireEvent.click(await screen.findByText("o-offer"));
+
+    const link = await screen.findByText(/Email the buyer for their address/i);
+    expect(link.getAttribute("href")).toContain("mailto:venue%40example.com");
+  });
+
+  it("prints the address normally when there is one", async () => {
+    serve(ORDER);
+    render(<ArtistOrdersPage />);
+    fireEvent.click(await screen.findByText("o1"));
+
+    expect(await screen.findByText("Bob")).toBeTruthy();
+    expect(screen.queryByText(/nothing to post to yet/i)).toBeNull();
+  });
+});
