@@ -36,7 +36,20 @@ const FILE = path.resolve(
 );
 
 /** Every verdict a column-3 cell may open with. */
-const VERDICTS = ["WORKS", "BROKEN", "DIFFERS", "FIXED", "FLAG STANDS", "BLOCKED", "NOT SAFE"];
+const VERDICTS = [
+  "WORKS",
+  "BROKEN",
+  "DIFFERS",
+  "FIXED",
+  "FLAG STANDS",
+  "BLOCKED",
+  "NOT SAFE",
+  // Two more the passes and the remediation used where neither a plain verdict
+  // nor a plain fix was honest: a row the pass corrected itself on, and one
+  // where half the finding is fixed and half is not.
+  "SELF-CORRECTION",
+  "PARTLY FIXED",
+];
 
 /**
  * Split an inventory row into `[col1and2, col3]`.

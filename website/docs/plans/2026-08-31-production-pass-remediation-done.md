@@ -153,6 +153,30 @@ money.
 
 ---
 
+## Where column 3 stands now
+
+| verdict | rows |
+|---|---:|
+| WORKS | 808 |
+| BLOCKED | 718 |
+| FIXED | 149 |
+| DIFFERS | 55 |
+| FLAG STANDS | 29 |
+| NOT SAFE TO TEST | 18 |
+| BROKEN | 6 |
+| PARTLY FIXED | 2 |
+| SELF-CORRECTION | 1 |
+
+FIXED went from 89 to 149. **All six remaining BROKEN rows are the two owner
+decisions**, not code:
+
+- 534, 1050, 2364, 2580: the Supabase Site URL. The P0 above.
+- 447, 458: two rows asserting a signup lands on `/check-your-inbox`, which
+  depends on whether email confirmation is turned on. Track B's decision.
+
+BLOCKED is unchanged at 718: those are rows neither pass could exercise, and
+fixing code does not unblock them. They need a third pass after the deploy.
+
 ## What still needs a person
 
 1. **The P0 above.** Nothing else matters as much.
