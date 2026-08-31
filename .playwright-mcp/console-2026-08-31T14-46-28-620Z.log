@@ -1,0 +1,3 @@
+[     553ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/admin/applications:0
+[  393639ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/messages/unread:0
+[  393639ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/notifications:0

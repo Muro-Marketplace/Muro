@@ -1,0 +1,3 @@
+[     338ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/forgot-password:0
+[  105197ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[  105197ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
