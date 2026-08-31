@@ -1,0 +1,130 @@
+- generic [active] [ref=f48e1]:
+  - generic [ref=f48e2]:
+    - link "Skip to content" [ref=f48e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f48e4]:
+      - generic [ref=f48e6]:
+        - link "Wallplace" [ref=f48e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f48e8]:
+          - link "Marketplace" [ref=f48e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f48e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f48e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f48e13] [cursor=pointer]
+        - generic [ref=f48e16]:
+          - link "Saved" [ref=f48e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f48e21] [cursor=pointer]
+          - button "Notifications" [ref=f48e26] [cursor=pointer]
+          - generic [ref=f48e30]:
+            - link "Venue Portal" [ref=f48e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f48e32] [cursor=pointer]
+          - button "Logout" [ref=f48e35] [cursor=pointer]
+    - main [ref=f48e36]:
+      - generic [ref=f48e37]:
+        - complementary [ref=f48e38]:
+          - navigation [ref=f48e39]:
+            - paragraph [ref=f48e41]: Venue Portal
+            - generic [ref=f48e42]:
+              - list [ref=f48e43]:
+                - listitem [ref=f48e44]:
+                  - link "Dashboard" [ref=f48e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f48e46]:
+                  - link "Venue Profile" [ref=f48e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f48e48]:
+                  - link "Messages" [ref=f48e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f48e50]:
+                  - link "Placements" [ref=f48e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f48e52]:
+                  - link "My Offers" [ref=f48e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f48e54]:
+                  - link "My Walls" [ref=f48e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f48e56]:
+                  - link "Saved" [ref=f48e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f48e58]:
+                  - link "QR Labels" [ref=f48e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f48e60]:
+                  - link "Analytics" [ref=f48e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f48e62]:
+                  - link "My Orders" [ref=f48e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f48e65]:
+                - listitem [ref=f48e66]:
+                  - link "Settings" [ref=f48e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f48e68]:
+                  - button "Logout" [ref=f48e69] [cursor=pointer]
+        - generic [ref=f48e72]:
+          - generic [ref=f48e73]:
+            - link "← My Walls" [ref=f48e74] [cursor=pointer]:
+              - /url: /venue-portal/walls
+            - heading "New Wall" [level=1] [ref=f48e75]
+            - paragraph [ref=f48e76]: Pick a preset for a clean colour-block wall, or upload a photo of your actual wall to see artworks composited onto it.
+          - tablist "Wall source" [ref=f48e77]:
+            - tab "Preset" [selected] [ref=f48e78] [cursor=pointer]
+            - tab "Upload photo" [ref=f48e79] [cursor=pointer]
+          - generic [ref=f48e80]:
+            - generic [ref=f48e81]:
+              - generic [ref=f48e82]: Preset
+              - generic [ref=f48e83]:
+                - button [ref=f48e84] [cursor=pointer]:
+                  - paragraph [ref=f48e86]: Minimal white
+                  - paragraph [ref=f48e87]: 300×240
+                - button [ref=f48e88] [cursor=pointer]:
+                  - paragraph [ref=f48e90]: Warm plaster
+                  - paragraph [ref=f48e91]: 320×240
+                - button [ref=f48e92] [cursor=pointer]:
+                  - paragraph [ref=f48e94]: Industrial concrete
+                  - paragraph [ref=f48e95]: 360×260
+                - button [ref=f48e96] [cursor=pointer]:
+                  - paragraph [ref=f48e98]: Gallery charcoal
+                  - paragraph [ref=f48e99]: 400×260
+            - generic [ref=f48e100]:
+              - generic [ref=f48e101]: Wall colour
+              - textbox [ref=f48e102]: "#f5f1eb"
+              - generic [ref=f48e103]: "#F5F1EB"
+            - generic [ref=f48e104]:
+              - generic [ref=f48e105] [cursor=pointer]: Name
+              - textbox "Name" [ref=f48e106]:
+                - /placeholder: e.g. Main café back wall
+            - generic [ref=f48e107]:
+              - generic [ref=f48e108]: Real dimensions (cm)
+              - generic [ref=f48e109]:
+                - generic [ref=f48e110]:
+                  - generic [ref=f48e111]: W
+                  - spinbutton [ref=f48e112]: "300"
+                  - generic [ref=f48e113]: cm
+                - generic [ref=f48e114]: ×
+                - generic [ref=f48e115]:
+                  - generic [ref=f48e116]: H
+                  - spinbutton [ref=f48e117]: "240"
+                  - generic [ref=f48e118]: cm
+              - paragraph [ref=f48e119]: Measure the actual usable wall area. Artworks will be drawn at true scale relative to this.
+            - generic [ref=f48e120]:
+              - link "Cancel" [ref=f48e121] [cursor=pointer]:
+                - /url: /venue-portal/walls
+              - button "Create wall" [ref=f48e122] [cursor=pointer]
+    - button "Feedback and feature requests" [ref=f48e123] [cursor=pointer]: Feedback
+  - generic [ref=f48e129]:
+    - paragraph [ref=f48e130]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f48e131] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f48e132]:
+      - button "Decline" [ref=f48e133] [cursor=pointer]
+      - button "Accept" [ref=f48e134] [cursor=pointer]
+  - alert [ref=f48e135]
