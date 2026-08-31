@@ -64,7 +64,9 @@ vi.mock("@/lib/admin-auth", () => ({
   ) => handler({ user: { id: "admin-1" }, audit: () => {} }),
 }));
 vi.mock("@/lib/auth/find-user-by-email", () => ({ findUserByEmail: findUserMock }));
-const { sendEmailMock } = vi.hoisted(() => ({ sendEmailMock: vi.fn(async () => ({ ok: true })) }));
+const { sendEmailMock } = vi.hoisted(() => ({
+  sendEmailMock: vi.fn(async (_input: { template?: string; react?: unknown }) => ({ ok: true })),
+}));
 vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 
 import { PUT } from "@/app/api/admin/applications/[id]/route";
@@ -168,8 +170,8 @@ describe("accepting an application with a referral code", () => {
 describe("the approval email says the chosen plan is not running yet", () => {
   function approvalEmail() {
     return sendEmailMock.mock.calls
-      .map((c) => c[0] as { template?: string; react?: unknown })
-      .find((c) => c.template === "artist_application_approved");
+      .map((c) => c[0])
+      .find((c) => c?.template === "artist_application_approved");
   }
 
   it("names the plan the applicant picked", async () => {

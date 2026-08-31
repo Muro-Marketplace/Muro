@@ -8,7 +8,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
-import { authFetch } from "@/lib/api-client";
+import { ApiError, authFetch, mutate } from "@/lib/api-client";
+import { useConfirm } from "@/context/ConfirmContext";
 import { isFlagOn } from "@/lib/feature-flags";
 
 interface BlogRow {
@@ -46,6 +47,37 @@ export default function ArtistBlogsPage() {
   // boundary catches); isFlagOn is client-safe via the CLIENT_ENV snapshot.
   if (!isFlagOn("BLOGS_V1")) notFound();
   const [rows, setRows] = useState<BlogRow[]>([]);
+  // Row D L1313. "No way to delete a blog draft." DELETE /api/blogs/[id] has
+  // existed and is owner-gated; nothing in the portal called it, so a draft
+  // written by mistake stayed on the artist's list for good and the QA blog
+  // that reached production could only be removed with SQL.
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { confirm } = useConfirm();
+
+  async function handleDelete(row: BlogRow) {
+    const ok = await confirm({
+      title: `Delete "${row.title || "this post"}"?`,
+      body:
+        row.status === "published"
+          ? "It will come off the public journal straight away. This cannot be undone."
+          : "This cannot be undone.",
+      confirmLabel: "Delete",
+      cancelLabel: "Keep it",
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeletingId(row.id);
+    setDeleteError(null);
+    try {
+      await mutate(`/api/blogs/${row.id}`, { method: "DELETE" });
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Could not delete. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -82,6 +114,10 @@ export default function ArtistBlogsPage() {
           </Link>
         </div>
 
+        {deleteError && (
+          <p role="alert" className="mb-4 text-sm text-red-600">{deleteError}</p>
+        )}
+
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : rows.length === 0 ? (
@@ -111,6 +147,14 @@ export default function ArtistBlogsPage() {
                     admin_audit_log and on the moderation_queue row, neither of
                     which an artist can read, and the email carrying it was
                     eaten by the send throttle. */}
+                <button
+                  type="button"
+                  onClick={() => handleDelete(r)}
+                  disabled={deletingId === r.id}
+                  className="text-[11px] text-muted hover:text-red-600 transition-colors disabled:opacity-50"
+                >
+                  {deletingId === r.id ? "Deleting…" : "Delete"}
+                </button>
                 {r.status === "rejected" && r.rejection_reason && (
                   <p className="basis-full text-xs text-red-700 bg-red-50 border border-red-200 rounded-sm px-3 py-2 mt-2">
                     <span className="font-medium">Why: </span>

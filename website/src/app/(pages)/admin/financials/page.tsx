@@ -106,10 +106,6 @@ export default function AdminFinancialsPage() {
               title="Renewals next 7 days"
               value={String(data.upcomingRenewals.length)}
             />
-            <Tile
-              title="Total subs MRR"
-              value={fmt(data.subscriptions.mrrPence)}
-            />
             <TileWide title="Top 10 venues by spend">
               <ol className="text-xs text-foreground space-y-0.5 list-decimal pl-4">
                 {data.topVenues.map((v) => (

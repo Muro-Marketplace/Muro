@@ -263,8 +263,8 @@ export default function RegisterVenuePage() {
               Want us to do the curation for you?{" "}
               <Link href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
                 Wallplace Curated
-              </Link>{" "}
-             , paid shortlists from £49.
+              </Link>
+              , paid shortlists from £49.
             </p>
           </div>
         </div>

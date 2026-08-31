@@ -494,8 +494,17 @@ export default function CollectionDetailPage() {
                     href = "/artist-portal/placements";
                     label = "View your placements";
                   } else if (userType === "customer") {
-                    href = `/signup?next=${encodeURIComponent(venueHref)}`;
-                    label = "Switch to a venue account to request";
+                    // Row B L748. This linked to /signup, which redirects a
+                    // signed-in user straight back to their own portal, so the
+                    // button did nothing. /signup/venue bounces them the same
+                    // way. There is no link that works from here, so say what
+                    // actually has to happen instead of offering one.
+                    return (
+                      <p className="w-full px-5 py-3 text-sm text-muted border border-border rounded-sm text-center">
+                        Placements are arranged by venues. If you run one, sign out and register
+                        it at <span className="text-foreground">/signup/venue</span>.
+                      </p>
+                    );
                   }
                   return (
                     <Link

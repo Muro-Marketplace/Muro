@@ -502,7 +502,10 @@ export default function ArtistPortalPage() {
             {[
               { href: "/artist-portal/portfolio", label: "Edit Portfolio", icon: <><rect x="2" y="2" width="12" height="12" rx="1" stroke="#C17C5A" strokeWidth="1.25" /><path d="M5 8h6M5 5.5h6M5 10.5h4" stroke="#C17C5A" strokeWidth="1.25" strokeLinecap="round" /></> },
               { href: "/artist-portal/analytics", label: "View Analytics", icon: <path d="M2 12l4-4 3 3 5-7" stroke="#C17C5A" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" /> },
-              { href: "/artist-portal/placements", label: "Update Availability", icon: <><rect x="2" y="3" width="12" height="10" rx="1" stroke="#C17C5A" strokeWidth="1.25" /><path d="M5 7h6M5 10h4" stroke="#C17C5A" strokeWidth="1.25" strokeLinecap="round" /><path d="M8 1v4" stroke="#C17C5A" strokeWidth="1.25" strokeLinecap="round" /></> },
+              // Row A L253 area: this read "Update Availability" and opened Placements,
+              // which is not what availability means anywhere else in the product
+              // (that is the portfolio's per-work toggle).
+              { href: "/artist-portal/placements", label: "Manage Placements", icon: <><rect x="2" y="3" width="12" height="10" rx="1" stroke="#C17C5A" strokeWidth="1.25" /><path d="M5 7h6M5 10h4" stroke="#C17C5A" strokeWidth="1.25" strokeLinecap="round" /><path d="M8 1v4" stroke="#C17C5A" strokeWidth="1.25" strokeLinecap="round" /></> },
               { href: "/artist-portal/labels", label: "Print QR Labels", icon: <><rect x="1" y="1" width="6" height="6" rx="0.5" stroke="#C17C5A" strokeWidth="1.25" /><rect x="9" y="1" width="6" height="6" rx="0.5" stroke="#C17C5A" strokeWidth="1.25" /><rect x="1" y="9" width="6" height="6" rx="0.5" stroke="#C17C5A" strokeWidth="1.25" /><rect x="9" y="9" width="6" height="6" rx="0.5" stroke="#C17C5A" strokeWidth="1.25" /></> },
             ].map(({ href, label, icon }) => (
               <Link key={href} href={href} className="flex items-center gap-3 p-3 rounded-sm border border-border hover:bg-background transition-colors text-sm text-foreground">
