@@ -24,8 +24,10 @@ vi.mock("@/lib/stripe", () => ({
   stripe: { checkout: { sessions: { create: sessionsCreateMock } } },
 }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
+vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => null) }));
 
 import { GET, POST } from "./route";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const REQUEST_ID = "11111111-2222-4333-8444-555555555555";
 
@@ -36,6 +38,12 @@ const QUOTED_ROW = {
   contact_email: "maya@example.com",
   quoted_amount_gbp: 150,
   billing_interval: "month" as const,
+  // The value the admin quote route writes alongside the quote fields above
+  // (../../../admin/curation/quote/route.ts). A row that has since been
+  // paid, refunded or cancelled keeps quoted_amount_gbp/billing_interval but
+  // moves status away from this, which is what the status-gate tests below
+  // exercise.
+  status: "pending_payment" as const,
 };
 
 let rowForLookup: Record<string, unknown> | null = { ...QUOTED_ROW };
@@ -71,6 +79,7 @@ beforeEach(() => {
   sessionsCreateMock.mockClear();
   sessionsCreateMock.mockResolvedValue({ id: "cs_prog_1", url: "https://stripe.example/pay/cs_prog_1" });
   fromMock.mockReset();
+  vi.mocked(checkRateLimit).mockResolvedValue(null);
   vi.spyOn(console, "error").mockImplementation(() => {});
 
   rowForLookup = { ...QUOTED_ROW };
@@ -170,6 +179,41 @@ describe("checkout on a row with no quote is 409", () => {
   });
 });
 
+describe("re-payment hole: checkout on a row that is no longer pending payment is 409", () => {
+  it("409s a paid row and creates no Stripe session, even though the quote fields are still set", async () => {
+    // quoted_amount_gbp/billing_interval are never cleared once written, so
+    // this row still clears the "has it been quoted" check above. status is
+    // what must stop it: without the gate, re-clicking the durable emailed
+    // link after an already-completed payment would mint a second live
+    // subscription for the same programme.
+    rowForLookup = { ...QUOTED_ROW, status: "paid" };
+    const res = await post();
+    expect(res.status).toBe(409);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("409s a refunded row", async () => {
+    rowForLookup = { ...QUOTED_ROW, status: "refunded" };
+    const res = await post();
+    expect(res.status).toBe(409);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("409s a cancelled row", async () => {
+    rowForLookup = { ...QUOTED_ROW, status: "cancelled" };
+    const res = await post();
+    expect(res.status).toBe(409);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("still succeeds for a pending_payment row", async () => {
+    rowForLookup = { ...QUOTED_ROW, status: "pending_payment" };
+    const res = await post();
+    expect(res.status).toBe(200);
+    expect(sessionsCreateMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("other guards", () => {
   it("404s an unknown request id", async () => {
     rowForLookup = null;
@@ -210,5 +254,23 @@ describe("GET redirects straight to Stripe, for a plain email link", () => {
     rowForLookup = null;
     const res = await get();
     expect(res.status).toBe(404);
+  });
+});
+
+describe("rate limiting, since this link is reusable and never expires", () => {
+  it("honours the rate limit on GET before touching the database", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue(new Response(null, { status: 429 }) as never);
+    const res = await get();
+    expect(res.status).toBe(429);
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("honours the rate limit on POST before touching the database", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue(new Response(null, { status: 429 }) as never);
+    const res = await post();
+    expect(res.status).toBe(429);
+    expect(fromMock).not.toHaveBeenCalled();
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
   });
 });

@@ -31,11 +31,17 @@ const PUBLIC_ROUTES = {
     "Public bespoke-curation enquiry. Associates a user only when a token is present.",
   "src/app/api/curation/[id]/checkout/route.ts":
     "Wallplace Programmes, Task 4. Quoted-programme checkout link, emailed by the admin " +
-    "quote route once a programme has been priced. Authenticated by the row's id, the " +
-    "same 122-bit bearer model as the newsletter confirmation link above (whoever has " +
-    "the link reads the inbox it was sent to). The amount charged is never caller-" +
-    "supplied: it is quoted_amount_gbp, set only by an authenticated admin beforehand, " +
-    "and the route 409s until that quote exists.",
+    "quote route once a programme has been priced. Authenticated by the row's id: an " +
+    "unguessable, non-enumerable UUIDv4 (gen_random_uuid()), the same 122 bits of " +
+    "randomness as the newsletter confirmation token above. Unlike that token, though, " +
+    "this link is reusable and never expires, so it carries none of the newsletter " +
+    "route's single-use or 7-day-expiry protection; do not describe it as if it did. " +
+    "What actually protects this route: the amount charged is never caller-supplied " +
+    "(it is quoted_amount_gbp, written only by an authenticated admin), the route 409s " +
+    "until that quote exists, the row's status must be pending_payment (closing the " +
+    "re-payment hole a paid, refunded or cancelled row would otherwise leave open, since " +
+    "quoted_amount_gbp itself is never cleared), and it is rate limited via the same " +
+    "checkRateLimit the newsletter confirm route uses.",
   "src/app/api/register-venue/route.ts":
     "Public venue registration. Creates a pending row for admin review.",
   "src/app/api/apply/route.ts":

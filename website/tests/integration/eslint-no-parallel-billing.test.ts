@@ -92,14 +92,26 @@ describe("wallplace/no-parallel-billing", () => {
     expect(messages).toEqual([]);
   });
 
-  it("allows the artist plan and curation retainer entry points", () => {
-    for (const file of ["src/app/api/subscribe/route.ts", "src/app/api/curation/route.ts"]) {
-      const messages = lint(
-        `await stripe.checkout.sessions.create({ mode: "subscription" });`,
-        file,
-      );
-      expect(messages, file).toEqual([]);
-    }
+  it("allows the artist plan entry point", () => {
+    const messages = lint(
+      `await stripe.checkout.sessions.create({ mode: "subscription" });`,
+      "src/app/api/subscribe/route.ts",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  it("flags a subscription-mode session in curation/route.ts: it is not, and must not become, a billing entry point", () => {
+    // curation/route.ts used to carry a stale ALLOWED entry left over from the
+    // retired managed-tier subscription flow. A stale entry here is not inert:
+    // it licenses the single most plausible file to regrow a second programme
+    // biller (curation/route.ts already handles programme submissions) to add
+    // a subscription-mode sessions.create without tripping this rule. Now that
+    // the entry is gone, this must be flagged like any other file.
+    const messages = lint(
+      `await stripe.checkout.sessions.create({ mode: "subscription" });`,
+      "src/app/api/curation/route.ts",
+    );
+    expect(ids(messages)).toEqual(["parallelBilling"]);
   });
 
   it("does not lint test harness mocks", () => {

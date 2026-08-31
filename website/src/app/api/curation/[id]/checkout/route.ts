@@ -24,6 +24,7 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ interface CurationRow {
   contact_email: string | null;
   quoted_amount_gbp: number | null;
   billing_interval: "month" | "quarter" | null;
+  status: string;
 }
 
 type CheckoutResult = { ok: true; url: string } | { ok: false; status: number; error: string };
@@ -47,7 +49,7 @@ async function buildCheckoutSession(id: string): Promise<CheckoutResult> {
   const db = getSupabaseAdmin();
   const { data: row, error } = await db
     .from("curation_requests")
-    .select("id, tier, venue_name, contact_email, quoted_amount_gbp, billing_interval")
+    .select("id, tier, venue_name, contact_email, quoted_amount_gbp, billing_interval, status")
     .eq("id", id)
     .maybeSingle<CurationRow>();
 
@@ -65,6 +67,20 @@ async function buildCheckoutSession(id: string): Promise<CheckoutResult> {
   // "wrong tier" without a second lookup.
   if (row.quoted_amount_gbp == null || !row.billing_interval) {
     return { ok: false, status: 409, error: "This request has not been quoted yet." };
+  }
+  // Post-launch review fix: quoted_amount_gbp and billing_interval are never
+  // cleared once the admin quote route writes them, so the check above alone
+  // still passes for a row that has since been paid, refunded or cancelled.
+  // status is the only field that says the row is CURRENTLY payable, and
+  // pending_payment (../../../admin/curation/quote/route.ts) is the exact
+  // value that means "quoted, awaiting the requester's payment, nothing else
+  // has happened since." Nothing moves a row back into pending_payment once
+  // it leaves, so this closes the re-payment hole the two checks above left
+  // open: without it, re-clicking the durable emailed link after the
+  // hour-long idempotency bucket rolls over could mint a second live
+  // subscription for a programme that is already paid.
+  if (row.status !== "pending_payment") {
+    return { ok: false, status: 409, error: "This request is no longer awaiting payment." };
   }
 
   const unitAmount = Math.round(row.quoted_amount_gbp * 100);
@@ -117,6 +133,14 @@ async function buildCheckoutSession(id: string): Promise<CheckoutResult> {
     // Best-effort link, mirrors ../../route.ts's D19 pattern: the session
     // already exists and is payable regardless of whether this write lands,
     // so a failure here is logged, never fatal.
+    //
+    // This column is overwritten on every new idempotency hour bucket,
+    // including a bare re-fetch of the link (a mail scanner, a bored
+    // requester), so it can end up naming an abandoned, unpaid session
+    // rather than the one that actually paid. Task 5's webhook
+    // reconciliation must key off Stripe's own session/subscription
+    // metadata (curation_request_id), and must never trust this column as
+    // "the session that paid."
     const { error: linkErr } = await db
       .from("curation_requests")
       .update({ stripe_checkout_session_id: session.id })
@@ -136,7 +160,15 @@ async function buildCheckoutSession(id: string): Promise<CheckoutResult> {
   }
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  // This link is reusable and never expires (see eslint-rules/public-routes.js
+  // for the full security record), unlike the newsletter confirmation link's
+  // single-use, 7-day-expiring token. checkRateLimit is what stands in for
+  // those two missing protections here: it bounds how many sessions one
+  // client can mint by bulk-fetching a single known link, mirroring
+  // newsletter/confirm/route.ts's own use of it.
+  const limited = await checkRateLimit(request, 20, 60_000);
+  if (limited) return limited;
   const { id } = await params;
   const result = await buildCheckoutSession(id);
   if (result.ok) {
@@ -145,7 +177,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json({ error: result.error }, { status: result.status });
 }
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const limited = await checkRateLimit(request, 20, 60_000);
+  if (limited) return limited;
   const { id } = await params;
   const result = await buildCheckoutSession(id);
   if (result.ok) {

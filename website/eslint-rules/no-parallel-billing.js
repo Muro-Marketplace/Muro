@@ -22,19 +22,16 @@ const ALLOWED = [
   "src/app/api/placements/[id]/payment/setup/route.ts",
   // The artist's own Wallplace plan.
   "src/app/api/subscribe/route.ts",
-  // Managed curation retainer. NB: vestigial as of Wallplace Programmes Task 1
-  // (the managed_monthly/managed_quarterly tiers this was written for are
-  // retired, and no subscription-mode call remains in this file), kept rather
-  // than removed because a stale entry here is inert, not a hole.
-  "src/app/api/curation/route.ts",
   // Wallplace Programmes, Task 4. The sole subscription entry point for the
   // quoted `programme` product: builds the checkout session for an
   // already-quoted curation_requests row (../admin/curation/quote/route.ts
   // writes the quote; this route is the only place that turns it into a
-  // Stripe session). curation/route.ts above never creates one for a
-  // programme row (it is quote-first, no Stripe session at enquiry time), so
-  // this is a new billing entry point, not a second implementation of an
-  // existing one.
+  // Stripe session). src/app/api/curation/route.ts (not in this list: it
+  // creates no Stripe session for a programme row, quote-first means no
+  // session at enquiry time) is the file a second programme biller would
+  // most plausibly regrow in, since it already handles programme
+  // submissions, which is exactly why it is deliberately absent here rather
+  // than carrying a stale entry.
   "src/app/api/curation/[id]/checkout/route.ts",
 ];
 
