@@ -1,0 +1,36 @@
+- generic [active] [ref=f22e1]:
+  - generic [ref=f22e2]:
+    - link "Skip to content" [ref=f22e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f22e4]:
+      - generic [ref=f22e6]:
+        - link "Wallplace" [ref=f22e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f22e8]:
+          - link "Marketplace" [ref=f22e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f22e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f22e12] [cursor=pointer]
+        - generic [ref=f22e15]:
+          - link "Saved" [ref=f22e16] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f22e20] [cursor=pointer]
+          - generic [ref=f22e24]:
+            - link "My Account" [ref=f22e25] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f22e26] [cursor=pointer]
+          - button "Logout" [ref=f22e29] [cursor=pointer]
+    - main [ref=f22e30]:
+      - paragraph [ref=f22e32]: Loading...
+    - button "Feedback and feature requests" [ref=f22e33] [cursor=pointer]: Feedback
+  - generic [ref=f22e39]:
+    - paragraph [ref=f22e40]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f22e41] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f22e42]:
+      - button "Decline" [ref=f22e43] [cursor=pointer]
+      - button "Accept" [ref=f22e44] [cursor=pointer]
+  - alert [ref=f22e45]

@@ -1,0 +1,152 @@
+- generic [active] [ref=f8e1]:
+  - generic [ref=f8e2]:
+    - link "Skip to content" [ref=f8e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f8e4]:
+      - generic [ref=f8e6]:
+        - link "Wallplace" [ref=f8e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f8e8]:
+          - link "Marketplace" [ref=f8e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f8e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f8e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f8e13] [cursor=pointer]
+        - generic [ref=f8e16]:
+          - link "Saved" [ref=f8e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f8e21] [cursor=pointer]
+          - button "Notifications" [ref=f8e26] [cursor=pointer]
+          - generic [ref=f8e30]:
+            - link "Venue Portal" [ref=f8e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f8e32] [cursor=pointer]
+          - button "Logout" [ref=f8e35] [cursor=pointer]
+    - main [ref=f8e36]:
+      - generic [ref=f8e37]:
+        - complementary [ref=f8e38]:
+          - navigation [ref=f8e39]:
+            - paragraph [ref=f8e41]: Venue Portal
+            - generic [ref=f8e42]:
+              - list [ref=f8e43]:
+                - listitem [ref=f8e44]:
+                  - link "Dashboard" [ref=f8e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f8e46]:
+                  - link "Venue Profile" [ref=f8e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f8e48]:
+                  - link "Messages" [ref=f8e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f8e50]:
+                  - link "Placements" [ref=f8e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f8e52]:
+                  - link "My Offers" [ref=f8e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f8e54]:
+                  - link "My Walls" [ref=f8e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f8e56]:
+                  - link "Saved" [ref=f8e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f8e58]:
+                  - link "QR Labels" [ref=f8e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f8e60]:
+                  - link "Analytics" [ref=f8e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f8e62]:
+                  - link "My Orders" [ref=f8e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f8e65]:
+                - listitem [ref=f8e66]:
+                  - link "Settings" [ref=f8e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f8e68]:
+                  - button "Logout" [ref=f8e69] [cursor=pointer]
+        - generic [ref=f8e71]:
+          - generic [ref=f8e73]:
+            - heading "Welcome back, Test" [level=1] [ref=f8e75]
+            - paragraph [ref=f8e76]: Here's what's happening with your account.
+          - generic [ref=f8e77]:
+            - generic [ref=f8e78]:
+              - paragraph [ref=f8e79]: —
+              - paragraph [ref=f8e80]: Saved Artists
+            - generic [ref=f8e81]:
+              - paragraph [ref=f8e82]: —
+              - paragraph [ref=f8e83]: Total Spent
+            - generic [ref=f8e84]:
+              - paragraph [ref=f8e85]: —
+              - paragraph [ref=f8e86]: Revenue Share Earned
+            - generic [ref=f8e87]:
+              - paragraph [ref=f8e88]: —
+              - paragraph [ref=f8e89]: QR Scans
+          - generic [ref=f8e90]:
+            - generic [ref=f8e91]:
+              - paragraph [ref=f8e92]: Wallplace Curated
+              - paragraph [ref=f8e93]: Want a shortlist picked for you?
+              - paragraph [ref=f8e94]: Our curators hand-pick works that fit your space, from £49.
+            - link "Explore Curated" [ref=f8e95] [cursor=pointer]:
+              - /url: /curated
+          - generic [ref=f8e98]:
+            - generic [ref=f8e99]:
+              - heading "Quick Actions" [level=2] [ref=f8e100]
+              - generic [ref=f8e101]:
+                - link [ref=f8e102] [cursor=pointer]:
+                  - /url: /browse
+                  - generic [ref=f8e103]:
+                    - paragraph [ref=f8e104]: Browse Portfolios
+                    - paragraph [ref=f8e105]: Find art for your space
+                - link [ref=f8e108] [cursor=pointer]:
+                  - /url: /venue-portal/messages
+                  - generic [ref=f8e109]:
+                    - paragraph [ref=f8e110]: Your Messages
+                    - paragraph [ref=f8e111]: Chat with artists
+                - link [ref=f8e114] [cursor=pointer]:
+                  - /url: /venue-portal/orders
+                  - generic [ref=f8e115]:
+                    - paragraph [ref=f8e116]: Your Orders
+                    - paragraph [ref=f8e117]: Track purchases
+                - link [ref=f8e120] [cursor=pointer]:
+                  - /url: /venue-portal/profile
+                  - generic [ref=f8e121]:
+                    - paragraph [ref=f8e122]: Update Preferences
+                    - paragraph [ref=f8e123]: Tell artists what you need
+            - generic [ref=f8e126]:
+              - heading "Summary" [level=2] [ref=f8e127]
+              - generic [ref=f8e128]:
+                - generic [ref=f8e129]:
+                  - generic [ref=f8e130]: Saved artists
+                  - generic [ref=f8e131]: "0"
+                - generic [ref=f8e132]:
+                  - generic [ref=f8e133]: Total spent
+                  - generic [ref=f8e134]: £0
+                - generic [ref=f8e135]:
+                  - generic [ref=f8e136]: Revenue share earned
+                  - generic [ref=f8e137]: £0
+                - generic [ref=f8e138]:
+                  - generic [ref=f8e139]: QR scans
+                  - generic [ref=f8e140]: "0"
+              - link "Browse Art" [ref=f8e142] [cursor=pointer]:
+                - /url: /browse
+          - generic [ref=f8e145]:
+            - heading "Recent Activity" [level=2] [ref=f8e147]
+            - generic [ref=f8e148]:
+              - text: No recent activity yet. Start by
+              - link "browsing portfolios" [ref=f8e149] [cursor=pointer]:
+                - /url: /browse
+              - text: .
+    - button "Feedback and feature requests" [ref=f8e150] [cursor=pointer]: Feedback
+  - generic [ref=f8e156]:
+    - paragraph [ref=f8e157]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f8e158] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f8e159]:
+      - button "Decline" [ref=f8e160] [cursor=pointer]
+      - button "Accept" [ref=f8e161] [cursor=pointer]
+  - alert [ref=f8e162]
