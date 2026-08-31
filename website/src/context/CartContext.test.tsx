@@ -47,12 +47,20 @@ const blankSizeItem: Omit<CartItem, "id"> = {
   size: "",
 };
 
+/** Bug 8: same work, same (broken) size label, different price and postage. */
+const cheapTier: Omit<CartItem, "id"> = { ...itemA, size: "Original", price: 180, shippingPrice: 12 };
+const dearTier: Omit<CartItem, "id"> = { ...itemA, size: "Original", price: 580, shippingPrice: 25 };
+
 function Probe() {
   const { items, addItem, ready } = useCart();
+  const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   return (
     <div>
       <button onClick={() => addItem(blankSizeItem)}>add-blank</button>
       <button onClick={() => addItem(itemA)}>add-a</button>
+      <button onClick={() => addItem(cheapTier)}>add-cheap</button>
+      <button onClick={() => addItem(dearTier)}>add-dear</button>
+      <span data-testid="total">{total}</span>
       <span data-testid="ready">{ready ? "ready" : "loading"}</span>
       <span data-testid="count">{items.length}</span>
       <span data-testid="size">{items[0]?.size ?? ""}</span>
@@ -120,6 +128,38 @@ describe("CartContext", () => {
       fireEvent.click(screen.getByText("add-blank"));
       expect(screen.getByTestId("count").textContent).toBe("1");
       expect(screen.getByTestId("size").textContent).toBe("Original");
+      expect(screen.getByTestId("qty").textContent).toBe("2");
+    });
+  });
+
+  describe("a differently-priced tier is never merged away (bug 8)", () => {
+    it("keeps two lines and charges the full amount when only the price differs", () => {
+      // The live defect: three tiers of one work all carried the same label,
+      // so adding the GBP 580 size after the GBP 180 size produced ONE line of
+      // quantity 2 at GBP 180. The buyer was charged GBP 400 less than the page
+      // quoted a click earlier, and would have been sent two of the wrong size.
+      render(
+        <CartProvider>
+          <Probe />
+        </CartProvider>,
+      );
+      fireEvent.click(screen.getByText("add-cheap"));
+      fireEvent.click(screen.getByText("add-dear"));
+
+      expect(screen.getByTestId("count").textContent).toBe("2");
+      expect(screen.getByTestId("total").textContent).toBe("760");
+    });
+
+    it("still merges a genuine repeat of the same tier", () => {
+      render(
+        <CartProvider>
+          <Probe />
+        </CartProvider>,
+      );
+      fireEvent.click(screen.getByText("add-cheap"));
+      fireEvent.click(screen.getByText("add-cheap"));
+
+      expect(screen.getByTestId("count").textContent).toBe("1");
       expect(screen.getByTestId("qty").textContent).toBe("2");
     });
   });

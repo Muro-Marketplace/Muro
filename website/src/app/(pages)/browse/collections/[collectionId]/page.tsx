@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, notFound as nextNotFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import type { ArtistCollection } from "@/data/collections";
@@ -100,16 +100,11 @@ export default function CollectionDetailPage() {
   }
 
   if (notFound || !collection) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-serif mb-3">Collection not found</h1>
-          <Link href="/browse" className="text-sm text-accent hover:text-accent-hover">
-            Back to marketplace
-          </Link>
-        </div>
-      </div>
-    );
+    // QA 2026-08-30 bug 39: this rendered a friendly message with an HTTP 200,
+    // so every made-up collection URL was a soft-200 that search engines will
+    // index and that hides genuinely broken links. nextNotFound() hands the
+    // request to the app's own not-found boundary instead.
+    nextNotFound();
   }
 
   const individualTotal = works.reduce(

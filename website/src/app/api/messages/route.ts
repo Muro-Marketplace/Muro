@@ -328,11 +328,20 @@ export async function POST(request: Request) {
     // profile impersonate anyone by passing that slug in the body. If the
     // user has no artist/venue profile, reject outright rather than
     // quietly delivering a spoofed message.
-    const { data: senderArtist } = await db.from("artist_profiles").select("slug").eq("user_id", auth.user!.id).maybeSingle();
+    const { data: senderArtist } = await db.from("artist_profiles").select("slug, name").eq("user_id", auth.user!.id).maybeSingle();
     const { data: senderVenue } = !senderArtist
-      ? await db.from("venue_profiles").select("slug").eq("user_id", auth.user!.id).maybeSingle()
+      ? await db.from("venue_profiles").select("slug, name").eq("user_id", auth.user!.id).maybeSingle()
       : { data: null };
     const resolvedSenderSlug = senderArtist?.slug || senderVenue?.slug || null;
+    // The SLUG stays the stored identity (sender_name is matched against it in
+    // the thread lookups below and must not change shape). This is the human
+    // name for the notification EMAIL only: owner-reported 2026-08-30, the
+    // notification read "fin-coles" where the person's name belongs. Falls back
+    // to a de-slugged version when a profile has no name set.
+    const resolvedSenderDisplayName =
+      (senderArtist as { name?: string | null } | null)?.name?.trim() ||
+      (senderVenue as { name?: string | null } | null)?.name?.trim() ||
+      (resolvedSenderSlug ? formatSlugToName(resolvedSenderSlug) : "Someone");
     if (!resolvedSenderSlug) {
       return NextResponse.json(
         { error: "Your account is not set up to send messages yet, complete your artist or venue profile first." },
@@ -796,7 +805,7 @@ export async function POST(request: Request) {
               recipientUserId: recipientArtist.user_id,
               recipientName: recipientArtist.name,
               recipientPortal: "artist",
-              senderName: resolvedSenderSlug,
+              senderName: resolvedSenderDisplayName,
               messagePreview: content,
               conversationId: cid || "",
             });
@@ -820,7 +829,7 @@ export async function POST(request: Request) {
               // F7: venues used to get an artist-portal link here, which
               // bounced them off a portal guard instead of opening the thread.
               recipientPortal: "venue",
-              senderName: resolvedSenderSlug,
+              senderName: resolvedSenderDisplayName,
               messagePreview: content,
               conversationId: cid || "",
             });

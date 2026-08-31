@@ -94,6 +94,15 @@ export default function BlogEditor({
   // rejected, archived) so further keystrokes don't silently overwrite
   // a post that's already in review or live. Audit follow-up.
   const canAutoSave = status === "draft" || status === "rejected";
+  // QA 2026-08-30 bug 16: the action row already rendered only for draft and
+  // rejected, so a published (or in-review) post showed a fully working-looking
+  // form with no way to save and silently discarded every edit on navigation.
+  // The fields follow the same rule as the buttons now, and say why.
+  //
+  // Deliberately read-only rather than adding a Save: PATCH /api/blogs/[id]
+  // does not re-enter moderation on a content edit, so a Save button here
+  // would let an artist change live, already-approved copy to anything at all.
+  const isEditable = canAutoSave;
   useEffect(() => {
     if (!currentId) return;
     if (!canAutoSave) return;
@@ -181,11 +190,27 @@ export default function BlogEditor({
         <p className="text-sm text-red-600 mb-4">{error}</p>
       )}
 
+      {!isEditable && (
+        <div className="mb-4 border border-border bg-surface rounded-sm p-3">
+          <p className="text-sm text-foreground">
+            {status === "published"
+              ? "This post is published, so it cannot be edited here."
+              : "This post is with the Wallplace team for review, so it cannot be edited until they have looked at it."}
+          </p>
+          <p className="text-xs text-muted mt-1">
+            {status === "published"
+              ? "Published posts have already been reviewed. To change this one, contact support and we will take it back into draft for you."
+              : "You will get an email once it has been reviewed. If it needs changes, you will be able to edit it then."}
+          </p>
+        </div>
+      )}
+
       <div className="space-y-4">
         <label className="block text-xs text-muted">
           Title
           <input
             type="text"
+            disabled={!isEditable}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={180}
@@ -197,6 +222,7 @@ export default function BlogEditor({
           Cover image URL (optional)
           <input
             type="url"
+            disabled={!isEditable}
             value={cover}
             onChange={(e) => setCover(e.target.value)}
             placeholder="https://"
@@ -207,6 +233,7 @@ export default function BlogEditor({
         <label className="block text-xs text-muted">
           Body (markdown)
           <textarea
+          disabled={!isEditable}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={16}
@@ -229,6 +256,7 @@ export default function BlogEditor({
                 <label key={w.id} className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
+                    disabled={!isEditable}
                     checked={featured.includes(w.id)}
                     onChange={() => toggleFeatured(w.id)}
                   />

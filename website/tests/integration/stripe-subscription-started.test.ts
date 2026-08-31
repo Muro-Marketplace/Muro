@@ -969,6 +969,43 @@ describe("checkout.session.completed books a collect_venue order", () => {
     expect(workFlagUpdates).toEqual([{ available_in_store: false }]);
   });
 
+  it("bug 20: an empty artist_slugs falls back to the cart line, so the order is not orphaned", async () => {
+    // Production holds one order booked with a NULL artist: money taken, the
+    // print on nobody's Orders queue, nobody told to post it. The cart LINES
+    // named the artist the whole time.
+    setupCartDb();
+    nextEvent.value = completedSession();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "cart_sessions") {
+        const c: Record<string, unknown> = {
+          maybeSingle: async () => ({
+            data: {
+              stripe_session_id: "cs_1",
+              cart: CART_ROW.cart,
+              shipping: CART_ROW.shipping,
+              source: CART_ROW.source,
+              venue_slug: CART_ROW.venue_slug,
+              artist_slugs: [],
+              expected_subtotal_pence: CART_ROW.expected_subtotal_pence,
+              expected_shipping_pence: CART_ROW.expected_shipping_pence,
+              artist_shipping_pence: {},
+            },
+            error: null,
+          }),
+        };
+        c.eq = () => c;
+        c.gt = () => c;
+        return { select: () => c, update: () => ({ eq: async () => ({ error: null }) }) };
+      }
+      return base(table);
+    });
+
+    await POST(post());
+    expect(orderInsert).toBeTruthy();
+    expect(orderInsert!.artist_slug).toBe("fin-coles");
+  });
+
   it("WS3.3: an off-wall sale ENDS the placement - sold, billing cancelled, stamps cleared", async () => {
     // Before this, nothing ever set a placement to "sold": an off-wall sale
     // left the placement active forever, and a paid-loan venue kept paying a

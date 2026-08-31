@@ -617,7 +617,18 @@ async function handleWebhookEvent(
         const source = saved.source || session.metadata?.source || "direct";
         const venueSlug = saved.venueSlug || session.metadata?.venue_slug || "";
         const artistSlugs = (saved.artistSlugs || []).join(",") || session.metadata?.artist_slugs || "";
-        const firstArtistSlug = artistSlugs.split(",")[0] || "";
+        // QA 2026-08-30 bug 20 (critical): when the cart session carried no
+        // artistSlugs, this resolved to "" and the order was booked with a NULL
+        // artist. Production holds one such row: GBP 64.49 charged, the print
+        // never appeared on any artist's Orders queue, so nobody was ever told
+        // to post it, artist_revenue was 0 and platform_fee_percent was 0, yet
+        // it still counted toward admin GROSS SALES. The cart LINES knew whose
+        // work it was the whole time (items[].artistName was populated), so
+        // fall back to them before giving up.
+        const firstArtistSlug =
+          artistSlugs.split(",")[0] ||
+          (cartItems as Array<{ artistSlug?: string }>).map((i) => i.artistSlug || "").find(Boolean) ||
+          "";
         const savedShipping = saved.shipping as Record<string, string>;
 
         // Compute revenue splits
@@ -868,6 +879,10 @@ async function handleWebhookEvent(
               ]
             : [{ status: "confirmed", timestamp: nowIso }],
           source,
+          // Still null means neither the session nor any cart line named an
+          // artist. The order is booked anyway (the customer HAS paid, and
+          // losing the record would be worse), but it is an orphan and an
+          // admin alert fires below so a human assigns it the same day.
           artist_slug: firstArtistSlug || null,
           artist_user_id: artistUserId,
           venue_slug: venueSlug || null,
@@ -1086,7 +1101,15 @@ async function handleWebhookEvent(
               const fallbackName = item.artistName && !/^[a-z0-9-]+$/.test(item.artistName) ? item.artistName : null;
               return {
                 title: item.title || "Artwork",
-                artistName: resolved || fallbackName || slug || "Artist",
+                // Owner-reported 2026-08-30: the last fallback printed the raw
+                // slug in the buyer's receipt. The line above already refuses a
+                // slug-shaped artistName, so falling through to one here was
+                // the same leak by another route.
+                artistName:
+                  resolved ||
+                  fallbackName ||
+                  slug.split("-").filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") ||
+                  "Artist",
                 quantity: Number(item.qty ?? item.quantity ?? 1),
                 size: item.size,
                 image: item.image || `${SITE}/placeholder-work.jpg`,
@@ -1110,6 +1133,30 @@ async function handleWebhookEvent(
               await db.from("orders").update({ items: orderItems }).eq("id", orderId);
             } catch (persistErr) {
               console.warn("[webhook] persisting enriched items failed:", persistErr);
+            }
+          }
+
+          // Bug 20: an order nobody can fulfil must not sit silent. The buyer
+          // has been charged, so this alerts rather than throwing; keyed on the
+          // order so a Stripe redelivery cannot spam.
+          if (!firstArtistSlug) {
+            try {
+              const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+              await sendAdminAlert({
+                idempotencyKey: `orphan_order:${orderId}`,
+                subject: `Order ${orderId} has no artist attached`,
+                summary:
+                  `Order ${orderId} was paid but neither the cart session nor any cart line named an ` +
+                  `artist, so it appears on no artist's Orders queue and nobody has been told to post ` +
+                  `it. Assign the artist by hand, then check how long the customer has been waiting.`,
+                fields: [
+                  { label: "Order", value: String(orderId) },
+                  { label: "Buyer", value: String(buyerEmail || "unknown") },
+                ],
+                metadata: { orderId },
+              });
+            } catch (orphanErr) {
+              console.error("[webhook] orphan-order alert failed:", orphanErr);
             }
           }
 

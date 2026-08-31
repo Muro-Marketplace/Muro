@@ -6,7 +6,8 @@ import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { authFetch } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
 import { labelForArrangement } from "@/lib/arrangement-labels";
-import { artistPayoutPounds } from "@/lib/finance/order-money";
+import { artistPayoutPounds, artistPostagePounds } from "@/lib/finance/order-money";
+import { venuePerformance } from "@/lib/finance/venue-performance";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
 
@@ -26,6 +27,7 @@ interface Placement {
   workTitle: string;
   workImage: string;
   venue: string;
+  venueSlug?: string | null;
   type: string;
   revenueSharePercent?: number;
   status: string;
@@ -58,7 +60,7 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("Last 30 days");
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [placements, setPlacements] = useState<Placement[]>([]);
-  const [orders, setOrders] = useState<{ total?: number; artist_revenue?: number | null; created_at?: string }[]>([]);
+  const [orders, setOrders] = useState<{ total?: number; artist_revenue?: number | null; shipping_cost?: number | null; created_at?: string; venue_slug?: string | null; status?: string | null }[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
@@ -121,21 +123,21 @@ export default function AnalyticsPage() {
   // Falls back to `total` for legacy rows pre-dating the artist_revenue
   // column so we don't silently zero them out.
   const totalEarnings = orders.reduce((sum: number, o) => sum + orderPayout(o), 0);
+  // QA 2026-08-30 bug 22: the payout includes the postage the buyer paid, which
+  // the artist forwards to a courier. Presenting the total as "your share after
+  // fees" counted that as margin, and the overstatement is largest on cheap
+  // works. The headline stays the payout, because that is the figure that must
+  // match Stripe, but the postage inside it is now stated.
+  const totalPostage = orders.reduce((sum: number, o) => sum + artistPostagePounds(o), 0);
   const uniqueVenues = new Set(placements.map((p) => p.venue)).size;
 
-  const venuePerformance = useMemo(() => {
-    const map: Record<string, { venue: string; pieces: number; sales: number; revenue: number; status: string }> = {};
-    placements.forEach((p) => {
-      if (!map[p.venue]) map[p.venue] = { venue: p.venue, pieces: 0, sales: 0, revenue: 0, status: "Active" };
-      map[p.venue].pieces++;
-      if ((p.status || "").toLowerCase() === "sold" && p.revenue) {
-        map[p.venue].sales++;
-        map[p.venue].revenue += parseFloat(p.revenue.replace(/[^0-9.]/g, "")) || 0;
-      }
-      if ((p.status || "").toLowerCase() === "completed") map[p.venue].status = "Completed";
-    });
-    return Object.values(map);
-  }, [placements]);
+  // Bugs 13 and 14. The derivation lives in lib/finance/venue-performance so
+  // it can be tested, and takes the payout rule as an argument rather than
+  // re-implementing it.
+  const venuePerformanceRows = useMemo(
+    () => venuePerformance(placements, orders, orderPayout),
+    [placements, orders],
+  );
 
   const earningsData = useMemo(() => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -342,8 +344,15 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Total Sales</p>
+          {/* Main's postage wording, kept. A4.7's formatPounds, also kept:
+              toLocaleString() has no minimum fraction digits, so £1,127.20
+              rendered as "£1,127.2" on an artist's own earnings figure. */}
           <p className="text-2xl font-medium">{formatPounds(totalEarnings)}</p>
-          <p className="text-xs text-muted mt-1">All time, your share after fees</p>
+          <p className="text-xs text-muted mt-1">
+            {totalPostage > 0
+              ? `All time, paid to you after fees. Includes ${formatPounds(totalPostage)} postage you pay the courier.`
+              : "All time, paid to you after fees"}
+          </p>
         </div>
         <div className="bg-surface border border-border rounded-sm p-5">
           <p className="text-sm text-muted mb-1">Pieces Placed</p>
@@ -448,12 +457,12 @@ export default function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {venuePerformance.map((row) => (
+                {venuePerformanceRows.map((row) => (
                   <tr key={row.venue} className="hover:bg-background/60 transition-colors">
                     <td className="px-6 py-3.5 font-medium text-foreground">{row.venue}</td>
                     <td className="px-4 py-3.5 text-right text-foreground">{row.pieces}</td>
                     <td className="px-4 py-3.5 text-right text-foreground">{row.sales}</td>
-                    <td className="px-4 py-3.5 text-right font-medium text-foreground">£{row.revenue}</td>
+                    <td className="px-4 py-3.5 text-right font-medium text-foreground">£{row.revenue.toFixed(2)}</td>
                     <td className="px-6 py-3.5">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                         row.status === "Active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"

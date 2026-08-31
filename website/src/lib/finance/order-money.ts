@@ -25,6 +25,9 @@ export interface OrderMoneyRow {
   total?: number | null;
   artist_revenue?: number | null;
   status?: string | null;
+  /** Postage the buyer paid. Passed through to the artist, who pays the
+      courier, so it is inside artist_revenue but is not margin. */
+  shipping_cost?: number | null;
 }
 
 /**
@@ -87,4 +90,31 @@ export function artistPayoutPence(order: OrderMoneyRow): number {
 /** Formatted for display, e.g. "12.50". Never "NaN". */
 export function formatPounds(pounds: number): string {
   return (Number.isFinite(pounds) ? pounds : 0).toFixed(2);
+}
+
+/**
+ * The postage inside an artist's payout, in POUNDS.
+ *
+ * QA 2026-08-30 bug 22: `artist_revenue` is artwork share PLUS the postage the
+ * buyer paid, minus the fee, because the artist receives the postage and pays
+ * the courier out of it. The money is right; calling the total "your share
+ * after fees" is not, because it presents money already owed to a courier as
+ * margin. A GBP 10 artwork with GBP 9.95 postage reported GBP 18.45 "earned",
+ * and the overstatement is largest on cheap works, where artists are most
+ * price-sensitive.
+ */
+export function artistPostagePounds(order: OrderMoneyRow): number {
+  const p = order.shipping_cost;
+  return typeof p === "number" && Number.isFinite(p) && p > 0 ? p : 0;
+}
+
+/**
+ * What the artist actually KEEPS on this order, in POUNDS: the payout with the
+ * courier's share taken back out. Never negative.
+ *
+ * Deliberately derived rather than stored: `artist_revenue` stays the payout,
+ * which is the figure that must continue to match Stripe.
+ */
+export function artistArtworkEarningsPounds(order: OrderMoneyRow): number {
+  return Math.max(0, artistPayoutPounds(order) - artistPostagePounds(order));
 }

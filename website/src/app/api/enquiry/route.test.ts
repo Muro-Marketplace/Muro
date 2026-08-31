@@ -194,6 +194,16 @@ describe("POST /api/enquiry names the sender consistently (C L1124)", () => {
       if (table === "enquiries") {
         return { insert: async (row: Record<string, unknown>) => { enquiryInserts.push(row); return { error: null }; } };
       }
+      if (table === "artist_profiles") {
+        // #78 resolves the artist's real name for the alert subject, so the
+        // slug never reaches a human. Answer it or the POST throws before it
+        // reaches the messages insert.
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: { name: "Maya Chen" }, error: null }) }),
+          }),
+        };
+      }
       return { insert: async () => ({ error: null }) };
     });
 

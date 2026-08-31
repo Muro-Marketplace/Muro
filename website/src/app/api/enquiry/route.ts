@@ -131,6 +131,16 @@ export async function POST(request: Request) {
     const { senderName, senderEmail, artistSlug, workTitle, enquiryType, message } = parsed.data;
 
     const { error } = await supabase.from("enquiries").insert({
+      // The artist's enquiries page renders this straight to them
+      // (artist-portal/enquiries), and nothing ever matches it against a slug,
+      // so it holds the name the form collected.
+      //
+      // #78 set this to the email's local part, carrying across the rule that
+      // MESSAGES.sender_name must stay a slug because four queries match it as
+      // an identity (api/messages:120, api/placements:709 and :1124,
+      // api/placements/venues:51). That rule is real, but it is about the other
+      // table. Applied here it only meant an enquiry from Finlay Coles showed
+      // up on the artist's own enquiries list as "fcoles2598".
       sender_name: senderName,
       sender_email: senderEmail,
       artist_slug: artistSlug,
@@ -146,14 +156,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
     }
 
+    // Owner-reported 2026-08-30: the alert read "New enquiry for fin-coles".
+    // The slug is the lookup key, not a person's name, and it should never be
+    // what a human reads. Resolve the artist's real name, de-slugging only as
+    // a fallback for a profile with no name set.
+    const { data: enquiryArtist } = await supabase
+      .from("artist_profiles")
+      .select("name")
+      .eq("slug", artistSlug)
+      .maybeSingle<{ name: string | null }>();
+    const artistDisplayName =
+      enquiryArtist?.name?.trim() ||
+      artistSlug
+        .split("-")
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ") ||
+      "an artist";
+
     // K1: was notifyAdminNewEnquiry in the legacy module.
     await sendAdminAlert({
       idempotencyKey: `admin_new_enquiry:${senderEmail.toLowerCase()}:${artistSlug}:${message.slice(0, 64)}`,
-      subject: `New enquiry for ${artistSlug}`,
+      subject: `New enquiry for ${artistDisplayName}`,
       summary: `${senderName} sent an enquiry through the public artist page.`,
       fields: [
         { label: "From", value: `${senderName} <${senderEmail}>` },
-        { label: "Artist", value: artistSlug },
+        { label: "Artist", value: `${artistDisplayName} (${artistSlug})` },
         { label: "Type", value: enquiryType },
         { label: "Message", value: message },
       ],
@@ -165,11 +193,10 @@ export async function POST(request: Request) {
     const { data: insertedMessage } = await db.from("messages").insert({
       conversation_id: cid,
       sender_id: null,
-      // C L1124. Was senderEmail.split("@")[0], so an enquiry from Finlay Coles
-      // reached the artist's inbox as "fcoles2598" while the name the form had
-      // just collected sat buried in the message body. The enquiries row two
-      // writes above already stores senderName; these two disagreed about the
-      // same person.
+      // C L1124, and #78 independently. An anonymous enquirer has no slug, so
+      // the identity rule on this column has nothing to store here; the name
+      // is what the artist needs to see. sender_type "anonymous" is what marks
+      // this row as not slug-matchable.
       sender_name: senderName,
       sender_type: "anonymous",
       recipient_slug: artistSlug,

@@ -61,10 +61,13 @@ describe("orderParties", () => {
     expect(buyer.firstName).toBe("buyer");
   });
 
-  it("falls back to the slug when the artist has no profile name", async () => {
+  it("de-slugs rather than greeting the artist by their slug", async () => {
+    // Owner-reported 2026-08-30: slugs were reaching customer-facing email.
+    // This previously asserted "maya-chen", so the test had pinned the leak.
     profileMock.mockResolvedValue({ data: { name: null } } as never);
     const [, artist] = await orderParties(db(), ORDER);
-    expect(artist.firstName).toBe("maya-chen");
+    expect(artist.firstName).toBe("Maya");
+    expect(artist.firstName).not.toContain("-");
   });
 
   it("never emits a blank first name from a whitespace-only shipping name", async () => {
