@@ -8,10 +8,11 @@ import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import { formatCurrency } from "@/lib/format-currency";
 import { isRefundEligible } from "@/lib/order-status-labels";
+import { readOrderItem, type RawOrderItem } from "@/lib/order-items";
 import { useUrlState } from "@/lib/use-url-state";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
 
-function safeArray(val: unknown): { title: string; qty: number; price: number; artistSlug?: string }[] {
+function safeArray(val: unknown): RawOrderItem[] {
   if (Array.isArray(val)) return val;
   if (typeof val === "string") { try { const parsed = JSON.parse(val); return Array.isArray(parsed) ? parsed : []; } catch { return []; } }
   return [];
@@ -20,7 +21,7 @@ function safeArray(val: unknown): { title: string; qty: number; price: number; a
 interface Order {
   id: string;
   order_number?: string | null;
-  items: { title: string; qty: number; price: number; artistSlug?: string }[];
+  items: RawOrderItem[];
   subtotal?: number | null;
   shipping_cost?: number | null;
   tax_total?: number | null;
@@ -282,12 +283,18 @@ function CustomerPortalContent() {
 
           <div className="mt-6 space-y-3">
             <p className="text-xs text-muted uppercase tracking-wider">Items</p>
-            {safeArray(selected.items).map((item, i) => (
-              <div key={i} className="flex items-center justify-between text-sm border-b border-border pb-2">
-                <span className="text-foreground">{item.title} &times; {item.qty}</span>
-                <span className="text-foreground font-medium">{formatCurrency(item.price * item.qty, selected.currency)}</span>
-              </div>
-            ))}
+            {/* B L834. Read both shapes. `item.price * item.qty` is undefined
+                times undefined on the enriched rows the Stripe webhook writes,
+                which is two thirds of production. See lib/order-items.ts. */}
+            {safeArray(selected.items).map((raw, i) => {
+              const item = readOrderItem(raw);
+              return (
+                <div key={i} className="flex items-center justify-between text-sm border-b border-border pb-2">
+                  <span className="text-foreground">{item.title} &times; {item.quantity}</span>
+                  <span className="text-foreground font-medium">{formatCurrency(item.lineTotal, item.currency || selected.currency)}</span>
+                </div>
+              );
+            })}
             <ul className="space-y-1 pt-2">
               {selected.subtotal != null && (
                 <li className="flex justify-between text-sm">
