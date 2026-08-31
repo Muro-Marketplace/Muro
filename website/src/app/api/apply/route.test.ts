@@ -20,6 +20,7 @@ const {
   applicationInsertMock,
   profilesSelectMock,
   profilesSelectBySlugMock,
+  profilesSelectByReferralCodeMock,
   profilesInsertMock,
   getAuthenticatedUserMock,
   sendEmailMock,
@@ -28,6 +29,7 @@ const {
   applicationInsertMock: vi.fn(),
   profilesSelectMock: vi.fn(),
   profilesSelectBySlugMock: vi.fn(),
+  profilesSelectByReferralCodeMock: vi.fn(),
   profilesInsertMock: vi.fn(),
   getAuthenticatedUserMock: vi.fn(),
   sendEmailMock: vi.fn(),
@@ -82,6 +84,13 @@ vi.mock("@/lib/supabase-admin", () => ({
                   maybeSingle: async () => {
                     return profilesSelectMock();
                   },
+                };
+              }
+              // Row G L2366: the route now resolves a claimed referral code
+              // against the codes that actually exist before storing it.
+              if (column === "referral_code") {
+                return {
+                  maybeSingle: async () => profilesSelectByReferralCodeMock(),
                 };
               }
               return {
@@ -161,6 +170,7 @@ beforeEach(() => {
   insertAttempts.length = 0;
   profilesSelectMock.mockReset();
   profilesSelectBySlugMock.mockReset();
+  profilesSelectByReferralCodeMock.mockReset();
   profilesInsertMock.mockReset();
   getAuthenticatedUserMock.mockReset();
   sendEmailMock.mockReset();
@@ -173,6 +183,12 @@ beforeEach(() => {
   });
   profilesSelectMock.mockReturnValue({ data: null, error: null });
   profilesSelectBySlugMock.mockReturnValue({ data: null, error: null });
+  // Default: the claimed referral code belongs to a real artist, so the tests
+  // written before the code was validated still exercise the stored path.
+  profilesSelectByReferralCodeMock.mockReturnValue({
+    data: { referral_code: "WP-ABC123" },
+    error: null,
+  });
 });
 
 describe("POST /api/apply creates the artist_profiles bridge row", () => {
@@ -355,5 +371,85 @@ describe("POST /api/apply records the referral code (migration 109)", () => {
 
     expect(res.status).toBe(500);
     expect(insertAttempts).toHaveLength(1);
+  });
+});
+
+// Production pass, row A L514. The worst-placed defect in the product: leaving
+// the OPTIONAL "primary medium" select blank returned 500 and wrote nothing, at
+// the first step of the artist acquisition funnel. The applicant saw only
+// "Something went wrong. Please try again."
+//
+// Cause: `primary_medium: d.primaryMedium || null` into a column that is NOT
+// NULL with no default. Postgres rejects the whole statement. The same file
+// already had `|| ""` two hundred lines down for the profile bridge, which is
+// what the column needed.
+//
+// `tests/integration/not-null-writes.test.ts` is the ratchet for the class;
+// this is the behaviour test for the instance.
+describe("POST /api/apply and the NOT NULL columns (row A L514)", () => {
+  /** The columns of artist_applications that are NOT NULL with no default. */
+  const REQUIRED = ["name", "email", "location", "primary_medium", "portfolio_link", "artist_statement"];
+
+  it("accepts a blank primary medium and stores an empty string, not null", async () => {
+    const res = await POST(req({ ...VALID_BODY, primaryMedium: "" }));
+
+    expect(res.status).toBe(200);
+    expect(applicationInsertMock.mock.calls[0][0]).toMatchObject({ primary_medium: "" });
+  });
+
+  it("accepts a payload that omits the medium entirely", async () => {
+    const res = await POST(req(VALID_BODY));
+
+    expect(res.status).toBe(200);
+    expect(applicationInsertMock.mock.calls[0][0]).toMatchObject({ primary_medium: "" });
+  });
+
+  it("writes neither null nor undefined into any NOT NULL column", async () => {
+    // Every optional field omitted — the shape the form produces when the
+    // applicant fills in only what is marked required.
+    const res = await POST(
+      req({ name: "Finlay Coles", email: "finlay@example.com", location: "London" }),
+    );
+
+    expect(res.status).toBe(200);
+    const row = applicationInsertMock.mock.calls[0][0] as Record<string, unknown>;
+    for (const col of REQUIRED) {
+      expect(row[col], `${col} is NOT NULL in production`).not.toBeNull();
+      expect(row[col], `${col} is NOT NULL in production`).not.toBeUndefined();
+    }
+  });
+});
+
+// Row G L2366. Application 29 carried the code `QATESTREF`. No artist owns it
+// (`select count(*) from artist_profiles where referral_code='QATESTREF'` is 0)
+// and it was written to `referred_by_code` anyway, so the admin reviewing the
+// application saw an attribution that could never pay anyone.
+describe("POST /api/apply validates the referral code (row G L2366)", () => {
+  it("stores a code that a real artist owns", async () => {
+    profilesSelectByReferralCodeMock.mockReturnValue({
+      data: { referral_code: "REALCODE" },
+      error: null,
+    });
+
+    await POST(req({ ...VALID_BODY, referralCode: "realcode" }));
+
+    expect(applicationInsertMock.mock.calls[0][0]).toMatchObject({
+      referred_by_code: "REALCODE",
+    });
+  });
+
+  it("drops a code no artist owns rather than storing it as if it were valid", async () => {
+    profilesSelectByReferralCodeMock.mockReturnValue({ data: null, error: null });
+
+    const res = await POST(req({ ...VALID_BODY, referralCode: "QATESTREF" }));
+
+    expect(res.status).toBe(200);
+    expect(applicationInsertMock.mock.calls[0][0]).toHaveProperty("referred_by_code", null);
+  });
+
+  it("does not look a code up when none was given", async () => {
+    await POST(req(VALID_BODY));
+
+    expect(profilesSelectByReferralCodeMock).not.toHaveBeenCalled();
   });
 });

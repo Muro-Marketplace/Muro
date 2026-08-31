@@ -56,6 +56,28 @@ export async function POST(request: Request) {
 
     const d = parsed.data;
 
+    // Row G L2366. The referral code is stored verbatim, so application 29
+    // carried `QATESTREF` — a code no artist owns — into `referred_by_code` as
+    // if it were real. Nothing downstream re-checks it, `artist_referrals` holds
+    // 0 rows across all of production, and the admin reviewing the application
+    // sees an attribution that will never pay anyone. Resolve it against the
+    // codes that actually exist and drop it if it matches none. A code the
+    // applicant mistyped is worth losing; a code that looks credited and is not
+    // is worse than none.
+    const claimedCode = (d as { referralCode?: string }).referralCode?.trim().toUpperCase() || "";
+    let referredByCode: string | null = null;
+    if (claimedCode) {
+      const { data: referrer } = await getSupabaseAdmin()
+        .from("artist_profiles")
+        .select("referral_code")
+        .eq("referral_code", claimedCode)
+        .maybeSingle();
+      referredByCode = referrer ? claimedCode : null;
+      if (!referrer) {
+        console.warn("[apply] referral code does not belong to any artist, dropped");
+      }
+    }
+
     // ONE insert, no strip-and-retry. Every column below exists in production
     // (checked against `tests/integration/schema-columns.json` and against the
     // live schema), so the ladder that used to sit under this could not do what
@@ -66,7 +88,12 @@ export async function POST(request: Request) {
       location: d.location,
       instagram: d.instagram || null,
       website: d.website || null,
-      primary_medium: d.primaryMedium || null,
+      // NOT NULL with no default, and the form labels this field optional. It
+      // was `|| null`, so leaving the select blank made Postgres reject the
+      // whole insert and the applicant got an unexplained 500 at the first step
+      // of the funnel (row A L514). The profile bridge below this already used
+      // `|| ""`, which is what the column needs.
+      primary_medium: d.primaryMedium || "",
       discipline: d.discipline || null,
       sub_styles: d.subStyles || [],
       // Merge `sampleWorkUrls` into `portfolio_link` until we have a
@@ -84,7 +111,11 @@ export async function POST(request: Request) {
           .join("\n");
         return main ? `${main}\n${sampleBlock}` : sampleBlock;
       })(),
-      artist_statement: d.artistStatement,
+      // Also NOT NULL, also optional in the schema. The form always posts the
+      // key so it arrives as "" and survives, but a client that omits it drops
+      // the key from the JSON body entirely and Postgres rejects the insert the
+      // same way `primary_medium` did.
+      artist_statement: d.artistStatement || "",
       trader_status: d.traderStatus || null,
       business_name: d.businessName || null,
       vat_number: d.vatNumber || null,
@@ -100,9 +131,7 @@ export async function POST(request: Request) {
       themes: d.themes || [],
       hear_about: d.hearAbout || null,
       selected_plan: d.selectedPlan || "core",
-      referred_by_code: (d as { referralCode?: string }).referralCode
-        ? ((d as { referralCode?: string }).referralCode as string).toUpperCase()
-        : null,
+      referred_by_code: referredByCode,
       status: "pending",
       created_at: new Date().toISOString(),
     };
