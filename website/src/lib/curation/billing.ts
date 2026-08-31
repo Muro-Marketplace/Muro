@@ -58,6 +58,7 @@ import { sendAdminAlert } from "@/lib/email/admin-alert";
 import { sendEmail } from "@/lib/email/send";
 import { CurationProgrammeConfirmed } from "@/emails/templates/venue-lifecycle/CurationProgrammeConfirmed";
 import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
+import { accrueProgrammeRent } from "@/lib/curation/programme-rent";
 
 interface CurationRow {
   id: string;
@@ -188,6 +189,32 @@ export async function handleCurationInvoicePaid(
       ...(subId ? { stripe_subscription_id: subId } : {}),
     })
     .eq("id", row.id);
+
+  // Task 6: rent accrues to every artist placed under this programme on
+  // EVERY paid invoice, not just the first -- unlike the two notification
+  // blocks below, this is not gated on billing_reason. Own try/catch,
+  // deliberately: this runs before the subscription_cycle and
+  // subscription_create blocks further down, and an uncaught throw here
+  // would abort the rest of this function, silently skipping the renewal
+  // alert or the first-payment alert + client receipt below it. The status
+  // reconcile above has already landed by this point regardless, since it is
+  // its own awaited call with nothing left to roll back.
+  if (row.tier === "programme") {
+    try {
+      await accrueProgrammeRent(db, {
+        curationRequestId: row.id,
+        invoiceId: invoice.id,
+        periodMonths: row.billing_interval === "quarter" ? 3 : 1,
+        quotedAmountPence: Math.round((row.quoted_amount_gbp ?? 0) * 100),
+      });
+    } catch (err) {
+      console.error("[curation billing] programme rent accrual failed", {
+        requestId: row.id,
+        invoiceId: invoice.id,
+        err,
+      });
+    }
+  }
 
   // D23: a renewal is money landing again, and it was silent. Only ping on a
   // recurring cycle — the first invoice (subscription_create) is already covered

@@ -21,10 +21,11 @@
     "rls_enabled_no_policy_public_order_events",
     "rls_enabled_no_policy_public_placement_record_versions",
     "rls_enabled_no_policy_public_placement_reviews",
+    "rls_enabled_no_policy_public_programme_rent_accruals",
     "rls_enabled_no_policy_public_purchase_offers",
     "rls_enabled_no_policy_public_stripe_webhook_events",
     "rls_enabled_no_policy_public_user_blocks",
     "rls_enabled_no_policy_public_visualizer_quota_overrides"
   ],
-  "_comment2": "Every key here must also appear in docs/security/service-role-only-tables.md with the route that writes it. Six were added 2026-08-28: admin_users (migration 101), artist_applications and stripe_webhook_events (already live and never listed, so the nightly advisor job would have failed on them), and conversation_reports, user_blocks and placement_record_versions (migration 111)."
+  "_comment2": "Every key here must also appear in docs/security/service-role-only-tables.md with the route that writes it. Six were added 2026-08-28: admin_users (migration 101), artist_applications and stripe_webhook_events (already live and never listed, so the nightly advisor job would have failed on them), and conversation_reports, user_blocks and placement_record_versions (migration 111). programme_rent_accruals added 2026-08-31 (migration 122, Task 6)."
 }

@@ -10,7 +10,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 
-const { sendAdminAlertMock, sendEmailMock } = vi.hoisted(() => ({
+const { sendAdminAlertMock, sendEmailMock, accrueProgrammeRentMock } = vi.hoisted(() => ({
   sendAdminAlertMock: vi.fn(
     async (_input: {
       idempotencyKey: string;
@@ -34,6 +34,15 @@ const { sendAdminAlertMock, sendEmailMock } = vi.hoisted(() => ({
       metadata?: Record<string, unknown>;
     }) => ({ ok: true as const, skipped: false as const, messageId: "m" }),
   ),
+  // Task 6: programme-rent.ts has its own dedicated unit tests
+  // (programme-rent.test.ts). Here we only pin the WIRING -- that
+  // handleCurationInvoicePaid calls it with the right arguments, only for a
+  // programme row, and that a throw from it cannot break reconciliation --
+  // so a plain mock stands in rather than a real fake DB.
+  accrueProgrammeRentMock: vi.fn(async (_db: unknown, _input: unknown) => ({
+    accrued: 0,
+    skipped: 0,
+  })),
 }));
 
 /** The single alert the call under test sent, or undefined if it sent none. */
@@ -52,6 +61,7 @@ vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({}) }));
 // tell them apart by the alert's subject.
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: sendAdminAlertMock }));
 vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
+vi.mock("@/lib/curation/programme-rent", () => ({ accrueProgrammeRent: accrueProgrammeRentMock }));
 
 import {
   handleCurationInvoicePaid,
@@ -168,7 +178,7 @@ function makeDbByColumn(byColumn: {
 function invoice(
   subId: string | null,
   nextAttempt: number | null = 123,
-  extra: { billingReason?: string; amountPaid?: number; curationRequestId?: string } = {},
+  extra: { billingReason?: string; amountPaid?: number; curationRequestId?: string; id?: string } = {},
 ): Stripe.Invoice {
   const subscriptionDetails =
     subId || extra.curationRequestId
@@ -180,6 +190,10 @@ function invoice(
         }
       : undefined;
   return {
+    // Task 6: real Stripe.Invoice.id is a required string; defaulted here
+    // (rather than left unset, as before) so accrueProgrammeRent's
+    // invoiceId argument is always a realistic value, not undefined.
+    id: extra.id ?? "in_test",
     parent: subscriptionDetails ? { subscription_details: subscriptionDetails } : undefined,
     next_payment_attempt: nextAttempt,
     billing_reason: extra.billingReason,
@@ -377,6 +391,114 @@ describe("handleCurationInvoicePaid — Task 5 programme metadata resolution", (
 
     expect(handled).toBe(false);
     expect(updates).toHaveLength(0);
+  });
+});
+
+// Task 6: accrueProgrammeRent itself is covered by programme-rent.test.ts
+// (a real fake DB, the pool guard, the unique-constraint replay). These
+// tests pin only the WIRING in this file: called with the right arguments,
+// only for a programme row, on every paid invoice regardless of
+// billing_reason, and unable to break reconciliation or the notifications
+// that run after it in the same function.
+describe("handleCurationInvoicePaid — Task 6 programme rent accrual wiring", () => {
+  it("calls accrueProgrammeRent for a monthly programme row with periodMonths 1", async () => {
+    const { db } = makeDb(PROGRAMME_ROW); // billing_interval: "month", quoted_amount_gbp: 250
+
+    await handleCurationInvoicePaid(invoice("sub_prog_1", null, { id: "in_month_1" }), db);
+
+    expect(accrueProgrammeRentMock).toHaveBeenCalledTimes(1);
+    expect(accrueProgrammeRentMock).toHaveBeenCalledWith(db, {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_month_1",
+      periodMonths: 1,
+      quotedAmountPence: 25000,
+    });
+  });
+
+  it("derives periodMonths 3 for a quarterly-billed programme row", async () => {
+    const quarterlyRow = { ...PROGRAMME_ROW, billing_interval: "quarter" as const };
+    const { db } = makeDb(quarterlyRow);
+
+    await handleCurationInvoicePaid(invoice("sub_prog_2", null, { id: "in_q_1" }), db);
+
+    expect(accrueProgrammeRentMock).toHaveBeenCalledWith(db, {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_q_1",
+      periodMonths: 3,
+      quotedAmountPence: 25000,
+    });
+  });
+
+  it("does not call accrueProgrammeRent for a non-programme (managed) row", async () => {
+    const { db } = makeDb(ROW); // tier: "managed_monthly"
+
+    const handled = await handleCurationInvoicePaid(invoice("sub_cur_1"), db);
+
+    expect(handled).toBe(true);
+    expect(accrueProgrammeRentMock).not.toHaveBeenCalled();
+  });
+
+  it("accrues on a renewal too, not just the first invoice", async () => {
+    const { db } = makeDb(PROGRAMME_ROW);
+
+    await handleCurationInvoicePaid(
+      invoice("sub_prog_3", null, {
+        billingReason: "subscription_cycle",
+        amountPaid: 25000,
+        id: "in_renewal",
+      }),
+      db,
+    );
+
+    expect(accrueProgrammeRentMock).toHaveBeenCalledTimes(1);
+    expect(accrueProgrammeRentMock).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ invoiceId: "in_renewal" }),
+    );
+  });
+
+  it("an accrual failure does not break reconciliation or the renewal alert that runs after it", async () => {
+    accrueProgrammeRentMock.mockRejectedValueOnce(new Error("accrual boom"));
+    const { db, updates } = makeDb(PROGRAMME_ROW);
+
+    const handled = await handleCurationInvoicePaid(
+      invoice("sub_prog_4", null, {
+        billingReason: "subscription_cycle",
+        amountPaid: 25000,
+        id: "in_boom",
+      }),
+      db,
+    );
+
+    // The status reconcile (which runs BEFORE the accrual call) still landed.
+    expect(handled).toBe(true);
+    expect(updates).toHaveLength(1);
+    expect(updates[0].status).toBe("in_progress");
+    // The renewal alert (which runs AFTER the accrual call in the same
+    // function body) still fired -- proving the throw was caught locally
+    // rather than aborting the rest of handleCurationInvoicePaid.
+    const alert = lastAlert();
+    expect(alert?.subject).toContain("Curation renewal paid");
+  });
+
+  it("an accrual failure does not suppress the programme first-payment alert and client receipt", async () => {
+    accrueProgrammeRentMock.mockRejectedValueOnce(new Error("accrual boom"));
+    const { db } = makeDbByColumn({ stripe_subscription_id: null, id: PROGRAMME_ROW });
+
+    const handled = await handleCurationInvoicePaid(
+      invoice("sub_prog_5", null, {
+        curationRequestId: "cr_prog_1",
+        billingReason: "subscription_create",
+        amountPaid: 25000,
+        id: "in_boom_first",
+      }),
+      db,
+    );
+
+    expect(handled).toBe(true);
+    const alert = lastAlert();
+    expect(alert?.subject).toContain("Programme confirmed");
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
   });
 });
 

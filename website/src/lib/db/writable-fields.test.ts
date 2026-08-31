@@ -8,6 +8,7 @@ import {
   VENUE_PROFILE_SERVER_OWNED,
   ARTIST_WORK_WRITABLE,
   ARTIST_WORK_SERVER_OWNED,
+  PLACEMENT_SERVER_OWNED,
 } from "./writable-fields";
 
 // 06-validation-massassign.md A2. These two functions are the only thing standing
@@ -159,6 +160,24 @@ describe("allowlist integrity", () => {
     // allowlisting a phantom would let one stray field fail the whole save,
     // then admitted the moment the migration made it real.
     expect(ARTIST_WORK_WRITABLE).toContain("in_store_price");
+  });
+
+  it("Task 6: denies programme_request_id and programme_rent_gbp on placements", () => {
+    // migration 122. Both drive real money (accrueProgrammeRent), so a
+    // client setting either would let an artist or venue fabricate rent
+    // income -- pinned here the same way the ARTIST_PROFILE_SERVER_OWNED
+    // entries above are, even though no placements route calls
+    // assertNoServerOwned yet (see the constant's own doc comment).
+    expect(PLACEMENT_SERVER_OWNED).toContain("programme_request_id");
+    expect(PLACEMENT_SERVER_OWNED).toContain("programme_rent_gbp");
+    expect(Object.isFrozen(PLACEMENT_SERVER_OWNED)).toBe(true);
+    expect(() =>
+      assertNoServerOwned(
+        { programme_request_id: "cr_1", programme_rent_gbp: 999 },
+        PLACEMENT_SERVER_OWNED,
+        "placements",
+      ),
+    ).toThrow(/programme_request_id/);
   });
 
   it("allowlists the two shipping-scope columns that migration 081 created", () => {

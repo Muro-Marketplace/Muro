@@ -242,6 +242,32 @@ export const ARTIST_WORK_SERVER_OWNED = Object.freeze([
   "mockups", // written by the visualizer API
 ] as const);
 
+/**
+ * Server-owned columns on `placements`. Task 6 (Wallplace Programmes rent
+ * accrual, migration 122): `programme_request_id` links a placement to the
+ * programme paying for it, and `programme_rent_gbp` is the artist's agreed
+ * monthly rent for it. Both drive real money -- accrueProgrammeRent()
+ * (src/lib/curation/programme-rent.ts) inserts one accrual row per linked
+ * placement on every paid programme invoice -- so a client setting either
+ * would let an artist or venue fabricate rent income.
+ *
+ * NOT an exhaustive server-owned list for placements, unlike the
+ * ARTIST_PROFILE_SERVER_OWNED / VENUE_PROFILE_SERVER_OWNED pair above:
+ * api/placements/route.ts does not build its writes through pickWritable().
+ * Its PATCH validates against placementUpdateSchema (lib/validations.ts), a
+ * narrow zod object with no field for either column, so today's actual
+ * protection is that omission, not this list. Recorded here anyway, in the
+ * one place this codebase already looks for "is this column server-owned",
+ * so a future write path -- an admin route linking a placement to a
+ * programme, deliberately left unbuilt by this task -- has a documented
+ * allowlist to check against, and assertNoServerOwned() can guard it the
+ * moment that path exists.
+ */
+export const PLACEMENT_SERVER_OWNED = Object.freeze([
+  "programme_request_id",
+  "programme_rent_gbp",
+] as const);
+
 export type WritableKeys<T extends readonly string[]> = T[number];
 
 /**

@@ -40,6 +40,7 @@ suppression or a nightly job that fails on a deliberate design.
 | `order_events` | `lib/orders/lifecycle.ts` |
 | `placement_record_versions` | `api/placements/[id]/record`. Migration 111 |
 | `placement_reviews` | `api/placements/[id]/review` |
+| `programme_rent_accruals` | `lib/curation/programme-rent.ts`, called from the webhook's programme `invoice.paid` branch. Migration 122 |
 | `purchase_offers` | `api/offers/**` |
 | `stripe_webhook_events` | the webhook's event-dedup claim |
 | `user_blocks` | `api/messages/block`. Migration 111 |
