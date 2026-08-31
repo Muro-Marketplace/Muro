@@ -1891,3 +1891,50 @@ describe("POST /api/checkout shipping inputs come from the database (A1.2)", () 
     expect(shippingMock).not.toHaveBeenCalled();
   });
 });
+
+// orders.buyer_user_id has existed in the schema throughout and was written
+// by nothing. Measured against production on 2026-08-31: 18 orders, 0 with an
+// id, 15 of them placed against an email that matches a real account. Every
+// order was therefore reachable only by matching the email address, which
+// stops working the moment somebody changes theirs.
+//
+// Stripe's session metadata is the only channel from this route to the
+// webhook that creates the order, so that is where the id has to ride.
+describe("POST /api/checkout carries the buyer's identity to the order", () => {
+  function sessionMetadata(): Record<string, string> {
+    const arg = stripeCreate.mock.calls[0][0] as { metadata?: Record<string, string> };
+    return arg.metadata || {};
+  }
+
+  it("puts the signed-in buyer's id in the session metadata", async () => {
+    setupDefaultDbMock();
+    const res = await POST(req({
+      items: [{ ...baseItem, artistSlug: "bob", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }, "Bearer artist-alice"));
+
+    expect(res.status).toBe(200);
+    expect(sessionMetadata().buyer_user_id).toBe("u-alice");
+  });
+
+  it("sends an empty string for a guest, since Stripe metadata must be strings", async () => {
+    setupDefaultDbMock();
+    await POST(req({
+      items: [{ ...baseItem, workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+
+    expect(sessionMetadata().buyer_user_id).toBe("");
+  });
+
+  it("still allows guest checkout", async () => {
+    // The identity is additive. Requiring it would end guest checkout.
+    setupDefaultDbMock();
+    const res = await POST(req({
+      items: [{ ...baseItem, workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+
+    expect(res.status).toBe(200);
+  });
+});

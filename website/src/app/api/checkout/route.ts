@@ -182,10 +182,17 @@ export async function POST(request: Request) {
     // allowed). If the caller IS authenticated and is the artist behind
     // any cart item, refuse — money would cycle through Stripe Connect
     // and the platform would skim a fee from the artist's own card.
+    // Also the only place the buyer's identity is known. orders.buyer_user_id
+    // exists in the schema and was written by nothing at all: 18 production
+    // orders, 0 with an id, 15 of them placed against an email that matches a
+    // real account. Stripe's session metadata is the only channel from here to
+    // the webhook that creates the order, so the id rides along there.
+    let buyerUserId: string | null = null;
     const authHeader = request.headers.get("authorization");
     if (authHeader) {
       const auth = await getAuthenticatedUser(request);
       if (auth.user) {
+        buyerUserId = auth.user.id;
         // E23a. Guarded only inside the authenticated branch, because guest
         // checkout is supported and an anonymous caller has no id to test. A
         // demo session reaching Stripe would take real money, so this is the
@@ -777,6 +784,9 @@ export async function POST(request: Request) {
       customer_email: shipping.email,
       metadata: {
         kind: "cart_checkout",
+        // Empty string rather than omitted: Stripe metadata values must be
+        // strings, and the webhook reads a missing key the same as a blank one.
+        buyer_user_id: buyerUserId || "",
         source,
         venue_slug: venueSlug,
         artist_slugs: artistSlugs.join(","),
