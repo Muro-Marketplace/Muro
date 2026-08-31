@@ -23,7 +23,7 @@ records what has actually landed.
 | C L1124 | An enquiry reached the artist's inbox under the email's local part rather than the name the form collected. | `api/enquiry` |
 | — | `orders.buyer_user_id` was written by nothing at all: 18 orders, 0 with an id. | `api/checkout`, Stripe webhook |
 
-Roughly 130 new tests. Every fix above was checked against the original
+About 100 new tests, taking the suite to 3,490. Every fix above was checked against the original
 defect: the tests fail without it.
 
 ## Needs the owner, not code
