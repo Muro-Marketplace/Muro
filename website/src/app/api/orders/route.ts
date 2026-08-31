@@ -411,6 +411,40 @@ export async function PATCH(request: Request) {
         });
         if (rpcErr) console.error("Failed to attribute placement revenue:", rpcErr);
       }
+
+      // Row 727 / PASS2-placement-lifecycle-log. A placement sold off the wall
+      // went to `sold` and could never reach Collected: the progress bar sat at
+      // 5 of 6, every stage control vanished for both parties, and there was no
+      // way to close the loan.
+      //
+      // The buyer confirming they have picked the piece up IS the "Collected"
+      // event: that is the moment the work physically leaves the venue's wall.
+      // So the confirmation that releases the money also closes the loan.
+      // Either party can still mark it by hand (PATCH /api/placements accepts
+      // stage: "collected" from `sold`), so a buyer who never confirms cannot
+      // strand the venue's record.
+      //
+      // Best-effort: the order transition has already been written, and a
+      // placement that stays open is recoverable by hand while a failed
+      // delivery confirmation is not.
+      if (isCollectionOrder && order.placement_id) {
+        try {
+          const { data: placement } = await db
+            .from("placements")
+            .select("id, collected_at")
+            .eq("id", order.placement_id)
+            .maybeSingle<{ id: string; collected_at: string | null }>();
+          if (placement && !placement.collected_at) {
+            const { error: closeErr } = await db
+              .from("placements")
+              .update({ collected_at: new Date().toISOString(), status: "completed" })
+              .eq("id", placement.id);
+            if (closeErr) console.error("[orders PATCH] could not close the placement:", closeErr);
+          }
+        } catch (closeErr) {
+          console.error("[orders PATCH] placement close hook:", closeErr);
+        }
+      }
     }
 
     // On cancellation, cancel pending payouts

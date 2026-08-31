@@ -902,7 +902,12 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Artist fulfilment notice */}
+          {/* Fulfilment notice. PASS2-placement-lifecycle-log: this said "Your
+              order will be fulfilled directly by the artist. They'll pack and
+              ship your artwork within 5 to 7 working days" under a SELECTED
+              "Collect from the venue" option. Nothing was going to be packed or
+              shipped: the piece was on a wall the buyer was about to walk into.
+              The confirmation page already said the right thing. */}
           <div className="bg-accent/5 border border-accent/20 rounded-sm p-4 flex gap-3">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
               <circle cx="12" cy="12" r="10" />
@@ -910,7 +915,23 @@ export default function CheckoutPage() {
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
             <p className="text-sm text-foreground/70">
-              Your order will be fulfilled directly by the artist. They&apos;ll pack and ship your artwork within {aggregatedEstimatedDays}.
+              {fulfilmentMethod === "collect_venue" ? (
+                <>
+                  Nothing is posted. Once you have paid, collect it from{" "}
+                  {collectVenueName ?? "the venue"} and confirm the pickup in your account so the
+                  artist is paid.
+                </>
+              ) : fulfilmentMethod === "collection" ? (
+                <>
+                  Nothing is posted. The artist will be in touch to arrange a time for you to
+                  collect it.
+                </>
+              ) : (
+                <>
+                  Your order will be fulfilled directly by the artist. They&apos;ll pack and ship
+                  your artwork within {aggregatedEstimatedDays}.
+                </>
+              )}
             </p>
           </div>
 

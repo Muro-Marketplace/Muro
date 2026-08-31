@@ -12,9 +12,10 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock, rpcMock, cancelPaidLoanMock } =
+const { fromMock, getUserByIdMock, nextEvent, paidLoanDeletedMock, curationDeletedMock, rpcMock, cancelPaidLoanMock, scheduleTransferMock } =
   vi.hoisted(() => ({
   fromMock: vi.fn(),
+  scheduleTransferMock: vi.fn(async (_args: { immediate?: boolean }) => ({ ok: true as const })),
   getUserByIdMock: vi.fn(),
   nextEvent: { value: null as unknown },
   paidLoanDeletedMock: vi.fn(async () => {}),
@@ -49,8 +50,13 @@ vi.mock("@/lib/curation/billing", () => ({
   handleCurationSubscriptionDeleted: curationDeletedMock,
 }));
 vi.mock("@/lib/stripe-connect", () => ({
-  scheduleTransfer: vi.fn(async () => ({ ok: true })),
+  scheduleTransfer: scheduleTransferMock,
   recordBlockedLeg: vi.fn(async () => {}),
+}));
+// Both legs are payable, so `scheduleTransfer` is actually reached and the
+// payout-timing assertions below are not vacuous.
+vi.mock("@/lib/payouts/capability", () => ({
+  canReceivePayout: vi.fn(async () => ({ ok: true, accountId: "acct_1" })),
 }));
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
@@ -818,20 +824,45 @@ describe("checkout.session.completed books a collect_venue order", () => {
 
   beforeEach(() => {
     setupCartDb();
+    scheduleTransferMock.mockClear();
     getUserByIdMock.mockResolvedValue({ data: { user: { email: "venue@x.com" } } });
     vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
-  it("books the order delivered immediately, with the collection address on it", async () => {
+  // Rows 870-874 / PASS2-placement-lifecycle-log. WS-UAKK1KDSC32PDT5R was
+  // written `status: delivered` with `delivered_at` set at the moment of
+  // payment, and the GBP 114 artist transfer was created and settled to `paid`
+  // seven seconds later with `payout_after` equal to its own creation time. No
+  // hold, and no evidence the buyer had collected anything: they had only just
+  // paid, and the piece was still on the wall.
+  //
+  // A collect order is booked `confirmed` like any other. The BUYER confirms
+  // the handover, which is the same rule the posted path already follows and
+  // the reason `delivered` is buyer-only in /api/orders: the parties who get
+  // paid, artist and venue, must not attest to the delivery that releases their
+  // own money. If the buyer never confirms, the 14-day payout cron pays out
+  // anyway, exactly as for a posted order.
+  it("books the order confirmed, not delivered, with the collection address on it", async () => {
     await POST(post());
 
     expect(orderInsert).toBeTruthy();
     expect(orderInsert!).toMatchObject({
       fulfilment_method: "collect_venue",
-      status: "delivered",
+      status: "confirmed",
       collection_address: "The Copper Kettle, 1 High St, Hampton",
     });
-    expect(orderInsert!.delivered_at).toEqual(expect.any(String));
+    expect(orderInsert!.delivered_at).toBeNull();
+    expect(orderInsert!.status_history).toEqual([
+      { status: "confirmed", timestamp: expect.any(String) },
+    ]);
+  });
+
+  it("puts the artist's payout on the normal hold rather than settling it at payment", async () => {
+    await POST(post());
+
+    const immediates = scheduleTransferMock.mock.calls.map((c) => c[0].immediate);
+    expect(immediates.length).toBeGreaterThan(0);
+    expect(immediates.every((i) => i !== true)).toBe(true);
   });
 
   it("tells the venue: one email keyed on the order, so a redelivery cannot double it", async () => {

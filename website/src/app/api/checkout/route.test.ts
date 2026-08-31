@@ -1397,6 +1397,50 @@ describe("POST /api/checkout collect-from-venue re-validation (T9)", () => {
     expect(saved.shipping.collectionAddress).toBe(PLACEMENT.collection_address);
   });
 
+  // Row 727 / PASS2-placement-lifecycle-log. A venue and an artist agreed a
+  // 20% share, the work went live, a customer bought it off the wall for GBP
+  // 120, and the order came out with placement_id NULL, venue_slug NULL,
+  // venue_revenue_share_percent 0 and venue_revenue 0. No venue transfer row
+  // existed. Meanwhile venue_collection_pending emailed the venue to say the
+  // piece "has sold and will be collected from you".
+  //
+  // Cause: `venueSlug` was only ever set from a QR attribution token or from a
+  // raw client field, and an off-the-wall purchase starts on the public artwork
+  // page, not a QR scan. The webhook resolves the placement by filtering
+  // `.eq("venue_slug", venueSlug)`, so a blank slug means it finds nothing and
+  // every downstream figure is zero.
+  //
+  // The rule, matching what offer sales already do (see the venue-share block
+  // in api/offers/[id]/checkout): a work hanging on a venue's wall earns that
+  // venue its placement share on ANY platform sale of the work. An off-the-wall
+  // collect sale is the most venue-attributable sale there is, because the buyer
+  // is standing in the venue and the venue hands the piece over.
+  it("attributes a collect sale to the venue whose wall the work hangs on", async () => {
+    setupWithPlacements([PLACEMENT]);
+
+    const res = await POST(req(collectBody));
+
+    expect(res.status).toBe(200);
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ venueSlug?: string }]
+    >)[0][0];
+    expect(saved.venueSlug).toBe(PLACEMENT.venue_slug);
+  });
+
+  it("takes the venue from the PLACEMENT, not from whatever the client claimed", async () => {
+    setupWithPlacements([PLACEMENT]);
+
+    // A browser console can send any venueSlug it likes. On a collect order the
+    // placement row is the authority, exactly as it already is for the venue,
+    // artist, liveness, size and price of the line.
+    await POST(req({ ...collectBody, venueSlug: "somewhere-i-do-not-own" }));
+
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ venueSlug?: string }]
+    >)[0][0];
+    expect(saved.venueSlug).toBe(PLACEMENT.venue_slug);
+  });
+
   it("rejects a line whose placement does not exist or is not active", async () => {
     // The .eq("status","active") filter means an ended placement simply is not
     // in the result set: same refusal as a fabricated id.

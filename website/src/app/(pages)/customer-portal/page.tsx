@@ -35,6 +35,31 @@ interface Order {
   delivered_at?: string | null;
   artist_slug?: string;
   venue_slug?: string;
+  fulfilment_method?: string | null;
+  collection_address?: string | null;
+}
+
+/**
+ * Rows 870-874. A collection order never passes through `shipped`: there is no
+ * dispatch leg, the buyer picks the piece up. Gating the confirm control on
+ * `shipped` therefore left a collect buyer with no way to confirm at all, and
+ * every collect payout waiting the full 14 days on the cron.
+ *
+ * Confirming is the buyer's act in both shapes, because it releases the
+ * artist's payout and (since row 727) the hosting venue's share, and a party
+ * that gets paid must not attest to the delivery that pays them.
+ */
+function isCollectionOrder(order: Order): boolean {
+  return order.fulfilment_method === "collection" || order.fulfilment_method === "collect_venue";
+}
+
+/** Can the buyer confirm the handover on this order right now? */
+function canConfirmHandover(order: Order): boolean {
+  if (order.status === "shipped") return true;
+  return (
+    isCollectionOrder(order) &&
+    ["confirmed", "artist_notified", "awaiting_dispatch", "processing"].includes(order.status)
+  );
 }
 
 // RefundRequest is now the canonical shared type from the API module.
@@ -332,19 +357,29 @@ function CustomerPortalContent() {
           {/* Confirm delivery (E21). Only the buyer may move an order to
               `delivered`, because that release the artist's pending payout. An
               order left unconfirmed still pays out on the 14-day cron, so this
-              is an accelerator for honest buyers, not a gate on the artist. */}
-          {selected.status === "shipped" && (
+              is an accelerator for honest buyers, not a gate on the artist.
+              Rows 870-874: a collection order reaches this point at `confirmed`
+              rather than `shipped`, because it has no dispatch leg. */}
+          {canConfirmHandover(selected) && (
             <div className="mt-6 pt-4 border-t border-border">
-              <p className="text-xs text-muted uppercase tracking-wider mb-2">Delivery</p>
+              <p className="text-xs text-muted uppercase tracking-wider mb-2">
+                {isCollectionOrder(selected) ? "Collection" : "Delivery"}
+              </p>
               <p className="text-sm text-muted mb-3">
-                Has this arrived? Confirming releases payment to the artist.
+                {isCollectionOrder(selected)
+                  ? "Have you picked this up? Confirming releases payment to the artist."
+                  : "Has this arrived? Confirming releases payment to the artist."}
               </p>
               <button
                 onClick={() => confirmDelivery(selected.id)}
                 disabled={confirmingDelivery}
                 className="px-4 py-2 min-h-11 text-sm font-medium bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {confirmingDelivery ? "Confirming..." : "Confirm delivery"}
+                {confirmingDelivery
+                  ? "Confirming..."
+                  : isCollectionOrder(selected)
+                    ? "Confirm collection"
+                    : "Confirm delivery"}
               </button>
               {confirmError && (
                 <p className="text-xs text-red-600 mt-2">{confirmError}</p>

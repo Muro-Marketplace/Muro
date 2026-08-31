@@ -1378,7 +1378,16 @@ export async function PATCH(request: Request) {
     // real timestamp immediately.
     if (stage) {
       const effectiveStatus = status || existing.status;
-      if (effectiveStatus !== "active") {
+      // Row 727. A placement sold off the wall goes to `sold`, which is
+      // terminal for billing and inventory but leaves the piece physically at
+      // the venue until the buyer picks it up. Refusing every stage from `sold`
+      // stranded the record at 5 of 6 with "Collected" permanently out of
+      // reach, and neither party could close the loan.
+      //
+      // Only the CLOSING stage is reachable from `sold`: scheduling or
+      // installing a piece that has already been sold means nothing.
+      const closingASoldPlacement = effectiveStatus === "sold" && stage === "collected";
+      if (effectiveStatus !== "active" && !closingASoldPlacement) {
         return NextResponse.json({ error: "Placement must be active to advance the stage" }, { status: 400 });
       }
 

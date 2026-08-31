@@ -1174,3 +1174,57 @@ describe("PATCH /api/placements concurrent placement cap (Task 3)", () => {
     });
   });
 });
+
+// Row 727 / PASS2-placement-lifecycle-log. After a GBP 120 off-the-wall sale
+// the placement went to `status: sold`, every stage control disappeared for
+// both parties, and the progress bar sat at 5 of 6 with "Collected"
+// permanently unreachable. There was no way for either side to close the loan.
+//
+// `sold` IS a terminal outcome (billing is cancelled, the work is unlinked,
+// reviews open), but the piece has still physically left the wall and the
+// record should say when. Two routes to that, and both are wired:
+//
+//   automatic  the buyer confirming collection of the collect order stamps
+//              collected_at on the placement (see /api/orders)
+//   manual     either party can still mark Collected on a sold placement,
+//              which is this block
+describe("PATCH /api/placements can still close a SOLD placement (row 727)", () => {
+  const SOLD: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "sold",
+  };
+
+  it("accepts stage: collected and lands the placement at completed", async () => {
+    setupDb(SOLD);
+
+    const res = await patch({ id: "pl-1", stage: "collected" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(updates[0]).toMatchObject({ status: "completed" });
+    expect(updates[0].collected_at).toEqual(expect.any(String));
+  });
+
+  it("still refuses an earlier stage on a sold placement", async () => {
+    // Scheduling or installing a piece that has been sold off the wall is
+    // meaningless; only the closing stage is reachable from here.
+    setupDb(SOLD);
+
+    const res = await patch({ id: "pl-1", stage: "installed" });
+
+    expect(res.status).toBe(400);
+    expect(updates).toHaveLength(0);
+  });
+
+  it("still refuses a stage on a cancelled placement", async () => {
+    setupDb({ ...SOLD, status: "cancelled" });
+
+    const res = await patch({ id: "pl-1", stage: "collected" });
+
+    expect(res.status).toBe(400);
+    expect(updates).toHaveLength(0);
+  });
+});

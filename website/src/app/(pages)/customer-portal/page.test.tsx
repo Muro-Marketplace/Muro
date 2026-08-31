@@ -441,3 +441,65 @@ describe("CustomerPortalPage — failed orders fetch (C2)", () => {
     expect(screen.queryByText(ERROR_COPY)).toBeNull();
   });
 });
+
+// Rows 870-874 / PASS2-placement-lifecycle-log. A collect-from-venue order used
+// to be booked `delivered` at the moment of payment, so it needed no
+// confirmation and got none. Now it is booked `confirmed` and the buyer
+// confirms the handover, which is what releases the artist's payout and starts
+// the statutory 14-day refund window.
+//
+// A collection order never passes through `shipped`, so gating the control on
+// `status === "shipped"` would leave a collect buyer with no way to confirm at
+// all and every collect payout waiting the full 14 days on the cron.
+describe("CustomerPortalPage — confirming a collection (rows 870-874)", () => {
+  const collectOrder = {
+    ...mockOrder,
+    status: "confirmed",
+    status_history: [{ status: "confirmed", timestamp: deliveredAt }],
+    delivered_at: null,
+    fulfilment_method: "collect_venue",
+    collection_address: "The Copper Kettle, 1 High St, Hampton",
+  };
+
+  function serve(order: Record<string, unknown>) {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/orders") return Promise.resolve(jsonResponse({ orders: [order] }));
+      if (url === "/api/refunds") {
+        return Promise.resolve(jsonResponse({ refundRequests: [], userType: "customer" }));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+  }
+
+  it("offers the buyer a confirm control on a collection order awaiting collection", async () => {
+    serve(collectOrder);
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Confirm collection/i }).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("does not offer it once the collection is already confirmed", async () => {
+    serve({ ...collectOrder, status: "delivered", delivered_at: deliveredAt });
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+    await waitFor(() => expect(screen.getAllByText("WP-001").length).toBeGreaterThan(0));
+
+    expect(screen.queryByRole("button", { name: /Confirm collection/i })).toBeNull();
+  });
+
+  it("still calls the confirm control 'Confirm delivery' on a posted order", async () => {
+    serve({ ...mockOrder, status: "shipped", delivered_at: null, fulfilment_method: "ship" });
+
+    render(<CustomerPortalPage />);
+    await waitFor(() => expect(screen.queryByText("Loading orders...")).toBeNull());
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Confirm delivery/i }).length).toBeGreaterThan(0);
+    });
+  });
+});

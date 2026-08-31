@@ -883,18 +883,28 @@ async function handleWebhookEvent(
           ? session.payment_intent
           : session.payment_intent?.id || "";
 
-        // Collection (in-store) sales hand the artwork over at the
-        // point of purchase, so there's no shipping/processing/shipped
-        // lifecycle to track. Mark the order delivered straight away
-        // and pin delivered_at so refund-window logic still works.
+        // Rows 870-874 / PASS2-placement-lifecycle-log. A collection order used
+        // to be booked `delivered` with `delivered_at` stamped at the moment of
+        // payment, and its artist transfer settled to `paid` seven seconds
+        // later with `payout_after` equal to its own creation time. The buyer
+        // had only just paid; the piece was still on the wall. There was no
+        // hold and no evidence anyone had collected anything.
+        //
+        // A collection order is now booked `confirmed` like any other, and the
+        // BUYER confirms the handover. That is the rule the posted path already
+        // follows, and the reason `delivered` is buyer-only in /api/orders: the
+        // parties who get paid, the artist and (since row 727) the hosting
+        // venue, must not attest to the delivery that releases their own money.
+        // If the buyer never confirms, the 14-day payout cron pays out anyway,
+        // exactly as it does for a posted order.
+        //
+        // The collection-shaped behaviour that remains lives downstream and
+        // keys off `orders.fulfilment_method`, not off a flag computed here:
+        // /api/orders reads it to allow the state machine's `collection` edge,
+        // which lets `delivered` follow straight from `confirmed` with no
+        // shipping leg in between.
         const fulfilmentMethod = (savedShipping as { fulfilmentMethod?: string })?.fulfilmentMethod || session.metadata?.fulfilment_method || "ship";
-        // T9 (8.5): collect-from-venue behaves like collect-from-artist for
-        // status and payout timing — the artwork is handed over at (or just
-        // after) purchase, there is no shipping lifecycle, and the artist's
-        // payout releases immediately rather than waiting the 14-day hold.
         const isVenueCollection = fulfilmentMethod === "collect_venue";
-        const isCollection = fulfilmentMethod === "collection" || isVenueCollection;
-        const initialStatus: "confirmed" | "delivered" = isCollection ? "delivered" : "confirmed";
         const nowIso = new Date().toISOString();
 
         const orderRow: Record<string, unknown> = {
@@ -921,17 +931,9 @@ async function handleWebhookEvent(
           subtotal,
           shipping_cost: shippingCost,
           total,
-          status: initialStatus,
+          status: "confirmed",
           // jsonb column — store the array raw (Plan B Task 13).
-          // For collection orders we record the confirmed → delivered
-          // jump in one go so the customer-facing tracker reads cleanly
-          // ("Order placed · Delivered") without intermediate pips.
-          status_history: isCollection
-            ? [
-                { status: "confirmed", timestamp: nowIso },
-                { status: "delivered", timestamp: nowIso },
-              ]
-            : [{ status: "confirmed", timestamp: nowIso }],
+          status_history: [{ status: "confirmed", timestamp: nowIso }],
           source,
           // Still null means neither the session nor any cart line named an
           // artist. The order is booked anyway (the customer HAS paid, and
@@ -953,7 +955,10 @@ async function handleWebhookEvent(
           collection_address: isVenueCollection
             ? (savedShipping as { collectionAddress?: string })?.collectionAddress || null
             : null,
-          delivered_at: isCollection ? nowIso : null,
+          // Stamped by /api/orders when the buyer confirms the handover. It is
+          // what the statutory 14-day refund window measures from, so stamping
+          // it at payment started the buyer's window before they had the piece.
+          delivered_at: null,
           created_at: nowIso,
         };
 
@@ -970,7 +975,7 @@ async function handleWebhookEvent(
             // the payout legs, so any leg the first pass missed (a ledger insert
             // that threw, a 500 after the order landed) gets scheduled now.
             // Idempotent via scheduleTransfer's (order_id, recipient_user_id) 23505.
-            await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
+            await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue });
             return NextResponse.json({ received: true, duplicate: true });
           }
         }
@@ -993,7 +998,7 @@ async function handleWebhookEvent(
             if ((await classifyOrderIdConflict(db, orderId, paymentIntentId || null)) === "duplicate") {
               console.log("Order already exists (same payment intent), treating webhook as processed");
               // D52.3: re-attempt the payout legs on a redelivery (idempotent).
-              await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
+              await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue });
               return NextResponse.json({ received: true, duplicate: true });
             }
             console.error("[webhook] order id collision", { orderId, paymentIntentId });
@@ -1396,7 +1401,7 @@ async function handleWebhookEvent(
           // can re-run it and schedule any legs the first pass missed (C4/D52.3);
           // scheduleTransfer's (order_id, recipient_user_id) 23505 idempotency
           // makes already-scheduled legs no-ops, so a redelivery only fills gaps.
-          await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue, isCollection });
+          await scheduleOrderLegs(db, { orderId, legs, venueSlug, venueRevenue });
         }
       } catch (err) {
         // WS1.1 (audit F1, verified): this catch used to swallow the throw and
@@ -2631,9 +2636,25 @@ async function handleWebhookEvent(
  */
 async function scheduleOrderLegs(
   db: ReturnType<typeof getSupabaseAdmin>,
-  params: { orderId: string; legs: ArtistLeg[]; venueSlug: string; venueRevenue: number; isCollection: boolean },
+  params: {
+    orderId: string;
+    legs: ArtistLeg[];
+    venueSlug: string;
+    venueRevenue: number;
+    /**
+     * Release the transfers now instead of holding them.
+     *
+     * Rows 870-874: this used to be `isCollection`, so a collect order settled
+     * its artist transfer seconds after payment with no hold and no proof the
+     * buyer had collected. Nothing sets it today; it stays as a parameter
+     * because releasing on a confirmed handover is a legitimate future caller,
+     * and /api/orders already does exactly that on the transition into
+     * `delivered`.
+     */
+    releaseImmediately?: boolean;
+  },
 ): Promise<void> {
-  const { orderId, legs, venueSlug, venueRevenue, isCollection } = params;
+  const { orderId, legs, venueSlug, venueRevenue, releaseImmediately = false } = params;
 
   const schedulingFailures: string[] = [];
 
@@ -2658,7 +2679,7 @@ async function scheduleOrderLegs(
           recipientUserId: venueUserId,
           connectAccountId: cap.accountId,
           amountCents: venuePence,
-          immediate: isCollection,
+          immediate: releaseImmediately,
         });
       } else if (venueUserId) {
         console.error("[cart] venue cannot be paid out, transfer skipped", {
@@ -2695,7 +2716,7 @@ async function scheduleOrderLegs(
           recipientUserId: leg.artistUserId,
           connectAccountId: cap.accountId,
           amountCents: leg.netPence,
-          immediate: isCollection,
+          immediate: releaseImmediately,
         });
       } else {
         console.error("[cart] artist cannot be paid out, transfer skipped", {
