@@ -2575,4 +2575,53 @@ describe("Stripe webhook — D21 curation reconcile wiring", () => {
     expect(curationSubDeletedMock).toHaveBeenCalledWith(subscription);
     expect(curationInvoicePaidMock).not.toHaveBeenCalled();
   });
+
+  // Task 5: a Wallplace Programme's lifecycle rides these same reconcilers,
+  // resolved by metadata rather than a price-id lookup (billing.ts). billing.ts
+  // itself has no per-invoice dedupe -- calling handleCurationInvoicePaid twice
+  // is NOT idempotent by itself, since it unconditionally re-stamps status and
+  // last_invoice_paid_at. What makes a Stripe redelivery a no-op is the D1
+  // global replay guard above (stripe_webhook_events, keyed on event.id), which
+  // runs before ANY branch, curation included. This test proves that guard
+  // actually covers the curation invoice.paid path: the reconciler mock is
+  // invoked exactly once across two deliveries of the identical event id.
+  it("Task 5: a redelivered invoice.paid for a curation subscription is a no-op (D1 replay guard, not a billing.ts dedupe)", async () => {
+    const claimed = new Set<string>();
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") {
+        return {
+          insert: async (row: { event_id: string }) => {
+            if (claimed.has(row.event_id)) return { error: { code: "23505" } };
+            claimed.add(row.event_id);
+            return { error: null };
+          },
+          delete: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: null, error: null }),
+            single: async () => ({ data: null, error: null }),
+          }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+      };
+    });
+
+    const invoice = { id: "in_prog_1", subscription: "sub_prog_1" };
+    constructEventMock.mockReturnValue({ id: "evt_prog_1", type: "invoice.paid", data: { object: invoice } });
+
+    const first = await POST(buildRequest());
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.not.toMatchObject({ duplicate: true });
+    expect(curationInvoicePaidMock).toHaveBeenCalledTimes(1);
+
+    const second = await POST(buildRequest());
+    expect(second.status).toBe(200);
+    await expect(second.json()).resolves.toMatchObject({ duplicate: true });
+    // The reconciler must not run again for the redelivered event.
+    expect(curationInvoicePaidMock).toHaveBeenCalledTimes(1);
+  });
 });
