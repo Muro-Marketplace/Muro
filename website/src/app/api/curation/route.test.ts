@@ -53,19 +53,25 @@ let linkBehaviour: "ok" | "throw" | "error" = "ok";
 let deletes: Array<[string, unknown]> = [];
 /** Every update() payload the route runs. */
 let updates: Array<Record<string, unknown>> = [];
+/** Every insert() payload the route runs. */
+let inserts: Array<Record<string, unknown>> = [];
 
 function setupDb() {
   linkBehaviour = "ok";
   deletes = [];
   updates = [];
+  inserts = [];
   fromMock.mockImplementation((table: string) => {
     if (table !== "curation_requests") throw new Error(`unexpected table ${table}`);
     return {
-      insert: (_payload: Record<string, unknown>) => ({
-        select: () => ({
-          single: async () => ({ data: { id: "cr_1" }, error: null }),
-        }),
-      }),
+      insert: (payload: Record<string, unknown>) => {
+        inserts.push(payload);
+        return {
+          select: () => ({
+            single: async () => ({ data: { id: "cr_1" }, error: null }),
+          }),
+        };
+      },
       update: (payload: Record<string, unknown>) => {
         updates.push(payload);
         return {
@@ -99,6 +105,18 @@ const ONE_OFF_BODY = {
   venueName: "The Copper Kettle",
   contactName: "Maya Chen",
   contactEmail: "maya@example.com",
+};
+
+// Wallplace Programmes, Task 2.
+const PROGRAMME_BODY = {
+  tier: "programme",
+  venueName: "The Copper Kettle",
+  contactName: "Maya Chen",
+  contactEmail: "maya@example.com",
+  siteCount: 1,
+  piecesEstimate: 8,
+  rotationCadence: "biannual",
+  sector: "office",
 };
 
 // D22: Stripe price fixtures keyed by price id, kept for whichever future
@@ -177,3 +195,68 @@ describe("POST /api/curation, D19 orphan-payment guard", () => {
 // no live tier of kind "managed" to exercise this way, so those tests are
 // removed rather than rewritten. See also src/lib/curation-tiers.test.ts
 // ("retires the fixed-price managed tiers").
+
+// Wallplace Programmes plan, Task 2. Before this change, `programme` matched
+// neither the bespoke quote-first guard (`tier.kind === "one_off"`) nor the
+// (dead) managed branch, so it fell through to the pay-first one-off Stripe
+// Checkout at the bottom of the route: a quote-only tier would have charged
+// £79.99 immediately. These tests pin the fix: programme is quote-first, like
+// bespoke, with no Stripe session and no charge.
+describe("POST /api/curation, programme tier (Task 2)", () => {
+  it("creates an awaiting_quote row, no Stripe session, and sends the quote-request email", async () => {
+    const res = await POST(req(PROGRAMME_BODY));
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json).toMatchObject({ mode: "enquiry", id: "cr_1" });
+
+    // No charge: this is the whole point of the fix.
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+
+    // The row is created quote-first, with the new intake fields mapped through.
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).toMatchObject({
+      tier: "programme",
+      status: "awaiting_quote",
+      amount_paid_gbp: null,
+      site_count: 1,
+      pieces_estimate: 8,
+      rotation_cadence: "biannual",
+      sector: "office",
+    });
+
+    // The existing quote-request email, same template bespoke uses.
+    expect(notifyEnquiryMock).toHaveBeenCalledOnce();
+    const [emailArgs] = notifyEnquiryMock.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(emailArgs).toMatchObject({
+      template: "curation_enquiry_received",
+      to: "maya@example.com",
+    });
+  });
+
+  it("rejects a non-positive piecesEstimate with 400", async () => {
+    const res = await POST(req({ ...PROGRAMME_BODY, piecesEstimate: 0 }));
+
+    expect(res.status).toBe(400);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("rejects an out-of-enum rotationCadence with 400", async () => {
+    const res = await POST(req({ ...PROGRAMME_BODY, rotationCadence: "monthly" }));
+
+    expect(res.status).toBe(400);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("rejects a retired tier with 400, not 500", async () => {
+    // managed_monthly/managed_quarterly were dropped from CURATION_TIERS in
+    // Task 1. A submission naming one must fail validation (400), not reach
+    // the DB and trip the tier CHECK constraint (which would 500).
+    const res = await POST(req({ ...ONE_OFF_BODY, tier: "managed_monthly" }));
+
+    expect(res.status).toBe(400);
+    expect(inserts).toHaveLength(0);
+  });
+});

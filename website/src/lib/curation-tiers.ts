@@ -18,11 +18,13 @@
 // IDs (STRIPE_PRICE_CURATION_MONTHLY / _QUARTERLY) were never configured, so
 // the route's managed branch always 503'd. They are retired here, not
 // replaced in kind, by one quoted `programme` tier: every deal is quoted by an
-// admin, so there is no fixed price ID to configure or forget. ManagedTier
-// stays exported even though nothing currently constructs one, because
-// src/app/api/curation/route.ts still imports it for its (soon to be deleted)
-// managed-tier branch; removing the type here is Task 2's job, alongside
-// deleting that branch.
+// admin, so there is no fixed price ID to configure or forget. Task 2 deleted
+// src/app/api/curation/route.ts's managed-tier branch, which was the only
+// remaining importer of the ManagedTier type, and removed the type here too.
+// The two retired tier VALUES live on regardless, as data: historical rows
+// still carry tier = 'managed_monthly' / 'managed_quarterly', the widened DB
+// CHECK (migration 121) still permits them for those rows, and the billing
+// reconcilers (src/lib/curation/billing.ts) still service them by string.
 //
 // Owner decisions locked with this change:
 //  - One price rule: about £25 per piece per month; the from-anchor is
@@ -47,14 +49,6 @@ export type OneOffTier = {
   payFirst: boolean;
 };
 
-export type ManagedTier = {
-  kind: "managed";
-  label: string;
-  priceGbp: number;
-  interval: "month" | "quarter";
-  priceEnvVar: string;
-};
-
 export type QuotedSubscriptionTier = {
   kind: "quoted_subscription";
   label: string;
@@ -66,7 +60,7 @@ export type QuotedSubscriptionTier = {
   responseDays: number;
 };
 
-export type CurationTier = OneOffTier | ManagedTier | QuotedSubscriptionTier;
+export type CurationTier = OneOffTier | QuotedSubscriptionTier;
 
 export const CURATION_TIERS = {
   single_wall: { kind: "one_off", label: "Single wall", priceGbp: 49, payFirst: true },
