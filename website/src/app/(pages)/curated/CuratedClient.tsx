@@ -53,26 +53,30 @@ const HOW_IT_WORKS = [
   },
 ];
 
-/* Where curators place art — illustrative venue-type strip. Photos are
- * reused from /venues' "Where art goes up" set; both pages are venue
- * surfaces so a small overlap is acceptable. Captions are deliberately
- * generic ("Boutique hotel, Margate") and not real client claims —
- * replace with attributed placements once we have any. */
+/* Where curators place art — illustrative venue-type strip.
+ * Previously three Unsplash stock photos captioned with invented
+ * places ("Boutique hotel, Margate" and so on); one of those exact
+ * photo IDs was captioned as a different invented place on /venues,
+ * which is precisely the drift a sceptical visitor notices. Now real
+ * Wallplace-commissioned photography, captioned with the venue TYPE
+ * only (no place name, no business name), which stays true wherever
+ * the photo is used, matches the honest "kind of spaces" framing
+ * below, and cannot repeat that mistake. */
 const VENUE_PLACEMENTS = [
   {
-    caption: "Boutique hotel, Margate",
-    image:
-      "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&h=450&fit=crop&crop=center",
+    caption: "Café",
+    alt: "An empty café with a long bare wall, ready for art",
+    image: "/images/programmes/venues-cafe-before.webp",
   },
   {
-    caption: "Members' club, Soho",
-    image:
-      "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=600&h=450&fit=crop&crop=center",
+    caption: "Hotel",
+    alt: "A hotel lounge with armchairs and a large bare wall",
+    image: "/images/programmes/programmes-hotel-lounge.webp",
   },
   {
-    caption: "Independent café, Peckham",
-    image:
-      "https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=600&h=450&fit=crop&crop=center",
+    caption: "Office",
+    alt: "An office reception with a large bare wall behind the desk",
+    image: "/images/programmes/programmes-office-reception.webp",
   },
 ];
 
@@ -320,15 +324,20 @@ export default function CuratedClient() {
       {/* Immersive hero — pulls behind the header with negative margin
           and matches the /artists & /venues hero pattern (full-bleed
           dark photo, dual CTA, trust strip on the dark band at the
-          bottom). Gallery-interior shot with multiple framed artworks
-          under spotlights — closer to what Curated actually delivers
-          (a placed, lit hang) than the previous abstract close-up.
-          Plan G Task 13 may still ship a custom brand asset later. */}
+          bottom).
+          Nav-broadening plan: /curated is now the shared front door for
+          both paid products, so the hero leads with the idea they have
+          in common (art on your walls, no legwork for you) rather than
+          Curated specifically, and the dual CTA sends a visitor toward
+          whichever route fits instead of down a single path. Real
+          Wallplace photography (two people talking beside a bare café
+          wall) replaces the old auth-page mountain background, which
+          had nothing to do with the page. */}
       <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 overflow-hidden">
         <div className="absolute inset-0 -z-10">
           <Image
-            src="/images/auth-bg.jpg"
-            alt="Mt. Fitz Roy, Patagonia"
+            src="/images/programmes/how-it-works-conversation.webp"
+            alt="Two people talking beside a bare wall in a café"
             fill
             className="object-cover"
             sizes="100vw"
@@ -341,28 +350,26 @@ export default function CuratedClient() {
           <div className="max-w-[1200px] mx-auto px-6 w-full">
             <div className="max-w-2xl">
               <p className="text-xs font-medium tracking-[0.25em] uppercase text-accent mb-5">
-                Wallplace Curated
+                Done For You
               </p>
               <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
-                Hand-picked art for your space.
+                You want art on your walls. We&rsquo;ll do the work.
               </h1>
               <p className="text-lg lg:text-xl text-white/65 leading-relaxed max-w-xl mb-10">
-                Tell us about your space, audience, and the feel you want.
-                Our curators hand-pick a shortlist of works from Wallplace
-                artists that fit. From {gbp(CURATION_TIERS.single_wall.priceGbp)}.
+                {`Two ways to get there. Wallplace Curated is a one-off shortlist you arrange yourself, from ${gbp(CURATION_TIERS.single_wall.priceGbp)}. Wallplace Programmes is an ongoing service that curates, installs and rotates art for you, from ${gbp(CURATION_TIERS.programme.priceGbp)} a month. Pick the one that fits.`}
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Link
                   href="#plans"
                   className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
                 >
-                  PICK A PLAN
+                  SEE CURATED PLANS
                 </Link>
                 <Link
-                  href="#how"
+                  href="/programmes"
                   className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white/10 text-white border border-white/30 rounded-sm hover:bg-white/15 transition-colors backdrop-blur-sm"
                 >
-                  HOW IT WORKS
+                  SEE PROGRAMMES
                 </Link>
               </div>
             </div>
@@ -381,9 +388,9 @@ export default function CuratedClient() {
           </div>
           <div className="border-t border-white/10 bg-black/50 backdrop-blur-sm">
             <div className="max-w-[1200px] mx-auto px-6 py-3.5 flex items-center justify-center gap-3 text-xs text-white/40 tracking-wider uppercase flex-wrap">
-              <span>From {gbp(CURATION_TIERS.single_wall.priceGbp)}</span>
+              <span>From {gbp(CURATION_TIERS.single_wall.priceGbp)} one-off</span>
               <span className="w-1 h-1 rounded-full bg-white/30" />
-              <span>Delivered in 5 business days</span>
+              <span>From {gbp(CURATION_TIERS.programme.priceGbp)} a month, ongoing</span>
             </div>
           </div>
         </div>
@@ -402,11 +409,113 @@ export default function CuratedClient() {
       )}
 
       <div id="curated-content" className="bg-background">
-        {/* How it works — 3-step strip, demystifies the service in 10s */}
+        {/* Two routes — the shared "Done For You" idea forks here into a
+            one-off shortlist or an ongoing programme. Sits right after
+            the hero, before either product's own detail, so a visitor
+            self-selects before scrolling further. Each card carries one
+            sentence stating what it is and how it differs from the
+            other, per the nav-broadening brief. */}
+        <section className="py-20 lg:py-28">
+          <div className="max-w-[1200px] mx-auto px-6">
+            <AnimateIn>
+              <div className="mb-12 max-w-2xl">
+                <h2 className="text-3xl md:text-4xl mb-3">
+                  Two ways to get it done
+                </h2>
+                <p className="text-muted leading-relaxed">
+                  Same idea, different shape. Pick a one-off shortlist or
+                  an ongoing programme, whichever fits your walls and
+                  your budget.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+                <div className="bg-surface border border-border rounded-sm overflow-hidden flex flex-col">
+                  <div className="aspect-[16/10] relative">
+                    <Image
+                      src="/images/programmes/curated-measuring-wall.webp"
+                      alt="Measuring and marking up a wall in a café, ready for artwork"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                    />
+                  </div>
+                  <div className="p-6 lg:p-8 flex flex-col flex-1">
+                    <p className="text-xs font-medium uppercase tracking-wider text-accent mb-2">
+                      One-off
+                    </p>
+                    <h3 className="font-serif text-2xl text-foreground mb-3">
+                      Wallplace Curated
+                    </h3>
+                    <p className="text-sm text-foreground/85 leading-relaxed mb-4">
+                      Pay once for a hand-picked shortlist, then arrange
+                      the rest yourself.
+                    </p>
+                    <p className="text-xs text-muted mb-6">
+                      {`From ${gbp(CURATION_TIERS.single_wall.priceGbp)}, delivered in 5 business days.`}
+                    </p>
+                    <Link
+                      href="#plans"
+                      className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
+                    >
+                      See Curated plans
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="12 5 19 12 12 19" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="bg-surface border border-border rounded-sm overflow-hidden flex flex-col">
+                  <div className="aspect-[16/10] relative">
+                    <Image
+                      src="/images/programmes/programmes-rotation.webp"
+                      alt="Wrapped framed artworks propped against a wall, ready to be hung"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                    />
+                  </div>
+                  <div className="p-6 lg:p-8 flex flex-col flex-1">
+                    <p className="text-xs font-medium uppercase tracking-wider text-accent mb-2">
+                      Ongoing
+                    </p>
+                    <h3 className="font-serif text-2xl text-foreground mb-3">
+                      Wallplace Programmes
+                    </h3>
+                    <p className="text-sm text-foreground/85 leading-relaxed mb-4">
+                      A monthly programme that curates, installs and
+                      rotates art for you all year, with every artist
+                      paid rent.
+                    </p>
+                    <p className="text-xs text-muted mb-6">
+                      {`From ${gbp(CURATION_TIERS.programme.priceGbp)} a month, quoted per site.`}
+                    </p>
+                    <Link
+                      href="/programmes"
+                      className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
+                    >
+                      See Programmes
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="12 5 19 12 12 19" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </AnimateIn>
+          </div>
+        </section>
+
+        {/* How it works — 3-step strip, demystifies the one-off route in
+            10s. Retitled to name Wallplace Curated specifically now
+            that Programmes is introduced above it, since Programmes
+            has its own how-it-works on its dedicated page. */}
         <section id="how" className="py-20 lg:py-28">
           <div className="max-w-[1200px] mx-auto px-6">
             <AnimateIn>
-              <h2 className="text-3xl md:text-4xl mb-12">How it works</h2>
+              <h2 className="text-3xl md:text-4xl mb-12">How Wallplace Curated works</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
                 {HOW_IT_WORKS.map((step) => (
                   <div key={step.n}>
@@ -566,7 +675,7 @@ export default function CuratedClient() {
                     <div className="aspect-[4/3] rounded-sm overflow-hidden relative">
                       <Image
                         src={v.image}
-                        alt={v.caption}
+                        alt={v.alt}
                         fill
                         className="object-cover group-hover:scale-[1.03] transition-transform duration-500"
                         sizes="(max-width: 768px) 100vw, 33vw"
@@ -881,21 +990,32 @@ export default function CuratedClient() {
           </div>
         </section>
 
-        {/* Final CTA — dark band matching /artists & /venues final CTAs */}
+        {/* Final CTA — dark band matching /artists & /venues final CTAs.
+            Dual CTA mirrors the hero: closes the page on the same
+            self-select choice it opened with, rather than defaulting
+            back to Curated alone. */}
         <section className="py-20 lg:py-28 bg-foreground">
           <div className="max-w-[1200px] mx-auto px-6 text-center">
             <h2 className="text-3xl md:text-4xl lg:text-5xl mb-4 max-w-2xl mx-auto text-white">
-              Hand-picked art for your space.
+              Art on your walls, none of the legwork.
             </h2>
             <p className="text-white/60 max-w-lg mx-auto mb-10 leading-relaxed">
-              From {gbp(CURATION_TIERS.single_wall.priceGbp)} · 5 business days · No long-term commitment.
+              {`One-off from ${gbp(CURATION_TIERS.single_wall.priceGbp)}. Ongoing from ${gbp(CURATION_TIERS.programme.priceGbp)} a month.`}
             </p>
-            <Link
-              href="#plans"
-              className="inline-flex items-center justify-center px-8 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
-            >
-              PICK A PLAN
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+              <Link
+                href="#plans"
+                className="inline-flex items-center justify-center px-8 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors"
+              >
+                SEE CURATED PLANS
+              </Link>
+              <Link
+                href="/programmes"
+                className="inline-flex items-center justify-center px-8 py-3.5 border border-white/30 text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/10 transition-colors"
+              >
+                SEE PROGRAMMES
+              </Link>
+            </div>
           </div>
         </section>
       </div>

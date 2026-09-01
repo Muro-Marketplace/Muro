@@ -29,7 +29,12 @@ vi.mock("@/lib/api-client", async (orig) => {
     authFetch: vi.fn(async () => ({ json: async () => ({ profile: null }) })),
   };
 });
-vi.mock("next/image", () => ({ default: () => <span /> }));
+vi.mock("next/image", () => ({
+  default: ({ alt, src, className }: { alt?: string; src?: string; className?: string }) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img alt={alt} src={typeof src === "string" ? src : undefined} className={className} />
+  ),
+}));
 vi.mock("@/components/Accordion", () => ({ default: () => <div /> }));
 vi.mock("@/components/AnimateIn", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -139,5 +144,45 @@ describe("the brief prefills from the venue's profile (row 1924)", () => {
 
     await waitFor(() => expect(container.querySelectorAll("input").length).toBeGreaterThan(0));
     expect(authFetch).not.toHaveBeenCalled();
+  });
+});
+
+// Nav-broadening plan: /curated became the shared front door for both
+// paid products (Wallplace Curated's one-off shortlist and Wallplace
+// Programmes' ongoing service), with real photography replacing the
+// old auth-page background.
+describe("the Done For You page presents both products (nav-broadening plan)", () => {
+  beforeEach(() => {
+    authState.value = { userType: null, loading: false, session: null };
+  });
+
+  it("swaps the old auth-page mountain hero for real photography", () => {
+    const { container } = render(<CuratedClient />);
+    expect(container.querySelector('img[alt*="Fitz Roy"]')).toBeNull();
+    expect(container.querySelector('img[src*="auth-bg"]')).toBeNull();
+    expect(
+      container.querySelector(
+        'img[alt="Two people talking beside a bare wall in a café"]',
+      ),
+    ).toBeTruthy();
+  });
+
+  it("offers a route into Wallplace Programmes as well as Wallplace Curated", () => {
+    const { container } = render(<CuratedClient />);
+    const programmeLinks = container.querySelectorAll('a[href="/programmes"]');
+    expect(programmeLinks.length).toBeGreaterThan(0);
+    expect(container.textContent).toContain("Wallplace Curated");
+    expect(container.textContent).toContain("Wallplace Programmes");
+  });
+
+  it("never captions a venue placement with an invented place name", () => {
+    const { container } = render(<CuratedClient />);
+    // The removed defect: stock photos captioned with a specific invented
+    // place ("Office reception, Manchester"), the same photo captioned as
+    // a different invented place elsewhere. Category-only captions ("Café",
+    // "Hotel", "Office") are fine; a place name is not.
+    expect(container.textContent).not.toMatch(
+      /Margate|Soho|Peckham|Manchester/,
+    );
   });
 });
