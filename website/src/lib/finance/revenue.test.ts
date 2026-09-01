@@ -109,6 +109,14 @@ describe("programmeMrrPence", () => {
     await expect(programmeMrrPence(db)).resolves.toBe(10000);
   });
 
+  it("rounds a quarterly amount that does not divide evenly into three months", async () => {
+    // £79.99/quarter is 7999p per invoice, which is 2666.33p per month.
+    // Math.round takes it to 2666p rather than truncating or carrying a
+    // fraction of a penny into the total.
+    const db = makeDb([programme({ quoted_amount_gbp: 79.99, billing_interval: "quarter" })]);
+    await expect(programmeMrrPence(db)).resolves.toBe(2666);
+  });
+
   it("ignores a non-programme tier even with a live-paying status", async () => {
     const db = makeDb([
       { tier: "bespoke", status: "in_progress", quoted_amount_gbp: 299, billing_interval: "month" },
