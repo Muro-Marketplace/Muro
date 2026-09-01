@@ -52,6 +52,11 @@ interface Placement {
   direction?: "sent" | "received" | null;
   monthlyFeeGbp?: number | null;
   qrEnabled?: boolean | null;
+  /** Rent this piece earns while it hangs on a Wallplace Programme wall.
+   *  Set by an admin when the placement is linked to a programme; accrues on
+   *  each paid programme invoice and settles quarterly. Null for every
+   *  ordinary placement. */
+  programmeRentGbp?: number | null;
   proposedStage?: "installed" | "collected" | null;
   proposedByUserId?: string | null;
   acceptedAt?: string | null;
@@ -368,6 +373,7 @@ export default function PlacementsPage() {
               direction,
               monthlyFeeGbp: (p.monthly_fee_gbp as number | null) ?? null,
               qrEnabled: (p.qr_enabled as boolean | null) ?? null,
+              programmeRentGbp: (p.programme_rent_gbp as number | null) ?? null,
               proposedStage: (p.proposed_stage as "installed" | "collected" | null) ?? null,
               proposedByUserId: (p.proposed_by_user_id as string | null) ?? null,
               acceptedAt: (p.accepted_at as string | null) ?? null,
@@ -1445,6 +1451,13 @@ export default function PlacementsPage() {
                           <div>
                             <p className="text-muted mb-0.5">Monthly fee</p>
                             <p className="text-foreground font-medium">&pound;{p.monthlyFeeGbp.toFixed(2)}</p>
+                          </div>
+                        )}
+                        {typeof p.programmeRentGbp === "number" && p.programmeRentGbp > 0 && (
+                          <div>
+                            <p className="text-muted mb-0.5">Programme rent</p>
+                            <p className="text-foreground font-medium">&pound;{p.programmeRentGbp.toFixed(2)} per month</p>
+                            <p className="text-muted mt-0.5">Settled quarterly</p>
                           </div>
                         )}
                         <div>
