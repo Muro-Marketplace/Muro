@@ -17,6 +17,7 @@ import {
   artistEarningsPence,
   grossMerchandiseValuePence,
   subscriptionMrrPence,
+  programmeMrrPence,
   venueSpendPence,
 } from "@/lib/finance/revenue";
 
@@ -63,6 +64,11 @@ export async function GET(request: Request) {
   // K6: the price map and the multiply lived here. Moved to lib/finance so
   // there is one definition of MRR.
   const mrrPence = subscriptionMrrPence(subsByPlan);
+
+  // Programme MRR is reported beside artist MRR, never blended into it: the
+  // mix between the two is the thing worth watching, and one combined figure
+  // would hide which side is actually growing.
+  const programmeMrr = await programmeMrrPence(db);
 
   // Failed payments this month + last month (artist_profiles flips
   // to subscription_status='past_due' on a failed invoice).
@@ -120,6 +126,10 @@ export async function GET(request: Request) {
       byPlan: subsByPlan,
       mrrPence,
     },
+    programmes: {
+      mrrPence: programmeMrr,
+    },
+    totalMrrPence: mrrPence + programmeMrr,
     failedPayments: {
       thisMonth: failedThisMonth ?? 0,
       lastMonth: failedLastMonth ?? 0,

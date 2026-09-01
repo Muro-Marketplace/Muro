@@ -12,6 +12,8 @@ interface FinancialsResponse {
     byPlan: Record<string, number>;
     mrrPence: number;
   };
+  programmes: { mrrPence: number };
+  totalMrrPence: number;
   failedPayments: { thisMonth: number; lastMonth: number };
   upcomingRenewals: Array<{
     placement_id: string;
@@ -82,7 +84,12 @@ export default function AdminFinancialsPage() {
                 ))}
               </ul>
             </Tile>
-            <Tile title="MRR" value={fmt(data.subscriptions.mrrPence)} />
+            <Tile title="Artist MRR" value={fmt(data.subscriptions.mrrPence)} />
+            <Tile
+              title="Programme MRR"
+              value={fmt(data.programmes.mrrPence)}
+              subtitle="monthly equivalent"
+            />
             <Tile
               title="Failed payments"
               value={String(data.failedPayments.thisMonth)}
@@ -98,8 +105,9 @@ export default function AdminFinancialsPage() {
               value={String(data.upcomingRenewals.length)}
             />
             <Tile
-              title="Total subs MRR"
-              value={fmt(data.subscriptions.mrrPence)}
+              title="Total MRR"
+              value={fmt(data.totalMrrPence)}
+              subtitle="artists plus programmes"
             />
             <TileWide title="Top 10 venues by spend">
               <ol className="text-xs text-foreground space-y-0.5 list-decimal pl-4">
