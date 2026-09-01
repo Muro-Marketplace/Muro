@@ -54,6 +54,30 @@ export default function PartnersPage() {
             overhead of hiring a curator per location, we want to talk.
           </p>
 
+          {/* Bridge into Wallplace Programmes: this page is the bespoke,
+              talk-to-us pitch for multi-site operators, but Programmes is
+              the same curation-and-rotation offer already quoted and
+              bookable for a single site. Without this link a partner
+              enquiry had nowhere to go and see actual pricing. */}
+          <div className="max-w-2xl mb-16 bg-surface border border-border rounded-sm p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+            <div className="flex-1">
+              <p className="text-base font-medium text-foreground mb-1">
+                Want to see pricing for one site first?
+              </p>
+              <p className="text-sm text-muted leading-relaxed">
+                Wallplace Programmes is the same curated, rotated,
+                artist-paid service described below, already quoted and
+                bookable for a single site.
+              </p>
+            </div>
+            <Link
+              href="/programmes"
+              className="inline-flex items-center justify-center px-6 py-3 bg-foreground text-white text-sm font-medium rounded-sm hover:bg-foreground/90 transition-colors whitespace-nowrap shrink-0"
+            >
+              Explore Wallplace Programmes
+            </Link>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-16">
             {partnerProfiles.map((p) => (
               <div

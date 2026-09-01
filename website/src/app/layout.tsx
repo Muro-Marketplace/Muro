@@ -19,9 +19,9 @@ const dmSerifDisplay = DM_Serif_Display({
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
 
-const SITE_TITLE = "Wallplace | Curated Art for Commercial Spaces";
+const SITE_TITLE = "Wallplace | Original art, seen on real walls";
 const SITE_DESCRIPTION =
-  "Wallplace is a curated art marketplace connecting independent venues with emerging artists. Source artwork risk-free. Get discovered by commercial spaces.";
+  "Wallplace is where original art meets real walls. Buy directly from independent artists, get your work seen in person, or find art for your space.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import ScrollButton from "@/components/ScrollButton";
 import VenueGuide from "@/components/marketing/VenueGuide";
+import { CURATION_TIERS, gbp } from "@/lib/curation-tiers";
 
 export const metadata: Metadata = {
   title: "For Venues",
@@ -54,7 +55,7 @@ export default function VenuesPage() {
                 <Link href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
                   Try Wallplace Curated
                 </Link>
-                , from £49.
+                , from {gbp(CURATION_TIERS.single_wall.priceGbp)}.
               </p>
             </div>
           </div>
@@ -69,6 +70,42 @@ export default function VenuesPage() {
       {/* Body — sections share with /how-it-works's For Venues panel. */}
       <div id="venue-content">
         <VenueGuide />
+
+        {/* Second fork, for the visitor who wants art handled rather
+            than browsed. Sits below VenueGuide's own final CTA so the
+            free pitch reads first, in full, unweakened, this is a
+            secondary path, not a replacement for it. Price is quoted
+            per site; the from-anchor is derived from
+            CURATION_TIERS.programme.priceGbp via gbp(), the single
+            source pinned by
+            tests/integration/one-curated-price-source.test.ts, never a
+            hand-typed pound figure. */}
+        <section className="py-20 lg:py-28 bg-surface border-t border-border">
+          <div className="max-w-[1200px] mx-auto px-6">
+            <div className="max-w-2xl mx-auto text-center">
+              <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
+                Prefer it handled?
+              </p>
+              <h2 className="font-serif text-3xl md:text-4xl text-foreground mb-5 leading-tight">
+                Or let Wallplace run your walls for you
+              </h2>
+              <p className="text-muted leading-relaxed text-lg mb-8">
+                Wallplace Programmes is a quoted monthly service for spaces
+                that want it handled end to end: curation, installation, and
+                rotation through the year, arranged for you rather than
+                browsed and enquired about one piece at a time. Every artist
+                on your wall is paid rent for as long as their work is up.
+                Quoted per site, from {gbp(CURATION_TIERS.programme.priceGbp)} a month.
+              </p>
+              <Link
+                href="/programmes"
+                className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors"
+              >
+                EXPLORE WALLPLACE PROGRAMMES
+              </Link>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Blog",
-  description: "Insights on art in commercial spaces, artist tips, and industry trends from the Wallplace team.",
+  description: "Tips for artists, advice for collectors, and ideas for spaces putting art on real walls, from the Wallplace team.",
 };
 
 // Phase 2.7: merge curated static posts with DB-backed artist posts.
@@ -74,7 +74,7 @@ export default async function BlogPage() {
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Blog</p>
           <h1 className="font-serif text-4xl lg:text-5xl text-white mb-4">Insights & Stories</h1>
           <p className="text-lg text-white/50 max-w-lg mx-auto">
-            Tips for artists, advice for venues, and trends shaping the world of art in commercial spaces.
+            Tips for artists, advice for collectors, and stories from spaces putting art on real walls.
           </p>
         </div>
       </section>

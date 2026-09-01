@@ -83,11 +83,11 @@ export default function Home() {
                 WALLPLACE
               </h1>
               <p className="text-lg sm:text-xl lg:text-2xl text-white/90 font-light leading-snug mb-6 sm:mb-3">
-                The curated art marketplace<br className="sm:hidden" /> for commercial spaces.
+                Original art, seen on real walls.
               </p>
               <p className="text-sm sm:text-base lg:text-lg text-white/50 leading-relaxed mb-14 sm:mb-10 max-w-lg mx-auto">
-                Venues source original artwork risk-free. Artists access
-                high-intent commercial demand.
+                Buyers take original art home. Venues source it risk-free.
+                Artists get seen and get paid.
               </p>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-sm sm:max-w-none mx-auto">
                 <Link

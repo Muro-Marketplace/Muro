@@ -46,17 +46,23 @@ const venueMarketplaceTabs = [
 
 type NavLink = { label: string; href: string; subLinks?: { label: string; href: string; description?: string }[] };
 
+// Every visitor type gets a home in this top-level nav now: a buyer
+// lands on Marketplace, someone with walls to fill lands on /venues,
+// an artist lands on /artists. /spaces (venues browsing OTHER venues'
+// listings) stays out of this list, a stranger with walls reads it as
+// a directory of other businesses, not a pitch to them; it's reachable
+// from the artist path (/artists renders ArtistGuide, which links into
+// it) and from the logged-in nav, which already carries it for
+// signed-in users.
+// Waitlist (#18), page kept live for warm prospects we already
+// sent the link to, but unsurfaced from the nav. Also gated from
+// search via robots metadata in the page itself.
 const publicNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
+  { label: "For Your Space", href: "/venues" },
+  { label: "For Artists", href: "/artists" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
-  { label: "Spaces", href: "/spaces" },
-  // "For Venues" used to live here but the venue value-prop is already
-  // covered by /spaces and the homepage; the dedicated
-  // /venues page is kept reachable from the footer + any deep links.
-  // Waitlist (#18), page kept live for warm prospects we already
-  // sent the link to, but unsurfaced from the nav. Also gated from
-  // search via robots metadata in the page itself.
 ];
 
 const loggedInNavLinks: NavLink[] = [

@@ -54,7 +54,7 @@ export default function Footer() {
               Wallplace
             </Link>
             <p className="mt-3 text-sm text-muted leading-relaxed max-w-xs">
-              The curated art marketplace connecting artists with commercial spaces.
+              The curated marketplace for original art, seen on real walls.
             </p>
 
             {/* Mailing list, item 19: "be first to see new works" */}

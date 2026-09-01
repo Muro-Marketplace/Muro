@@ -78,6 +78,22 @@ describe("curated pricing has one source of truth", () => {
     expect(client).not.toMatch(/&pound;\d/);
   });
 
+  // Nav-broadening plan: /venues now forks into a secondary pitch for
+  // Wallplace Programmes (quoting the same `programme` tier as /programmes
+  // and /curated), and its pre-existing Wallplace Curated from-price was
+  // rewritten to derive from CURATION_TIERS too. Same drift risk, same
+  // guard: the whole page must derive every price from CURATION_TIERS via
+  // gbp(), never a literal "£<number>".
+  it("venues page derives its prices from billing tiers, not literal £ strings", () => {
+    const page = readFileSync(
+      join(process.cwd(), "src/app/(pages)/venues/page.tsx"),
+      "utf8",
+    );
+    expect(page).toContain('from "@/lib/curation-tiers"');
+    expect(page).not.toMatch(/£\d+(\.\d{2})?/);
+    expect(page).not.toMatch(/&pound;\d/);
+  });
+
   it("renders exactly the prices venues see today, for every tier and every FAQ that quotes one", () => {
     const byKey = Object.fromEntries(CURATED_TIERS.map((t) => [t.key, t]));
 
