@@ -1,4 +1,4 @@
--- 122: Wallplace Programmes rent accrual (Task 6).
+-- 131: Wallplace Programmes rent accrual (Task 6).
 --
 -- Every artist whose work hangs under a Wallplace Programme is owed rent out
 -- of the client's fee (curation-tiers.ts: PROGRAMME_PIECE_RENT_TARGET_GBP,

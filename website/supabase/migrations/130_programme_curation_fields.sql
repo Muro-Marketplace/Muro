@@ -1,4 +1,4 @@
--- 121: Wallplace Programmes intake fields and quote-first tier CHECK widen (Task 2).
+-- 130: Wallplace Programmes intake fields and quote-first tier CHECK widen (Task 2).
 --
 -- Two defects verified by review, both on curation_requests:
 --
