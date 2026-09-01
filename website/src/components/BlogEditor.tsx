@@ -94,6 +94,15 @@ export default function BlogEditor({
   // rejected, archived) so further keystrokes don't silently overwrite
   // a post that's already in review or live. Audit follow-up.
   const canAutoSave = status === "draft" || status === "rejected";
+  // QA 2026-08-30 bug 16: the action row already rendered only for draft and
+  // rejected, so a published (or in-review) post showed a fully working-looking
+  // form with no way to save and silently discarded every edit on navigation.
+  // The fields follow the same rule as the buttons now, and say why.
+  //
+  // Deliberately read-only rather than adding a Save: PATCH /api/blogs/[id]
+  // does not re-enter moderation on a content edit, so a Save button here
+  // would let an artist change live, already-approved copy to anything at all.
+  const isEditable = canAutoSave;
   useEffect(() => {
     if (!currentId) return;
     if (!canAutoSave) return;
@@ -106,7 +115,16 @@ export default function BlogEditor({
   // PATCH against the right URL — the React `currentId` state isn't
   // updated synchronously, so reading it right after setCurrentId
   // would still see the stale null. Audit follow-up.
-  async function handleCreate(): Promise<string | null> {
+  //
+  // `navigate: false` is the submit-for-review path (row 2442). On
+  // /artist-portal/blogs/new that flow creates the draft and then PATCHes it
+  // for review. When the PATCH is refused (`422` with an `issues` array saying
+  // exactly what is wrong), the `router.replace` fired by the create had
+  // already sent the author to the edit page, so the editor holding the error
+  // was on its way off screen and a fresh one mounted showing a draft. The
+  // refusal reached nobody and the author believed they had submitted. Navigate
+  // once the whole flow has settled instead.
+  async function handleCreate({ navigate = true }: { navigate?: boolean } = {}): Promise<string | null> {
     setSaving("saving");
     setError(null);
     try {
@@ -122,7 +140,7 @@ export default function BlogEditor({
       });
       setCurrentId(data.blog.id);
       setSaving("saved");
-      router.replace(`/artist-portal/blogs/${data.blog.id}/edit`);
+      if (navigate) router.replace(`/artist-portal/blogs/${data.blog.id}/edit`);
       return data.blog.id;
     } catch (err) {
       setSaving("error");
@@ -137,9 +155,11 @@ export default function BlogEditor({
       return;
     }
     let id = currentId;
+    let created = false;
     if (!id) {
-      id = await handleCreate();
+      id = await handleCreate({ navigate: false });
       if (!id) return; // create failed, error already set
+      created = true;
     }
     setSaving("saving");
     try {
@@ -156,6 +176,9 @@ export default function BlogEditor({
       });
       setStatus("pending_review");
       setSaving("saved");
+      // Only now, with the submission accepted. A refusal keeps the author on
+      // the page that is showing them why.
+      if (created) router.replace(`/artist-portal/blogs/${id}/edit`);
     } catch (err) {
       setSaving("error");
       setError(err instanceof ApiError ? describeSaveError(err.payload) : "Network error");
@@ -181,11 +204,27 @@ export default function BlogEditor({
         <p className="text-sm text-red-600 mb-4">{error}</p>
       )}
 
+      {!isEditable && (
+        <div className="mb-4 border border-border bg-surface rounded-sm p-3">
+          <p className="text-sm text-foreground">
+            {status === "published"
+              ? "This post is published, so it cannot be edited here."
+              : "This post is with the Wallplace team for review, so it cannot be edited until they have looked at it."}
+          </p>
+          <p className="text-xs text-muted mt-1">
+            {status === "published"
+              ? "Published posts have already been reviewed. To change this one, contact support and we will take it back into draft for you."
+              : "You will get an email once it has been reviewed. If it needs changes, you will be able to edit it then."}
+          </p>
+        </div>
+      )}
+
       <div className="space-y-4">
         <label className="block text-xs text-muted">
           Title
           <input
             type="text"
+            disabled={!isEditable}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={180}
@@ -197,6 +236,7 @@ export default function BlogEditor({
           Cover image URL (optional)
           <input
             type="url"
+            disabled={!isEditable}
             value={cover}
             onChange={(e) => setCover(e.target.value)}
             placeholder="https://"
@@ -207,6 +247,7 @@ export default function BlogEditor({
         <label className="block text-xs text-muted">
           Body (markdown)
           <textarea
+          disabled={!isEditable}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={16}
@@ -229,6 +270,7 @@ export default function BlogEditor({
                 <label key={w.id} className="flex items-center gap-1.5">
                   <input
                     type="checkbox"
+                    disabled={!isEditable}
                     checked={featured.includes(w.id)}
                     onChange={() => toggleFeatured(w.id)}
                   />
@@ -248,7 +290,7 @@ export default function BlogEditor({
           <div className="flex gap-2">
             {!currentId && (
               <button
-                onClick={handleCreate}
+                onClick={() => { void handleCreate(); }}
                 className="px-3 py-2 text-sm rounded-sm border border-border hover:border-accent/40"
                 disabled={!title.trim() || !body.trim()}
               >

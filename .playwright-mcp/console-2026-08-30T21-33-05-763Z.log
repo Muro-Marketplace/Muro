@@ -1,0 +1,2 @@
+[     221ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/orders/WS-J6CRQS4XTX2DJRO7:0
+[   65504ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://www.wallplace.co.uk/api/offers:0

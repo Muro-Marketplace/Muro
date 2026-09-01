@@ -23,10 +23,23 @@ const WATCHED_ENV = [
   "EMAIL_FROM_NEWS",
   "CRON_SECRET",
   "SUPABASE_WEBHOOK_SECRET",
+  // WS5.2: without this the Resend webhook refuses every delivery, so bounces
+  // and complaints never reach email_suppressions and dead addresses are
+  // retried forever. An unset secret is dead email infrastructure, which is
+  // exactly what this route exists to surface.
+  "RESEND_WEBHOOK_SECRET",
 ] as const;
 
-/** Statuses worth counting. `skipped_no_api_key` is the one that fails health. */
-const WATCHED_STATUSES = ["sent", "failed", "skipped_no_api_key", "render_failed"] as const;
+/**
+ * Statuses worth counting. Everything except `sent` fails health (WS5.4,
+ * R4.8): `failed` and `render_failed` are provider or template breakage, and
+ * `dry_run` in the window means EMAIL_DRY_RUN leaked into a live environment,
+ * which used to leave this route green through a total outage.
+ */
+const WATCHED_STATUSES = ["sent", "failed", "skipped_no_api_key", "render_failed", "dry_run"] as const;
+
+/** The subset of WATCHED_STATUSES whose presence in the last 24h means unhealthy. */
+const FAILING_STATUSES = ["failed", "render_failed", "dry_run", "skipped_no_api_key"] as const;
 
 export async function GET() {
   const env = Object.fromEntries(
@@ -61,7 +74,7 @@ export async function GET() {
   const healthy =
     dbReachable &&
     Object.values(env).every(Boolean) &&
-    (counts.skipped_no_api_key ?? 0) === 0;
+    FAILING_STATUSES.every((s) => (counts[s] ?? 0) === 0);
 
   return NextResponse.json(
     { healthy, env, dbReachable, last24h: counts },

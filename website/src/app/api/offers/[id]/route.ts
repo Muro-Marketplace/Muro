@@ -9,6 +9,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemo } from "@/lib/demo-guard";
 import { createNotification } from "@/lib/notifications";
+import { isOfferLapsed } from "@/lib/offers/expiry";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,30 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   if (offer.status !== "pending" && offer.status !== "countered") {
     return NextResponse.json({ error: "Offer is no longer open" }, { status: 409 });
+  }
+
+  // F41. `expires_at` has been stored and typed since the create route accepted
+  // an `expiresAt` field, and no handler ever read it: an offer whose deadline
+  // passed months ago still accepted, and an accept is precisely what makes the
+  // row payable. Withdraw is deliberately still allowed — the sender pulling
+  // back a lapsed offer is tidying up, not acting on stale terms.
+  if (parsed.data.action !== "withdraw" && isOfferLapsed(offer)) {
+    // Close the row so it stops presenting as live on both portals and in the
+    // thread card. Compare-and-set on the status we read, so a concurrent
+    // accept or payment is never overwritten by this bookkeeping write — the
+    // same shape the checkout's stock guard uses.
+    await db
+      .from("purchase_offers")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("status", offer.status);
+    return NextResponse.json(
+      {
+        error: "This offer has passed its deadline and is no longer open.",
+        code: "offer_expired",
+      },
+      { status: 409 },
+    );
   }
 
   let newStatus: string;

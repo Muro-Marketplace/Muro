@@ -2,11 +2,15 @@ import { describe, expect, it, vi, beforeEach, beforeAll, afterEach } from "vite
 
 // vi.hoisted runs before vi.mock factories so refs in the factories
 // below are initialised when the factory is evaluated.
-const { stripeCreate, fromMock, canReceivePayoutMock, saveCartSessionMock } = vi.hoisted(() => ({
+const { stripeCreate, fromMock, canReceivePayoutMock, saveCartSessionMock, shippingMock } = vi.hoisted(() => ({
   stripeCreate: vi.fn(async () => ({ id: "sess_test", url: "https://stripe.example/session" })),
   fromMock: vi.fn(),
   canReceivePayoutMock: vi.fn(async (): Promise<{ ok: boolean; reason?: string }> => ({ ok: true })),
   saveCartSessionMock: vi.fn(async () => undefined),
+  // A1.2: spied rather than stubbed, so the shipping tests can assert what
+  // the route hands the shared helper. The helper's own arithmetic is
+  // covered in lib/shipping-checkout.test.ts.
+  shippingMock: vi.fn(() => ({ totalShipping: 0, artistGroups: [] })),
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -31,7 +35,7 @@ vi.mock("@/lib/payouts/capability", () => ({
 }));
 
 vi.mock("@/lib/shipping-checkout", () => ({
-  calculateOrderShipping: () => ({ totalShipping: 0, artistGroups: [] }),
+  calculateOrderShipping: shippingMock,
 }));
 
 vi.mock("@/lib/validations", () => ({
@@ -52,6 +56,7 @@ beforeEach(() => {
   canReceivePayoutMock.mockReset();
   canReceivePayoutMock.mockResolvedValue({ ok: true });
   saveCartSessionMock.mockClear();
+  shippingMock.mockClear();
 });
 
 function req(body: unknown, auth: string | null = null): Request {
@@ -514,6 +519,46 @@ describe("POST /api/checkout cart re-validation (G2-15)", () => {
     }));
     expect(res.status).toBe(409);
     expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("B28: rejects a quantity above remaining stock with 409", async () => {
+    mockWorks([{
+      id: "w-two-left",
+      available: true,
+      quantity_available: 2,
+      pricing: [{ label: "S", price: 100 }],
+      title: "Short run",
+    }]);
+    const res = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-two-left", price: 100, size: "S", quantity: 5 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("insufficient_stock");
+    expect(body.available).toBe(2);
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("B28: unlimited stock (null) accepts any sane quantity; silly quantities 400", async () => {
+    mockWorks([{
+      id: "w-open",
+      available: true,
+      quantity_available: null,
+      pricing: [{ label: "S", price: 100 }],
+      title: "Open edition",
+    }]);
+    const ok = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-open", price: 100, size: "S", quantity: 7 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(ok.status).toBe(200);
+
+    const bad = await POST(req({
+      items: [{ ...baseItem, type: "work", workId: "w-open", price: 100, size: "S", quantity: 0 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(bad.status).toBe(400);
   });
 
   it("recomputes unit_amount from DB price (ignores stale client price)", async () => {
@@ -1352,6 +1397,50 @@ describe("POST /api/checkout collect-from-venue re-validation (T9)", () => {
     expect(saved.shipping.collectionAddress).toBe(PLACEMENT.collection_address);
   });
 
+  // Row 727 / PASS2-placement-lifecycle-log. A venue and an artist agreed a
+  // 20% share, the work went live, a customer bought it off the wall for GBP
+  // 120, and the order came out with placement_id NULL, venue_slug NULL,
+  // venue_revenue_share_percent 0 and venue_revenue 0. No venue transfer row
+  // existed. Meanwhile venue_collection_pending emailed the venue to say the
+  // piece "has sold and will be collected from you".
+  //
+  // Cause: `venueSlug` was only ever set from a QR attribution token or from a
+  // raw client field, and an off-the-wall purchase starts on the public artwork
+  // page, not a QR scan. The webhook resolves the placement by filtering
+  // `.eq("venue_slug", venueSlug)`, so a blank slug means it finds nothing and
+  // every downstream figure is zero.
+  //
+  // The rule, matching what offer sales already do (see the venue-share block
+  // in api/offers/[id]/checkout): a work hanging on a venue's wall earns that
+  // venue its placement share on ANY platform sale of the work. An off-the-wall
+  // collect sale is the most venue-attributable sale there is, because the buyer
+  // is standing in the venue and the venue hands the piece over.
+  it("attributes a collect sale to the venue whose wall the work hangs on", async () => {
+    setupWithPlacements([PLACEMENT]);
+
+    const res = await POST(req(collectBody));
+
+    expect(res.status).toBe(200);
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ venueSlug?: string }]
+    >)[0][0];
+    expect(saved.venueSlug).toBe(PLACEMENT.venue_slug);
+  });
+
+  it("takes the venue from the PLACEMENT, not from whatever the client claimed", async () => {
+    setupWithPlacements([PLACEMENT]);
+
+    // A browser console can send any venueSlug it likes. On a collect order the
+    // placement row is the authority, exactly as it already is for the venue,
+    // artist, liveness, size and price of the line.
+    await POST(req({ ...collectBody, venueSlug: "somewhere-i-do-not-own" }));
+
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ venueSlug?: string }]
+    >)[0][0];
+    expect(saved.venueSlug).toBe(PLACEMENT.venue_slug);
+  });
+
   it("rejects a line whose placement does not exist or is not active", async () => {
     // The .eq("status","active") filter means an ended placement simply is not
     // in the result set: same refusal as a fabricated id.
@@ -1510,7 +1599,7 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
 
   // Collect-from-venue pricing needs the T9 placement claim to hold, so these
   // two mock both tables.
-  function setupCollect(workRow: Record<string, unknown>) {
+  function setupCollect(workRow: Record<string, unknown>, placementExtra: Record<string, unknown> = {}) {
     const base = fromMock.getMockImplementation()!;
     fromMock.mockImplementation((table: string) => {
       if (table === "artist_works") {
@@ -1528,6 +1617,8 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
                   status: "active",
                   collection_address: "1 High St",
                   placed_size_label: null,
+                  in_store_price: null,
+                  ...placementExtra,
                 }],
                 error: null,
               }),
@@ -1573,6 +1664,40 @@ describe("POST /api/checkout server-side pricing (audit)", () => {
     );
     expect(res.status).toBe(200);
     expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(7000);
+  });
+
+  it("121: the PLACEMENT's off-the-wall offer is the price, beating every work-level source", async () => {
+    // The artist priced this physical piece at live-on-wall; tier price,
+    // tick box and legacy in-store prices are all overridden.
+    setupCollect(
+      {
+        id: "w-1", available: true, quantity_available: 10, title: "Untitled",
+        pricing: [{ label: "S", price: 100, inStorePrice: 80 }],
+        frame_options: null, in_store_price: 70, available_in_store: true,
+      },
+      { in_store_price: 130 },
+    );
+    const res = await POST(
+      req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 130 }], shipping: collectShipping }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(13000);
+  });
+
+  it("121: a forged client price on an offered piece is corrected to the offer", async () => {
+    setupCollect(
+      {
+        id: "w-1", available: true, quantity_available: 10, title: "Untitled",
+        pricing: [{ label: "S", price: 100 }],
+        frame_options: null, in_store_price: null, available_in_store: false,
+      },
+      { in_store_price: 130 },
+    );
+    const res = await POST(
+      req({ fulfilmentMethod: "collect_venue", items: [{ ...collectLine, price: 1 }], shipping: collectShipping }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(13000);
   });
 
   it("the tick box charges the NORMAL tier price, ignoring any legacy in-store price", async () => {
@@ -1647,5 +1772,215 @@ describe("POST /api/checkout collect claim under a ship order (B27)", () => {
       [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
     >)[0]?.[0]?.line_items ?? [];
     expect(sent[0]?.price_data?.unit_amount).toBe(10000);
+  });
+});
+
+// A1.2 (production pass, 2026-08-30). Shipping was the last money input the
+// route took on trust. A cart posted to the live site with `shippingPrice: 0`
+// minted a Stripe session for £49.99 against an honest £53.49, with no
+// shipping line on it at all. Item prices were already re-priced from the
+// database, which is why forging those did nothing.
+//
+// The arithmetic lives in lib/shipping-checkout.ts and was never wrong. What
+// these tests pin is the input: what the route hands that helper must come
+// from artist_works, not from the request body.
+describe("POST /api/checkout shipping inputs come from the database (A1.2)", () => {
+  const WORK_ID = "w-ship";
+
+  /** A work row whose shipping and dimensions disagree with the cart. */
+  function installWorksDb(row: Record<string, unknown>) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return profilesTable();
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [{
+                id: WORK_ID,
+                available: true,
+                quantity_available: 10,
+                pricing: [{ label: "S", price: 100 }],
+                title: "Untitled",
+                shipping_price: 9.95,
+                dimensions: "100x150cm",
+                ...row,
+              }],
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
+    });
+  }
+
+  const forgedItem = {
+    ...baseItem,
+    workId: WORK_ID,
+    price: 100,
+    shippingPrice: 0,
+    internationalShippingPrice: 0,
+    dimensions: "1x1cm",
+  };
+
+  function shippingArgs(): Array<Record<string, unknown>> {
+    expect(shippingMock).toHaveBeenCalledTimes(1);
+    return (shippingMock.mock.calls as unknown as unknown[][])[0][0] as Array<
+      Record<string, unknown>
+    >;
+  }
+
+  it("ignores a forged shippingPrice of 0 and uses the work's own price", async () => {
+    installWorksDb({});
+    const res = await POST(req({
+      items: [forgedItem],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    expect(shippingArgs()[0].shippingPrice).toBe(9.95);
+  });
+
+  it("prefers the selected size's own shipping price over the work-level one", async () => {
+    installWorksDb({ pricing: [{ label: "S", price: 100, shippingPrice: 4.5 }] });
+    await POST(req({
+      items: [forgedItem],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(shippingArgs()[0].shippingPrice).toBe(4.5);
+  });
+
+  it("ignores forged dimensions, which drive the estimate when there is no manual price", async () => {
+    installWorksDb({ shipping_price: null });
+    await POST(req({
+      items: [forgedItem],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    const line = shippingArgs()[0];
+    expect(line.shippingPrice).toBeNull();
+    expect(line.dimensions).toBe("100x150cm");
+  });
+
+  it("passes the re-priced figure, not the cart's, so the signature threshold cannot be dodged", async () => {
+    // The order-level signature uplift keys off the subtotal, so a forged
+    // price would have suppressed it even though the line itself was corrected.
+    installWorksDb({ pricing: [{ label: "S", price: 250 }] });
+    await POST(req({
+      items: [{ ...forgedItem, price: 1 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(shippingArgs()[0].price).toBe(250);
+  });
+
+  it("keeps a genuine free-shipping zero set by the artist", async () => {
+    installWorksDb({ shipping_price: 0 });
+    await POST(req({
+      items: [{ ...forgedItem, shippingPrice: 20 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(shippingArgs()[0].shippingPrice).toBe(0);
+  });
+
+  it("discards the cart's international price rather than passing it through", async () => {
+    // The lookup is skipped on a UK order, because international shipping is
+    // artist-level and unused here. The cart's own figure is still dropped:
+    // once a work row is known, nothing from the body survives.
+    installWorksDb({});
+    await POST(req({
+      items: [{ ...forgedItem, internationalShippingPrice: 0 }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(shippingArgs()[0].internationalShippingPrice).toBeNull();
+  });
+
+  it("still falls back to the cart for a collection bundle, which has no work row", async () => {
+    // A bundle prices from artist_collections and has no artist_works row to
+    // read shipping from. Narrowing that is tracked separately; this pins the
+    // current behaviour so a later change to it is deliberate.
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return profilesTable();
+      if (table === "artist_collections") {
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [{ id: "c-1", available: true, bundle_price: 100, name: "Bundle" }],
+              error: null,
+            }),
+          }),
+        };
+      }
+      return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
+    });
+    const res = await POST(req({
+      items: [{ ...baseItem, collectionId: "c-1", shippingPrice: 7.5, dimensions: "20x30cm" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(200);
+    const line = shippingArgs()[0];
+    expect(line.shippingPrice).toBe(7.5);
+    expect(line.dimensions).toBe("20x30cm");
+  });
+
+  it("never reaches the shipping calculation for an unidentified cart line", async () => {
+    // A line with neither workId nor collectionId is rejected upstream, so
+    // there is no path on which shipping is computed from an unverifiable
+    // line. Asserted here because the fallback above would otherwise be the
+    // one place the request body could still reach the helper.
+    installWorksDb({});
+    const res = await POST(req({
+      items: [{ ...baseItem }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ code: "cart_line_unidentified" });
+    expect(shippingMock).not.toHaveBeenCalled();
+  });
+});
+
+// orders.buyer_user_id has existed in the schema throughout and was written
+// by nothing. Measured against production on 2026-08-31: 18 orders, 0 with an
+// id, 15 of them placed against an email that matches a real account. Every
+// order was therefore reachable only by matching the email address, which
+// stops working the moment somebody changes theirs.
+//
+// Stripe's session metadata is the only channel from this route to the
+// webhook that creates the order, so that is where the id has to ride.
+describe("POST /api/checkout carries the buyer's identity to the order", () => {
+  function sessionMetadata(): Record<string, string> {
+    const arg = (stripeCreate.mock.calls as unknown as unknown[][])[0][0] as {
+      metadata?: Record<string, string>;
+    };
+    return arg.metadata || {};
+  }
+
+  it("puts the signed-in buyer's id in the session metadata", async () => {
+    setupDefaultDbMock();
+    const res = await POST(req({
+      items: [{ ...baseItem, artistSlug: "bob", workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }, "Bearer artist-alice"));
+
+    expect(res.status).toBe(200);
+    expect(sessionMetadata().buyer_user_id).toBe("u-alice");
+  });
+
+  it("sends an empty string for a guest, since Stripe metadata must be strings", async () => {
+    setupDefaultDbMock();
+    await POST(req({
+      items: [{ ...baseItem, workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+
+    expect(sessionMetadata().buyer_user_id).toBe("");
+  });
+
+  it("still allows guest checkout", async () => {
+    // The identity is additive. Requiring it would end guest checkout.
+    setupDefaultDbMock();
+    const res = await POST(req({
+      items: [{ ...baseItem, workId: "w-1" }],
+      shipping: { ...baseShipping, country: "GB" },
+    }));
+
+    expect(res.status).toBe(200);
   });
 });

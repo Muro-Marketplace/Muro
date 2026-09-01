@@ -1,7 +1,12 @@
-// Stream: notify. Sent to the OTHER party when someone cancels an
+// Stream: tx. Sent to the OTHER party when someone cancels an
 // in-flight placement (either side can cancel, status -> "cancelled").
 // Mirrors the decline template tone, soft, not punitive, with a nudge
 // back into the marketplace.
+//
+// R4.12 (WS5.5): was notify/placements. Cancellation ends a commercial
+// arrangement (for paid loans, a monthly liability), so it now rides
+// orders_and_payouts, the critical always-send category; sendEmail()
+// enforces it via TEMPLATE_CATEGORY_OVERRIDES.
 
 import { EmailShell, H1, P, Button, Badge } from "@/emails/_components";
 import type { EmailPersona } from "@/emails/types/emailTypes";
@@ -16,6 +21,16 @@ export interface PlacementCancelledProps {
   placementUrl: string;
   // Where to send them next, browse other venues / artists.
   nextStepUrl: string;
+  /**
+   * The monthly fee that stops with the placement, in pounds, when there was a
+   * live paid-loan subscription. Omitted for a free loan or revenue share.
+   *
+   * Rows 2179-2187: cancelling a paid-loan placement produced no word about the
+   * money to either party. The artist got this email and it said nothing about
+   * the payments ending; the venue, who is the one being charged, got nothing
+   * at all.
+   */
+  monthlyFeeGbp?: number | null;
 }
 
 export function PlacementCancelled({
@@ -24,14 +39,15 @@ export function PlacementCancelled({
   recipientPersona,
   placementUrl,
   nextStepUrl,
+  monthlyFeeGbp,
 }: PlacementCancelledProps) {
   const isArtist = recipientPersona === "artist";
   const nextLabel = isArtist ? "Discover more venues" : "Browse artists";
   return (
     <EmailShell
-      stream="notify"
+      stream="tx"
       persona={recipientPersona}
-      category="placements"
+      category="orders_and_payouts"
       preview={`${cancelledByName} cancelled the placement`}
     >
       <H1>
@@ -42,6 +58,13 @@ export function PlacementCancelled({
         Hi {firstName}, {cancelledByName} has cancelled this placement. The placement is
         now closed on both sides.
       </P>
+      {typeof monthlyFeeGbp === "number" && monthlyFeeGbp > 0 && (
+        <P>
+          {isArtist
+            ? `The venue's monthly payment of £${monthlyFeeGbp.toFixed(2)} ends with it. Your last payment covers the month they have already paid for.`
+            : `Your monthly payment of £${monthlyFeeGbp.toFixed(2)} ends with it. You won't be charged again, and the month you have already paid for runs to the end of its period.`}
+        </P>
+      )}
       <P>
         It happens. Plans shift, schedules change. We&rsquo;ll keep helping you find the
         right {isArtist ? "wall" : "artist"} for the next one.
@@ -64,20 +87,21 @@ export const mock: PlacementCancelledProps = {
   recipientPersona: "artist",
   placementUrl: "https://wallplace.co.uk/placements/p_example",
   nextStepUrl: "https://wallplace.co.uk/spaces",
+  monthlyFeeGbp: 12,
 };
 
 const entry: TemplateEntry<PlacementCancelledProps> = {
   id: "placement_cancelled",
   name: "Placement cancelled (to other party)",
   description: "Fires when either side cancels an in-flight placement.",
-  stream: "notify",
+  stream: "tx",
   persona: "multi",
-  category: "placements",
+  category: "orders_and_payouts",
   subject: "{{cancelledByName}} cancelled the placement",
   previewText: "The placement was cancelled.",
   component: PlacementCancelled,
   mock,
-  canUnsubscribe: true,
+  canUnsubscribe: false,
   hasInAppEquivalent: true,
   priority: 2,
 };

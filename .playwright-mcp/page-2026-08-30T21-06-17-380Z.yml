@@ -1,0 +1,255 @@
+- generic [active] [ref=f40e1]:
+  - generic [ref=f40e2]:
+    - link "Skip to content" [ref=f40e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f40e4]:
+      - generic [ref=f40e6]:
+        - link "Wallplace" [ref=f40e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f40e8]:
+          - link "Galleries" [ref=f40e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Portfolios" [ref=f40e10] [cursor=pointer]:
+            - /url: /browse?view=portfolios
+          - link "Collections" [ref=f40e11] [cursor=pointer]:
+            - /url: /browse?view=collections
+          - link "Spaces" [ref=f40e12] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f40e14] [cursor=pointer]
+        - generic [ref=f40e17]:
+          - link "Saved" [ref=f40e18] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f40e22] [cursor=pointer]
+          - generic [ref=f40e26]:
+            - link "My Account" [ref=f40e27] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f40e28] [cursor=pointer]
+          - button "Logout" [ref=f40e31] [cursor=pointer]
+    - main [ref=f40e32]:
+      - generic [ref=f40e33]:
+        - generic [ref=f40e36]:
+          - button "All" [ref=f40e37] [cursor=pointer]
+          - button "Photography" [ref=f40e38] [cursor=pointer]
+          - button "Painting" [ref=f40e39] [cursor=pointer]
+          - button "Drawing & Illustration" [ref=f40e40] [cursor=pointer]
+          - button "Sketching" [ref=f40e41] [cursor=pointer]
+          - button "Sculpture" [ref=f40e42] [cursor=pointer]
+          - button "Mixed / Other" [ref=f40e43] [cursor=pointer]
+        - generic [ref=f40e46]:
+          - complementary [ref=f40e47]:
+            - generic [ref=f40e48]: Filters
+            - generic [ref=f40e50]:
+              - generic [ref=f40e51]:
+                - paragraph [ref=f40e52]: Location
+                - generic [ref=f40e54]:
+                  - paragraph [ref=f40e55]: Enter your postcode
+                  - generic [ref=f40e56]:
+                    - generic [ref=f40e57]:
+                      - textbox "Postcode" [ref=f40e58]:
+                        - /placeholder: e.g. EC1A 1BB
+                      - button "Go" [disabled] [ref=f40e59] [cursor=pointer]
+                    - button "Use my current location" [ref=f40e60] [cursor=pointer]
+              - generic [ref=f40e64]:
+                - paragraph [ref=f40e65]: Arrangement
+                - generic [ref=f40e66]:
+                  - button [ref=f40e67] [cursor=pointer]:
+                    - generic [ref=f40e73]:
+                      - paragraph [ref=f40e74]: Revenue Share
+                      - paragraph [ref=f40e75]: Free on wall, split on QR sales
+                  - button "£ Paid Loan Monthly fee to display the work" [ref=f40e76] [cursor=pointer]:
+                    - generic [ref=f40e77]: £
+                    - generic [ref=f40e78]:
+                      - paragraph [ref=f40e79]: Paid Loan
+                      - paragraph [ref=f40e80]: Monthly fee to display the work
+                  - button [ref=f40e81] [cursor=pointer]:
+                    - generic [ref=f40e84]:
+                      - paragraph [ref=f40e85]: Direct Purchase
+                      - paragraph [ref=f40e86]: Buy artwork outright
+              - generic [ref=f40e87]:
+                - paragraph [ref=f40e88]: Availability
+                - generic [ref=f40e89]:
+                  - button "Originals available" [ref=f40e90] [cursor=pointer]
+                  - button "Prints available" [ref=f40e93] [cursor=pointer]
+                  - button "Framing available" [ref=f40e96] [cursor=pointer]
+              - generic [ref=f40e99]:
+                - paragraph [ref=f40e100]: Venue Type
+                - generic [ref=f40e101]:
+                  - button "Cafés" [ref=f40e102] [cursor=pointer]
+                  - button "Restaurants" [ref=f40e103] [cursor=pointer]
+                  - button "Hotels" [ref=f40e104] [cursor=pointer]
+                  - button "Offices" [ref=f40e105] [cursor=pointer]
+                  - button "Bars" [ref=f40e106] [cursor=pointer]
+                  - button "Galleries" [ref=f40e107] [cursor=pointer]
+                  - button "Salons" [ref=f40e108] [cursor=pointer]
+              - generic [ref=f40e109]:
+                - paragraph [ref=f40e110]: Style
+                - combobox [ref=f40e111] [cursor=pointer]:
+                  - option "All styles" [selected]
+                  - option "Abstract Painting"
+                  - option "Abstract Photography"
+                  - option "Acrylic & Collage"
+                  - option "Acrylic Painting"
+                  - option "Architectural Photography"
+                  - option "Botanical Illustration"
+                  - option "Ceramic Wall Art"
+                  - option "Charcoal Drawing"
+                  - option "Digital Illustration"
+                  - option "Documentary Photography"
+                  - option "Encaustic Painting"
+                  - option "Fine Art Photography"
+                  - option "Gouache Painting"
+                  - option "Ink & Wash"
+                  - option "Landscape Photography"
+                  - option "Linocut Printmaking"
+                  - option "Mixed Media"
+                  - option "Nature Photography"
+                  - option "Oil Painting"
+                  - option "Portrait Photography"
+                  - option "Risograph Printing"
+                  - option "Screen Printing"
+                  - option "Still Life Photography"
+                  - option "Street Photography"
+                  - option "Textile Art"
+                  - option "Urban Photography"
+                  - option "Watercolour"
+                  - option "Woodcut Printmaking"
+              - generic [ref=f40e112]:
+                - paragraph [ref=f40e113]: Theme
+                - combobox [ref=f40e114] [cursor=pointer]:
+                  - option "All themes" [selected]
+                  - option "Landscapes"
+                  - option "Black and White"
+                  - option "Urban"
+                  - option "Coastal"
+                  - option "Nature"
+                  - option "Abstract"
+                  - option "Hospitality-friendly"
+                  - option "Office collection"
+                  - option "Large-format prints"
+                  - option "Portraits"
+                  - option "Still Life"
+                  - option "Architectural"
+                  - option "Documentary"
+                  - option "Fine Art"
+                  - option "Minimalist"
+                  - option "Colour"
+                  - option "Monochrome"
+                  - option "Street"
+          - generic [ref=f40e115]:
+            - generic [ref=f40e116]:
+              - generic [ref=f40e117]:
+                - generic [ref=f40e119]:
+                  - searchbox "Search artists or themes" [ref=f40e120]: zzzzqqqnomatch
+                  - button "Clear search" [ref=f40e121] [cursor=pointer]
+                - paragraph [ref=f40e125]: …
+              - generic [ref=f40e126]:
+                - generic [ref=f40e127]:
+                  - button "Galleries" [ref=f40e128] [cursor=pointer]
+                  - button "Portfolios" [ref=f40e129] [cursor=pointer]
+                  - button "Collections" [ref=f40e130] [cursor=pointer]
+                - button "Compact view" [ref=f40e131] [cursor=pointer]
+                - button "Expanded view" [ref=f40e137] [cursor=pointer]
+                - combobox [ref=f40e142] [cursor=pointer]:
+                  - 'option "Sort: Featured" [selected]'
+                  - 'option "Sort: A-Z"'
+                  - 'option "Sort: Revenue Share %"'
+                  - 'option "Sort: Nearest (enable location)" [disabled]'
+            - generic [ref=f40e143]:
+              - paragraph [ref=f40e144]: No artists match these filters.
+              - button "Clear filters" [ref=f40e145] [cursor=pointer]
+    - contentinfo "Site footer" [ref=f40e148]:
+      - generic [ref=f40e149]:
+        - generic [ref=f40e150]:
+          - generic [ref=f40e151]:
+            - link "Wallplace" [ref=f40e152] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f40e153]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f40e154]:
+              - paragraph [ref=f40e155]: Be first to see new works
+              - paragraph [ref=f40e156]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f40e158]:
+                - textbox "your@email.com" [ref=f40e159]
+                - button "Subscribe" [ref=f40e160] [cursor=pointer]
+            - link "Instagram" [ref=f40e161] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f40e166]:
+            - heading "For Artists" [level=4] [ref=f40e167]
+            - list [ref=f40e168]:
+              - listitem [ref=f40e169]:
+                - link "Apply to Join" [ref=f40e170] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f40e171]:
+                - link "Pricing" [ref=f40e172] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f40e173]:
+                - link "Browse Venues" [ref=f40e174] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f40e175]:
+                - link "FAQs" [ref=f40e176] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f40e177]:
+            - heading "For Venues" [level=4] [ref=f40e178]
+            - list [ref=f40e179]:
+              - listitem [ref=f40e180]:
+                - link "Discover Art" [ref=f40e181] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f40e182]:
+                - link "Register Your Venue" [ref=f40e183] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f40e184]:
+                - link "Wallplace Curated" [ref=f40e185] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f40e186]:
+                - link "How It Works" [ref=f40e187] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f40e188]:
+                - link "FAQs" [ref=f40e189] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f40e190]:
+            - heading "Company" [level=4] [ref=f40e191]
+            - list [ref=f40e192]:
+              - listitem [ref=f40e193]:
+                - link "About" [ref=f40e194] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f40e195]:
+                - link "Blog" [ref=f40e196] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f40e197]:
+                - link "How It Works" [ref=f40e198] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f40e199]:
+                - link "Sustainability" [ref=f40e200] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f40e201]:
+                - link "Partner with us" [ref=f40e202] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f40e203]:
+                - link "Contact" [ref=f40e204] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f40e205]:
+                - link "Complaints" [ref=f40e206] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f40e207]:
+                - link "Terms" [ref=f40e208] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f40e209]:
+                - link "Artist Agreement" [ref=f40e210] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f40e211]:
+                - link "Venue Agreement" [ref=f40e212] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f40e213]:
+                - link "Privacy" [ref=f40e214] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f40e215]:
+                - link "Cookies" [ref=f40e216] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f40e217]:
+                - link "Returns & Refunds" [ref=f40e218] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f40e219]:
+                - link "IP Policy" [ref=f40e220] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f40e222]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f40e223] [cursor=pointer]: Feedback
+  - alert [ref=f40e226]

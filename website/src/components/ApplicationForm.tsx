@@ -187,6 +187,18 @@ export default function ApplicationForm() {
       name: prev.name || displayName || "",
     }));
   }, [user, displayName]);
+  // A17: honour a ?plan= query param (e.g. the pricing page's "Apply for
+  // Pro" button links /apply?plan=pro) by preselecting that plan. Read
+  // from window.location in an effect rather than useSearchParams so the
+  // form doesn't need a Suspense boundary in its host page.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const plan = new URLSearchParams(window.location.search).get("plan");
+    if (plan && planOptions.some((p) => p.id === plan)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForm((prev) => ({ ...prev, selectedPlan: plan }));
+    }
+  }, []);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   // Field-level validation errors keyed by form field name. Populated from
@@ -734,7 +746,7 @@ export default function ApplicationForm() {
             {fieldError("openTo")}
             <p className="text-xs text-muted mb-3">
               Three ways your work can reach venues. Revenue share means your
-              art is displayed free in a venue and you split QR-code sales
+              art is displayed free in a venue and you split sales from that wall
               with them. Paid loan means the venue pays you a monthly fee to
               display the work. Direct purchase means the venue buys the
               piece outright.

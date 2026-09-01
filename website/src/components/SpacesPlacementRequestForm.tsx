@@ -42,8 +42,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 import Image from "next/image";
 import Link from "next/link";
+import { physicalSizeLabel } from "@/lib/physical-size";
 
 interface ArtistWork {
   id: string;
@@ -127,6 +129,19 @@ export default function SpacesPlacementRequestForm({
   const [qrEnabled, setQrEnabled] = useState<boolean>(true);
   const [qrRevenueShare, setQrRevenueShare] = useState<number>(20);
 
+  // Remaining venue approaches for the rolling week (Core 3 / Premium 6 /
+  // Pro 15, shared across placement requests, first messages and artwork
+  // request responses). The cap has always been enforced server-side; what
+  // was missing was any way to see it coming, so an artist wrote a whole
+  // request and got a 429 at the end. The hook returns null while loading,
+  // for venues, and on a failed read.
+  const allowance = useOutreachAllowance();
+
+  // Only block on a positive zero. Loading, unlimited, and a failed lookup
+  // all leave the button alone; the server enforces the cap regardless.
+  const outOfAllowance =
+    !!allowance && !allowance.unlimited && allowance.remaining === 0;
+
   // "Quote a price" / "Suggest a commission" state. Both submit as
   // a placement with arrangement_type='purchase'; the price flows
   // into the placement message body so the venue sees a concrete
@@ -171,6 +186,7 @@ export default function SpacesPlacementRequestForm({
   // fields aren't filled.
   const canSubmit = (() => {
     if (submitting) return false;
+    if (outOfAllowance) return false;
     if (action === "placement") return !!primaryWork && !!arrangement;
     if (action === "quote")
       return (
@@ -214,8 +230,12 @@ export default function SpacesPlacementRequestForm({
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as {
             error?: string;
+            message?: string;
           };
-          throw new Error(data.error || `Request failed (${res.status})`);
+          // `message` first: on a 429 the API puts the machine code in
+          // `error` ("outreach_limit_reached") and the sentence in
+          // `message`, so reading `error` alone showed artists the code.
+          throw new Error(data.message || data.error || `Request failed (${res.status})`);
         }
         setSent(true);
         // No placement id for a plain message; pass a synthetic
@@ -261,7 +281,7 @@ export default function SpacesPlacementRequestForm({
         const extras = selectedWorks.slice(1).map((w) => ({
           title: w.title,
           image: w.image,
-          size: w.dimensions || null,
+          size: physicalSizeLabel(w.dimensions, "") || null,
         }));
         placement = {
           id: placementId,
@@ -350,11 +370,15 @@ export default function SpacesPlacementRequestForm({
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as {
           error?: string;
+          message?: string;
           reason?: string;
         };
         // The API uses `reason: "application_pending"` for un-approved
-        // artists, surface the exact human message it returns.
-        throw new Error(data.error || `Request failed (${res.status})`);
+        // artists and puts that sentence in `error`; the outreach cap puts
+        // its machine code in `error` and the sentence in `message`. Prefer
+        // `message` so a capped artist reads the explanation rather than
+        // the string "outreach_limit_reached".
+        throw new Error(data.message || data.error || `Request failed (${res.status})`);
       }
       setSent(true);
       // Hold the success block on screen briefly before letting the
@@ -671,7 +695,7 @@ export default function SpacesPlacementRequestForm({
                   }
                   className="w-20 px-2.5 py-1.5 text-sm border border-border rounded-sm bg-background focus:outline-none focus:border-accent"
                 />
-                <span className="text-xs text-muted">% of QR sales</span>
+                <span className="text-xs text-muted">% of sales from the wall</span>
               </div>
             </div>
           )}
@@ -744,7 +768,7 @@ export default function SpacesPlacementRequestForm({
                     className="w-20 px-2.5 py-1.5 text-sm border border-border rounded-sm bg-background focus:outline-none focus:border-accent"
                   />
                   <span className="text-xs text-muted">
-                    to venue, on QR sales
+                    to venue, on sales from the wall
                   </span>
                 </div>
               )}
@@ -964,6 +988,13 @@ export default function SpacesPlacementRequestForm({
           </p>
         </div>
       )}
+
+      {/* Remaining approaches, shown before anything is typed so the limit is
+          never a surprise at the end of a request. */}
+      <OutreachAllowanceBadge
+        allowance={allowance}
+        className={outOfAllowance ? "bg-amber-50 border border-amber-200 rounded-sm px-2.5 py-1.5" : ""}
+      />
 
       {/* Error / submit */}
       {error && (

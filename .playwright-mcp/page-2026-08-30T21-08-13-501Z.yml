@@ -1,0 +1,191 @@
+- generic [active] [ref=f42e1]:
+  - generic [ref=f42e2]:
+    - link "Skip to content" [ref=f42e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f42e4]:
+      - generic [ref=f42e6]:
+        - link "Wallplace" [ref=f42e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f42e8]:
+          - link "Galleries" [ref=f42e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Portfolios" [ref=f42e10] [cursor=pointer]:
+            - /url: /browse?view=portfolios
+          - link "Collections" [ref=f42e11] [cursor=pointer]:
+            - /url: /browse?view=collections
+          - link "Spaces" [ref=f42e12] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f42e14] [cursor=pointer]
+        - generic [ref=f42e17]:
+          - link "Saved" [ref=f42e18] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f42e22] [cursor=pointer]
+          - generic [ref=f42e26]:
+            - link "My Account" [ref=f42e27] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f42e28] [cursor=pointer]
+          - button "Logout" [ref=f42e31] [cursor=pointer]
+    - main [ref=f42e32]:
+      - generic [ref=f42e33]:
+        - generic [ref=f42e36]:
+          - button "All" [ref=f42e37] [cursor=pointer]
+          - button "Photography" [ref=f42e38] [cursor=pointer]
+          - button "Painting" [ref=f42e39] [cursor=pointer]
+          - button "Drawing & Illustration" [ref=f42e40] [cursor=pointer]
+          - button "Sketching" [ref=f42e41] [cursor=pointer]
+          - button "Sculpture" [ref=f42e42] [cursor=pointer]
+          - button "Mixed / Other" [ref=f42e43] [cursor=pointer]
+        - generic [ref=f42e45]:
+          - generic [ref=f42e46]:
+            - heading "Curated Collections" [level=2] [ref=f42e47]
+            - paragraph [ref=f42e48]: Themed bundles of artwork at a set price. Ready to transform your space.
+          - generic [ref=f42e49]:
+            - complementary [ref=f42e50]:
+              - generic [ref=f42e51]:
+                - generic [ref=f42e52]: Filters
+                - button "Clear all" [ref=f42e53] [cursor=pointer]
+              - generic [ref=f42e54]:
+                - generic [ref=f42e55]:
+                  - paragraph [ref=f42e56]: Location
+                  - generic [ref=f42e57]:
+                    - paragraph [ref=f42e58]: Enter your postcode to filter by distance
+                    - generic [ref=f42e59]:
+                      - generic [ref=f42e60]:
+                        - textbox "Postcode" [ref=f42e61]:
+                          - /placeholder: e.g. EC1A 1BB
+                          - text: TW12 2TH
+                        - button "Go" [ref=f42e62] [cursor=pointer]
+                      - button "Use my current location" [ref=f42e63] [cursor=pointer]
+                - generic [ref=f42e67]:
+                  - paragraph [ref=f42e68]: Arrangement
+                  - generic [ref=f42e69]:
+                    - button [ref=f42e70] [cursor=pointer]:
+                      - generic [ref=f42e76]:
+                        - paragraph [ref=f42e77]: Revenue Share
+                        - paragraph [ref=f42e78]: Free on wall, split on QR sales
+                    - button "£ Paid Loan Monthly fee to display the work" [ref=f42e79] [cursor=pointer]:
+                      - generic [ref=f42e80]: £
+                      - generic [ref=f42e81]:
+                        - paragraph [ref=f42e82]: Paid Loan
+                        - paragraph [ref=f42e83]: Monthly fee to display the work
+                    - button [ref=f42e84] [cursor=pointer]:
+                      - generic [ref=f42e87]:
+                        - paragraph [ref=f42e88]: Direct Purchase
+                        - paragraph [ref=f42e89]: Buy artwork outright
+                - generic [ref=f42e90]:
+                  - paragraph [ref=f42e91]: "Bundle price: £0 to £2000+"
+                  - generic [ref=f42e92]:
+                    - generic [ref=f42e93]:
+                      - text: Min
+                      - slider [ref=f42e94] [cursor=pointer]: "0"
+                    - generic [ref=f42e95]:
+                      - text: Max
+                      - slider [ref=f42e96] [cursor=pointer]: "2000"
+            - generic [ref=f42e97]:
+              - generic [ref=f42e98]:
+                - generic [ref=f42e99]:
+                  - searchbox "Search collections, artists" [ref=f42e102]
+                  - paragraph [ref=f42e103]: …
+                - generic [ref=f42e105]:
+                  - button "Galleries" [ref=f42e106] [cursor=pointer]
+                  - button "Portfolios" [ref=f42e107] [cursor=pointer]
+                  - button "Collections" [ref=f42e108] [cursor=pointer]
+              - generic [ref=f42e109]:
+                - paragraph [ref=f42e110]: No collections available yet.
+                - button "Clear all filters" [ref=f42e111] [cursor=pointer]
+    - contentinfo "Site footer" [ref=f42e114]:
+      - generic [ref=f42e115]:
+        - generic [ref=f42e116]:
+          - generic [ref=f42e117]:
+            - link "Wallplace" [ref=f42e118] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f42e119]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f42e120]:
+              - paragraph [ref=f42e121]: Be first to see new works
+              - paragraph [ref=f42e122]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f42e124]:
+                - textbox "your@email.com" [ref=f42e125]
+                - button "Subscribe" [ref=f42e126] [cursor=pointer]
+            - link "Instagram" [ref=f42e127] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f42e132]:
+            - heading "For Artists" [level=4] [ref=f42e133]
+            - list [ref=f42e134]:
+              - listitem [ref=f42e135]:
+                - link "Apply to Join" [ref=f42e136] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f42e137]:
+                - link "Pricing" [ref=f42e138] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f42e139]:
+                - link "Browse Venues" [ref=f42e140] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f42e141]:
+                - link "FAQs" [ref=f42e142] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f42e143]:
+            - heading "For Venues" [level=4] [ref=f42e144]
+            - list [ref=f42e145]:
+              - listitem [ref=f42e146]:
+                - link "Discover Art" [ref=f42e147] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f42e148]:
+                - link "Register Your Venue" [ref=f42e149] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f42e150]:
+                - link "Wallplace Curated" [ref=f42e151] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f42e152]:
+                - link "How It Works" [ref=f42e153] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f42e154]:
+                - link "FAQs" [ref=f42e155] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f42e156]:
+            - heading "Company" [level=4] [ref=f42e157]
+            - list [ref=f42e158]:
+              - listitem [ref=f42e159]:
+                - link "About" [ref=f42e160] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f42e161]:
+                - link "Blog" [ref=f42e162] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f42e163]:
+                - link "How It Works" [ref=f42e164] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f42e165]:
+                - link "Sustainability" [ref=f42e166] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f42e167]:
+                - link "Partner with us" [ref=f42e168] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f42e169]:
+                - link "Contact" [ref=f42e170] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f42e171]:
+                - link "Complaints" [ref=f42e172] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f42e173]:
+                - link "Terms" [ref=f42e174] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f42e175]:
+                - link "Artist Agreement" [ref=f42e176] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f42e177]:
+                - link "Venue Agreement" [ref=f42e178] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f42e179]:
+                - link "Privacy" [ref=f42e180] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f42e181]:
+                - link "Cookies" [ref=f42e182] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f42e183]:
+                - link "Returns & Refunds" [ref=f42e184] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f42e185]:
+                - link "IP Policy" [ref=f42e186] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f42e188]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f42e189] [cursor=pointer]: Feedback
+  - alert [ref=f42e192]

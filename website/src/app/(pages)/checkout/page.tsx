@@ -76,8 +76,11 @@ export default function CheckoutPage() {
   // so the initial render is already right.
   const allVenueCollect =
     items.length > 0 && items.every((i) => i.lineFulfilment === "collect_venue");
+  // B18: the tile used to print the raw slug ("the-copper-kettle"). Prefer the
+  // display name the line now carries, and fall back to the slug only for
+  // carts built before that field existed.
   const collectVenueName = allVenueCollect
-    ? items[0]?.collectVenueSlug ?? null
+    ? items[0]?.collectVenueName ?? items[0]?.collectVenueSlug ?? null
     : null;
   const [fulfilmentMethod, setFulfilmentMethod] = useState<"ship" | "collection" | "collect_venue">(
     allVenueCollect ? "collect_venue" : "ship",
@@ -131,6 +134,15 @@ export default function CheckoutPage() {
       setSavedAddressId("");
       return;
     }
+    // Production pass 2, P4: "A signed-in buyer's email is not prefilled at
+    // checkout, though their name is." The address effect below fills the name
+    // from a saved address; the email is on the session and nothing used it, so
+    // a signed-in buyer retyped the address the receipt would go to. Set it
+    // before the address fetch, and never over a value they have typed.
+    if (user?.email) {
+      setShipping((prev) => (prev.email ? prev : { ...prev, email: user.email as string }));
+    }
+
     let cancelled = false;
     authFetch("/api/customer-addresses")
       .then((r) => r.json())
@@ -521,6 +533,12 @@ export default function CheckoutPage() {
       if (data.url) {
         // Save shipping to localStorage for confirmation fallback
         localStorage.setItem("wallplace-last-shipping", JSON.stringify(shipping));
+        // B22: the confirmation page's fulfilment notice needs to know
+        // whether anything is actually being shipped. The session API
+        // deliberately returns no fulfilment data (E39), so hand the
+        // chosen method over via localStorage for the immediate
+        // post-checkout render.
+        localStorage.setItem("wallplace-last-fulfilment", fulfilmentMethod);
         window.location.href = data.url;
         // Leave `submitting` true so the button stays disabled while
         // the browser navigates to Stripe. Resetting it here flickers
@@ -893,7 +911,12 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Artist fulfilment notice */}
+          {/* Fulfilment notice. PASS2-placement-lifecycle-log: this said "Your
+              order will be fulfilled directly by the artist. They'll pack and
+              ship your artwork within 5 to 7 working days" under a SELECTED
+              "Collect from the venue" option. Nothing was going to be packed or
+              shipped: the piece was on a wall the buyer was about to walk into.
+              The confirmation page already said the right thing. */}
           <div className="bg-accent/5 border border-accent/20 rounded-sm p-4 flex gap-3">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C17C5A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
               <circle cx="12" cy="12" r="10" />
@@ -901,7 +924,23 @@ export default function CheckoutPage() {
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
             <p className="text-sm text-foreground/70">
-              Your order will be fulfilled directly by the artist. They&apos;ll pack and ship your artwork within {aggregatedEstimatedDays}.
+              {fulfilmentMethod === "collect_venue" ? (
+                <>
+                  Nothing is posted. Once you have paid, collect it from{" "}
+                  {collectVenueName ?? "the venue"} and confirm the pickup in your account so the
+                  artist is paid.
+                </>
+              ) : fulfilmentMethod === "collection" ? (
+                <>
+                  Nothing is posted. The artist will be in touch to arrange a time for you to
+                  collect it.
+                </>
+              ) : (
+                <>
+                  Your order will be fulfilled directly by the artist. They&apos;ll pack and ship
+                  your artwork within {aggregatedEstimatedDays}.
+                </>
+              )}
             </p>
           </div>
 

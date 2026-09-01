@@ -215,3 +215,25 @@ describe("formatReport", () => {
     expect(formatReport(reconcile([order()], [transfer()]))).toContain("£100.00");
   });
 });
+
+// ─── WS2.5: blocked rows surface as an actionable queue ───
+describe("blocked transfers surface (WS2.5)", () => {
+  it("counts blocked rows and pence, and formatReport shouts about them", () => {
+    const orders = [order({ id: "o1", total: 100, artist_revenue: 85, platform_fee: 15 })];
+    const report = reconcile(orders, [
+      { order_id: "o1", amount_cents: 4000, status: "pending" },
+      { order_id: "o1", amount_cents: 4500, status: "blocked" },
+    ]);
+    expect(report.blockedCount).toBe(1);
+    expect(report.blockedPence).toBe(4500);
+    expect(formatReport(report)).toMatch(/BLOCKED: 1 transfer/);
+  });
+
+  it("no blocked rows, no noise", () => {
+    const orders = [order({ id: "o1", total: 100, artist_revenue: 85, platform_fee: 15 })];
+    const report = reconcile(orders, [{ order_id: "o1", amount_cents: 8500, status: "pending" }]);
+    expect(report.blockedCount).toBe(0);
+    expect(formatReport(report)).not.toMatch(/BLOCKED/);
+  });
+});
+

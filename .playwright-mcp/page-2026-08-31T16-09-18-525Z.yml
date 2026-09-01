@@ -1,0 +1,39 @@
+- generic [active] [ref=f49e1]:
+  - generic [ref=f49e2]:
+    - link "Skip to content" [ref=f49e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f49e4]:
+      - generic [ref=f49e6]:
+        - link "Wallplace" [ref=f49e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f49e8]:
+          - link "Marketplace" [ref=f49e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f49e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f49e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f49e13] [cursor=pointer]
+        - generic [ref=f49e16]:
+          - link "Saved" [ref=f49e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f49e21] [cursor=pointer]
+          - button "Notifications" [ref=f49e26] [cursor=pointer]
+          - generic [ref=f49e30]:
+            - link "Venue Portal" [ref=f49e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f49e32] [cursor=pointer]
+          - button "Logout" [ref=f49e35] [cursor=pointer]
+    - main [ref=f49e36]:
+      - paragraph [ref=f49e38]: Loading...
+    - button "Feedback and feature requests" [ref=f49e39] [cursor=pointer]: Feedback
+  - generic [ref=f49e45]:
+    - paragraph [ref=f49e46]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f49e47] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f49e48]:
+      - button "Decline" [ref=f49e49] [cursor=pointer]
+      - button "Accept" [ref=f49e50] [cursor=pointer]
+  - alert [ref=f49e51]

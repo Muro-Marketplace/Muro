@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import type { ReactNode } from "react";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import PaidLoanPaymentChip from "./PaidLoanPaymentChip";
+
+// Every test in this file renders the same component with different props, so
+// a leaked mount from the previous test matches the next one's query and the
+// failure reads as a bug in the component. Unmount between tests.
+afterEach(() => cleanup());
 
 // next/link needs no router behaviour here; render it as a plain anchor.
 vi.mock("next/link", () => ({
@@ -72,5 +77,57 @@ describe("PaidLoanPaymentChip — N3 entry-point reachability", () => {
       />,
     );
     expect(container.firstChild).toBeNull();
+  });
+});
+
+// Rows 2179-2187 / PASS2-offers-and-paid-loan-log. After the venue cancelled a
+// paid-loan placement, this banner still read "Monthly payment active,
+// £12.00/mo. Next payment on 30 September. Manage it any time from this page."
+// on the same page that said Cancelled at the top.
+//
+// Three separate untruths: the payment is not active, there is no next payment
+// (30 September is the last day of cover), and there is no manage control on
+// that page in any state.
+describe("a subscription winding down after a cancellation", () => {
+  const winding = {
+    placementId: "p1",
+    arrangementType: "free_loan",
+    monthlyFeeGbp: 12,
+    liveFrom: "2026-08-01T00:00:00.000Z",
+    subscriptionStatus: "active",
+    currentPeriodEnd: "2026-09-30T16:04:45.000Z",
+    cancelAtPeriodEnd: true,
+  } as const;
+
+  it("does not call the payment active", () => {
+    render(<PaidLoanPaymentChip {...winding} role="venue" />);
+
+    expect(screen.queryByText(/Monthly payment active/i)).toBeNull();
+  });
+
+  it("tells the venue the money has stopped and when cover ends", () => {
+    render(<PaidLoanPaymentChip {...winding} role="venue" />);
+
+    expect(screen.getByText(/won.t be charged again/i)).toBeTruthy();
+    expect(screen.getByText(/30 September/)).toBeTruthy();
+  });
+
+  it("promises no management control that does not exist", () => {
+    render(<PaidLoanPaymentChip {...winding} role="venue" />);
+
+    expect(screen.queryByText(/Manage it any time/i)).toBeNull();
+  });
+
+  it("tells the artist their payments are ending, not that they are running", () => {
+    render(<PaidLoanPaymentChip {...winding} role="artist" />);
+
+    expect(screen.queryByText(/is set up. Next payment/i)).toBeNull();
+    expect(screen.getByText(/last payment/i)).toBeTruthy();
+  });
+
+  it("leaves a genuinely running subscription reading as running", () => {
+    render(<PaidLoanPaymentChip {...winding} cancelAtPeriodEnd={false} role="venue" />);
+
+    expect(screen.getByText(/Monthly payment active/i)).toBeTruthy();
   });
 });

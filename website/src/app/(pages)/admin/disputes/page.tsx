@@ -1,10 +1,28 @@
 "use client";
 
 // Phase 2.8 A2. Admin dispute list + light detail view.
+//
+// G17: the row used to print the literal string
+// "GET /api/messages?dispute_id={id}" in a code tag and leave the admin to go
+// and run it themselves. The admin-scoped branch of that endpoint has worked
+// since Phase 2.8, audited read and all; nothing in the portal called it. It is
+// a viewer now.
+//
+// G20: escalation no longer overwrites the dispute's category, so the heading
+// shows the classification it was filed under plus a flag.
 
 import { useEffect, useState, useCallback } from "react";
 import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { baseCategory, isEscalated } from "@/app/api/admin/disputes/escalation";
+
+interface DisputeMessage {
+  id: string;
+  sender_name: string | null;
+  recipient_slug: string | null;
+  content: string | null;
+  created_at: string;
+}
 
 interface Dispute {
   id: string;
@@ -42,7 +60,10 @@ export default function AdminDisputesPage() {
   async function handleAction(id: string, action: "resolve" | "close" | "escalate") {
     let body: Record<string, unknown> = { action };
     if (action === "resolve") {
-      const resolution = prompt("Resolution note (visible internally):");
+      // The resolution text is the body of the email both parties receive (or
+      // the opener, on a dispute with no order). It was never internal, and
+      // saying so invited notes that read like an internal ticket comment.
+      const resolution = prompt("Outcome (emailed to everyone involved):");
       if (!resolution) return;
       body = { action, resolution };
     } else if (action === "escalate") {
@@ -74,7 +95,7 @@ export default function AdminDisputesPage() {
         <div className="mb-8">
           <h1 className="text-2xl lg:text-3xl mb-2">Disputes</h1>
           <p className="text-sm text-muted">
-            Customer / artist / venue disputes. Resolving writes to the audit log.
+            Customer / artist / venue disputes. Resolving emails everyone involved and writes to the audit log.
           </p>
         </div>
 
@@ -112,8 +133,13 @@ export default function AdminDisputesPage() {
               <li key={d.id} className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div>
-                    <h3 className="text-sm font-medium">
-                      {d.category ? d.category : "Untitled dispute"}
+                    <h3 className="text-sm font-medium flex items-center gap-2 flex-wrap">
+                      <span>{baseCategory(d.category) || "Untitled dispute"}</span>
+                      {isEscalated(d.category) && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-amber-100 text-amber-700">
+                          Escalated
+                        </span>
+                      )}
                     </h3>
                     <p className="text-[11px] text-muted">
                       Filed {new Date(d.created_at).toLocaleDateString("en-GB")}
@@ -133,14 +159,7 @@ export default function AdminDisputesPage() {
                     Resolution: {d.resolution}
                   </p>
                 )}
-                {d.conversation_id && (
-                  <p className="text-[11px] text-muted mb-3">
-                    Read conversation:{" "}
-                    <code className="bg-background/40 px-1 py-0.5 rounded-sm">
-                      GET /api/messages?dispute_id={d.id}
-                    </code>
-                  </p>
-                )}
+                {d.conversation_id && <DisputeThread disputeId={d.id} />}
                 {statusFilter === "open" && (
                   <div className="flex gap-2">
                     <button
@@ -169,5 +188,68 @@ export default function AdminDisputesPage() {
         )}
       </div>
     </AdminPortalLayout>
+  );
+}
+
+// G17. The dispute-scoped read is audited server-side on every call, so it is
+// fetched on demand rather than for every row on load: opening the page should
+// not write an admin_audit_log row per dispute for threads nobody looked at.
+function DisputeThread({ disputeId }: { disputeId: string }) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<DisputeMessage[] | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+
+  async function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (messages !== null || state === "loading") return;
+    setState("loading");
+    try {
+      const res = await authFetch(`/api/messages?dispute_id=${encodeURIComponent(disputeId)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setState("error");
+        return;
+      }
+      setMessages((data.messages as DisputeMessage[]) ?? []);
+      setState("idle");
+    } catch {
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="mb-3">
+      <button type="button" onClick={toggle} className="text-xs text-accent hover:underline">
+        {open ? "Hide the conversation" : "Read the conversation"}
+      </button>
+      {open && (
+        <div className="mt-2 bg-background/40 border border-border rounded-sm p-3 max-h-80 overflow-y-auto space-y-2">
+          {state === "loading" && <p className="text-xs text-muted">Loading the conversation…</p>}
+          {state === "error" && (
+            <p className="text-xs text-red-600">
+              Could not load the conversation. Try again before deciding on this case.
+            </p>
+          )}
+          {state === "idle" && messages?.length === 0 && (
+            <p className="text-xs text-muted">This conversation has no messages.</p>
+          )}
+          {state === "idle" &&
+            messages?.map((m) => (
+              <div key={m.id} className="bg-white border border-border rounded-sm px-3 py-2">
+                <p className="text-[10px] text-muted uppercase tracking-wider mb-1">
+                  {m.sender_name || "unknown"}
+                  {" · "}
+                  {new Date(m.created_at).toLocaleString("en-GB")}
+                </p>
+                <p className="text-xs text-foreground whitespace-pre-wrap">{m.content || ""}</p>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
   );
 }

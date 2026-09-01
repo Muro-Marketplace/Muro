@@ -149,7 +149,7 @@ const faqItems = [
   {
     question: "What if I'm not accepted?",
     answer:
-      "We provide feedback on every application. You're welcome to reapply after three months. Many successful artists are accepted on their second application.",
+      "We give feedback where we can, and you're welcome to reapply after three months. A stronger portfolio edit or a clearer artist statement can change the outcome.",
   },
   {
     question: "What sizes work best?",
@@ -159,12 +159,12 @@ const faqItems = [
   {
     question: "How does payment work when something sells?",
     answer:
-      "The buyer pays through Wallplace. We deduct the platform fee and pay you within 14 days via bank transfer. Simple and transparent.",
+      "The buyer pays through Wallplace. The funds are held until the artwork is confirmed delivered (or 14 days pass without a buyer dispute, whichever comes first), then we transfer your share, minus the platform fee, straight to your linked bank account.",
   },
   {
     question: "What happens if I cancel?",
     answer:
-      "You can cancel any time. You'll be responsible for collecting your work from venues you've placed in. No penalties, no hard feelings.",
+      "You can cancel with 30 days' notice, by email or from your account settings, and your membership stays active until the end of that period. You'll be responsible for collecting your work from venues within 30 days of cancelling. No cancellation fees, no hard feelings.",
   },
   {
     question: "Is my artwork protected?",
@@ -409,7 +409,11 @@ export default function ArtistGuide() {
             <Link href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
               SEE VENUE DEMAND
             </Link>
-            <Link href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-foreground text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground/90 transition-colors">
+            {/* Row A L163: this was a second differently-labelled button to
+                the SAME /spaces URL, so the pair read as two things and did
+                one. The postcode search lives on that page, so the second CTA
+                is the quieter route to it rather than a rival to the first. */}
+            <Link href="/spaces#postcode" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 border border-foreground/25 text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:border-foreground/50 transition-colors">
               SEARCH BY POSTCODE
             </Link>
           </div>

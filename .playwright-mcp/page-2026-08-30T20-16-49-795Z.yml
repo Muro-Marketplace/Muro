@@ -1,0 +1,258 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - link "Skip to content" [ref=f3e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f3e4]:
+      - generic [ref=f3e6]:
+        - link "Wallplace" [ref=f3e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f3e8]:
+          - link "Marketplace" [ref=f3e9] [cursor=pointer]:
+            - /url: /browse
+          - link "How It Works" [ref=f3e10] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f3e11] [cursor=pointer]:
+            - /url: /blog
+          - link "Spaces" [ref=f3e12] [cursor=pointer]:
+            - /url: /spaces
+        - generic [ref=f3e13]:
+          - link "Login" [ref=f3e14] [cursor=pointer]:
+            - /url: /login
+          - link "Sign Up" [ref=f3e15] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=f3e16]:
+      - generic [ref=f3e17]:
+        - generic [ref=f3e18]:
+          - img "Curated gallery interior with framed artwork" [ref=f3e20]
+          - generic [ref=f3e24]:
+            - paragraph [ref=f3e25]: How it works
+            - heading "How Wallplace works" [level=1] [ref=f3e26]
+            - tablist "How Wallplace works for" [ref=f3e27]:
+              - tab "For venues" [selected] [ref=f3e28] [cursor=pointer]
+              - tab "For artists" [ref=f3e29] [cursor=pointer]
+              - tab "For customers" [ref=f3e30] [cursor=pointer]
+            - tabpanel "For venues" [ref=f3e31]:
+              - paragraph [ref=f3e32]: You have a wall. We have a curated network of artists actively looking for somewhere to hang their work. Browsing and enquiring is free.
+              - list [ref=f3e33]:
+                - listitem [ref=f3e34]:
+                  - generic [ref=f3e35]: "01"
+                  - generic [ref=f3e36]:
+                    - paragraph [ref=f3e37]: Browse & Filter
+                    - paragraph [ref=f3e38]: Search curated artist portfolios by style, theme, and location. Free, no signup needed.
+                - listitem [ref=f3e39]:
+                  - generic [ref=f3e40]: "02"
+                  - generic [ref=f3e41]:
+                    - paragraph [ref=f3e42]: Enquire
+                    - paragraph [ref=f3e43]: Contact artists directly through Wallplace to discuss work, terms, and fit for your space.
+                - listitem [ref=f3e44]:
+                  - generic [ref=f3e45]: "03"
+                  - generic [ref=f3e46]:
+                    - paragraph [ref=f3e47]: Arrange
+                    - paragraph [ref=f3e48]: Display work for free with an optional revenue share on sales, or purchase pieces outright for your permanent collection.
+              - generic [ref=f3e49]:
+                - link "Register your venue" [ref=f3e50] [cursor=pointer]:
+                  - /url: /signup/venue
+                - link "Or explore Curated, a managed selection from £49" [ref=f3e51] [cursor=pointer]:
+                  - /url: /curated
+          - link "Scroll to see more" [ref=f3e53] [cursor=pointer]:
+            - /url: "#hiw-detail"
+        - generic [ref=f3e59]:
+          - generic [ref=f3e62]:
+            - generic [ref=f3e63]:
+              - text: What’s included
+              - heading "What you get for free" [level=2] [ref=f3e64]
+            - generic [ref=f3e65]:
+              - generic [ref=f3e71]:
+                - heading "Browse artist portfolios" [level=3] [ref=f3e72]
+                - paragraph [ref=f3e73]: Explore curated photography and original artwork from independent artists.
+              - generic [ref=f3e79]:
+                - heading "Filter by location, style & theme" [level=3] [ref=f3e80]
+                - paragraph [ref=f3e81]: Find work that suits your interior and clientele. Filter by medium, style, theme, size, and commercial availability.
+              - generic [ref=f3e87]:
+                - heading "Post your space" [level=3] [ref=f3e88]
+                - paragraph [ref=f3e89]: Create a venue profile so artists can see what you're looking for and reach out directly.
+              - generic [ref=f3e94]:
+                - heading "Enquire directly" [level=3] [ref=f3e95]
+                - paragraph [ref=f3e96]: Submit enquiries to artists whose work interests you. Arrange everything directly.
+              - generic [ref=f3e102]:
+                - heading "Sales handled by QR" [level=3] [ref=f3e103]
+                - paragraph [ref=f3e104]: Customers scan a QR card to buy. Revenue share between you and the artist is optional and arranged directly.
+              - generic [ref=f3e110]:
+                - heading "Free, always" [level=3] [ref=f3e111]
+                - paragraph [ref=f3e112]: Browsing and enquiring is free for venues. No platform fee for venues, ever.
+          - generic [ref=f3e119]:
+            - generic [ref=f3e120]:
+              - paragraph [ref=f3e121]: Why it matters
+              - heading "Walls that work for you" [level=2] [ref=f3e122]
+              - paragraph [ref=f3e123]: Bare walls earn nothing today. Real art makes a space feel considered, gives customers something to look at, and quietly improves the experience of being in your venue. Any commercial upside on top is a bonus, not the whole point.
+              - paragraph [ref=f3e124]: Revenue share is optional and agreed directly with the artist when you arrange a placement.
+            - list [ref=f3e125]:
+              - listitem [ref=f3e126]:
+                - generic [ref=f3e127]: "01"
+                - generic [ref=f3e128]:
+                  - heading "Atmosphere" [level=3] [ref=f3e129]
+                  - paragraph [ref=f3e130]: Curated work makes your space feel intentional. Better photos, longer dwell times, customers who come back.
+              - listitem [ref=f3e131]:
+                - generic [ref=f3e132]: "02"
+                - generic [ref=f3e133]:
+                  - heading "Story" [level=3] [ref=f3e134]
+                  - paragraph [ref=f3e135]: Local artists give you something to talk about, a reason for regulars to bring friends and for press to cover you.
+              - listitem [ref=f3e136]:
+                - generic [ref=f3e137]: "03"
+                - generic [ref=f3e138]:
+                  - heading "Optional upside" [level=3] [ref=f3e139]
+                  - paragraph [ref=f3e140]: When a customer scans a QR and buys, you can take an agreed share of the sale. Typical 10%. Off by default, on if you want it.
+          - generic [ref=f3e142]:
+            - heading "Where art goes up" [level=2] [ref=f3e143]
+            - generic [ref=f3e144]:
+              - generic [ref=f3e145]:
+                - img "Independent cafe, Peckham" [ref=f3e147]
+                - paragraph [ref=f3e148]: Independent cafe, Peckham
+              - generic [ref=f3e149]:
+                - img "Wine bar, Bermondsey" [ref=f3e151]
+                - paragraph [ref=f3e152]: Wine bar, Bermondsey
+              - generic [ref=f3e153]:
+                - img "Brunch spot, Hackney" [ref=f3e155]
+                - paragraph [ref=f3e156]: Brunch spot, Hackney
+          - generic [ref=f3e157]:
+            - img "Wine bar with art" [ref=f3e158]
+            - generic [ref=f3e161]:
+              - paragraph [ref=f3e162]: Zero upfront cost
+              - paragraph [ref=f3e163]: Browse, enquire, and arrange, completely free for venues
+          - generic [ref=f3e166]:
+            - heading "Common questions" [level=2] [ref=f3e167]
+            - generic [ref=f3e168]:
+              - generic [ref=f3e169]:
+                - button "Is it really free?" [ref=f3e170] [cursor=pointer]
+                - paragraph [ref=f3e173]: Yes. Browsing portfolios, filtering artists, posting your space, and submitting enquiries are all free. Wallplace doesn't charge venues a platform fee.
+              - generic [ref=f3e174]:
+                - button "Do you handle installation?" [ref=f3e175] [cursor=pointer]
+                - paragraph [ref=f3e178]: Installation is not included as standard, it's an optional paid add-on. Delivery and collection are arranged directly between you and the artist, with our support if needed.
+              - generic [ref=f3e179]:
+                - button "What if I don't like the art?" [ref=f3e180] [cursor=pointer]
+                - paragraph [ref=f3e183]: You choose the work you enquire about. You're never sent artwork you haven't selected. If something isn't working after placement, you speak directly with the artist.
+              - generic [ref=f3e184]:
+                - button "Will it damage my walls?" [ref=f3e185] [cursor=pointer]
+                - paragraph [ref=f3e188]: That's between you and the artist. We recommend discussing hanging methods before agreeing to a placement. Many artists use non-invasive fixings.
+              - generic [ref=f3e189]:
+                - button "What do my staff need to do?" [ref=f3e190] [cursor=pointer]
+                - paragraph [ref=f3e193]: Point to the QR card if a customer asks. The artist provides this. Sales are handled automatically through Wallplace's payment infrastructure.
+              - generic [ref=f3e194]:
+                - button "How does revenue share work?" [ref=f3e195] [cursor=pointer]
+                - paragraph [ref=f3e198]: Revenue share is an optional arrangement between you and the artist. A common split is 10% to the venue on any sale made from your space. You agree this directly when arranging placement.
+              - generic [ref=f3e199]:
+                - button "Is there a contract?" [ref=f3e200] [cursor=pointer]
+                - paragraph [ref=f3e203]: No. Just a simple partnership agreement covering the basics. 30 days' notice to end at any time.
+          - generic [ref=f3e205]:
+            - heading "Discover art for your space. Free." [level=2] [ref=f3e206]
+            - paragraph [ref=f3e207]: Browse portfolios, filter by style, and enquire directly with artists. No curation fee. No contract.
+            - generic [ref=f3e208]:
+              - link "DISCOVER ART" [ref=f3e209] [cursor=pointer]:
+                - /url: /browse
+              - link "REGISTER YOUR VENUE" [ref=f3e210] [cursor=pointer]:
+                - /url: /signup/venue
+    - contentinfo "Site footer" [ref=f3e211]:
+      - generic [ref=f3e212]:
+        - generic [ref=f3e213]:
+          - generic [ref=f3e214]:
+            - link "Wallplace" [ref=f3e215] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f3e216]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f3e217]:
+              - paragraph [ref=f3e218]: Be first to see new works
+              - paragraph [ref=f3e219]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f3e221]:
+                - textbox "your@email.com" [ref=f3e222]
+                - button "Subscribe" [ref=f3e223] [cursor=pointer]
+            - link "Instagram" [ref=f3e224] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f3e229]:
+            - heading "For Artists" [level=4] [ref=f3e230]
+            - list [ref=f3e231]:
+              - listitem [ref=f3e232]:
+                - link "Apply to Join" [ref=f3e233] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f3e234]:
+                - link "Pricing" [ref=f3e235] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f3e236]:
+                - link "Browse Venues" [ref=f3e237] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f3e238]:
+                - link "FAQs" [ref=f3e239] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f3e240]:
+            - heading "For Venues" [level=4] [ref=f3e241]
+            - list [ref=f3e242]:
+              - listitem [ref=f3e243]:
+                - link "Discover Art" [ref=f3e244] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f3e245]:
+                - link "Register Your Venue" [ref=f3e246] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f3e247]:
+                - link "Wallplace Curated" [ref=f3e248] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f3e249]:
+                - link "How It Works" [ref=f3e250] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f3e251]:
+                - link "FAQs" [ref=f3e252] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f3e253]:
+            - heading "Company" [level=4] [ref=f3e254]
+            - list [ref=f3e255]:
+              - listitem [ref=f3e256]:
+                - link "About" [ref=f3e257] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f3e258]:
+                - link "Blog" [ref=f3e259] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f3e260]:
+                - link "How It Works" [ref=f3e261] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f3e262]:
+                - link "Sustainability" [ref=f3e263] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f3e264]:
+                - link "Partner with us" [ref=f3e265] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f3e266]:
+                - link "Contact" [ref=f3e267] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f3e268]:
+                - link "Complaints" [ref=f3e269] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f3e270]:
+                - link "Terms" [ref=f3e271] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f3e272]:
+                - link "Artist Agreement" [ref=f3e273] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f3e274]:
+                - link "Venue Agreement" [ref=f3e275] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f3e276]:
+                - link "Privacy" [ref=f3e277] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f3e278]:
+                - link "Cookies" [ref=f3e279] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f3e280]:
+                - link "Returns & Refunds" [ref=f3e281] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f3e282]:
+                - link "IP Policy" [ref=f3e283] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f3e285]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f3e286] [cursor=pointer]: Feedback
+  - generic [ref=f3e291]:
+    - paragraph [ref=f3e292]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f3e293] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f3e294]:
+      - button "Decline" [ref=f3e295] [cursor=pointer]
+      - button "Accept" [ref=f3e296] [cursor=pointer]
+  - alert [ref=f3e297]

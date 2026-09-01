@@ -1,0 +1,85 @@
+- generic [active] [ref=f51e1]:
+  - generic [ref=f51e2]:
+    - link "Skip to content" [ref=f51e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f51e4]:
+      - generic [ref=f51e6]:
+        - link "Wallplace" [ref=f51e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f51e8]:
+          - link "Marketplace" [ref=f51e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f51e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f51e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f51e13] [cursor=pointer]
+        - generic [ref=f51e16]:
+          - link "Saved" [ref=f51e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f51e21] [cursor=pointer]
+          - button "Notifications" [ref=f51e26] [cursor=pointer]
+          - generic [ref=f51e30]:
+            - link "Venue Portal" [ref=f51e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f51e32] [cursor=pointer]
+          - button "Logout" [ref=f51e35] [cursor=pointer]
+    - main [ref=f51e36]:
+      - generic [ref=f51e37]:
+        - complementary [ref=f51e38]:
+          - navigation [ref=f51e39]:
+            - paragraph [ref=f51e41]: Venue Portal
+            - generic [ref=f51e42]:
+              - list [ref=f51e43]:
+                - listitem [ref=f51e44]:
+                  - link "Dashboard" [ref=f51e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f51e46]:
+                  - link "Venue Profile" [ref=f51e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f51e48]:
+                  - link "Messages" [ref=f51e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f51e50]:
+                  - link "Placements" [ref=f51e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f51e52]:
+                  - link "My Offers" [ref=f51e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f51e54]:
+                  - link "My Walls" [ref=f51e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f51e56]:
+                  - link "Saved" [ref=f51e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f51e58]:
+                  - link "QR Labels" [ref=f51e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f51e60]:
+                  - link "Analytics" [ref=f51e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f51e62]:
+                  - link "My Orders" [ref=f51e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f51e65]:
+                - listitem [ref=f51e66]:
+                  - link "Settings" [ref=f51e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f51e68]:
+                  - button "Logout" [ref=f51e69] [cursor=pointer]
+        - generic [ref=f51e71]:
+          - generic [ref=f51e72]:
+            - heading "Messages" [level=1] [ref=f51e73]
+            - paragraph [ref=f51e74]: Conversations with artists
+          - paragraph [ref=f51e75]: Loading messages...
+    - button "Feedback and feature requests" [ref=f51e76] [cursor=pointer]: Feedback
+  - generic [ref=f51e82]:
+    - paragraph [ref=f51e83]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f51e84] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f51e85]:
+      - button "Decline" [ref=f51e86] [cursor=pointer]
+      - button "Accept" [ref=f51e87] [cursor=pointer]
+  - alert [ref=f51e88]

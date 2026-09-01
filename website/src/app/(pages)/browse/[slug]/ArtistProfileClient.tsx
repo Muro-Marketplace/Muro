@@ -18,6 +18,9 @@ import { getProfileTheme, themeCssVars, canCustomiseTheme, DEFAULT_PROFILE_THEME
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
 import { ENQUIRY_TYPES } from "@/lib/enquiry-types";
+import { filterWorksByTheme, largestPricedTier } from "./portfolio-filters";
+import { physicalSizeLabel } from "@/lib/physical-size";
+import { frameUpliftFor } from "@/app/(pages)/browse/[slug]/[workSlug]/frame-uplift";
 
 interface ArtistProfileClientProps {
   artistName: string;
@@ -66,7 +69,11 @@ export default function ArtistProfileClient({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedSizeIdx, setSelectedSizeIdx] = useState(0);
-  const [selectedFrameIdx, setSelectedFrameIdx] = useState(0);
+  // Rows B L690, B L721. This defaulted to 0, the artist's FIRST paid frame,
+  // so the lightbox offered no way to buy a piece unframed and preselected a
+  // charge. The artwork page for the same work defaults to "No frame" and
+  // offers it as an option. -1 is that option, the same sentinel it uses.
+  const [selectedFrameIdx, setSelectedFrameIdx] = useState(-1);
   const [showEnquiry, setShowEnquiry] = useState(false);
   const [selectedForPlacement, setSelectedForPlacement] = useState<Set<number>>(new Set());
   // Bulk-action sheet — drives Make Offer modal off the floating bar.
@@ -92,13 +99,12 @@ export default function ArtistProfileClient({
   // never ran) but crashed the page the moment the first tick was
   // ticked, surfacing as the "We couldn't load this artist's profile"
   // error boundary.
-  const filteredWorks =
-    activeTheme === "All"
-      ? works
-      : works.filter((w) => {
-          const haystack = `${w.title} ${w.medium}`.toLowerCase();
-          return haystack.includes(activeTheme.toLowerCase());
-        });
+  // B6: the theme picker used to ask whether `title + medium` contained
+  // the theme string, so a work's own theme tags were never consulted.
+  // filterWorksByTheme matches tags where a work carries them and keeps
+  // the substring behaviour (widened to the description) only for
+  // untagged works. See portfolio-filters.ts.
+  const filteredWorks = filterWorksByTheme(works, activeTheme);
 
   // Selected works as resolved ArtistWork records, in array order. Used
   // by the bulk Buy Now / Make Offer flows so we don't recompute the
@@ -123,11 +129,13 @@ export default function ArtistProfileClient({
     if (selectedWorks.length === 0) return;
     let okCount = 0;
     for (const w of selectedWorks) {
-      const tiers = w.pricing || [];
-      if (tiers.length === 0) continue;
-      // Default to the largest tier — venues buying multi typically
-      // want the headline size; they can edit qty/size in the cart.
-      const tier = tiers[tiers.length - 1];
+      // B7: this used to take tiers[tiers.length - 1] and call it the
+      // largest tier. Pricing arrays keep the artist's entry order and
+      // are never sorted, so the last row is just the last one typed,
+      // while bulkAskingPrice above takes the max. Same rule for both
+      // now, so the offer hint and the cart line agree.
+      const tier = largestPricedTier(w.pricing);
+      if (!tier) continue;
       const result = addItem({
         type: "work",
         workId: w.id,
@@ -312,6 +320,19 @@ export default function ArtistProfileClient({
   // Sync URL with lightbox state so each artwork gets a shareable link
   useEffect(() => {
     if (navigatingAway.current) return;
+    // B L730. "Message the artist" on an artwork page sends the visitor here
+    // as /browse/<slug>?enquiry=1&work=<id>. The work param opens the lightbox,
+    // which is intended, since the enquiry scopes itself to the open work. This
+    // effect then rewrote the URL to the artwork permalink and dropped the
+    // query string with it, so roughly 1.7 seconds after the modal appeared the
+    // address bar was back on the artwork page. Reloading or sharing that link
+    // reopened the artwork rather than the enquiry, and watching the address
+    // bar rather than the page made the whole control look inert.
+    //
+    // While the enquiry is open, the URL the visitor arrived on is the one that
+    // matters. closeEnquiry strips ?enquiry=1 when they dismiss it, which lets
+    // this effect claim the URL again with the lightbox in the foreground.
+    if (showEnquiry) return;
     if (lightboxIndex !== null && filteredWorks[lightboxIndex]) {
       const workSlug = slugify(filteredWorks[lightboxIndex].title);
       window.history.pushState(null, "", `/browse/${artistSlug}/${workSlug}`);
@@ -322,7 +343,7 @@ export default function ArtistProfileClient({
         window.history.pushState(null, "", `/browse/${artistSlug}`);
       }
     }
-  }, [lightboxIndex, filteredWorks, artistSlug]);
+  }, [lightboxIndex, filteredWorks, artistSlug, showEnquiry]);
 
   // Handle browser back button closing the lightbox
   useEffect(() => {
@@ -444,6 +465,26 @@ export default function ArtistProfileClient({
               the *order* in the rendered grid matches the works
               array. Same pattern the marketplace gallery uses. */}
           {(() => {
+            // B6: a theme that selects nothing used to render a blank
+            // space with no explanation and no way out except finding
+            // the picker again and choosing All. Say what happened and
+            // give the visitor the button.
+            if (filteredWorks.length === 0) {
+              return (
+                <div className="py-16 text-center">
+                  <p className="text-sm text-muted mb-3">
+                    No works under this theme.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTheme("All")}
+                    className="text-sm text-accent hover:text-accent-hover transition-colors cursor-pointer"
+                  >
+                    Show the whole portfolio
+                  </button>
+                </div>
+              );
+            }
             const cols: typeof filteredWorks[] = Array.from(
               { length: colCount },
               () => [],
@@ -575,7 +616,7 @@ export default function ArtistProfileClient({
                                     quantity: 1,
                                     quantityAvailable: typeof work.quantityAvailable === "number" ? work.quantityAvailable : null,
                                     shippingPrice: typeof work.shippingPrice === "number" ? work.shippingPrice : undefined,
-                                    dimensions: sp.label || work.dimensions,
+                                    dimensions: sp.label || physicalSizeLabel(work.dimensions, ""),
                                     framed: false,
                                   });
                                   router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
@@ -942,11 +983,24 @@ export default function ArtistProfileClient({
                     onChange={(e) => setSelectedFrameIdx(Number(e.target.value))}
                     className="w-full px-3 py-2.5 bg-surface border border-border rounded-sm text-sm text-foreground focus:outline-none focus:border-accent/50 cursor-pointer"
                   >
-                    {currentWork.frameOptions.map((f, i) => (
-                      <option key={f.label} value={i}>
-                        {f.label}{f.priceUplift > 0 ? `, +\u00a3${f.priceUplift}` : ""}
-                      </option>
-                    ))}
+                    <option value={-1}>No frame</option>
+                    {currentWork.frameOptions.map((f, i) => {
+                      // B10 / row B L721: the lightbox quoted the artist's
+                      // small-size BASELINE uplift while the artwork page
+                      // quoted the per-size figure, so the same frame on the
+                      // same work was priced differently on two screens. Same
+                      // function as the artwork page and as the charge.
+                      const scaled = frameUpliftFor(
+                        f,
+                        currentWork.pricing[selectedSizeIdx]?.label,
+                        currentWork.pricing,
+                      );
+                      return (
+                        <option key={f.label} value={i}>
+                          {f.label}{scaled > 0 ? `, +\u00a3${scaled}` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                   {currentWork.frameOptions[selectedFrameIdx]?.imageUrl && (
                     <div className="mt-2 relative aspect-video rounded-sm overflow-hidden border border-border/60 bg-surface select-none" onContextMenu={(e) => e.preventDefault()}>
@@ -980,8 +1034,10 @@ export default function ArtistProfileClient({
                 {currentWork.available && currentWork.pricing.length > 0 && (() => {
                   const selected = currentWork.pricing[selectedSizeIdx] || currentWork.pricing[0];
                   const frameOpts = currentWork.frameOptions || [];
-                  const currentFrame = frameOpts[selectedFrameIdx];
-                  const frameUplift = currentFrame?.priceUplift || 0;
+                  const currentFrame = selectedFrameIdx >= 0 ? frameOpts[selectedFrameIdx] : undefined;
+                  const frameUplift = currentFrame
+                    ? frameUpliftFor(currentFrame, selected?.label, currentWork.pricing)
+                    : 0;
                   const sizeLabel = currentFrame ? `${selected.label} + ${currentFrame.label}` : selected.label;
                   const totalPrice = Math.round((selected.price + frameUplift) * 100) / 100;
                   // Per-size stock cap with fallback to work-level

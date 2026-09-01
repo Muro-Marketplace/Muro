@@ -1,0 +1,499 @@
+- generic [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - link "Skip to content" [ref=f4e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f4e4]:
+      - generic [ref=f4e6]:
+        - link "Wallplace" [ref=f4e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f4e8]:
+          - link "Marketplace" [ref=f4e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f4e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f4e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f4e13] [cursor=pointer]
+        - generic [ref=f4e16]:
+          - link "Saved" [ref=f4e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f4e21] [cursor=pointer]
+          - button "Notifications" [ref=f4e26] [cursor=pointer]:
+            - generic [ref=f4e223]: 9+
+          - generic [ref=f4e30]:
+            - link "Venue Portal" [ref=f4e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f4e32] [cursor=pointer]
+          - button "Logout" [ref=f4e35] [cursor=pointer]
+    - main [ref=f4e36]:
+      - generic [ref=f4e37]:
+        - complementary [ref=f4e38]:
+          - navigation [ref=f4e39]:
+            - paragraph [ref=f4e41]: Venue Portal
+            - generic [ref=f4e42]:
+              - list [ref=f4e43]:
+                - listitem [ref=f4e44]:
+                  - link "Dashboard" [ref=f4e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f4e46]:
+                  - link "Venue Profile" [ref=f4e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f4e48]:
+                  - link "Messages" [ref=f4e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f4e50]:
+                  - link "Placements" [ref=f4e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f4e52]:
+                  - link "My Offers" [ref=f4e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f4e54]:
+                  - link "My Walls" [ref=f4e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f4e56]:
+                  - link "Saved" [ref=f4e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f4e58]:
+                  - link "QR Labels" [ref=f4e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f4e60]:
+                  - link "Analytics" [ref=f4e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f4e62]:
+                  - link "My Orders" [ref=f4e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f4e65]:
+                - listitem [ref=f4e66]:
+                  - link "Settings" [ref=f4e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f4e68]:
+                  - button "Logout" [ref=f4e69] [cursor=pointer]
+        - generic [ref=f4e71]:
+          - generic [ref=f4e72]:
+            - heading "Placements" [level=1] [ref=f4e73]
+            - generic [ref=f4e74]: …
+          - generic [ref=f4e76]:
+            - generic [ref=f4e77]:
+              - heading "Request Placement" [level=2] [ref=f4e78]
+              - button "Cancel" [ref=f4e79] [cursor=pointer]
+            - generic [ref=f4e80]:
+              - generic [ref=f4e81]:
+                - paragraph [ref=f4e82]: "Artist: Fin Coles"
+                - button "Change" [ref=f4e83] [cursor=pointer]
+              - generic [ref=f4e84]:
+                - generic [ref=f4e85]: Arrangement
+                - generic [ref=f4e86]:
+                  - generic [ref=f4e87] [cursor=pointer]:
+                    - checkbox "QR-enabled display Display the work with a QR code linking to the artist’s shop. You split QR sales via the share below." [checked] [ref=f4e88]
+                    - generic [ref=f4e89]:
+                      - paragraph [ref=f4e90]: QR-enabled display
+                      - paragraph [ref=f4e91]: Display the work with a QR code linking to the artist’s shop. You split QR sales via the share below.
+                  - generic [ref=f4e92] [cursor=pointer]:
+                    - checkbox "Paid loan (monthly fee) You pay the artist a monthly fee to display the work. Combine with QR above if you want both." [ref=f4e93]
+                    - generic [ref=f4e94]:
+                      - paragraph [ref=f4e95]: Paid loan (monthly fee)
+                      - paragraph [ref=f4e96]: You pay the artist a monthly fee to display the work. Combine with QR above if you want both.
+              - generic [ref=f4e97]:
+                - generic [ref=f4e98]: Revenue share on QR sales (optional)
+                - paragraph [ref=f4e99]: Propose a revenue share percentage on QR-linked sales. Leave at 0 for a free display arrangement.
+                - generic [ref=f4e100]:
+                  - spinbutton [ref=f4e101]: "0"
+                  - generic [ref=f4e102]: "% to the venue on sales"
+              - generic [ref=f4e103]:
+                - generic [ref=f4e104]:
+                  - text: Select Works *
+                  - generic [ref=f4e224]: 1 selected
+                - paragraph [ref=f4e105]: Click a work to pick the size you’d like. The artist will confirm what’s available.
+                - generic [ref=f4e132]:
+                  - button [ref=f4e134] [cursor=pointer]:
+                    - img "Vietnamese Village" [ref=f4e135]
+                    - paragraph [ref=f4e137]: Vietnamese Village
+                  - button [ref=f4e139] [cursor=pointer]:
+                    - img "Mt. Fitz Roy" [ref=f4e140]
+                    - paragraph [ref=f4e142]: Mt. Fitz Roy
+                  - button [ref=f4e144] [cursor=pointer]:
+                    - img "Guanaco in Patagonia" [ref=f4e145]
+                    - paragraph [ref=f4e147]: Guanaco in Patagonia
+                  - button [ref=f4e149] [cursor=pointer]:
+                    - img "Giraffe at Sunset" [ref=f4e150]
+                    - paragraph [ref=f4e152]: Giraffe at Sunset
+                  - button [ref=f4e154] [cursor=pointer]:
+                    - img "Streets of St. Tropez" [ref=f4e155]
+                    - paragraph [ref=f4e157]: Streets of St. Tropez
+                  - generic [ref=f4e158]:
+                    - button "Gyeongbokgung Palace Gyeongbokgung Palace Any size" [active] [ref=f4e225] [cursor=pointer]:
+                      - img "Gyeongbokgung Palace" [ref=f4e160]
+                      - paragraph [ref=f4e162]: Gyeongbokgung Palace
+                      - generic [ref=f4e226]: Any size
+                    - button "Pick size" [ref=f4e228] [cursor=pointer]
+                  - button [ref=f4e164] [cursor=pointer]:
+                    - img "Cornish Countryside" [ref=f4e165]
+                    - paragraph [ref=f4e167]: Cornish Countryside
+                  - button [ref=f4e169] [cursor=pointer]:
+                    - img "Amazon Rainforest From The Air" [ref=f4e170]
+                    - paragraph [ref=f4e172]: Amazon Rainforest From The Air
+                  - button [ref=f4e174] [cursor=pointer]:
+                    - img "Sand Dunes" [ref=f4e175]
+                    - paragraph [ref=f4e177]: Sand Dunes
+                  - button [ref=f4e179] [cursor=pointer]:
+                    - img "Himalayas" [ref=f4e180]
+                    - paragraph [ref=f4e182]: Himalayas
+                  - button [ref=f4e184] [cursor=pointer]:
+                    - img "Huaraz, Peru" [ref=f4e185]
+                    - paragraph [ref=f4e187]: Huaraz, Peru
+                  - button [ref=f4e189] [cursor=pointer]:
+                    - img "Trees at Sunrise" [ref=f4e190]
+                    - paragraph [ref=f4e192]: Trees at Sunrise
+                  - button [ref=f4e194] [cursor=pointer]:
+                    - img "Sand Dunes at Dusk" [ref=f4e195]
+                    - paragraph [ref=f4e197]: Sand Dunes at Dusk
+                  - button [ref=f4e199] [cursor=pointer]:
+                    - img "Christ the Redeemer" [ref=f4e200]
+                    - paragraph [ref=f4e202]: Christ the Redeemer
+                  - button [ref=f4e204] [cursor=pointer]:
+                    - img "Norwegian House" [ref=f4e205]
+                    - paragraph [ref=f4e207]: Norwegian House
+                  - button [ref=f4e209] [cursor=pointer]:
+                    - img "Test Artwork One" [ref=f4e210]
+                    - paragraph [ref=f4e212]: Test Artwork One
+                  - button [ref=f4e214] [cursor=pointer]:
+                    - img "Test Artwork Two" [ref=f4e215]
+                    - paragraph [ref=f4e217]: Test Artwork Two
+                  - button [ref=f4e219] [cursor=pointer]:
+                    - img "Test Artwork Three" [ref=f4e220]
+                    - paragraph [ref=f4e222]: Test Artwork Three
+              - generic [ref=f4e107]:
+                - generic [ref=f4e108]: Message to artist (optional)
+                - textbox "Tell the artist about your space, why their work would suit it..." [ref=f4e109]
+              - generic [ref=f4e111]:
+                - button "Request 1 Placement" [ref=f4e229] [cursor=pointer]
+                - button "Cancel" [ref=f4e113] [cursor=pointer]
+          - generic [ref=f4e230]:
+            - heading "Needs your attention 3" [level=2] [ref=f4e232]:
+              - text: Needs your attention
+              - generic [ref=f4e233]: "3"
+            - list [ref=f4e234]:
+              - listitem [ref=f4e235]:
+                - link "Schedule install of Vietnamese Village with Fin Coles Schedule →" [ref=f4e236] [cursor=pointer]:
+                  - /url: /placements/p-1779058819433-6zux
+                  - paragraph [ref=f4e239]: Schedule install of Vietnamese Village with Fin Coles
+                  - generic [ref=f4e240]: Schedule →
+              - listitem [ref=f4e241]:
+                - link "Schedule install of Guanaco in Patagonia with Fin Coles Schedule →" [ref=f4e242] [cursor=pointer]:
+                  - /url: /placements/p-1777249710876-2
+                  - paragraph [ref=f4e245]: Schedule install of Guanaco in Patagonia with Fin Coles
+                  - generic [ref=f4e246]: Schedule →
+              - listitem [ref=f4e247]:
+                - link "Schedule install of Vietnamese Village with Fin Coles Schedule →" [ref=f4e248] [cursor=pointer]:
+                  - /url: /placements/p-1777214585131-wgh9
+                  - paragraph [ref=f4e251]: Schedule install of Vietnamese Village with Fin Coles
+                  - generic [ref=f4e252]: Schedule →
+          - generic [ref=f4e114]:
+            - button "Current11" [ref=f4e253] [cursor=pointer]
+            - button "Pending1" [ref=f4e254] [cursor=pointer]
+            - button "Active7" [ref=f4e255] [cursor=pointer]
+            - button "Completed0" [ref=f4e118] [cursor=pointer]
+            - button "Archived35" [ref=f4e256] [cursor=pointer]
+          - generic [ref=f4e120]:
+            - searchbox "Search by artist, work or type…" [ref=f4e125]
+            - combobox [ref=f4e126] [cursor=pointer]:
+              - option "All time" [selected]
+              - option "Last 7 days"
+              - option "Last 30 days"
+              - option "Last 90 days"
+              - option "This year"
+          - table [ref=f4e259]:
+            - rowgroup [ref=f4e260]:
+              - row [ref=f4e261]:
+                - columnheader [ref=f4e262]:
+                  - checkbox "Select all placements" [ref=f4e263] [cursor=pointer]
+                - columnheader "Piece" [ref=f4e264]
+                - columnheader "Artist" [ref=f4e265]
+                - columnheader "Type" [ref=f4e266]
+                - columnheader "Status" [ref=f4e267]
+                - columnheader "Date" [ref=f4e268]
+                - columnheader "Earned" [ref=f4e269]
+                - columnheader "Request" [ref=f4e270]
+                - columnheader [ref=f4e271]
+            - rowgroup [ref=f4e272]:
+              - row [ref=f4e273] [cursor=pointer]:
+                - cell [ref=f4e274]:
+                  - checkbox "Select Amazon Rainforest From The Air" [ref=f4e275]
+                - cell "Amazon Rainforest From The Air Amazon Rainforest From The Air" [ref=f4e276]:
+                  - generic [ref=f4e277]:
+                    - img "Amazon Rainforest From The Air" [ref=f4e279]
+                    - generic [ref=f4e280]: Amazon Rainforest From The Air
+                - cell "Fin Coles" [ref=f4e282]
+                - cell "Paid loan + QR (24%)" [ref=f4e283]
+                - cell [ref=f4e285]:
+                  - generic [ref=f4e286]:
+                    - combobox [ref=f4e288]:
+                      - option "Active" [selected]
+                      - option "Completed"
+                      - option "Sold"
+                    - generic "Placement progress" [ref=f4e289]:
+                      - generic "Accepted" [ref=f4e290]
+                      - generic "Scheduled" [ref=f4e291]
+                      - generic "Installed" [ref=f4e292]
+                      - generic "Live" [ref=f4e293]
+                      - generic "Collected" [ref=f4e294]
+                - cell "28 Aug 2026" [ref=f4e295]
+                - cell "£0.00" [ref=f4e296]
+                - cell [ref=f4e297]:
+                  - generic "You received this request" [ref=f4e299]: Received
+                - cell [ref=f4e303]:
+                  - generic [ref=f4e304]:
+                    - button "Cancel" [ref=f4e305]
+                    - button "Archive placement" [ref=f4e306]
+              - row [ref=f4e309] [cursor=pointer]:
+                - cell [ref=f4e310]:
+                  - checkbox "Select Guanaco in Patagonia" [ref=f4e311]
+                - cell "Guanaco in Patagonia Guanaco in Patagonia" [ref=f4e312]:
+                  - generic [ref=f4e313]:
+                    - img "Guanaco in Patagonia" [ref=f4e315]
+                    - generic [ref=f4e316]: Guanaco in Patagonia
+                - cell "Fin Coles" [ref=f4e318]
+                - cell "Revenue share (3%)" [ref=f4e319]
+                - cell [ref=f4e321]:
+                  - generic [ref=f4e322]:
+                    - combobox [ref=f4e324]:
+                      - option "Active" [selected]
+                      - option "Completed"
+                      - option "Sold"
+                    - generic "Placement progress" [ref=f4e325]:
+                      - generic "Accepted" [ref=f4e326]
+                      - generic "Scheduled" [ref=f4e327]
+                      - generic "Installed" [ref=f4e328]
+                      - generic "Live" [ref=f4e329]
+                      - generic "Collected" [ref=f4e330]
+                - cell "17 May 2026" [ref=f4e331]
+                - cell "£0.00" [ref=f4e332]
+                - cell [ref=f4e333]:
+                  - generic "You sent this request" [ref=f4e335]: Sent
+                - cell [ref=f4e339]:
+                  - generic [ref=f4e340]:
+                    - button "Cancel" [ref=f4e341]
+                    - button "Archive placement" [ref=f4e342]
+              - row [ref=f4e345] [cursor=pointer]:
+                - cell [ref=f4e346]:
+                  - checkbox "Select Mt. Fitz Roy" [ref=f4e347]
+                - cell "Mt. Fitz Roy Mt. Fitz Roy" [ref=f4e348]:
+                  - generic [ref=f4e349]:
+                    - img "Mt. Fitz Roy" [ref=f4e351]
+                    - generic [ref=f4e352]: Mt. Fitz Roy
+                - cell "Fin Coles" [ref=f4e354]
+                - cell "Paid loan" [ref=f4e355]
+                - cell [ref=f4e356]:
+                  - generic [ref=f4e357]:
+                    - combobox [ref=f4e359]:
+                      - option "Active" [selected]
+                      - option "Completed"
+                      - option "Sold"
+                    - generic "Placement progress" [ref=f4e360]:
+                      - generic "Accepted" [ref=f4e361]
+                      - generic "Scheduled" [ref=f4e362]
+                      - generic "Installed" [ref=f4e363]
+                      - generic "Live" [ref=f4e364]
+                      - generic "Collected" [ref=f4e365]
+                - cell "15 Jun 2026" [ref=f4e366]
+                - cell "-" [ref=f4e367]
+                - cell [ref=f4e368]:
+                  - generic "You sent this request" [ref=f4e370]: Sent
+                - cell [ref=f4e374]:
+                  - generic [ref=f4e375]:
+                    - button "Cancel" [ref=f4e376]
+                    - button "Archive placement" [ref=f4e377]
+              - row [ref=f4e380] [cursor=pointer]:
+                - cell [ref=f4e381]:
+                  - checkbox "Select Vietnamese Village" [ref=f4e382]
+                - cell "Vietnamese Village Vietnamese Village" [ref=f4e383]:
+                  - generic [ref=f4e384]:
+                    - img "Vietnamese Village" [ref=f4e386]
+                    - generic [ref=f4e387]: Vietnamese Village
+                - cell "Fin Coles" [ref=f4e389]
+                - cell "Revenue share" [ref=f4e390]
+                - cell "Cancelled" [ref=f4e391]
+                - cell "26 May 2026" [ref=f4e395]
+                - cell "-" [ref=f4e396]
+                - cell [ref=f4e397]:
+                  - generic "You sent this request" [ref=f4e399]: Sent
+                - cell [ref=f4e403]:
+                  - button "Archive placement" [ref=f4e405]
+              - row [ref=f4e408] [cursor=pointer]:
+                - cell [ref=f4e409]:
+                  - checkbox "Select Vietnamese Village" [ref=f4e410]
+                - cell "Vietnamese Village Vietnamese Village" [ref=f4e411]:
+                  - generic [ref=f4e412]:
+                    - img "Vietnamese Village" [ref=f4e414]
+                    - generic [ref=f4e415]: Vietnamese Village
+                - cell "Fin Coles" [ref=f4e417]
+                - cell "Revenue share" [ref=f4e418]
+                - cell [ref=f4e419]:
+                  - generic [ref=f4e420]:
+                    - combobox [ref=f4e422]:
+                      - option "Active" [selected]
+                      - option "Completed"
+                      - option "Sold"
+                    - generic "Placement progress" [ref=f4e423]:
+                      - generic "Accepted" [ref=f4e424]
+                      - generic "Scheduled" [ref=f4e425]
+                      - generic "Installed" [ref=f4e426]
+                      - generic "Live" [ref=f4e427]
+                      - generic "Collected" [ref=f4e428]
+                - cell "18 May 2026" [ref=f4e429]
+                - cell "-" [ref=f4e430]
+                - cell [ref=f4e431]:
+                  - generic "You sent this request" [ref=f4e433]: Sent
+                - cell [ref=f4e437]:
+                  - generic [ref=f4e438]:
+                    - button "Cancel" [ref=f4e439]
+                    - button "Archive placement" [ref=f4e440]
+              - row [ref=f4e443] [cursor=pointer]:
+                - cell [ref=f4e444]:
+                  - checkbox "Select Vietnamese Village" [ref=f4e445]
+                - cell "Vietnamese Village Vietnamese Village +1 more" [ref=f4e446]:
+                  - generic [ref=f4e447]:
+                    - img "Vietnamese Village" [ref=f4e449]
+                    - generic [ref=f4e451]:
+                      - text: Vietnamese Village
+                      - generic [ref=f4e452]: +1 more
+                - cell "Fin Coles" [ref=f4e453]
+                - cell "Revenue share (20%)" [ref=f4e454]
+                - cell "Awaiting their reply" [ref=f4e456]
+                - cell "18 May 2026" [ref=f4e460]
+                - cell "£0.00" [ref=f4e461]
+                - cell [ref=f4e462]:
+                  - generic "You sent this request" [ref=f4e464]: Sent
+                - cell [ref=f4e468]:
+                  - generic [ref=f4e469]:
+                    - button "Cancel" [ref=f4e470]
+                    - button "Archive placement" [ref=f4e471]
+              - row [ref=f4e474] [cursor=pointer]:
+                - cell [ref=f4e475]:
+                  - checkbox "Select Mt. Fitz Roy" [ref=f4e476]
+                - cell "Mt. Fitz Roy Mt. Fitz Roy" [ref=f4e477]:
+                  - generic [ref=f4e478]:
+                    - img "Mt. Fitz Roy" [ref=f4e480]
+                    - generic [ref=f4e481]: Mt. Fitz Roy
+                - cell "Fin Coles" [ref=f4e483]
+                - cell "Revenue share (15%)" [ref=f4e484]
+                - cell [ref=f4e486]:
+                  - generic [ref=f4e487]:
+                    - combobox [ref=f4e489]:
+                      - option "Active" [selected]
+                      - option "Completed"
+                      - option "Sold"
+                    - generic "Placement progress" [ref=f4e490]:
+                      - generic "Accepted" [ref=f4e491]
+                      - generic "Scheduled" [ref=f4e492]
+                      - generic "Installed" [ref=f4e493]
+                      - generic "Live" [ref=f4e494]
+                      - generic "Collected" [ref=f4e495]
+                - cell "17 May 2026" [ref=f4e496]
+                - cell "£0.00" [ref=f4e497]
+                - cell [ref=f4e498]:
+                  - generic "You sent this request" [ref=f4e500]: Sent
+                - cell [ref=f4e504]:
+                  - generic [ref=f4e505]:
+                    - button "Cancel" [ref=f4e506]
+                    - button "Archive placement" [ref=f4e507]
+              - row [ref=f4e510] [cursor=pointer]:
+                - cell [ref=f4e511]:
+                  - checkbox "Select Vietnamese Village" [ref=f4e512]
+                - cell "Vietnamese Village Vietnamese Village +1 more" [ref=f4e513]:
+                  - generic [ref=f4e514]:
+                    - img "Vietnamese Village" [ref=f4e516]
+                    - generic [ref=f4e518]:
+                      - text: Vietnamese Village
+                      - generic [ref=f4e519]: +1 more
+                - cell "Fin Coles" [ref=f4e520]
+                - cell "Revenue share (17%)" [ref=f4e521]
+                - cell "Cancelled" [ref=f4e523]
+                - cell "27 Apr 2026" [ref=f4e527]
+                - cell "£0.00" [ref=f4e528]
+                - cell [ref=f4e529]:
+                  - generic "You received this request" [ref=f4e531]: Received
+                - cell [ref=f4e535]:
+                  - button "Archive placement" [ref=f4e537]
+              - row [ref=f4e540] [cursor=pointer]:
+                - cell [ref=f4e541]:
+                  - checkbox "Select Vietnamese Village" [ref=f4e542]
+                - cell "Vietnamese Village Vietnamese Village +1 more" [ref=f4e543]:
+                  - generic [ref=f4e544]:
+                    - img "Vietnamese Village" [ref=f4e546]
+                    - generic [ref=f4e548]:
+                      - text: Vietnamese Village
+                      - generic [ref=f4e549]: +1 more
+                - cell "Fin Coles" [ref=f4e550]
+                - cell "Paid loan + QR (15%)" [ref=f4e551]
+                - cell "Cancelled" [ref=f4e553]
+                - cell "27 Apr 2026" [ref=f4e557]
+                - cell "£0.00" [ref=f4e558]
+                - cell [ref=f4e559]:
+                  - generic "You received this request" [ref=f4e561]: Received
+                - cell [ref=f4e565]:
+                  - button "Archive placement" [ref=f4e567]
+              - row [ref=f4e570] [cursor=pointer]:
+                - cell [ref=f4e571]:
+                  - checkbox "Select Guanaco in Patagonia" [ref=f4e572]
+                - cell "Guanaco in Patagonia Guanaco in Patagonia +1 more" [ref=f4e573]:
+                  - generic [ref=f4e574]:
+                    - img "Guanaco in Patagonia" [ref=f4e576]
+                    - generic [ref=f4e578]:
+                      - text: Guanaco in Patagonia
+                      - generic [ref=f4e579]: +1 more
+                - cell "Fin Coles" [ref=f4e580]
+                - cell "Revenue share (10%)" [ref=f4e581]
+                - cell [ref=f4e583]:
+                  - generic [ref=f4e584]:
+                    - combobox [ref=f4e586]:
+                      - option "Active" [selected]
+                      - option "Completed"
+                      - option "Sold"
+                    - generic "Placement progress" [ref=f4e587]:
+                      - generic "Accepted" [ref=f4e588]
+                      - generic "Scheduled" [ref=f4e589]
+                      - generic "Installed" [ref=f4e590]
+                      - generic "Live" [ref=f4e591]
+                      - generic "Collected" [ref=f4e592]
+                - cell "27 Apr 2026" [ref=f4e593]
+                - cell "£0.00" [ref=f4e594]
+                - cell [ref=f4e595]:
+                  - generic "You received this request" [ref=f4e597]: Received
+                - cell [ref=f4e601]:
+                  - generic [ref=f4e602]:
+                    - button "Cancel" [ref=f4e603]
+                    - button "Archive placement" [ref=f4e604]
+              - row [ref=f4e607] [cursor=pointer]:
+                - cell [ref=f4e608]:
+                  - checkbox "Select Vietnamese Village" [ref=f4e609]
+                - cell "Vietnamese Village Vietnamese Village +5 more" [ref=f4e610]:
+                  - generic [ref=f4e611]:
+                    - img "Vietnamese Village" [ref=f4e613]
+                    - generic [ref=f4e615]:
+                      - text: Vietnamese Village
+                      - generic [ref=f4e616]: +5 more
+                - cell "Fin Coles" [ref=f4e617]
+                - cell "Revenue share (20%)" [ref=f4e618]
+                - cell [ref=f4e620]:
+                  - generic [ref=f4e621]:
+                    - combobox [ref=f4e623]:
+                      - option "Active" [selected]
+                      - option "Completed"
+                      - option "Sold"
+                    - generic "Placement progress" [ref=f4e624]:
+                      - generic "Accepted" [ref=f4e625]
+                      - generic "Scheduled" [ref=f4e626]
+                      - generic "Installed" [ref=f4e627]
+                      - generic "Live" [ref=f4e628]
+                      - generic "Collected" [ref=f4e629]
+                - cell "26 Apr 2026" [ref=f4e630]
+                - cell "£0.00" [ref=f4e631]
+                - cell [ref=f4e632]:
+                  - generic "You sent this request" [ref=f4e634]: Sent
+                - cell [ref=f4e638]:
+                  - generic [ref=f4e639]:
+                    - button "Cancel" [ref=f4e640]
+                    - button "Archive placement" [ref=f4e641]
+    - button "Feedback and feature requests" [ref=f4e128] [cursor=pointer]: Feedback
+  - alert [ref=f4e131]

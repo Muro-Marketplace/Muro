@@ -1,4 +1,10 @@
 // Stream: notify (digests). Wed 9am local. Skipped if <3 events.
+//
+// H24: this used to carry an "Artist matches" stat, and the cron passed a
+// literal 0 for it on every single send, because artist-to-venue matching does
+// not exist. A permanent zero in a stat block is not a quiet week, it reads as
+// a product that is not working. The stat is gone until there is a real number
+// behind it; the three that remain are all counted from the database.
 
 import { EmailShell, H1, P, Button, StatBlock, ArtistCard, Divider } from "@/emails/_components";
 import type { Artist } from "@/emails/types/emailTypes";
@@ -11,21 +17,20 @@ export interface VenueWeeklyDigestProps {
   weekStart: string;
   weekEnd: string;
   profileViews: number;
-  artistMatches: number;
   placementRequests: number;
   activePlacements: number;
-  suggestedArtists: Artist[];
+  /** Omitted entirely when there is nothing to suggest; never rendered empty. */
+  suggestedArtists?: Artist[];
   dashboardUrl: string;
 }
 
-export function VenueWeeklyDigest({ firstName, venueName, weekStart, weekEnd, profileViews, artistMatches, placementRequests, activePlacements, suggestedArtists, dashboardUrl }: VenueWeeklyDigestProps) {
+export function VenueWeeklyDigest({ firstName, venueName, weekStart, weekEnd, profileViews, placementRequests, activePlacements, suggestedArtists = [], dashboardUrl }: VenueWeeklyDigestProps) {
   return (
     <EmailShell stream="notify" persona="venue" category="digests" preview={`${venueName}'s week on Wallplace (${weekStart} - ${weekEnd})`}>
       <H1>{venueName}&rsquo;s week</H1>
       <P>Hi {firstName}, from {weekStart} to {weekEnd}.</P>
       <StatBlock stats={[
         { label: "Profile views", value: profileViews },
-        { label: "Artist matches", value: artistMatches },
         { label: "Placement requests", value: placementRequests },
         { label: "Active placements", value: activePlacements },
       ]} />
@@ -49,7 +54,6 @@ export const mock: VenueWeeklyDigestProps = {
   weekStart: "14 Apr",
   weekEnd: "20 Apr",
   profileViews: 218,
-  artistMatches: 6,
   placementRequests: 3,
   activePlacements: 2,
   suggestedArtists: [mockArtist, mockArtistSecondary],
@@ -64,7 +68,7 @@ const entry: TemplateEntry<VenueWeeklyDigestProps> = {
   persona: "venue",
   category: "digests",
   subject: "{{venueName}}'s week on Wallplace",
-  previewText: "Matches, requests, and active placements.",
+  previewText: "Views, requests, and active placements.",
   component: VenueWeeklyDigest,
   mock,
   canUnsubscribe: true,

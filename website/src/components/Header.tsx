@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate } from "@/lib/api-client";
+import { portalNavLinksForRole } from "@/lib/portal-nav";
 
 // When the user is inside the marketplace area (/browse or /spaces)
 // the top-level "Marketplace" link is replaced by these inline tabs.
@@ -45,6 +46,29 @@ const venueMarketplaceTabs = [
 ];
 
 type NavLink = { label: string; href: string; subLinks?: { label: string; href: string; description?: string }[] };
+
+type HeaderNotification = { id: string; type: string; title: string; description: string; time: string; link: string; readAt?: string | null };
+
+// Where a notification row navigates when its own `link` is empty (legacy rows
+// written before we populated it, and platform notifications with no specific
+// destination). Without a fallback, clicking the row only closed the panel.
+// Shared by the desktop dropdown and the mobile list so the two agree (C19).
+function notificationHref(n: Pick<HeaderNotification, "type" | "link">, portalBase: string): string {
+  if (n.link && n.link !== "#") return n.link;
+  switch (n.type) {
+    case "message":
+      return `${portalBase}/messages`;
+    case "sale":
+      return `${portalBase}/orders`;
+    case "placement":
+    case "placement_request":
+    case "placement_accepted":
+    case "placement_declined":
+      return `${portalBase}/placements`;
+    default:
+      return portalBase;
+  }
+}
 
 // Every visitor type gets a home in this top-level nav now: a buyer
 // lands on Marketplace, someone with walls to fill lands on /venues,
@@ -101,10 +125,6 @@ const immersiveRoutes = ["/", "/venues", "/artists", "/about"];
 // renders the shared Header would be forced into dynamic rendering, which
 // breaks the static prerender for pages like /admin/applications.
 
-// Owner experiment (2026-08-28): the marketplace header in the portal's
-// black, site-wide. Flip to false to restore the white marketplace header.
-const DARK_HEADER_TEST = true;
-
 function MarketplaceTabsNav({
   pathname,
   isPortal,
@@ -118,7 +138,7 @@ function MarketplaceTabsNav({
 }) {
   const searchParams = useSearchParams();
   const view = searchParams?.get("view") || "";
-  const onDark = isPortal || DARK_HEADER_TEST || !showSolid;
+  const onDark = isPortal || !showSolid;
   const tabs =
     variant === "venue" ? venueMarketplaceTabs
     : variant === "public" ? publicMarketplaceTabs
@@ -156,7 +176,7 @@ export default function Header() {
   const [msgDropdownOpen, setMsgDropdownOpen] = useState(false);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
   const [conversations, setConversations] = useState<{ conversationId: string; otherPartyDisplayName: string; otherPartyImage: string | null; otherParty: string; latestMessage: string; unreadCount: number; lastActivity: string }[]>([]);
-  const [notifications, setNotifications] = useState<{ id: string; type: string; title: string; description: string; time: string; link: string; readAt?: string | null }[]>([]);
+  const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
   const msgDropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
   const moreDropdownRef = useRef<HTMLDivElement>(null);
@@ -166,6 +186,12 @@ export default function Header() {
   const [portalDropdownOpen, setPortalDropdownOpen] = useState(false);
   const portalDropdownRef = useRef<HTMLDivElement>(null);
   const [otherRoles, setOtherRoles] = useState<string[]>([]);
+  // C19: the mobile menu's notifications entry. Deliberately its own state
+  // rather than reusing notifDropdownOpen: the click-outside handler below
+  // watches the desktop dropdown's ref, and the mobile control sits outside
+  // it, so sharing the flag would make mousedown close it a beat before the
+  // click reopened it and the panel could never be dismissed.
+  const [mobileNotifsOpen, setMobileNotifsOpen] = useState(false);
 
   const isMarketplaceArea = pathname.startsWith("/browse") || pathname === "/spaces";
 
@@ -296,7 +322,7 @@ export default function Header() {
   // proper notification rows; an empty table is a real "no notifications"
   // state.
   useEffect(() => {
-    if (!notifDropdownOpen || !user) return;
+    if ((!notifDropdownOpen && !mobileNotifsOpen) || !user) return;
     async function loadNotifs() {
       try {
         const res = await authFetch("/api/notifications");
@@ -308,7 +334,7 @@ export default function Header() {
       }
     }
     loadNotifs();
-  }, [notifDropdownOpen, user]);
+  }, [notifDropdownOpen, mobileNotifsOpen, user]);
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -333,7 +359,13 @@ export default function Header() {
 
   // Close dropdowns on route change
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); setPortalDropdownOpen(false); }, [pathname]);
+  useEffect(() => { setMsgDropdownOpen(false); setNotifDropdownOpen(false); setMoreDropdownOpen(false); setPortalDropdownOpen(false); setMobileNotifsOpen(false); }, [pathname]);
+
+  // Refresh the badge when the mobile notifications panel closes, mirroring
+  // what the desktop dropdown does.
+  useEffect(() => {
+    if (!mobileNotifsOpen && user) fetchUnreadNotifs();
+  }, [mobileNotifsOpen, user, fetchUnreadNotifs]);
 
   const isPortal = pathname.startsWith("/artist-portal") || pathname.startsWith("/venue-portal") || pathname.startsWith("/customer-portal");
   const isBrowsePage = pathname === "/browse";
@@ -343,7 +375,7 @@ export default function Header() {
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ${
-        isPortal || DARK_HEADER_TEST
+        isPortal
           ? "bg-[#1A1A1A]"
           : showSolid
           ? "bg-white border-b border-border"
@@ -359,7 +391,7 @@ export default function Header() {
           <Link
             href="/"
             className={`font-serif text-2xl lg:text-3xl tracking-tight transition-colors duration-300 -ml-0.5 lg:-ml-1 ${
-              isPortal || DARK_HEADER_TEST || !showSolid ? "text-white" : "text-foreground"
+              isPortal || !showSolid ? "text-white" : "text-foreground"
             }`}
           >
             Wallplace
@@ -383,8 +415,8 @@ export default function Header() {
             (user ? (userType === "venue" ? venueNavLinks : loggedInNavLinks) : publicNavLinks).map((link) => {
               const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href));
               const activeClass = isActive
-                ? (isPortal || DARK_HEADER_TEST || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
-                : (isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white cursor-pointer" : "text-muted hover:text-foreground cursor-pointer");
+                ? (isPortal || !showSolid ? "text-white font-semibold border-b-2 border-white" : "text-foreground font-semibold border-b-2 border-accent")
+                : (isPortal || !showSolid ? "text-white/70 hover:text-white cursor-pointer" : "text-muted hover:text-foreground cursor-pointer");
 
               if (link.subLinks && link.subLinks.length > 0) {
                 const isMarketplace = link.href === "/browse";
@@ -448,7 +480,7 @@ export default function Header() {
                 <button
                   onClick={() => { setMoreDropdownOpen(!moreDropdownOpen); setMsgDropdownOpen(false); setNotifDropdownOpen(false); }}
                   className={`text-sm transition-colors duration-300 flex items-center gap-1 ${
-                    isPortal || DARK_HEADER_TEST || !showSolid
+                    isPortal || !showSolid
                       ? "text-white/80 hover:text-white"
                       : "text-muted hover:text-foreground"
                   }`}
@@ -487,7 +519,7 @@ export default function Header() {
                 <Link
                   href={`${portalBase}/saved`}
                   className={`relative p-2 transition-colors duration-300 ${
-                    isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                    isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                   }`}
                   title="Saved"
                   aria-label="Saved"
@@ -507,7 +539,7 @@ export default function Header() {
                   <button
                     onClick={() => { setMsgDropdownOpen(!msgDropdownOpen); setNotifDropdownOpen(false); }}
                     className={`relative p-2 transition-colors duration-300 ${
-                      isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                      isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                     title="Messages"
                     aria-label="Messages"
@@ -608,7 +640,7 @@ export default function Header() {
                   <button
                     onClick={() => { setNotifDropdownOpen(!notifDropdownOpen); setMsgDropdownOpen(false); }}
                     className={`relative p-2 transition-colors duration-300 ${
-                      isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                      isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                     title="Notifications"
                     aria-label="Notifications"
@@ -659,21 +691,7 @@ export default function Header() {
                         ) : (
                           notifications.map((n) => {
                             const isUnread = !n.readAt;
-                            // Derive a sensible href when the row's own link
-                            // is empty (legacy notifications written before
-                            // we started populating link, or platform
-                            // notifications with no specific destination).
-                            // Without this, clicking the row just closes
-                            // the dropdown without navigating anywhere.
-                            const fallbackHref =
-                              n.type === "message"
-                                ? `${portalBase}/messages`
-                                : n.type === "sale"
-                                  ? `${portalBase}/orders`
-                                  : n.type === "placement" || n.type === "placement_request" || n.type === "placement_accepted" || n.type === "placement_declined"
-                                    ? `${portalBase}/placements`
-                                    : portalBase;
-                            const href = n.link && n.link !== "#" ? n.link : fallbackHref;
+                            const href = notificationHref(n, portalBase);
                             return (
                             <Link
                               key={n.id}
@@ -746,7 +764,7 @@ export default function Header() {
                   <Link
                     href={portalBase}
                     className={`text-sm pl-3 pr-1 py-2 transition-colors duration-300 ${
-                      isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
+                      isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                   >
                     {userType === "venue" ? "Venue Portal" : userType === "customer" ? "My Account" : "Artist Portal"}
@@ -755,7 +773,7 @@ export default function Header() {
                     type="button"
                     onClick={() => setPortalDropdownOpen((v) => !v)}
                     className={`pl-1 pr-3 py-2 transition-colors duration-300 ${
-                      isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
+                      isPortal || !showSolid ? "text-white/70 hover:text-white" : "text-muted hover:text-foreground"
                     }`}
                     aria-label="Portal menu"
                     aria-expanded={portalDropdownOpen}
@@ -765,51 +783,19 @@ export default function Header() {
                     </svg>
                   </button>
                   {portalDropdownOpen && (() => {
-                    // Mirror the actual portal sidebar nav in
-                    // VenuePortalLayout / ArtistPortalLayout /
-                    // CustomerPortalLayout (the user complaint was
-                    // that this dropdown was a curated subset; now
-                    // it's parity). Settings stays at the end so the
-                    // visual order matches the sidebar's secondary
-                    // section.
-                    const links = userType === "venue"
-                      ? [
-                          { label: "Dashboard", href: "/venue-portal" },
-                          { label: "Venue Profile", href: "/venue-portal/profile" },
-                          { label: "Messages", href: "/venue-portal/messages" },
-                          { label: "Placements", href: "/venue-portal/placements" },
-                          { label: "My Walls", href: "/venue-portal/walls" },
-                          { label: "Saved", href: "/venue-portal/saved" },
-                          { label: "QR Labels", href: "/venue-portal/labels" },
-                          { label: "Analytics", href: "/venue-portal/analytics" },
-                          { label: "My Orders", href: "/venue-portal/orders" },
-                          { label: "Settings", href: "/venue-portal/settings" },
-                        ]
-                      : userType === "customer"
-                        ? [
-                            { label: "My Orders", href: "/customer-portal" },
-                            { label: "Saved", href: "/customer-portal/saved" },
-                            { label: "Addresses", href: "/customer-portal/addresses" },
-                            { label: "Messages", href: "/customer-portal/messages" },
-                            { label: "Settings", href: "/customer-portal/settings" },
-                          ]
-                        : [
-                            { label: "Dashboard", href: "/artist-portal" },
-                            { label: "Edit Profile", href: "/artist-portal/profile" },
-                            { label: "My Portfolio", href: "/artist-portal/portfolio" },
-                            { label: "Messages", href: "/artist-portal/messages" },
-                            { label: "Placements", href: "/artist-portal/placements" },
-                            { label: "Collections", href: "/artist-portal/collections" },
-                            { label: "Saved", href: "/artist-portal/saved" },
-                            { label: "Orders", href: "/artist-portal/orders" },
-                            { label: "QR Labels", href: "/artist-portal/labels" },
-                            { label: "Analytics", href: "/artist-portal/analytics" },
-                            { label: "Billing", href: "/artist-portal/billing" },
-                            { label: "Settings", href: "/artist-portal/settings" },
-                          ];
+                    // H6: this used to be three hand-written lists with a
+                    // comment claiming they were at parity with the portal
+                    // sidebars. They were not: the artist list had lost
+                    // Enquiries, My Offers, Social Posts and the flag-gated
+                    // Blogs, and the venue list had lost My Offers. Both
+                    // surfaces now read the same module, so the dropdown is
+                    // the sidebar by construction rather than by upkeep.
+                    // Settings comes last because portalNavLinksForRole
+                    // appends the sidebar's below-the-divider section.
+                    const links = portalNavLinksForRole(userType);
                     return (
                       <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-border rounded-sm shadow-lg overflow-hidden z-[110]">
-                        <ul className="py-1.5">
+                        <ul className="py-1.5" aria-label="Portal navigation">
                           {links.map((l) => (
                             <li key={l.href}>
                               <Link
@@ -853,7 +839,7 @@ export default function Header() {
                 <button
                   onClick={() => signOut()}
                   className={`text-sm transition-colors duration-300 ${
-                    isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
+                    isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
                   }`}
                 >
                   Logout
@@ -864,7 +850,7 @@ export default function Header() {
                 <Link
                   href="/login"
                   className={`text-sm px-4 py-2 transition-colors duration-300 ${
-                    isPortal || DARK_HEADER_TEST || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
+                    isPortal || !showSolid ? "text-white/90 hover:text-white" : "text-muted hover:text-foreground"
                   }`}
                 >
                   Login
@@ -872,14 +858,14 @@ export default function Header() {
                 <Link
                   href="/signup"
                   className={`text-sm px-4 py-2 rounded-sm transition-colors duration-300 ${
-                    isPortal || DARK_HEADER_TEST || !showSolid ? "bg-white/10 text-white hover:bg-white/20" : "bg-accent-text text-white hover:bg-accent-text-hover"
+                    isPortal || !showSolid ? "bg-white/10 text-white hover:bg-white/20" : "bg-accent-text text-white hover:bg-accent-text-hover"
                   }`}
                 >
                   Sign Up
                 </Link>
               </>
             ) : null}
-            <CartIndicator className={isPortal || DARK_HEADER_TEST || !showSolid ? "text-white" : "text-foreground"} />
+            <CartIndicator className={isPortal || !showSolid ? "text-white" : "text-foreground"} />
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -887,7 +873,7 @@ export default function Header() {
             <button
               type="button"
               className={`p-2 -mr-2 transition-colors duration-300 ${
-                isPortal || DARK_HEADER_TEST || !showSolid ? "text-white" : "text-foreground"
+                isPortal || !showSolid ? "text-white" : "text-foreground"
               }`}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
@@ -999,17 +985,96 @@ export default function Header() {
                         </span>
                       )}
                     </Link>
-                    <Link
-                      href={`${portalBase}`}
-                      className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                      </svg>
-                      Notifications
-                    </Link>
+                    {/* C19: this was a plain link to the portal dashboard
+                        wearing a bell icon, so on mobile there was no way to
+                        read a notification at all. It now opens the same list
+                        the desktop dropdown shows, in place. */}
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setMobileNotifsOpen((v) => !v)}
+                        aria-expanded={mobileNotifsOpen}
+                        aria-controls="mobile-notifications"
+                        className="w-full flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                        Notifications
+                        {unreadNotifCount > 0 && (
+                          <span className="min-w-[18px] h-[18px] flex items-center justify-center px-1 text-[10px] font-bold text-white bg-accent rounded-full leading-none">
+                            {unreadNotifCount > 9 ? "9+" : unreadNotifCount}
+                          </span>
+                        )}
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" className={`ml-auto transition-transform duration-200 ${mobileNotifsOpen ? "rotate-180" : ""}`} aria-hidden>
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                      <div id="mobile-notifications" hidden={!mobileNotifsOpen}>
+                        {mobileNotifsOpen && (
+                          <div className="mt-3 border border-border rounded-sm overflow-hidden">
+                            {notifications.length === 0 ? (
+                              <p className="text-xs text-muted text-center py-6">No new notifications</p>
+                            ) : (
+                              <>
+                                <div className="max-h-72 overflow-y-auto">
+                                  {notifications.map((n) => {
+                                    const isUnread = !n.readAt;
+                                    return (
+                                      <Link
+                                        key={n.id}
+                                        href={notificationHref(n, portalBase)}
+                                        onClick={() => {
+                                          setMobileNotifsOpen(false);
+                                          setMobileMenuOpen(false);
+                                          if (isUnread) {
+                                            setNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, readAt: x.readAt || new Date().toISOString() } : x));
+                                            setUnreadNotifCount((c) => Math.max(0, c - 1));
+                                          }
+                                          if (n.id && !n.id.startsWith("msg-")) {
+                                            mutate("/api/notifications", {
+                                              method: "PATCH",
+                                              body: JSON.stringify({ id: n.id }),
+                                            }).catch(() => {});
+                                          }
+                                        }}
+                                        className={`block px-3 py-2.5 border-b border-border last:border-b-0 transition-colors ${
+                                          isUnread ? "bg-accent/5" : "bg-white"
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-1.5">
+                                          <p className={`text-sm truncate ${isUnread ? "font-semibold text-foreground" : "font-normal text-muted"}`}>{n.title}</p>
+                                          {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-label="Unread" />}
+                                        </div>
+                                        <p className={`text-xs truncate ${isUnread ? "text-foreground/70" : "text-muted/70"}`}>{n.description}</p>
+                                        <p className="text-[10px] text-muted mt-0.5">{new Date(n.time).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
+                                      </Link>
+                                    );
+                                  })}
+                                </div>
+                                {unreadNotifCount > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setNotifications((prev) => prev.map((x) => ({ ...x, readAt: x.readAt || new Date().toISOString() })));
+                                      setUnreadNotifCount(0);
+                                      mutate("/api/notifications", {
+                                        method: "PATCH",
+                                        body: JSON.stringify({ all: true }),
+                                      }).catch(() => {});
+                                    }}
+                                    className="w-full px-3 py-2 text-[11px] text-accent hover:text-accent-hover border-t border-border bg-[#FAF8F5] transition-colors"
+                                  >
+                                    Mark all read
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <button
                     onClick={() => { signOut(); setMobileMenuOpen(false); }}

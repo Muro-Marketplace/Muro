@@ -1,0 +1,8 @@
+[     239ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/customer-portal?order=WS-J6CRQS4XTX2DJRO7:0
+[  531298ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[  626519ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/notifications:0
+[ 1798217ms] [ERROR] Failed to load resource: net::ERR_NETWORK_CHANGED @ https://www.wallplace.co.uk/api/notifications:0
+[ 1800277ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[ 2044939ms] [ERROR] Failed to load resource: net::ERR_NETWORK_IO_SUSPENDED @ https://www.wallplace.co.uk/api/notifications:0
+[ 3596472ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0
+[ 4468964ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://www.wallplace.co.uk/api/notifications:0

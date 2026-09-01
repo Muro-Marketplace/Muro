@@ -8,6 +8,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { formatPounds } from "@/lib/format-currency";
+import { VENUE_SHARE_CAPTION, venueShareOnSalesLabel } from "@/lib/revenue-share-labels";
 import { uploadImage } from "@/lib/upload";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import PlacementLoanForm from "./PlacementLoanForm";
@@ -15,9 +17,10 @@ import CounterPlacementDialog from "@/components/CounterPlacementDialog";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
+import InStoreOfferCard from "@/components/InStoreOfferCard";
 import { isLoan, isPurchase } from "@/lib/arrangement-type";
 import { ARRANGEMENT_LABEL, labelForArrangement } from "@/lib/arrangement-labels";
-import { normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
+import { isBillingWindingDown, normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
 interface PlacementRow {
   id: string;
@@ -50,6 +53,8 @@ interface PlacementRow {
   live_from?: string | null;
   subscription_status?: string | null;
   subscription_current_period_end?: string | null;
+  in_store_price?: number | null;
+  in_store_frame_included?: boolean | null;
   collected_at?: string | null;
 }
 
@@ -123,6 +128,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
   const [artist, setArtist] = useState<{ name: string; slug: string; image?: string } | null>(null);
   const [venue, setVenue] = useState<{ name: string; slug: string; image?: string; location?: string; city?: string } | null>(null);
   const [viewerRole, setViewerRole] = useState<"artist" | "venue" | null>(null);
+  const [offerPromptOpen, setOfferPromptOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -294,7 +300,25 @@ export default function PlacementDetailClient({ placementId }: Props) {
       });
       await load({ silent: true });
       setSchedulePickerOpen(false);
-    } catch { /* ignore; next load will reconcile */ }
+      // Owner decision 2026-08-28: the moment the piece is LIVE on the wall
+      // is when the artist knows exactly what hangs there and in what frame,
+      // so that is when we ask whether it can be bought off the wall.
+      if (stage === "live" && viewerRole === "artist" && placement.in_store_price == null) {
+        setOfferPromptOpen(true);
+      }
+    } catch (err) {
+      // F28: this was `catch { /* ignore; next load will reconcile */ }`. Nothing
+      // reconciles a rejected PATCH — a 422 from the state machine (for example
+      // advancing a placement that is not active, or a backdated install date)
+      // left the button looking like it had simply done nothing. The undo path
+      // next door already toasts; the advance path now matches it.
+      showToast(
+        err instanceof ApiError
+          ? err.message || "Could not update the placement stage."
+          : "Network error. Please try again.",
+        { variant: "error" },
+      );
+    }
     finally {
       setAdvanceBusy(null);
     }
@@ -362,6 +386,20 @@ export default function PlacementDetailClient({ placementId }: Props) {
 
   async function handleRespond(accept: boolean) {
     if (!placement) return;
+    // Production pass 2, P4: "Decline has no confirmation step, unlike undo,
+    // which does." Declining ends the negotiation for the other party and
+    // cannot be taken back from this screen; the counter path is how it
+    // reopens. The context panel already prompts; these did not.
+    if (!accept) {
+      const ok = await confirm({
+        title: "Decline this placement request?",
+        body: "The other party will see it as declined. They can come back with new terms.",
+        confirmLabel: "Decline",
+        cancelLabel: "Keep it open",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     setResponding(accept ? "accept" : "decline");
     setRespondError(null);
     try {
@@ -938,7 +976,9 @@ export default function PlacementDetailClient({ placementId }: Props) {
               <p className="text-lg font-medium text-foreground">
                 {placement.revenue_share_percent != null ? `${placement.revenue_share_percent}%` : "Not set"}
               </p>
-              <p className="text-[11px] text-muted mt-1">Artist&rsquo;s share of QR-code sales</p>
+              {/* A4.2: this named the artist as the recipient of the venue's
+                  share. Both sides read this page. */}
+              <p className="text-[11px] text-muted mt-1">{VENUE_SHARE_CAPTION}</p>
             </div>
             <div className="bg-surface border border-border rounded-sm p-4">
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Earned so far</p>
@@ -967,7 +1007,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
                 return (
                   <>
                     <p className="text-lg font-medium text-foreground">
-                      {isPaidLoan ? `\u00a3${stored.toLocaleString()}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
+                      {isPaidLoan ? `${formatPounds(stored)}/month` : labelForArrangement({ arrangementType: "free_loan" as string, monthlyFeeGbp: 0 })}
                     </p>
                     <p className="text-[11px] text-muted mt-1">
                       {isPaidLoan ? "Venue pays artist to display the work" : "No rental fee agreed"}
@@ -981,7 +1021,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
               <p className="text-lg font-medium text-foreground">
                 {placement.qr_enabled ? "Enabled" : "Disabled"}
                 {placement.qr_enabled && placement.revenue_share_percent != null && placement.revenue_share_percent > 0 && (
-                  <>, {placement.revenue_share_percent}% share on QR sales</>
+                  <>, {venueShareOnSalesLabel(placement.revenue_share_percent)}</>
                 )}
               </p>
             </div>
@@ -1015,6 +1055,16 @@ export default function PlacementDetailClient({ placementId }: Props) {
           reachable from the placement itself, not only the venue-portal
           card view. */}
       {viewerRole && (
+        <InStoreOfferCard
+          placement={placement}
+          viewerRole={viewerRole}
+          promptOpen={offerPromptOpen}
+          onOpenPrompt={() => setOfferPromptOpen(true)}
+          onClosePrompt={() => setOfferPromptOpen(false)}
+          onSaved={() => load({ silent: true })}
+        />
+      )}
+      {viewerRole && (
         <PaidLoanPaymentChip
           placementId={placement.id}
           arrangementType={placement.arrangement_type}
@@ -1023,6 +1073,7 @@ export default function PlacementDetailClient({ placementId }: Props) {
           subscriptionStatus={placement.subscription_status}
           role={viewerRole}
           currentPeriodEnd={placement.subscription_current_period_end}
+          cancelAtPeriodEnd={isBillingWindingDown(placement.status)}
         />
       )}
 
@@ -1155,24 +1206,35 @@ export default function PlacementDetailClient({ placementId }: Props) {
         )}
       </div>
 
-      {/* Photos */}
+      {/* Photos. Production pass 2, P4: "photos can be uploaded to a pending
+          placement under the heading 'Photos in venue'". The work is not at the
+          venue until it has been installed, so before then the heading is
+          asserting something untrue and the upload invites a photo of nothing.
+          The panel still renders, so the section is discoverable and any photo
+          already attached is still visible; the control waits. */}
       <div className="mb-10">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-serif text-xl text-foreground">Photos in venue</h2>
-          <label className={`px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
-            {uploading ? "Uploading…" : "+ Upload"}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => handlePhotoUpload(e.target.files)}
-              className="hidden"
-            />
-          </label>
+          <h2 className="font-serif text-xl text-foreground">
+            {placement.installed_at ? "Photos in venue" : "Photos"}
+          </h2>
+          {placement.installed_at && (
+            <label className={`px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors cursor-pointer ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+              {uploading ? "Uploading…" : "+ Upload"}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => handlePhotoUpload(e.target.files)}
+                className="hidden"
+              />
+            </label>
+          )}
         </div>
         {photos.length === 0 ? (
           <div className="bg-surface border border-border rounded-sm p-6 text-center text-sm text-muted">
-            No photos yet.
+            {placement.installed_at
+              ? "No photos yet."
+              : "Photos can be added once the work is installed at the venue."}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">

@@ -1,11 +1,10 @@
 // Vercel Cron, daily 11:00 UTC. Asks each party for a review ~7 days after
 // their placement ended (status=completed, collected_at in a 24h window).
 
-import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email/send";
 import { PlacementReviewRequest } from "@/emails/templates/placements/PlacementReviewRequest";
-import { requireCronAuth, runBatch } from "../_auth";
+import { requireCronAuth, runBatch, finishCronRun } from "../_auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +16,11 @@ export async function GET(request: Request) {
 
   const db = getSupabaseAdmin();
   const nowMs = Date.now();
-  // 7 days ± 12h, same reasoning as the ending-soon job.
-  const lower = new Date(nowMs - 7.5 * 24 * 60 * 60 * 1000).toISOString();
+  // 7 days after collection, with a 3-day catch-up tail (R6.F14): the old
+  // fixed 24h window meant one missed or failed daily run permanently
+  // skipped that day's cohort. The once-ever per-(placement, user) email
+  // keys absorb the overlap, so nobody is asked twice.
+  const lower = new Date(nowMs - 9.5 * 24 * 60 * 60 * 1000).toISOString();
   const upper = new Date(nowMs - 6.5 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: placements } = await db
@@ -72,5 +74,6 @@ export async function GET(request: Request) {
     }
   });
 
-  return NextResponse.json({ ok: true, ...result });
+  // WS6.5: all-failed runs 500 and alert admin; partial failure stays 200.
+  return finishCronRun("placement-review-request", result, { ...result });
 }

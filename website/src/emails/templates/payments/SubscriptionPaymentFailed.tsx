@@ -22,6 +22,10 @@ export function SubscriptionPaymentFailed({ firstName, planName, amountDue, retr
         We&rsquo;ll retry on <strong>{retryDate}</strong>. Update your card before then to avoid losing access.
       </InfoBox>
       <Button href={updatePaymentUrl}>Update payment method</Button>
+      <P>
+        While the payment is outstanding your portfolio is not shown in the public
+        marketplace. Fixing the payment relists your work straight away.
+      </P>
       <SupportBlock supportUrl={supportUrl} />
     </EmailShell>
   );

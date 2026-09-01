@@ -45,10 +45,21 @@ export interface FeedbackModerationPayload {
  */
 export interface MessageModerationPayload {
   type: "message";
-  message_id: string;
+  /**
+   * The delivered message, when there is one. Null for a BLOCKED attempt:
+   * nothing was written to `messages`, which is the point of blocking it.
+   *
+   * Pass 2 item 3.8: a blocked message left no trace anywhere, so a user
+   * repeatedly trying to take deals off-platform was invisible to admins while
+   * the milder FLAGGED case (delivered, and queued since owner decision 11) was
+   * not. The blocked attempt is the more serious signal of the two.
+   */
+  message_id: string | null;
   conversation_id: string;
   sender_slug: string;
   recipient_slug: string;
+  /** True when the message was refused rather than delivered. */
+  blocked?: boolean;
   /** Why the filter flagged it. */
   flag_reason: string;
   /** First ~200 chars, plain text — enough to triage, same budget as blogs. */
@@ -123,15 +134,21 @@ export function parsePayload(
     const recipientSlug = asString(p.recipient_slug);
     const flagReason = asString(p.flag_reason);
     const excerpt = asString(p.excerpt);
-    if (!messageId || !conversationId || !senderSlug || !recipientSlug || !flagReason || !excerpt) {
+    const blocked = p.blocked === true;
+    // 3.8: a BLOCKED attempt has no message row, by design. Everything else is
+    // still required, so a payload missing its sender or its reason is still
+    // rejected rather than queued as an unactionable stub.
+    if (!conversationId || !senderSlug || !recipientSlug || !flagReason || !excerpt) {
       return null;
     }
+    if (!blocked && !messageId) return null;
     return {
       type: "message",
-      message_id: messageId,
+      message_id: blocked ? null : messageId,
       conversation_id: conversationId,
       sender_slug: senderSlug,
       recipient_slug: recipientSlug,
+      ...(blocked ? { blocked: true } : {}),
       flag_reason: flagReason,
       excerpt,
     };

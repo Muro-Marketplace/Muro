@@ -57,6 +57,12 @@ const METHOD_LABEL: Record<string, string> = {
   direct_purchase: ARRANGEMENT_LABEL.purchase,
 };
 
+// R2.10: window inside which a repeat submit for the same contact + venue + tier
+// reuses the existing pending checkout instead of minting a new one. 24 hours
+// matches Stripe's default checkout-session lifetime, beyond which the old
+// session is unpayable anyway.
+const CURATION_DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -94,6 +100,50 @@ export async function POST(request: Request) {
   // below without needing tier.kind narrowed again.
   const isPayFirst = tier.kind === "one_off" && tier.payFirst;
 
+  // R2.10: this route is anonymous and used to mint a fresh row plus checkout
+  // session on every POST, so a double click (or a resubmit after an abandoned
+  // checkout) produced N payable sessions, each individually legitimate to the
+  // webhook, N live charges for one engagement. Soft dedup: a pending_payment
+  // row younger than 24h for the same contact_email + venue_name + tier whose
+  // checkout session is still open gets its EXISTING checkout returned instead
+  // of a new one. Best-effort by design: any failure in the lookup or the
+  // session retrieve falls through to a normal fresh submission.
+  if (isPayFirst) {
+    try {
+      const dedupFloor = new Date(Date.now() - CURATION_DEDUP_WINDOW_MS).toISOString();
+      const { data: existingRow } = await db
+        .from("curation_requests")
+        .select("id, stripe_checkout_session_id")
+        .eq("contact_email", d.contactEmail)
+        .eq("venue_name", d.venueName)
+        .eq("tier", d.tier)
+        .eq("status", "pending_payment")
+        .not("stripe_checkout_session_id", "is", null)
+        .gte("created_at", dedupFloor)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existingRow?.stripe_checkout_session_id) {
+        const existingSession = await stripe.checkout.sessions.retrieve(
+          existingRow.stripe_checkout_session_id,
+        );
+        // Reuse only a session the venue can still pay. "expired" has no url
+        // left, and "complete" (webhook lag on a just-paid session) must not be
+        // re-offered; both fall through to a fresh submission.
+        if (existingSession.status === "open" && existingSession.url) {
+          return NextResponse.json({
+            mode: "checkout",
+            url: existingSession.url,
+            id: existingRow.id,
+            reused: true,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("curation dedup lookup failed, continuing with a fresh submission", err);
+    }
+  }
+
   // Insert a pending row first; the webhook will update it to "paid" /
   // "in_progress" once Stripe confirms.
   const { data: row, error: insertError } = await db
@@ -127,7 +177,12 @@ export async function POST(request: Request) {
       rotation_cadence: d.rotationCadence ?? null,
       sector: d.sector ?? null,
       status: isPayFirst ? "pending_payment" : "awaiting_quote",
-      amount_paid_gbp: isPayFirst ? tier.priceGbp : null,
+      // R5.8: amount_paid_gbp records money RECEIVED, and only the webhook's
+      // paid transition writes it (from the session's settled amount_total).
+      // Prefilling the tier price here made never-paid pending_payment rows
+      // read as £49/£149 received and overstated any revenue sum built on the
+      // column. NULL until Stripe confirms.
+      amount_paid_gbp: null,
     })
     .select("id")
     .single();
@@ -223,6 +278,10 @@ export async function POST(request: Request) {
       },
       success_url: `${siteUrl}/curated/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/curated?cancelled=1`,
+    }, {
+      // R2.10: keyed on the row id, so a transport-level retry cannot mint
+      // a second payable session for the same request.
+      idempotencyKey: `curation_checkout:${row.id}`,
     });
   } catch (err) {
     // D19: no Stripe session exists yet, so nothing can be paid. Removing the

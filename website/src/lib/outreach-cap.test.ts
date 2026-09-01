@@ -1,39 +1,67 @@
-// Tests for the unified artist outreach cap (checkArtistOutreachCap).
+// Tests for the unified artist outreach cap (checkArtistOutreachCap /
+// getArtistOutreachUsage).
 //
 // Covers:
-//  - cross-surface aggregation (1.6 / 1.7): placements + messages aggregate
-//    so artists cannot beat the cap by spreading across surfaces.
+//  - plan limits: Core 3 / Premium 6 / Pro 15 per rolling 7 days.
+//  - the rolling window: units older than 7 days don't count, units inside do.
+//  - the counting column: placements are counted by created_by_user_id
+//    (migration 122), NOT proposed_by_user_id, which counters and stage
+//    advances rewrite underneath the cap.
+//  - cross-surface aggregation (1.6 / 1.7): placements + messages + artwork
+//    request responses aggregate, so artists can't beat the cap by spreading.
 //  - exemptConversationId: reply into an existing thread is free.
-//  - units: multi-work placement request consumes N units.
-//  - base happy path: under-cap returns ok:true.
-//  - unlimited sentinel: plan returning -1 is always allowed.
+//  - units: a multi-row placement request consumes N units.
+//  - nextSlotAt: when the blocked artist gets their next approach back.
+//  - the 429 payload shape every route returns.
 
 import { describe, it, expect } from "vitest";
-import { checkArtistOutreachCap } from "./outreach-cap";
+import {
+  checkArtistOutreachCap,
+  getArtistOutreachUsage,
+  outreachCapPayload,
+  OUTREACH_WINDOW_DAYS,
+} from "./outreach-cap";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** ISO timestamp `days` days in the past. */
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * MS_PER_DAY).toISOString();
+}
 
 // ---------------------------------------------------------------------------
 // Minimal mock builder
 // ---------------------------------------------------------------------------
 
-/**
- * Builds a minimal Supabase client mock that:
- *   - returns `subscription_plan` from artist_profiles
- *   - returns a list of placement rows (for .select("id", { count: "exact" }))
- *   - returns a list of message rows with conversation_id
- *   - returns a list of artwork_request_response rows
- */
+interface MockOpts {
+  plan?: string;
+  /** created_at values of placements the artist CREATED (created_by_user_id). */
+  placementsAt?: string[];
+  /** [conversation_id, created_at] pairs for messages the artist sent. */
+  messagesAt?: Array<[string, string]>;
+  /** created_at values of artwork-request responses. */
+  responsesAt?: string[];
+  /**
+   * Rows that would be returned if the cap filtered on proposed_by_user_id
+   * instead of created_by_user_id. The mock returns these ONLY for that
+   * column, so a regression back to the old column shows up as a test
+   * failure rather than a silent behaviour change.
+   */
+  proposedOnlyAt?: string[];
+}
+
 function makeDb({
   plan = "core",
-  placementCount = 0,
-  messageConversationIds = [] as string[],
-  responseCount = 0,
-}: {
-  plan?: string;
-  placementCount?: number;
-  messageConversationIds?: string[];
-  responseCount?: number;
-}): SupabaseClient {
+  placementsAt = [],
+  messagesAt = [],
+  responsesAt = [],
+  proposedOnlyAt = [],
+}: MockOpts): SupabaseClient {
+  // The helper always filters `.gte("created_at", since)`, so the mock honours
+  // the window itself rather than trusting the caller to pre-filter.
+  const withinWindow = (rows: string[], since: string) => rows.filter((at) => at >= since);
+
   const db = {
     from: (table: string) => {
       if (table === "artist_profiles") {
@@ -48,23 +76,17 @@ function makeDb({
 
       if (table === "placements") {
         return {
-          select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
-            if (opts?.head) {
-              return {
-                eq: () => ({
-                  gte: async () => ({ count: placementCount, data: null, error: null }),
-                }),
-              };
-            }
-            return {
-              eq: () => ({
-                gte: async () => ({
-                  data: Array.from({ length: placementCount }, (_, i) => ({ id: `p-${i}` })),
+          select: () => ({
+            eq: (column: string) => ({
+              gte: async (_col: string, since: string) => {
+                const rows = column === "created_by_user_id" ? placementsAt : proposedOnlyAt;
+                return {
+                  data: withinWindow(rows, since).map((created_at) => ({ created_at })),
                   error: null,
-                }),
-              }),
-            };
-          },
+                };
+              },
+            }),
+          }),
         };
       }
 
@@ -72,11 +94,10 @@ function makeDb({
         return {
           select: () => ({
             eq: () => ({
-              gte: async () => ({
-                data: messageConversationIds.map((cid) => ({
-                  conversation_id: cid,
-                  created_at: new Date().toISOString(),
-                })),
+              gte: async (_col: string, since: string) => ({
+                data: messagesAt
+                  .filter(([, at]) => at >= since)
+                  .map(([conversation_id, created_at]) => ({ conversation_id, created_at })),
                 error: null,
               }),
             }),
@@ -86,23 +107,14 @@ function makeDb({
 
       if (table === "artwork_request_responses") {
         return {
-          select: (_cols: string, opts?: { count?: string; head?: boolean }) => {
-            if (opts?.head) {
-              return {
-                eq: () => ({
-                  gte: async () => ({ count: responseCount, data: null, error: null }),
-                }),
-              };
-            }
-            return {
-              eq: () => ({
-                gte: async () => ({
-                  data: Array.from({ length: responseCount }, (_, i) => ({ id: `r-${i}` })),
-                  error: null,
-                }),
+          select: () => ({
+            eq: () => ({
+              gte: async (_col: string, since: string) => ({
+                data: withinWindow(responsesAt, since).map((created_at) => ({ created_at })),
+                error: null,
               }),
-            };
-          },
+            }),
+          }),
         };
       }
 
@@ -113,47 +125,132 @@ function makeDb({
   return db;
 }
 
+/** n placement units, all spent an hour ago. */
+function recentPlacements(n: number): string[] {
+  return Array.from({ length: n }, () => daysAgo(0.04));
+}
+
 // ---------------------------------------------------------------------------
-// Tests
+// Plan limits
 // ---------------------------------------------------------------------------
 
-describe("checkArtistOutreachCap — base behaviour", () => {
+describe("checkArtistOutreachCap — plan limits", () => {
   it("allows when used < limit", async () => {
-    const db = makeDb({ plan: "core", placementCount: 1, messageConversationIds: [] });
-    const result = await checkArtistOutreachCap(db, "u-1");
-    expect(result.ok).toBe(true);
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(2) });
+    expect((await checkArtistOutreachCap(db, "u-1")).ok).toBe(true);
   });
 
-  it("blocks when used == limit (exactly at cap, one more unit)", async () => {
-    // Core cap = 2, already have 2 placements
-    const db = makeDb({ plan: "core", placementCount: 2 });
+  it("blocks the 4th approach on Core (limit 3)", async () => {
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
     const result = await checkArtistOutreachCap(db, "u-1");
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.result.limit).toBe(2);
-      expect(result.result.used).toBe(2);
+      expect(result.result.limit).toBe(3);
+      expect(result.result.used).toBe(3);
+      expect(result.result.remaining).toBe(0);
     }
   });
 
-  it("uses plan limits correctly: Premium cap = 5", async () => {
-    const db = makeDb({ plan: "premium", placementCount: 4 });
-    const under = await checkArtistOutreachCap(db, "u-1");
-    expect(under.ok).toBe(true);
-
-    const atCap = makeDb({ plan: "premium", placementCount: 5 });
-    const over = await checkArtistOutreachCap(atCap, "u-1");
-    expect(over.ok).toBe(false);
+  it("Premium allows 6 and blocks the 7th", async () => {
+    expect((await checkArtistOutreachCap(makeDb({ plan: "premium", placementsAt: recentPlacements(5) }), "u-1")).ok).toBe(true);
+    expect((await checkArtistOutreachCap(makeDb({ plan: "premium", placementsAt: recentPlacements(6) }), "u-1")).ok).toBe(false);
   });
 
-  it("allows unlimited sentinel plan (returns -1 equivalent through missing key → core, but test unlimited directly)", async () => {
-    // The DAILY_LIMITS map has no 'unlimited' key, so limit falls through to core (2).
-    // Test the actual unlimited sentinel: a plan value that maps to -1 isn't defined yet,
-    // but staff rows can use 'pro' which is 10. This test validates the helper doesn't
-    // crash on an unknown plan key (falls back to core).
-    const db = makeDb({ plan: "enterprise", placementCount: 100 });
+  it("Pro allows 15 and blocks the 16th", async () => {
+    expect((await checkArtistOutreachCap(makeDb({ plan: "pro", placementsAt: recentPlacements(14) }), "u-1")).ok).toBe(true);
+    expect((await checkArtistOutreachCap(makeDb({ plan: "pro", placementsAt: recentPlacements(15) }), "u-1")).ok).toBe(false);
+  });
+
+  it("falls back to Core for an unknown plan key rather than crashing", async () => {
+    const db = makeDb({ plan: "enterprise", placementsAt: recentPlacements(100) });
     const result = await checkArtistOutreachCap(db, "u-1");
-    // Falls back to core (2); 100 > 2+1, so blocked.
     expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.result.limit).toBe(3);
+  });
+
+  it("treats a null subscription_plan as Core", async () => {
+    const db = makeDb({ plan: "", placementsAt: recentPlacements(3) });
+    const result = await checkArtistOutreachCap(db, "u-1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.result.plan).toBe("core");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The rolling window
+// ---------------------------------------------------------------------------
+
+describe("checkArtistOutreachCap — rolling 7-day window", () => {
+  it("ignores units older than the window", async () => {
+    // Three placements, all 8 days old: outside a 7-day window, so the
+    // artist starts the day with a full allowance.
+    const db = makeDb({ plan: "core", placementsAt: [daysAgo(8), daysAgo(9), daysAgo(30)] });
+    const usage = await getArtistOutreachUsage(db, "u-1");
+    expect(usage.used).toBe(0);
+    expect(usage.remaining).toBe(3);
+  });
+
+  it("counts units from six days ago, which a calendar-week reset would have dropped", async () => {
+    const db = makeDb({ plan: "core", placementsAt: [daysAgo(6), daysAgo(5), daysAgo(1)] });
+    const result = await checkArtistOutreachCap(db, "u-1");
+    expect(result.ok).toBe(false);
+  });
+
+  it("counts an artist's whole sitting, which a daily cap would have split", async () => {
+    // Three approaches in one evening. Under the old 2-a-day cap the third
+    // was refused; a weekly allowance is precisely meant to permit this.
+    const db = makeDb({ plan: "core", placementsAt: [daysAgo(0.01), daysAgo(0.02)] });
+    expect((await checkArtistOutreachCap(db, "u-1")).ok).toBe(true);
+  });
+
+  it("reports nextSlotAt as the oldest counted unit plus the window", async () => {
+    const oldest = daysAgo(2);
+    const db = makeDb({ plan: "core", placementsAt: [oldest, daysAgo(1), daysAgo(0.5)] });
+    const result = await checkArtistOutreachCap(db, "u-1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const expected = new Date(new Date(oldest).getTime() + OUTREACH_WINDOW_DAYS * MS_PER_DAY);
+      expect(result.result.nextSlotAt).toBe(expected.toISOString());
+    }
+  });
+
+  it("nextSlotAt for a 2-unit request is when the SECOND-oldest unit expires", async () => {
+    const second = daysAgo(2);
+    const db = makeDb({ plan: "core", placementsAt: [daysAgo(3), second, daysAgo(1)] });
+    // used 3, limit 3, asking for 2 → 2 units must expire → the 2nd oldest.
+    const result = await checkArtistOutreachCap(db, "u-1", 2);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const expected = new Date(new Date(second).getTime() + OUTREACH_WINDOW_DAYS * MS_PER_DAY);
+      expect(result.result.nextSlotAt).toBe(expected.toISOString());
+    }
+  });
+
+  it("leaves nextSlotAt null while the artist still has allowance", async () => {
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(1) });
+    const usage = await getArtistOutreachUsage(db, "u-1");
+    expect(usage.nextSlotAt).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The counting column (migration 122)
+// ---------------------------------------------------------------------------
+
+describe("checkArtistOutreachCap — counts created_by_user_id, not proposed_by_user_id", () => {
+  it("counts placements the artist created", async () => {
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+    expect((await checkArtistOutreachCap(db, "u-art")).ok).toBe(false);
+  });
+
+  it("does not count rows where the artist is only the current proposer", async () => {
+    // A counter-offer flips proposed_by_user_id to the counter sender. Under
+    // the old column that silently spent an outreach unit, contradicting the
+    // rule that counters are free.
+    const db = makeDb({ plan: "core", placementsAt: [], proposedOnlyAt: recentPlacements(5) });
+    const usage = await getArtistOutreachUsage(db, "u-art");
+    expect(usage.used).toBe(0);
+    expect((await checkArtistOutreachCap(db, "u-art")).ok).toBe(true);
   });
 });
 
@@ -162,75 +259,63 @@ describe("checkArtistOutreachCap — base behaviour", () => {
 // ---------------------------------------------------------------------------
 
 describe("checkArtistOutreachCap — cross-surface aggregation (1.6 / 1.7)", () => {
-  it("blocks a first-contact message when artist already has 2 placements today (Core plan)", async () => {
-    // Core cap = 2. Placements = 2, messages = 0. Adding 1 message unit → 3 > 2 → blocked.
+  it("blocks a first-contact message when the week's placements are spent", async () => {
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+    const result = await checkArtistOutreachCap(db, "u-art");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.result.used).toBe(3);
+  });
+
+  it("blocks a placement when the week's messages are spent", async () => {
     const db = makeDb({
       plan: "core",
-      placementCount: 2,
-      messageConversationIds: [],
-      responseCount: 0,
+      messagesAt: [["cid-a", daysAgo(1)], ["cid-b", daysAgo(2)], ["cid-c", daysAgo(3)]],
     });
     const result = await checkArtistOutreachCap(db, "u-art");
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.result.used).toBe(2);
-      expect(result.result.limit).toBe(2);
-    }
+    if (!result.ok) expect(result.result.used).toBe(3);
   });
 
-  it("blocks a placement when artist already has 2 message conversations today (Core plan)", async () => {
-    // Core cap = 2. Messages = 2 distinct conversations, placements = 0.
+  it("adds the three surfaces together", async () => {
     const db = makeDb({
       plan: "core",
-      placementCount: 0,
-      messageConversationIds: ["cid-a", "cid-b"],
-      responseCount: 0,
+      placementsAt: [daysAgo(1)],
+      messagesAt: [["cid-a", daysAgo(2)]],
+      responsesAt: [daysAgo(3)],
     });
-    const result = await checkArtistOutreachCap(db, "u-art");
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.result.used).toBe(2);
-    }
+    const usage = await getArtistOutreachUsage(db, "u-art");
+    expect(usage.used).toBe(3);
+    expect((await checkArtistOutreachCap(db, "u-art")).ok).toBe(false);
   });
 
-  it("allows when cross-surface total is under cap", async () => {
-    // Core cap = 2. 1 placement + 0 messages = 1 used, 1 more allowed.
+  it("de-duplicates messages: many messages in one thread are one unit", async () => {
     const db = makeDb({
       plan: "core",
-      placementCount: 1,
-      messageConversationIds: [],
-      responseCount: 0,
+      messagesAt: [["same", daysAgo(1)], ["same", daysAgo(0.9)], ["same", daysAgo(0.5)]],
     });
-    const result = await checkArtistOutreachCap(db, "u-art");
-    expect(result.ok).toBe(true);
+    const usage = await getArtistOutreachUsage(db, "u-art");
+    expect(usage.used).toBe(1);
   });
 
-  it("de-duplicates messages: multiple rows with same conversation_id count as 1", async () => {
-    // Core cap = 2. Same cid repeated 3 times → still 1 unique conversation.
+  it("ages a thread out from its FIRST message, not its most recent", async () => {
+    // The unit was spent when the thread was opened 8 days ago. Later replies
+    // into it must not keep it pinned inside the window.
     const db = makeDb({
       plan: "core",
-      placementCount: 0,
-      messageConversationIds: ["same-cid", "same-cid", "same-cid"],
-      responseCount: 0,
+      messagesAt: [["old-thread", daysAgo(8)], ["old-thread", daysAgo(1)]],
     });
-    const result = await checkArtistOutreachCap(db, "u-art");
-    // used = 1 (one unique cid), limit = 2, adding 1 more unit → 2 ≤ 2 → allowed
-    expect(result.ok).toBe(true);
+    const usage = await getArtistOutreachUsage(db, "u-art");
+    // The 8-day-old row is outside the window, so only the recent row is read
+    // and the thread's first-seen timestamp inside the window is 1 day ago.
+    expect(usage.used).toBe(1);
+    expect(usage.spentAt).toHaveLength(1);
   });
 
   it("counts artwork_request_responses as outreach units", async () => {
-    // Core cap = 2. 0 placements + 0 messages + 2 responses → at cap.
-    const db = makeDb({
-      plan: "core",
-      placementCount: 0,
-      messageConversationIds: [],
-      responseCount: 2,
-    });
+    const db = makeDb({ plan: "core", responsesAt: [daysAgo(1), daysAgo(2), daysAgo(3)] });
     const result = await checkArtistOutreachCap(db, "u-art");
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.result.used).toBe(2);
-    }
+    if (!result.ok) expect(result.result.used).toBe(3);
   });
 });
 
@@ -239,57 +324,44 @@ describe("checkArtistOutreachCap — cross-surface aggregation (1.6 / 1.7)", () 
 // ---------------------------------------------------------------------------
 
 describe("checkArtistOutreachCap — exemptConversationId", () => {
-  it("allows a reply into a conversation the artist already started today, even at cap", async () => {
-    // Core cap = 2, both slots used by this one conversation appearing twice.
-    // But we're replying into that same cid, so it's exempt.
+  it("allows a reply into a thread already opened this week, even at cap", async () => {
     const db = makeDb({
       plan: "core",
-      placementCount: 0,
-      messageConversationIds: ["cid-existing", "cid-existing"],
-      responseCount: 0,
+      placementsAt: recentPlacements(2),
+      messagesAt: [["cid-existing", daysAgo(3)]],
     });
-    // used = 1 unique cid. Replying into 'cid-existing' → exempt.
     const result = await checkArtistOutreachCap(db, "u-art", 1, {
       exemptConversationId: "cid-existing",
     });
     expect(result.ok).toBe(true);
   });
 
-  it("blocks a message to a NEW conversation even at cap, when exemptConversationId is a different cid", async () => {
-    // Core cap = 2, already at cap via 2 distinct conversations.
+  it("blocks a NEW conversation at cap even when an exempt id is passed", async () => {
     const db = makeDb({
       plan: "core",
-      placementCount: 0,
-      messageConversationIds: ["cid-a", "cid-b"],
-      responseCount: 0,
+      messagesAt: [["cid-a", daysAgo(1)], ["cid-b", daysAgo(2)], ["cid-c", daysAgo(3)]],
     });
-    // Trying to message 'cid-new' — not in today's set → not exempt → blocked.
     const result = await checkArtistOutreachCap(db, "u-art", 1, {
       exemptConversationId: "cid-new",
     });
     expect(result.ok).toBe(false);
   });
 
-  it("exemptConversationId with no opts (default) still enforces the cap", async () => {
-    // Core cap = 2, 2 placements today, no opts → blocked.
-    const db = makeDb({ plan: "core", placementCount: 2 });
-    const result = await checkArtistOutreachCap(db, "u-art");
+  it("does not exempt a thread whose only message has aged out of the window", async () => {
+    const db = makeDb({
+      plan: "core",
+      placementsAt: recentPlacements(3),
+      messagesAt: [["cid-stale", daysAgo(20)]],
+    });
+    const result = await checkArtistOutreachCap(db, "u-art", 1, {
+      exemptConversationId: "cid-stale",
+    });
     expect(result.ok).toBe(false);
   });
 
-  it("allows at cap when the exact cid is in today's conversations", async () => {
-    // Core cap = 2. 1 placement + 1 conversation ('cid-x'). used = 2, at cap.
-    // Replying into 'cid-x' → exempt.
-    const db = makeDb({
-      plan: "core",
-      placementCount: 1,
-      messageConversationIds: ["cid-x"],
-      responseCount: 0,
-    });
-    const result = await checkArtistOutreachCap(db, "u-art", 1, {
-      exemptConversationId: "cid-x",
-    });
-    expect(result.ok).toBe(true);
+  it("enforces the cap when no opts are passed", async () => {
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+    expect((await checkArtistOutreachCap(db, "u-art")).ok).toBe(false);
   });
 });
 
@@ -297,69 +369,54 @@ describe("checkArtistOutreachCap — exemptConversationId", () => {
 // units parameter
 // ---------------------------------------------------------------------------
 
-describe("checkArtistOutreachCap — units (multi-work placement)", () => {
-  it("blocks when used + units > limit (multi-placement request)", async () => {
-    // Core cap = 2. 0 used. Requesting 3 works at once → 0 + 3 > 2 → blocked.
-    const db = makeDb({ plan: "core", placementCount: 0 });
+describe("checkArtistOutreachCap — units (multi-row placement request)", () => {
+  it("blocks when used + units > limit", async () => {
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(1) });
     const result = await checkArtistOutreachCap(db, "u-art", 3);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.result.limit).toBe(2);
-      expect(result.result.used).toBe(0);
+      expect(result.result.limit).toBe(3);
+      expect(result.result.used).toBe(1);
     }
   });
 
   it("allows when used + units == limit exactly", async () => {
-    // Core cap = 2. 0 used. 2 units → 0 + 2 = 2, not > 2 → allowed.
-    const db = makeDb({ plan: "core", placementCount: 0 });
-    const result = await checkArtistOutreachCap(db, "u-art", 2);
-    expect(result.ok).toBe(true);
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(1) });
+    expect((await checkArtistOutreachCap(db, "u-art", 2)).ok).toBe(true);
   });
 
-  it("blocks when used + units > limit with partial existing use", async () => {
-    // Core cap = 2. 1 placement used. 2 more units → 1 + 2 = 3 > 2 → blocked.
-    const db = makeDb({ plan: "core", placementCount: 1 });
-    const result = await checkArtistOutreachCap(db, "u-art", 2);
-    expect(result.ok).toBe(false);
-  });
-
-  it("Premium (cap 5): 3 placements + 2 units is blocked", async () => {
-    const db = makeDb({ plan: "premium", placementCount: 3 });
-    const result = await checkArtistOutreachCap(db, "u-art", 3);
-    expect(result.ok).toBe(false);
+  it("Premium: 4 used + 3 units is blocked", async () => {
+    const db = makeDb({ plan: "premium", placementsAt: recentPlacements(4) });
+    expect((await checkArtistOutreachCap(db, "u-art", 3)).ok).toBe(false);
   });
 });
 
+// ---------------------------------------------------------------------------
+// The 429 payload
+// ---------------------------------------------------------------------------
 
-// N3, filter side. `placements` has no `requester_user_id`; the column is
-// `proposed_by_user_id`. PostgREST rejects the whole query, and a rejected count
-// reads as null, which this code treats as zero. So the placements leg of the
-// anti-spam cap counted nothing: placement requests were FREE. An artist on
-// Core, limited to 2 first contacts a day, could send as many as they liked, and
-// only the messages and artwork-response legs were ever enforced.
-describe("the cap counts placements against a column that exists", () => {
-  it("filters placements on proposed_by_user_id", async () => {
-    const { readFileSync } = await import("node:fs");
-    const path = await import("node:path");
-    const schema = JSON.parse(
-      readFileSync(
-        path.resolve(__dirname, "../../tests/integration/schema-columns.json"),
-        "utf8",
-      ),
-    ) as Record<string, string[]>;
-    const source = readFileSync(path.resolve(__dirname, "outreach-cap.ts"), "utf8");
+describe("outreachCapPayload", () => {
+  it("carries the machine code in `error` and the sentence in `message`", async () => {
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+    const result = await checkArtistOutreachCap(db, "u-art");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
 
-    // Every column this module filters on must be a real one. Stated here as
-    // well as in the repo-wide sweep, because this is the file where getting it
-    // wrong turns an anti-spam control into decoration.
-    for (const m of source.matchAll(/\.eq\(\s*"([a-z_]+)"/g)) {
-      const col = m[1];
-      const inSome = ["placements", "messages", "artwork_request_responses", "artist_profiles"].some(
-        (t) => schema[t]?.includes(col),
-      );
-      expect(inSome, `${col} is not a column on any table this module reads`).toBe(true);
-    }
-    expect(source).toContain("proposed_by_user_id");
-    expect(source).not.toMatch(/\.eq\(\s*"requester_user_id"/);
+    const payload = outreachCapPayload(result.result);
+    expect(payload.error).toBe("outreach_limit_reached");
+    expect(payload.message).toContain("Core");
+    expect(payload.message).toContain("3 new venue approaches a week");
+    expect(payload.limit).toBe(3);
+    expect(payload.used).toBe(3);
+    expect(payload.remaining).toBe(0);
+    expect(payload.nextSlotAt).toBeTruthy();
+  });
+
+  it("keeps the user-facing message free of dashes (public-copy rule)", async () => {
+    const db = makeDb({ plan: "pro", placementsAt: recentPlacements(15) });
+    const result = await checkArtistOutreachCap(db, "u-art");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.result.message).not.toMatch(/[—–]|--/);
   });
 });

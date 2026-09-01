@@ -1,0 +1,9 @@
+[     363ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/placements/p-1788185323045-jmqm:0
+[  265402ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[  265705ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[  335703ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[  335703ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[  375395ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[  375699ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[  376721ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/messages/unread:0
+[  376722ms] [ERROR] Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://www.wallplace.co.uk/api/notifications:0

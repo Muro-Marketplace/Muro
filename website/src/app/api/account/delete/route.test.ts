@@ -18,10 +18,11 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const { mockDeleteUser, fromMock, getAuthMock } = vi.hoisted(() => ({
+const { mockDeleteUser, fromMock, getAuthMock, subsCancelMock } = vi.hoisted(() => ({
   mockDeleteUser: vi.fn(),
   fromMock: vi.fn(),
   getAuthMock: vi.fn(),
+  subsCancelMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
@@ -69,9 +70,35 @@ function installDb() {
       return {
         update: () => reject(`relation "public.${table}" does not exist`),
         delete: () => reject(`relation "public.${table}" does not exist`),
+        select: () => {
+          throw new Error(`relation "public.${table}" does not exist`);
+        },
       };
     }
     return {
+      // WS3.2 reads subscription ids before scrubbing. Same honesty rule as
+      // the writes: an unknown column THROWS (the route ignores select
+      // errors, so a silent error object would let a typo slip through).
+      select: (colsArg: string) => {
+        for (const c of String(colsArg).split(",").map((x) => x.trim())) {
+          if (c && c !== "*" && !known.includes(c)) throw new Error(`column ${table}.${c} does not exist`);
+        }
+        const check = (col: string) => {
+          if (!known.includes(col)) throw new Error(`column ${table}.${col} does not exist`);
+        };
+        return {
+          eq: (col: string) => {
+            check(col);
+            return {
+              maybeSingle: async () => ({ data: null, error: null }),
+              in: async (col2: string) => {
+                check(col2);
+                return { data: [], error: null };
+              },
+            };
+          },
+        };
+      },
       update: (payload: Record<string, unknown>) => {
         const bad = Object.keys(payload).find((k) => !known.includes(k));
         if (bad) return reject(`Could not find the '${bad}' column of '${table}'`);
@@ -381,5 +408,80 @@ describe("POST /api/account/delete demo guard (C15)", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).demo).toBeUndefined();
     expect(mockDeleteUser).toHaveBeenCalledWith("u1");
+  });
+});
+
+// ─── WS3.2 (missing-events gap 2): deletion cancels Stripe subscriptions ───
+// Before this, "account gone, card still charged monthly" was reachable three
+// ways: the SaaS plan, a paid loan the user was paying as venue, and a
+// curation retainer. These pin the cancel calls and the abort-on-failure.
+
+vi.mock("@/lib/stripe", () => ({ stripe: { subscriptions: { cancel: subsCancelMock } } }));
+
+describe("stripe subscriptions are cancelled on deletion (WS3.2)", () => {
+  function installSubs() {
+    installDb();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      const chain = base(table) as Record<string, unknown>;
+      if (table === "artist_profiles") {
+        return {
+          ...chain,
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { stripe_subscription_id: "sub_saas" }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "placement_recurring_billings" || table === "curation_requests") {
+        const id = table === "curation_requests" ? "sub_curation" : "sub_loan";
+        return {
+          ...chain,
+          select: () => ({
+            eq: () => ({ in: async () => ({ data: [{ stripe_subscription_id: id }], error: null }) }),
+          }),
+        };
+      }
+      return chain;
+    });
+  }
+
+  it("cancels the SaaS plan, paid-loan and curation subscriptions, then deletes", async () => {
+    installSubs();
+    subsCancelMock.mockResolvedValue({});
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    const cancelled = subsCancelMock.mock.calls.map((c) => c[0]);
+    expect(cancelled).toEqual(expect.arrayContaining(["sub_saas", "sub_loan", "sub_curation"]));
+    expect(mockDeleteUser).toHaveBeenCalled();
+  });
+
+  it("a cancel failure ABORTS the deletion (no orphaned billing)", async () => {
+    installSubs();
+    subsCancelMock.mockRejectedValue(new Error("stripe down"));
+    const res = await POST(req());
+    expect(res.status).toBe(500);
+    expect(mockDeleteUser).not.toHaveBeenCalled();
+  });
+
+  it("and aborts BEFORE scrubbing, so a Stripe outage loses nothing", async () => {
+    // Aborting after the scrub would leave the worst of both worlds: the
+    // person's data gone, their account still alive, and still undeletable
+    // for as long as Stripe stays unreachable.
+    installSubs();
+    subsCancelMock.mockRejectedValue(new Error("stripe down"));
+    const res = await POST(req());
+    expect(res.status).toBe(500);
+    expect(writes).toHaveLength(0);
+    expect((await res.json()).error).toMatch(/nothing has been removed/i);
+  });
+
+  it("an already-cancelled subscription does not block deletion", async () => {
+    installSubs();
+    subsCancelMock.mockRejectedValue(new Error("No such subscription: sub_saas"));
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    expect(mockDeleteUser).toHaveBeenCalled();
   });
 });

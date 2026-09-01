@@ -21,8 +21,8 @@ interface FinancialsResponse {
     current_period_end: string;
   }>;
   revenue: { thisMonthPence: number; yearAgoPence: number };
-  topVenues: Array<{ userId: string; totalPence: number }>;
-  topArtists: Array<{ userId: string; totalPence: number }>;
+  topVenues: Array<{ userId: string; name: string | null; totalPence: number }>;
+  topArtists: Array<{ userId: string; name: string | null; totalPence: number }>;
 }
 
 function fmt(pence: number): string {
@@ -90,11 +90,20 @@ export default function AdminFinancialsPage() {
               value={fmt(data.programmes.mrrPence)}
               subtitle="monthly equivalent"
             />
+            {/* G22: the API counts profiles sitting in past_due bucketed by
+                updated_at, not payment-failure events. A recovered payment
+                drops out of history and any profile update moves buckets,
+                so the tile is labelled as the state snapshot it is. */}
             <Tile
-              title="Failed payments"
+              title="Past-due subscriptions"
               value={String(data.failedPayments.thisMonth)}
-              subtitle={`last month: ${data.failedPayments.lastMonth}`}
-            />
+              subtitle={`updated last month: ${data.failedPayments.lastMonth}`}
+            >
+              <p className="text-[11px] text-muted leading-snug">
+                Profiles currently past due, bucketed by when they last
+                changed. Not a count of payment-failure events.
+              </p>
+            </Tile>
             <Tile
               title="Revenue this month"
               value={fmt(data.revenue.thisMonthPence)}
@@ -113,7 +122,11 @@ export default function AdminFinancialsPage() {
               <ol className="text-xs text-foreground space-y-0.5 list-decimal pl-4">
                 {data.topVenues.map((v) => (
                   <li key={v.userId} className="flex justify-between gap-3">
-                    <code className="truncate text-[10px] text-muted">{v.userId}</code>
+                    {v.name ? (
+                      <span className="truncate" title={v.userId}>{v.name}</span>
+                    ) : (
+                      <code className="truncate text-[10px] text-muted">{v.userId}</code>
+                    )}
                     <span className="font-medium">{fmt(v.totalPence)}/mo</span>
                   </li>
                 ))}
@@ -124,7 +137,11 @@ export default function AdminFinancialsPage() {
               <ol className="text-xs text-foreground space-y-0.5 list-decimal pl-4">
                 {data.topArtists.map((a) => (
                   <li key={a.userId} className="flex justify-between gap-3">
-                    <code className="truncate text-[10px] text-muted">{a.userId}</code>
+                    {a.name ? (
+                      <span className="truncate" title={a.userId}>{a.name}</span>
+                    ) : (
+                      <code className="truncate text-[10px] text-muted">{a.userId}</code>
+                    )}
                     <span className="font-medium">{fmt(a.totalPence)}</span>
                   </li>
                 ))}

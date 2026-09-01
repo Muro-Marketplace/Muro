@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { signupDestination } from "@/lib/signup-destination";
 import { slugify } from "@/lib/slugify";
 import { safeRedirect } from "@/lib/safe-redirect";
 import TermsCheckbox from "@/components/TermsCheckbox";
@@ -170,7 +171,7 @@ export default function RegisterVenuePage() {
       }
 
       // Create auth account
-      const { error: authError } = await supabase.auth.signUp({
+      const { data: signUpData, error: authError } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
         options: {
@@ -206,7 +207,10 @@ export default function RegisterVenuePage() {
         body: JSON.stringify({ ...termsPayload, termsType: "venue_agreement" }),
       }).catch(() => {});
 
-      router.push("/check-your-inbox");
+      // A L447/A L458: was unconditional. Supabase returns a session only
+      // when email confirmation is off, in which case the account is already
+      // signed in and the inbox page is untrue. See lib/signup-destination.ts.
+      router.push(signupDestination(signUpData, postSignupNext));
     } catch {
       setError("Network error. Please try again.");
       setSubmitting(false);
@@ -259,8 +263,8 @@ export default function RegisterVenuePage() {
               Want us to do the curation for you?{" "}
               <Link href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
                 Wallplace Curated
-              </Link>{" "}
-             , paid shortlists from £49.
+              </Link>
+              , paid shortlists from £49.
             </p>
           </div>
         </div>

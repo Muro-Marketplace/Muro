@@ -1,0 +1,124 @@
+- generic [active] [ref=f89e1]:
+  - generic [ref=f89e2]:
+    - link "Skip to content" [ref=f89e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f89e4]:
+      - generic [ref=f89e6]:
+        - link "Wallplace" [ref=f89e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f89e8]:
+          - link "Marketplace" [ref=f89e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f89e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f89e12] [cursor=pointer]
+        - generic [ref=f89e15]:
+          - link "Saved" [ref=f89e16] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f89e20] [cursor=pointer]
+          - generic [ref=f89e24]:
+            - link "My Account" [ref=f89e25] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f89e26] [cursor=pointer]
+          - button "Logout" [ref=f89e29] [cursor=pointer]
+    - main [ref=f89e30]:
+      - generic [ref=f89e33]:
+        - heading "Email preferences" [level=1] [ref=f89e34]
+        - paragraph [ref=f89e35]: Pick what you want to hear about. Order receipts, password resets, and legal notices always send, you can’t turn those off.
+        - paragraph [ref=f89e36]: Loading your preferences…
+    - contentinfo "Site footer" [ref=f89e37]:
+      - generic [ref=f89e38]:
+        - generic [ref=f89e39]:
+          - generic [ref=f89e40]:
+            - link "Wallplace" [ref=f89e41] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f89e42]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f89e43]:
+              - paragraph [ref=f89e44]: Be first to see new works
+              - paragraph [ref=f89e45]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f89e47]:
+                - textbox "your@email.com" [ref=f89e48]
+                - button "Subscribe" [ref=f89e49] [cursor=pointer]
+            - link "Instagram" [ref=f89e50] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f89e55]:
+            - heading "For Artists" [level=4] [ref=f89e56]
+            - list [ref=f89e57]:
+              - listitem [ref=f89e58]:
+                - link "Apply to Join" [ref=f89e59] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f89e60]:
+                - link "Pricing" [ref=f89e61] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f89e62]:
+                - link "Browse Venues" [ref=f89e63] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f89e64]:
+                - link "FAQs" [ref=f89e65] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f89e66]:
+            - heading "For Venues" [level=4] [ref=f89e67]
+            - list [ref=f89e68]:
+              - listitem [ref=f89e69]:
+                - link "Discover Art" [ref=f89e70] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f89e71]:
+                - link "Register Your Venue" [ref=f89e72] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f89e73]:
+                - link "Wallplace Curated" [ref=f89e74] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f89e75]:
+                - link "How It Works" [ref=f89e76] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f89e77]:
+                - link "FAQs" [ref=f89e78] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f89e79]:
+            - heading "Company" [level=4] [ref=f89e80]
+            - list [ref=f89e81]:
+              - listitem [ref=f89e82]:
+                - link "About" [ref=f89e83] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f89e84]:
+                - link "Blog" [ref=f89e85] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f89e86]:
+                - link "How It Works" [ref=f89e87] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f89e88]:
+                - link "Sustainability" [ref=f89e89] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f89e90]:
+                - link "Partner with us" [ref=f89e91] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f89e92]:
+                - link "Contact" [ref=f89e93] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f89e94]:
+                - link "Complaints" [ref=f89e95] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f89e96]:
+                - link "Terms" [ref=f89e97] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f89e98]:
+                - link "Artist Agreement" [ref=f89e99] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f89e100]:
+                - link "Venue Agreement" [ref=f89e101] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f89e102]:
+                - link "Privacy" [ref=f89e103] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f89e104]:
+                - link "Cookies" [ref=f89e105] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f89e106]:
+                - link "Returns & Refunds" [ref=f89e107] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f89e108]:
+                - link "IP Policy" [ref=f89e109] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f89e111]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f89e112] [cursor=pointer]: Feedback
+  - alert [ref=f89e115]

@@ -11,7 +11,8 @@ import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
-import { normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
+import { artistKeepsLabel, venueShareLabel } from "@/lib/revenue-share-labels";
+import { isBillingWindingDown, normaliseStatus as sharedNormaliseStatus, statusBadgeClass, type DisplayStatus } from "@/lib/placements/status";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { updatePlacementStatus } from "@/lib/placements/status-update";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
@@ -331,7 +332,12 @@ export default function PlacementsPage() {
       .then((data) => {
         if (data.placements && data.placements.length > 0) {
           const mapped: Placement[] = data.placements.map((p: Record<string, unknown>) => {
-            const requesterId = (p.requester_user_id as string) || null;
+            // F24/F51: GET /api/placements emits the resolved requester as
+            // proposed_by_user_id; requester_user_id is a phantom the rows
+            // never carry. Read both so respond buttons and direction tags
+            // resolve.
+            const requesterId =
+              ((p.requester_user_id ?? p.proposed_by_user_id) as string | null) || null;
             // Strict: only the recipient of a request can respond. Requests
             // the viewer sent themselves show a "Sent" tag and no
             // Accept/Counter/Decline buttons.
@@ -436,6 +442,20 @@ export default function PlacementsPage() {
   }, [artist, loadPlacements, loadArchivedCount, loadNonArchivedCounts]);
 
   async function respond(id: string, accept: boolean) {
+    // Production pass 2, P4: "Decline has no confirmation step, unlike undo,
+    // which does." Declining ends the negotiation for the other party and
+    // cannot be taken back from this screen; the counter path is how it
+    // reopens. The context panel already prompts; these did not.
+    if (!accept) {
+      const ok = await confirm({
+        title: "Decline this placement request?",
+        body: "The other party will see it as declined. They can come back with new terms.",
+        confirmLabel: "Decline",
+        cancelLabel: "Keep it open",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     setResponding(id);
     setRespondError(null);
     try {
@@ -939,7 +959,7 @@ export default function PlacementsPage() {
                     />
                     <span className="text-sm text-muted">per month</span>
                   </div>
-                  <p className="text-xs text-muted mt-2">Billing is handled manually for now, use this to record the agreed amount.</p>
+                  <p className="text-xs text-muted mt-2">The venue sets up the monthly payment by card once the placement is agreed, and Wallplace collects it automatically from then on.</p>
                 </div>
               )}
             </div>
@@ -948,7 +968,7 @@ export default function PlacementsPage() {
                 QR-enabled (no QR code = no QR-linked sales to share). */}
             {qrEnabled && (
               <div>
-                <label className="block text-sm font-medium mb-2">Revenue share on QR sales <span className="text-muted font-normal">(optional)</span></label>
+                <label className="block text-sm font-medium mb-2">Revenue share on sales from the wall <span className="text-muted font-normal">(optional)</span></label>
                 <p className="text-xs text-muted mb-3">Offer the venue a percentage of any QR-linked sales. Leave at 0 for a pure display arrangement.</p>
                 <div className="flex items-center gap-2">
                   <input
@@ -1444,7 +1464,11 @@ export default function PlacementsPage() {
                         {typeof p.revenueSharePercent === "number" && p.revenueSharePercent > 0 && (
                           <div>
                             <p className="text-muted mb-0.5">{ARRANGEMENT_LABEL.revenue_share}</p>
-                            <p className="text-foreground font-medium">{p.revenueSharePercent}% to artist</p>
+                            {/* A4.2: this read "N% to artist" on a number that is
+                                the VENUE's cut, so an artist giving away 24% was
+                                shown 24% as their earnings. */}
+                            <p className="text-foreground font-medium">{artistKeepsLabel(p.revenueSharePercent)}</p>
+                            <p className="text-[11px] text-muted">{venueShareLabel(p.revenueSharePercent)}</p>
                           </div>
                         )}
                         {typeof p.monthlyFeeGbp === "number" && p.monthlyFeeGbp > 0 && (
@@ -1802,6 +1826,7 @@ export default function PlacementsPage() {
                   monthlyFeeGbp={p.monthlyFeeGbp}
                   liveFrom={p.liveFrom}
                   subscriptionStatus={p.subscriptionStatus}
+                  cancelAtPeriodEnd={isBillingWindingDown(p.status)}
                   role="artist"
                 />
 
@@ -1937,7 +1962,17 @@ export default function PlacementsPage() {
       <ConfirmDialog
         open={pendingCancelId !== null}
         title="Cancel this placement?"
-        body="The other party will see it as cancelled."
+        // Rows 2179-2187: the prompt never mentioned money on a placement
+        // carrying a live monthly subscription. The artist is the one being
+        // paid, so name what stops.
+        body={(() => {
+          const target = placements.find((p) => p.id === pendingCancelId);
+          const fee = target?.monthlyFeeGbp ?? 0;
+          const base = "The other party will see it as cancelled.";
+          return fee > 0
+            ? `${base} The venue's monthly payment of \u00a3${fee.toFixed(2)} stops with it, after the month they have already paid for.`
+            : base;
+        })()}
         confirmLabel="Cancel placement"
         cancelLabel="Keep it"
         destructive

@@ -14,8 +14,10 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { createNotification } from "@/lib/notifications";
 import { orFilter } from "@/lib/db/safe-filter";
+import { defaultOfferExpiry } from "@/lib/offers/expiry";
 import { sendEmail } from "@/lib/email/send";
 import { OfferReceivedNotification } from "@/emails/templates/messages/OfferReceivedNotification";
+import { physicalSizeLabel } from "@/lib/physical-size";
 
 export const runtime = "nodejs";
 
@@ -365,7 +367,11 @@ export async function POST(request: Request) {
     currency: "GBP",
     message: message || null,
     status: "pending",
-    expires_at: expiresAt || null,
+    // Row 2244. `expires_at` was NULL on every row in production: the column,
+    // the type and F41's enforcement all existed, but nothing ever set a
+    // deadline, so an offer made today stayed bindingly open indefinitely. A
+    // sender-chosen deadline still wins; this is the floor, not an override.
+    expires_at: expiresAt || defaultOfferExpiry(),
     parent_offer_id: parentOfferId || null,
     created_by_user_id: buyerId,
   };
@@ -482,12 +488,18 @@ export async function POST(request: Request) {
               workImages: workDetails.map((w) => w.image).filter((x): x is string => !!x),
               primaryImage: primary?.image || null,
               primaryTitle: collectionTitle || primary?.title || (workIds.length > 1 ? `${workIds.length} works` : "Artwork"),
-              primaryDimensions: primary?.dimensions || null,
+              // Row 727 area: this is the IMAGE's pixel size on most rows, and it is
+              // rendered as the work's size on the offer card in the thread.
+              primaryDimensions: physicalSizeLabel(primary?.dimensions, "") || null,
               primaryMedium: primary?.medium || null,
               sizeLabel: sizeLabel || null,
               collectionId: collectionId || null,
               collectionTitle,
               note: message || null,
+              // F41: carry the deadline onto the thread card so the recipient
+              // can see the clock they are being held to. Previously the column
+              // was stored and shown nowhere at all.
+              expiresAt: expiresAt || null,
             },
           });
         }

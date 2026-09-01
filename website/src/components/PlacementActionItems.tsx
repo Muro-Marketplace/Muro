@@ -13,6 +13,9 @@ interface PlacementRow {
   work_title?: string;
   status?: string;
   requester_user_id?: string | null;
+  /** What GET /api/placements actually emits: the resolved requester.
+      Normalised onto requester_user_id below (F51). */
+  proposed_by_user_id?: string | null;
   artist_user_id?: string | null;
   venue_user_id?: string | null;
   accepted_at?: string | null;
@@ -72,7 +75,13 @@ export default function PlacementActionItems({
     authFetch("/api/placements")
       .then((r) => r.json())
       .then((data) => {
-        const rows: PlacementRow[] = data.placements || [];
+        // F51: the list API emits the resolved requester as
+        // proposed_by_user_id, while canRespond() reads requester_user_id.
+        // Alias it so pending "Respond" items actually surface.
+        const rows: PlacementRow[] = (data.placements || []).map((p: PlacementRow) => ({
+          ...p,
+          requester_user_id: p.requester_user_id ?? p.proposed_by_user_id ?? null,
+        }));
         const out: ActionItem[] = [];
         for (const p of rows) {
           const otherName = role === "venue" ? nameFrom(p.artist_slug) : (p.venue || nameFrom(p.venue_slug));

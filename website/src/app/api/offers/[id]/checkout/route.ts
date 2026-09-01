@@ -4,14 +4,17 @@
 // Stripe Checkout Session at the agreed amount. The webhook flips the
 // offer to 'paid' and threads the resulting order id back.
 
+import type Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { COUNTRIES } from "@/lib/iso-countries";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
 import { canReceivePayout } from "@/lib/payouts/capability";
 import { isWorkSold } from "@/lib/work-stock";
+import { isOfferUnpayableAfterExpiry } from "@/lib/offers/expiry";
 
 export const runtime = "nodejs";
 
@@ -26,6 +29,9 @@ interface OfferRow {
   amount_pence: number;
   currency: string;
   status: string;
+  /** F41: the response window. Read by isOfferUnpayableAfterExpiry below. */
+  expires_at: string | null;
+  accepted_at: string | null;
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -46,6 +52,43 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
   if (offer.status !== "accepted") {
     return NextResponse.json({ error: "Offer is not in an accepted state" }, { status: 409 });
+  }
+
+  // F41. `expires_at` was stored and read by nothing, so an offer whose window
+  // had closed could still be paid for. The deadline governs the window to
+  // RESPOND, not the window to pay, so a deal accepted while the offer was live
+  // stays payable afterwards; what this stops is a row that ran past its
+  // deadline unaccepted, or one accepted after it lapsed (the PATCH had no gate
+  // until now, so those rows exist).
+  if (isOfferUnpayableAfterExpiry(offer)) {
+    await db
+      .from("purchase_offers")
+      .update({ status: "expired", updated_at: new Date().toISOString() })
+      .eq("id", offer.id)
+      .eq("status", "accepted");
+    return NextResponse.json(
+      {
+        error: "This offer passed its deadline before it was accepted, so it has been closed.",
+        code: "offer_expired",
+      },
+      { status: 409 },
+    );
+  }
+
+  // F49, the far end of the same hole. The legacy existing_works fulfil branch
+  // priced an offer as `?? 0`, and this route built the Stripe line straight
+  // from amount_pence with no positive-amount guard. Stripe would very likely
+  // refuse the zero-value session, but the failure would surface as a raw
+  // gateway error rather than something the venue can act on, and the guard has
+  // to exist here regardless because the bad rows predate the fulfil fix.
+  if (!Number.isFinite(offer.amount_pence) || offer.amount_pence <= 0) {
+    return NextResponse.json(
+      {
+        error: "This offer has no amount on it, so there's nothing to pay. Ask the artist to send a priced offer.",
+        code: "offer_not_priced",
+      },
+      { status: 422 },
+    );
   }
 
   // D7: purchase_offers has no link to stock, so an offer accepted on Monday can
@@ -73,6 +116,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
   }
 
+  // Row 2245: kept so the Stripe page can name what the buyer is paying for.
+  // It read "Wallplace offer · off_1788192000823_qyzr33" and "Accepted offer
+  // for 1 work", which identifies the row and not the artwork.
+  let workTitles: string[] = [];
   let soldOrMissing = collectionWithdrawn;
   if (!soldOrMissing && workIds.length > 0) {
     const { data: works } = await db
@@ -85,6 +132,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       available: boolean | null;
       quantity_available: number | null;
     }>;
+    workTitles = found.map((w) => (w.title || "").trim()).filter(Boolean);
     // A work deleted since the offer was accepted counts as gone too, hence the
     // length comparison. work_ids is de-duplicated above so a repeated id cannot
     // fake a shortfall and close a live offer.
@@ -125,9 +173,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // reward to offers is a separate decision from creating the column.
   const { data: artistProfile } = await db
     .from("artist_profiles")
-    .select("slug, subscription_plan, subscription_status")
+    .select("slug, subscription_plan, subscription_status, ships_internationally")
     .eq("user_id", offer.artist_user_id)
-    .maybeSingle<{ slug: string; subscription_plan: string | null; subscription_status: string | null }>();
+    .maybeSingle<{
+      slug: string;
+      subscription_plan: string | null;
+      subscription_status: string | null;
+      ships_internationally: boolean | null;
+    }>();
 
   if (!artistProfile) {
     return NextResponse.json({ error: "Artist profile unavailable" }, { status: 500 });
@@ -199,20 +252,53 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const requestOrigin = request.headers.get("origin");
   const origin = requestOrigin || process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
+  // Rows 933-939, 2245. The buyer's Stripe page said "Wallplace offer ·
+  // off_1788192000823_qyzr33" and "Accepted offer for 1 work": the offer's row
+  // id and a count, telling them nothing about what they were buying. The
+  // titles are already loaded above for the sold-out check.
+  const titleList = workTitles.join(", ");
+  const productName = titleList
+    ? `${titleList} by ${offer.artist_slug ?? "the artist"}`
+    : `Wallplace offer · ${offer.id}`;
   const description = offer.collection_id
     ? `Accepted offer for collection ${offer.collection_id}`
-    : `Accepted offer for ${offer.work_ids.length} work${offer.work_ids.length === 1 ? "" : "s"}`;
+    : titleList
+      ? `Accepted offer for ${titleList}`
+      : `Accepted offer for ${offer.work_ids.length} work${offer.work_ids.length === 1 ? "" : "s"}`;
+
+  // Rows 933-939. The offer flow collected no delivery address anywhere, so the
+  // order it produced carried an empty shipping block and the artist was shown
+  // "SHIP TO: ," above a live "Mark as Shipped" button. Collect it on the
+  // Stripe page the buyer is already standing on rather than rebuilding the
+  // cart path's address form: Stripe's is localised, validated and familiar.
+  //
+  // Destinations follow the ARTIST's own scope, the same fail-closed rule
+  // lib/shipping-scope.ts applies to the cart: an artist who has not opted in
+  // to international shipping can only be sent a UK address, because we cannot
+  // confirm consent to ship anywhere else.
+  const allowedCountries = artistProfile.ships_internationally
+    ? COUNTRIES.map((c) => c.code)
+    : ["GB"];
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: offer.buyer_email || auth.user!.email || undefined,
+    shipping_address_collection: {
+      // COUNTRIES is the project's own ISO-3166 alpha-2 list (lib/iso-countries),
+      // the same one the cart's country picker renders from. Stripe types this
+      // as a closed union of every code it accepts; ours is a subset of it.
+      allowed_countries:
+        allowedCountries as NonNullable<
+          Stripe.Checkout.SessionCreateParams["shipping_address_collection"]
+        >["allowed_countries"],
+    },
     line_items: [
       {
         price_data: {
           currency: offer.currency.toLowerCase(),
           product_data: {
-            name: `Wallplace offer · ${offer.id}`,
+            name: productName,
             description,
           },
           unit_amount: offer.amount_pence,
@@ -249,12 +335,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       // orders.buyer_email is NOT NULL. The webhook used to fall back to
       // offer_buyer_user_id, which put a UUID in an email column.
       offer_buyer_email: offer.buyer_email || auth.user!.email || "",
+      // Row 933-939 / P4. `orders.items` for an offer was
+      // {offer_id, work_ids, collection_id} with no title and no price, so the
+      // artist portal rendered "Artwork × 1, £0.00". The titles are already
+      // resolved above for the sold-out check; carry them so the webhook can
+      // write a line a person can read. Stripe caps a metadata value at 500
+      // characters, hence the trim.
+      offer_work_titles: titleList.slice(0, 480),
       // Flag so the Stripe webhook knows to treat this differently from a
       // standard cart checkout — no shipping line, link back to the offer row.
       checkout_kind: "purchase_offer",
     },
     success_url: `${origin}/checkout/confirmation?session_id={CHECKOUT_SESSION_ID}&offer_id=${encodeURIComponent(offer.id)}`,
-    cancel_url: `${origin}/customer-portal/offers`,
+    // B31/F42: the payer on an offer is a venue and their offers live at
+    // /venue-portal/offers. The old /customer-portal/offers has never
+    // existed, so backing out of Stripe landed mid-payment on a 404.
+    cancel_url: `${origin}/venue-portal/offers`,
   });
 
   return NextResponse.json({ url: session.url });

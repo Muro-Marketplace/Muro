@@ -1,0 +1,136 @@
+- generic [active] [ref=f25e1]:
+  - generic [ref=f25e2]:
+    - link "Skip to content" [ref=f25e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f25e4]:
+      - generic [ref=f25e6]:
+        - link "Wallplace" [ref=f25e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f25e8]:
+          - link "Marketplace" [ref=f25e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f25e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f25e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f25e13] [cursor=pointer]
+        - generic [ref=f25e16]:
+          - link "Saved" [ref=f25e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f25e21] [cursor=pointer]
+          - button "Notifications" [ref=f25e26] [cursor=pointer]
+          - generic [ref=f25e30]:
+            - link "Venue Portal" [ref=f25e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f25e32] [cursor=pointer]
+          - button "Logout" [ref=f25e35] [cursor=pointer]
+    - main [ref=f25e36]:
+      - generic [ref=f25e37]:
+        - complementary [ref=f25e38]:
+          - navigation [ref=f25e39]:
+            - paragraph [ref=f25e41]: Venue Portal
+            - generic [ref=f25e42]:
+              - list [ref=f25e43]:
+                - listitem [ref=f25e44]:
+                  - link "Dashboard" [ref=f25e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f25e46]:
+                  - link "Venue Profile" [ref=f25e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f25e48]:
+                  - link "Messages" [ref=f25e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f25e50]:
+                  - link "Placements" [ref=f25e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f25e52]:
+                  - link "My Offers" [ref=f25e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f25e54]:
+                  - link "My Walls" [ref=f25e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f25e56]:
+                  - link "Saved" [ref=f25e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f25e58]:
+                  - link "QR Labels" [ref=f25e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f25e60]:
+                  - link "Analytics" [ref=f25e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f25e62]:
+                  - link "My Orders" [ref=f25e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f25e65]:
+                - listitem [ref=f25e66]:
+                  - link "Settings" [ref=f25e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f25e68]:
+                  - button "Logout" [ref=f25e69] [cursor=pointer]
+        - generic [ref=f25e71]:
+          - generic [ref=f25e72]:
+            - heading "Placements" [level=1] [ref=f25e73]
+            - generic [ref=f25e74]: …
+          - generic [ref=f25e76]:
+            - generic [ref=f25e77]:
+              - heading "Request Placement" [level=2] [ref=f25e78]
+              - button "Cancel" [ref=f25e79] [cursor=pointer]
+            - generic [ref=f25e80]:
+              - generic [ref=f25e81]:
+                - paragraph [ref=f25e82]: "Artist: Fin Coles"
+                - button "Change" [ref=f25e83] [cursor=pointer]
+              - generic [ref=f25e84]:
+                - generic [ref=f25e85]: Arrangement
+                - generic [ref=f25e86]:
+                  - generic [ref=f25e87] [cursor=pointer]:
+                    - checkbox "QR-enabled display Display the work with a QR code linking to the artist’s shop. You split QR sales via the share below." [checked] [ref=f25e88]
+                    - generic [ref=f25e89]:
+                      - paragraph [ref=f25e90]: QR-enabled display
+                      - paragraph [ref=f25e91]: Display the work with a QR code linking to the artist’s shop. You split QR sales via the share below.
+                  - generic [ref=f25e92] [cursor=pointer]:
+                    - checkbox "Paid loan (monthly fee) You pay the artist a monthly fee to display the work. Combine with QR above if you want both." [ref=f25e93]
+                    - generic [ref=f25e94]:
+                      - paragraph [ref=f25e95]: Paid loan (monthly fee)
+                      - paragraph [ref=f25e96]: You pay the artist a monthly fee to display the work. Combine with QR above if you want both.
+              - generic [ref=f25e97]:
+                - generic [ref=f25e98]: Revenue share on QR sales (optional)
+                - paragraph [ref=f25e99]: Propose a revenue share percentage on QR-linked sales. Leave at 0 for a free display arrangement.
+                - generic [ref=f25e100]:
+                  - spinbutton [ref=f25e101]: "0"
+                  - generic [ref=f25e102]: "% to the venue on sales"
+              - generic [ref=f25e103]:
+                - generic [ref=f25e104]: Select Works *
+                - paragraph [ref=f25e105]: Click a work to pick the size you’d like. The artist will confirm what’s available.
+                - paragraph [ref=f25e106]: Loading portfolio...
+              - generic [ref=f25e107]:
+                - generic [ref=f25e108]: Message to artist (optional)
+                - textbox "Tell the artist about your space, why their work would suit it..." [ref=f25e109]
+              - generic [ref=f25e111]:
+                - button "Request 0 Placements" [disabled] [ref=f25e112] [cursor=pointer]
+                - button "Cancel" [ref=f25e113] [cursor=pointer]
+          - generic [ref=f25e114]:
+            - button "Current0" [ref=f25e115] [cursor=pointer]
+            - button "Pending0" [ref=f25e116] [cursor=pointer]
+            - button "Active0" [ref=f25e117] [cursor=pointer]
+            - button "Completed0" [ref=f25e118] [cursor=pointer]
+            - button "Archived0" [ref=f25e119] [cursor=pointer]
+          - generic [ref=f25e120]:
+            - searchbox "Search by artist, work or type…" [ref=f25e125]
+            - combobox [ref=f25e126] [cursor=pointer]:
+              - option "All time" [selected]
+              - option "Last 7 days"
+              - option "Last 30 days"
+              - option "Last 90 days"
+              - option "This year"
+          - paragraph [ref=f25e127]: Loading placements...
+    - button "Feedback and feature requests" [ref=f25e128] [cursor=pointer]: Feedback
+  - generic [ref=f25e134]:
+    - paragraph [ref=f25e135]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f25e136] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f25e137]:
+      - button "Decline" [ref=f25e138] [cursor=pointer]
+      - button "Accept" [ref=f25e139] [cursor=pointer]
+  - alert [ref=f25e140]

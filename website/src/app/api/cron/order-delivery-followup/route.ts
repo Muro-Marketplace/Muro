@@ -35,7 +35,7 @@
 // the event log is the only source of truth for buyer confirmation.
 
 import { NextResponse } from "next/server";
-import { requireCronAuth, runBatch } from "@/app/api/cron/_auth";
+import { requireCronAuth, runBatch, finishCronRun } from "@/app/api/cron/_auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendTransactional } from "@/lib/email/dispatcher";
 
@@ -45,6 +45,14 @@ export const runtime = "nodejs";
 const PROMPT_AFTER_MS = 48 * 60 * 60 * 1000;
 const AUTO_CONFIRM_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
+// R6.F7: how far back the delivered-events query reaches. Everything the job
+// can act on (48h prompt, 7d auto-confirm) happens well inside 14 days, and
+// the floor is what stops the oldest-first LIMIT 500 from saturating: without
+// it, once lifetime delivered events (including this job's own synthetic
+// prompt rows, which share the event_type) passed 500, new deliveries never
+// entered the batch again while the job kept reporting ok.
+const LOOKBACK_MS = 14 * 24 * 60 * 60 * 1000;
+
 export async function GET(request: Request) {
   const authError = requireCronAuth(request);
   if (authError) return authError;
@@ -52,14 +60,14 @@ export async function GET(request: Request) {
   const db = getSupabaseAdmin();
   const now = Date.now();
 
-  // Pull every order.delivered event that hasn't already received a
-  // 48h prompt or a delivery_confirmed event. The volume is small
-  // enough that a single LIMIT 500 query is fine; we'll batch
-  // pagination in if delivery volume grows.
+  // Pull the actionable window of order.delivered events. LIMIT 500 now
+  // bounds 14 days of deliveries rather than all time; if volume ever
+  // approaches that, batch pagination in.
   const { data: deliveredEvents, error } = await db
     .from("order_events")
     .select("order_id, created_at")
     .eq("event_type", "order.delivered")
+    .gte("created_at", new Date(now - LOOKBACK_MS).toISOString())
     .order("created_at", { ascending: true })
     .limit(500);
 
@@ -69,7 +77,7 @@ export async function GET(request: Request) {
   }
 
   if (!deliveredEvents || deliveredEvents.length === 0) {
-    return NextResponse.json({ status: "ok", prompted: 0, confirmed: 0 });
+    return NextResponse.json({ ok: true, prompted: 0, confirmed: 0 });
   }
 
   const orderIds = Array.from(
@@ -129,22 +137,28 @@ export async function GET(request: Request) {
   }
 
   // Decide which orders need a 48h prompt and which need auto-confirm.
+  // Dedup within the run: an order appears once per delivered-shaped event
+  // (its real delivery plus this job's synthetic prompt row), and pushing it
+  // twice would inflate the counts.
   const toPrompt: Array<{ orderId: string; firstName: string; buyerEmail: string; deliveredAt: string }> = [];
   const toConfirm: Array<{ orderId: string }> = [];
+  const queued = new Set<string>();
 
   for (const ev of deliveredEvents as Array<{ order_id: string; created_at: string }>) {
-    if (alreadyConfirmed.has(ev.order_id)) continue;
+    if (alreadyConfirmed.has(ev.order_id) || queued.has(ev.order_id)) continue;
     const deliveredAtMs = Date.parse(ev.created_at);
     if (!Number.isFinite(deliveredAtMs)) continue;
     const ageMs = now - deliveredAtMs;
 
     if (ageMs >= AUTO_CONFIRM_AFTER_MS) {
+      queued.add(ev.order_id);
       toConfirm.push({ orderId: ev.order_id });
       continue;
     }
     if (ageMs >= PROMPT_AFTER_MS && !alreadyPrompted.has(ev.order_id)) {
       const buyer = buyerById.get(ev.order_id);
       if (!buyer?.buyerEmail) continue;
+      queued.add(ev.order_id);
       toPrompt.push({
         orderId: ev.order_id,
         firstName: buyer.firstName,
@@ -158,8 +172,25 @@ export async function GET(request: Request) {
     }
   }
 
-  // Send prompts and log them.
+  // Claim, then send (WS6.4). The prompt row's unique idempotency_key IS the
+  // per-order claim: insert it first, and only the run that wins the insert
+  // sends the email. A re-run or a concurrent run loses with 23505 and skips,
+  // so double-sending no longer leans on the email pipeline's own dedup
+  // (which it also still has, keyed `{orderId}:48h_prompt`). Losing the
+  // email after a won claim is no regression: sendTransactional soft-fails
+  // rather than throwing, so the old send-then-upsert order never retried a
+  // failed email either.
   const promptResult = await runBatch(toPrompt, async (p) => {
+    const { error: claimError } = await db.from("order_events").insert({
+      order_id: p.orderId,
+      event_type: "order.delivered",
+      metadata: { kind: "48h_prompt" },
+      idempotency_key: `${p.orderId}:48h_prompt`,
+    });
+    if (claimError) {
+      if (claimError.code === "23505") return; // already claimed, nothing to send
+      throw new Error(`48h prompt claim failed for ${p.orderId}: ${claimError.message}`);
+    }
     await sendTransactional({
       to: p.buyerEmail,
       template: "customer_confirm_delivery",
@@ -173,15 +204,6 @@ export async function GET(request: Request) {
         autoConfirmInDays: 5,
       },
     });
-    await db.from("order_events").upsert(
-      {
-        order_id: p.orderId,
-        event_type: "order.delivered",
-        metadata: { kind: "48h_prompt" },
-        idempotency_key: `${p.orderId}:48h_prompt`,
-      },
-      { onConflict: "idempotency_key" },
-    );
   });
 
   // Auto-confirm overdue orders. The event log (order_events) is the
@@ -202,11 +224,19 @@ export async function GET(request: Request) {
     );
   });
 
-  return NextResponse.json({
-    status: "ok",
-    prompted: promptResult.succeeded,
-    promptedFailed: promptResult.failed,
-    confirmed: confirmResult.succeeded,
-    confirmedFailed: confirmResult.failed,
-  });
+  // WS6.5: an all-failed run 500s (and alerts admin) so Vercel's cron monitor
+  // can see it; partial failure stays 200 with the counts below.
+  return finishCronRun(
+    "order-delivery-followup",
+    {
+      succeeded: promptResult.succeeded + confirmResult.succeeded,
+      failed: promptResult.failed + confirmResult.failed,
+    },
+    {
+      prompted: promptResult.succeeded,
+      promptedFailed: promptResult.failed,
+      confirmed: confirmResult.succeeded,
+      confirmedFailed: confirmResult.failed,
+    },
+  );
 }

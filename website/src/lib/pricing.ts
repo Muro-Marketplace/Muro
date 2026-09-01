@@ -55,6 +55,16 @@ export const PAID_LOAN_MIN_GBP = 15;
 // and in copy. Owner decision: the share is not capped; the artist chooses.
 export const VENUE_SHARE_SUGGESTED_PERCENT = 10;
 
+/**
+ * The most of a sale a venue may take, as a percentage.
+ *
+ * Row 2144: the number 50 was written out at four input sites and in the helper
+ * copy beside them, and the clamp that enforced it was silent, so typing 70
+ * became 50 with nothing said. One constant, so the cap, the input's `max` and
+ * the sentence explaining it cannot disagree.
+ */
+export const MAX_VENUE_SHARE_PERCENT = 50;
+
 // Founding cohort: first N approved artists get the long trial and a locked
 // price. The flyer's "First 20 artists: 6 months free" is only true if the
 // is_founding_artist flag is actually managed against this limit.

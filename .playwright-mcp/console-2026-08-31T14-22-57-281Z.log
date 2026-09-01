@@ -1,0 +1,5 @@
+[     301ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/placements/p-1788185323045-jmqm/review:0
+[  617249ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[  617407ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0
+[  700720ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/messages/unread:0
+[  701520ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://www.wallplace.co.uk/api/notifications:0

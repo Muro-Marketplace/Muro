@@ -814,23 +814,35 @@ function BrowsePortfoliosPageInner() {
     );
   }, [updateLocationCoords]);
 
-  const hasActiveFilters =
-    // mode is permanently "local" now (toggle removed); the actual
-    // signal of "user has applied a location filter" is whether
-    // their coords are set.
-    !!userCoords ||
-    filters.themes.length > 0 ||
-    filters.originals ||
-    filters.prints ||
-    filters.framing ||
-    filters.revenueShare ||
-    filters.paidLoan ||
-    filters.freeLoan ||
-    filters.revenueShare ||
-    filters.revenueShareMin > 0 ||
-    filters.outrightPurchase ||
-    filters.venueTypes.length > 0 ||
-    filters.styleMedium !== "";
+  // One list of the sidebar filters the artist grid actually applies, so
+  // the "any filters?" flag, the sidebar badge count and the empty-state
+  // guidance can never disagree with each other.
+  //
+  // B2: `filters.mode` is deliberately absent. It is permanently "local"
+  // (the Local/Global toggle was removed, see DEFAULT_FILTERS), so the
+  // badge's old `filters.mode === "local"` entry was an always-true flag
+  // that added a phantom +1 to every count. The real signal that a
+  // location filter is applied is whether the visitor's coords are set,
+  // which is what the distance filter itself keys on.
+  //
+  // `paidLoan` was missing from the badge array while being a live
+  // sidebar toggle, so ticking it moved the count by zero.
+  const activeFilterFlags: boolean[] = [
+    !!userCoords,
+    ...filters.themes.map(() => true),
+    filters.originals,
+    filters.prints,
+    filters.framing,
+    filters.revenueShare,
+    filters.paidLoan,
+    filters.freeLoan,
+    filters.revenueShareMin > 0,
+    filters.outrightPurchase,
+    ...filters.venueTypes.map(() => true),
+    filters.styleMedium !== "",
+  ];
+  const activeFilterCount = activeFilterFlags.filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
 
   // Get active discipline object. "collections" is a UI-only sentinel that
   // activates the Collections view, so we explicitly treat it as null here.
@@ -838,6 +850,24 @@ function BrowsePortfoliosPageInner() {
     () => (activeDiscipline && activeDiscipline !== "collections" ? getDisciplineById(activeDiscipline) : null),
     [activeDiscipline]
   );
+
+  // B3: "Enter your postcode" is only honest guidance for an empty artist
+  // grid when a missing location is the ONLY thing that could have emptied
+  // it. The old guard was `filters.mode === "local" && !userCoords`, and
+  // mode is permanently "local", so the postcode branch won for every
+  // empty result: a theme filter, a search term or a discipline chip with
+  // no matches all told the visitor to type a postcode. Worse, the
+  // distance filter does not even run without coords, so a missing
+  // postcode can never be the reason on its own once anything else is set.
+  //
+  // activeFilterCount already covers the location filter (it counts
+  // userCoords), so a count of zero means no sidebar filter at all.
+  const emptyForLackOfLocationOnly =
+    activeFilterCount === 0 &&
+    !searchQuery.trim() &&
+    !featuredFilter &&
+    !activeDisciplineObj &&
+    activeSubStyles.size === 0;
 
   // Available sub-styles for the active discipline, narrowed to ones that at
   // least one artist in the current data set actually has. This keeps the pill
@@ -1160,8 +1190,12 @@ function BrowsePortfoliosPageInner() {
     });
   }, [collections, collectionsLocationMode, userCoords, artists, maxDistance, collectionsPriceMin, collectionsPriceMax, collectionsFreeLoan, collectionsRevShare, collectionsPurchase, searchQuery]);
 
+  // Row B L622: this included `collectionsLocationMode === "local"`, which is
+  // the DEFAULT mode, so it was always true and "Clear all" plus the mobile
+  // active-filter badge rendered on a page with no filters applied. A location
+  // filter is only active once there is a location to filter by.
   const hasCollectionsFilters =
-    collectionsLocationMode === "local" ||
+    (collectionsLocationMode === "local" && !!userCoords) ||
     collectionsPriceMin > 0 ||
     collectionsPriceMax < 2000 ||
     collectionsFreeLoan ||
@@ -1180,7 +1214,14 @@ function BrowsePortfoliosPageInner() {
     setGalleryTheme(""); setGalleryMedium(""); setGalleryStyle(""); setGalleryAvailableOnly(false);
     setGalleryPriceMin(0); setGalleryPriceMax(1000); setGalleryOriginals(false); setGalleryPrints(false); setGalleryFraming(false);
     setGalleryFreeLoan(false); setGalleryRevenueShare(false); setGalleryRevenueShareMin(0); setGalleryPurchase(false);
-    setGalleryLocationMode("global");
+    // B4: this used to set galleryLocationMode to "global", which silently
+    // switched the distance filter OFF for the rest of the session. The
+    // distance slider stayed on screen and kept moving, no control anywhere
+    // sets the mode back to "local", and the non-default mode was then
+    // serialised into the URL so a shared link carried the dead filter too.
+    // "local" IS the default (see filterParams DEFAULTS), and the distance
+    // filter already no-ops when the visitor has no coords, so clearing the
+    // filters means leaving the mode alone.
     setGallerySizes(new Set());
   }
 
@@ -1297,7 +1338,7 @@ function BrowsePortfoliosPageInner() {
             </svg>
             <div>
               <p className="text-sm font-medium">Revenue Share</p>
-              <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
+              <p className="text-[10px] text-muted">Free on wall, venue shares in sales from it</p>
             </div>
           </button>
           {filters.revenueShare && (
@@ -1580,22 +1621,8 @@ function BrowsePortfoliosPageInner() {
                     Filters
                   </span>
                   {hasActiveFilters && (
-                    <span className="text-xs text-white bg-accent rounded-full w-5 h-5 flex items-center justify-center">
-                      {
-                        [
-                          filters.mode === "local",
-                          ...filters.themes.map(() => true),
-                          filters.originals,
-                          filters.prints,
-                          filters.framing,
-                          filters.freeLoan,
-                          filters.revenueShare,
-                          filters.revenueShareMin > 0,
-                          filters.outrightPurchase,
-                          ...filters.venueTypes.map(() => true),
-                          !!filters.styleMedium,
-                        ].filter(Boolean).length
-                      }
+                    <span data-testid="artist-filter-count" className="text-xs text-white bg-accent rounded-full w-5 h-5 flex items-center justify-center">
+                      {activeFilterCount}
                     </span>
                   )}
                 </div>
@@ -1778,7 +1805,7 @@ function BrowsePortfoliosPageInner() {
 
                 {filteredArtists.length === 0 ? (
                   <div className="py-20 text-center">
-                    {filters.mode === "local" && !userCoords ? (
+                    {emptyForLackOfLocationOnly ? (
                       <>
                         <p className="text-muted mb-2">Enter your postcode in the filter panel</p>
                         <p className="text-sm text-muted/60">to find artists near you</p>
@@ -1989,7 +2016,7 @@ function BrowsePortfoliosPageInner() {
                         </svg>
                         <div>
                           <p className="text-sm font-medium">Revenue Share</p>
-                          <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
+                          <p className="text-[10px] text-muted">Free on wall, venue shares in sales from it</p>
                         </div>
                       </button>
                       {galleryRevenueShare && (
@@ -2243,7 +2270,7 @@ function BrowsePortfoliosPageInner() {
                           </svg>
                           <div>
                             <p className="text-xs font-medium">Revenue Share</p>
-                            <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
+                            <p className="text-[10px] text-muted">Free on wall, venue shares in sales from it</p>
                           </div>
                         </button>
                         {galleryRevenueShare && (
@@ -2637,7 +2664,7 @@ function BrowsePortfoliosPageInner() {
                   </svg>
                   <div>
                     <p className="text-sm font-medium">Revenue Share</p>
-                    <p className="text-[10px] text-muted">Free on wall, split on QR sales</p>
+                    <p className="text-[10px] text-muted">Free on wall, venue shares in sales from it</p>
                   </div>
                 </button>
                 <button

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { checkoutSchema } from "@/lib/validations";
 import { calculateOrderShipping } from "@/lib/shipping-checkout";
+import { resolveLineShipping } from "@/lib/checkout-shipping-source";
 import { regionForCountry, isSupportedCountry, labelForCountry } from "@/lib/iso-countries";
 import { findUkOnlyArtists } from "@/lib/shipping-scope";
 import { isWorkSold } from "@/lib/work-stock";
@@ -24,7 +25,11 @@ type WorkRow = {
   id: string;
   available: boolean | null;
   quantity_available: number | null;
-  pricing: Array<{ label: string; price: number; inStorePrice?: number | null }> | null;
+  pricing: Array<{ label: string; price: number; inStorePrice?: number | null; shippingPrice?: number | null }> | null;
+  // A1.2. Shipping inputs, resolved server-side instead of trusting the cart.
+  // See lib/checkout-shipping-source.ts for the precedence and the exploit.
+  shipping_price: number | null;
+  dimensions: string | null;
   title: string | null;
   // Migration 118. Work-level in-store price, the number a collect-from-venue
   // buyer is shown when the work has no per-size in-store pricing.
@@ -61,6 +66,14 @@ export async function POST(request: Request) {
     // send any pair — so the placement row is the authority on venue, artist,
     // liveness and size.
     let collectVenueAddress: string | null = null;
+    // Row 727. The venue slug taken from the PLACEMENT row, not from the
+    // client. Set only on a collect order, where the placement is already the
+    // authority on venue, artist, liveness, size and price.
+    let collectVenueSlug: string | null = null;
+    // 121: the placement's buy-off-the-wall price, keyed by placement id, for
+    // the pricing ladder below. The PLACEMENT is the price authority for a
+    // collect line; the work-level paths further down are legacy fallbacks.
+    const offerByPlacementId = new Map<string, number>();
     if (fulfilmentMethod === "collect_venue") {
       const placementIds = items
         .map((i) => i.collectPlacementId)
@@ -83,7 +96,7 @@ export async function POST(request: Request) {
 
       const { data: places } = await getSupabaseAdmin()
         .from("placements")
-        .select("id, venue_slug, artist_slug, status, collection_address, placed_size_label")
+        .select("id, venue_slug, artist_slug, status, collection_address, placed_size_label, in_store_price")
         .in("id", placementIds)
         .eq("status", "active");
       const byId = new Map((places || []).map((pl) => [pl.id, pl]));
@@ -110,6 +123,10 @@ export async function POST(request: Request) {
           );
         }
         collectVenueAddress = pl.collection_address ?? collectVenueAddress;
+        collectVenueSlug = pl.venue_slug;
+        if (typeof pl.in_store_price === "number" && pl.in_store_price > 0) {
+          offerByPlacementId.set(pl.id, pl.in_store_price);
+        }
       }
     }
     // Task 1 review-deferred follow-up: read the metadata fields off
@@ -163,6 +180,30 @@ export async function POST(request: Request) {
     } else if (process.env.QR_ATTRIBUTION_ENFORCE !== "1") {
       venueSlug = parsed.data.venueSlug || "";
     }
+    // Row 727 / PASS2-placement-lifecycle-log. A GBP 120 off-the-wall sale
+    // produced an order with placement_id NULL, venue_slug NULL,
+    // venue_revenue_share_percent 0 and venue_revenue 0, and no venue transfer,
+    // while the venue was emailed to say the piece had sold and would be
+    // collected from them. The venue was credited nothing for the sale it
+    // physically facilitated.
+    //
+    // The cause is the block above: `venueSlug` came only from a QR attribution
+    // token or a raw client field, and an off-the-wall purchase starts on the
+    // public artwork page rather than a QR scan. The webhook then filters
+    // placements by `.eq("venue_slug", venueSlug)`, finds nothing, and every
+    // venue figure on the order lands at zero.
+    //
+    // The rule is the one offer sales already follow (see the venue-share block
+    // in api/offers/[id]/checkout): a work hanging on a venue's wall earns that
+    // venue its placement share on ANY platform sale of the work. It does NOT
+    // need the QR attribution token, because there is nothing to attribute:
+    // this order names the placement, the placement has been validated above,
+    // and the piece is handed over by the venue. Overriding rather than
+    // defaulting is deliberate — a collect line's venue is a fact about where
+    // the work is, so a QR token naming a different venue must not win.
+    if (collectVenueSlug) {
+      venueSlug = collectVenueSlug;
+    }
     const collectionNotes = parsed.data.collectionNotes || "";
     const expectedShippingCost = parsed.data.expectedShippingCost;
 
@@ -170,10 +211,17 @@ export async function POST(request: Request) {
     // allowed). If the caller IS authenticated and is the artist behind
     // any cart item, refuse — money would cycle through Stripe Connect
     // and the platform would skim a fee from the artist's own card.
+    // Also the only place the buyer's identity is known. orders.buyer_user_id
+    // exists in the schema and was written by nothing at all: 18 production
+    // orders, 0 with an id, 15 of them placed against an email that matches a
+    // real account. Stripe's session metadata is the only channel from here to
+    // the webhook that creates the order, so the id rides along there.
+    let buyerUserId: string | null = null;
     const authHeader = request.headers.get("authorization");
     if (authHeader) {
       const auth = await getAuthenticatedUser(request);
       if (auth.user) {
+        buyerUserId = auth.user.id;
         // E23a. Guarded only inside the authenticated branch, because guest
         // checkout is supported and an anonymous caller has no id to test. A
         // demo session reaching Stripe would take real money, so this is the
@@ -225,7 +273,7 @@ export async function POST(request: Request) {
     if (workIds.length > 0) {
       const { data: rows, error: worksErr } = await getSupabaseAdmin()
         .from("artist_works")
-        .select("id, available, quantity_available, pricing, title, frame_options, in_store_price, available_in_store")
+        .select("id, available, quantity_available, pricing, title, frame_options, in_store_price, available_in_store, shipping_price, dimensions")
         .in("id", workIds);
       if (worksErr) {
         console.error("[checkout] cart re-validation lookup failed:", worksErr);
@@ -263,6 +311,32 @@ export async function POST(request: Request) {
             error: `"${row.title || line.title}" has just been sold.`,
             code: "work_sold",
             workId: line.workId,
+          },
+          { status: 409 },
+        );
+      }
+      // B28: the quantity is client-supplied and the stock decrement happens
+      // after payment, so a cart asking for 5 of a 2-piece run charged for 5
+      // and oversold. Finite stock caps the line here, before Stripe; a null
+      // quantity_available means unlimited (migration 120).
+      const qty = Number(line.quantity ?? 1);
+      if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+        return NextResponse.json(
+          {
+            error: `Invalid quantity for "${row.title || line.title}".`,
+            code: "bad_quantity",
+            workId: line.workId,
+          },
+          { status: 400 },
+        );
+      }
+      if (row.quantity_available != null && qty > row.quantity_available) {
+        return NextResponse.json(
+          {
+            error: `Only ${row.quantity_available} of "${row.title || line.title}" ${row.quantity_available === 1 ? "is" : "are"} available.`,
+            code: "insufficient_stock",
+            workId: line.workId,
+            available: row.quantity_available,
           },
           { status: 409 },
         );
@@ -475,11 +549,23 @@ export async function POST(request: Request) {
         item.lineFulfilment === "collect_venue" && fulfilmentMethod === "collect_venue";
 
       if (isCollectLine) {
-        // Owner decision 2026-08-28: collect-from-venue charges the NORMAL
-        // tier price. The in-store price model is retired; a legacy per-size
-        // or work-level in-store price is honoured only when it exists AND
-        // the tick box is not set, so carts from before migration 120 keep
-        // the number their button displayed.
+        // 121: the placement's own off-the-wall offer is THE price for this
+        // physical piece. The artist set it at live-on-wall; nothing the
+        // client sends can move it.
+        const offer = item.collectPlacementId
+          ? offerByPlacementId.get(item.collectPlacementId)
+          : undefined;
+        if (typeof offer === "number") {
+          const dbPence = Math.round(offer * 100);
+          if (dbPence !== clientPence) {
+            console.warn("[checkout] off-the-wall price corrected", {
+              workId: item.workId, placementId: item.collectPlacementId, clientPence, dbPence,
+            });
+          }
+          return dbPence;
+        }
+        // Legacy ladders below: the 120 tick box (tier price) and the pre-120
+        // in-store prices, for placements that have no offer of their own yet.
         if (row.available_in_store !== true) {
           const perSize = dbTier && typeof dbTier.inStorePrice === "number" && dbTier.inStorePrice > 0
             ? dbTier.inStorePrice
@@ -590,6 +676,32 @@ export async function POST(request: Request) {
     // in Stripe but can't be paid out (escrow) until KYC completes.
     const uniqueArtistSlugs = [...new Set(items.map((i) => i.artistSlug || "").filter(Boolean))];
     const payoutDb = getSupabaseAdmin();
+
+    // A1.2. International shipping is an artist-level setting, so it is read
+    // from artist_profiles rather than from whatever the cart claimed. Only
+    // international orders read it, so UK orders, which are nearly all of
+    // them, do not pay for the round trip.
+    const artistShippingBySlug = new Map<string, { international_shipping_price: number | null }>();
+    if (region !== "uk" && uniqueArtistSlugs.length > 0) {
+      const { data: shipRows, error: shipErr } = await payoutDb
+        .from("artist_profiles")
+        .select("slug, international_shipping_price")
+        .in("slug", uniqueArtistSlugs);
+      if (shipErr) {
+        // Fail closed. Continuing here would silently drop back to the cart's
+        // own international figure, which is the value this is replacing.
+        console.error("[checkout] artist shipping lookup failed:", shipErr);
+        return NextResponse.json(
+          { error: "Couldn't work out delivery for your order, please try again." },
+          { status: 500 },
+        );
+      }
+      for (const row of shipRows || []) {
+        artistShippingBySlug.set(row.slug, {
+          international_shipping_price: row.international_shipping_price ?? null,
+        });
+      }
+    }
     const checks = await Promise.all(
       uniqueArtistSlugs.map(async (slug) => ({
         slug,
@@ -609,17 +721,39 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
+    // A1.2 (production pass, 2026-08-30). Every money input below used to come
+    // straight off the request body. A cart posted with `shippingPrice: 0`
+    // minted a live Stripe session for £49.99 against an honest £53.49, with
+    // no shipping line at all. Item prices were already re-priced from the
+    // database, which is why forging those did nothing; shipping was the one
+    // that was still trusted. `price` here is the re-priced figure too, since
+    // it drives both the dimensional estimate and the order-level signature
+    // threshold. `framed` stays client-supplied: it is a genuine buyer choice,
+    // and its price uplift is already resolved server-side from frame_options.
     const { totalShipping, artistGroups } = calculateOrderShipping(
-      items.map((it) => ({
-        artistSlug: it.artistSlug || "",
-        artistName: it.artistName || "Artist",
-        shippingPrice: it.shippingPrice ?? null,
-        internationalShippingPrice: it.internationalShippingPrice ?? null,
-        dimensions: it.dimensions || null,
-        framed: it.framed ?? false,
-        price: it.price,
-        quantity: it.quantity,
-      })),
+      pricedLines.map(({ item: it, unitPence }) => {
+        const work = it.workId ? workById.get(it.workId) : null;
+        const resolved = resolveLineShipping({
+          work,
+          artist: artistShippingBySlug.get(it.artistSlug || "") ?? null,
+          sizeLabel: it.size,
+          fallback: {
+            shippingPrice: it.shippingPrice ?? null,
+            internationalShippingPrice: it.internationalShippingPrice ?? null,
+            dimensions: it.dimensions || null,
+          },
+        });
+        return {
+          artistSlug: it.artistSlug || "",
+          artistName: it.artistName || "Artist",
+          shippingPrice: resolved.shippingPrice,
+          internationalShippingPrice: resolved.internationalShippingPrice,
+          dimensions: resolved.dimensions,
+          framed: it.framed ?? false,
+          price: unitPence / 100,
+          quantity: it.quantity,
+        };
+      }),
       region,
     );
 
@@ -679,6 +813,9 @@ export async function POST(request: Request) {
       customer_email: shipping.email,
       metadata: {
         kind: "cart_checkout",
+        // Empty string rather than omitted: Stripe metadata values must be
+        // strings, and the webhook reads a missing key the same as a blank one.
+        buyer_user_id: buyerUserId || "",
         source,
         venue_slug: venueSlug,
         artist_slugs: artistSlugs.join(","),

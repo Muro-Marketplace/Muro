@@ -1,0 +1,365 @@
+- generic [active] [ref=f19e1]:
+  - generic [ref=f19e2]:
+    - link "Skip to content" [ref=f19e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f19e4]:
+      - generic [ref=f19e6]:
+        - link "Wallplace" [ref=f19e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f19e8]:
+          - link "Marketplace" [ref=f19e9] [cursor=pointer]:
+            - /url: /browse
+          - link "How It Works" [ref=f19e10] [cursor=pointer]:
+            - /url: /how-it-works
+          - link "Blog" [ref=f19e11] [cursor=pointer]:
+            - /url: /blog
+          - link "Spaces" [ref=f19e12] [cursor=pointer]:
+            - /url: /spaces
+        - generic [ref=f19e13]:
+          - link "Login" [ref=f19e14] [cursor=pointer]:
+            - /url: /login
+          - link "Sign Up" [ref=f19e15] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=f19e16]:
+      - generic [ref=f19e17]:
+        - generic [ref=f19e19]:
+          - link "For Venues" [ref=f19e20] [cursor=pointer]:
+            - /url: /venues
+          - link "For Artists" [ref=f19e21] [cursor=pointer]:
+            - /url: /artists
+        - generic [ref=f19e22]:
+          - img "Photographer with camera" [ref=f19e24]
+          - generic [ref=f19e28]:
+            - paragraph [ref=f19e29]: For Artists
+            - heading "Display, discover, sell. All in one place." [level=1] [ref=f19e30]: Display, discover, sell.All in one place.
+            - paragraph [ref=f19e31]: Access high-intent venue demand. Get discovered by cafés, restaurants, hotels, galleries, offices, and salons looking for original artwork and sell directly to anyone who scans your QR code.
+            - link "APPLY TO JOIN" [ref=f19e33] [cursor=pointer]:
+              - /url: /apply
+            - paragraph [ref=f19e34]: Applications reviewed within 5 business days.
+          - generic [ref=f19e35]:
+            - button "See what you get" [ref=f19e37] [cursor=pointer]
+            - generic [ref=f19e43]:
+              - generic [ref=f19e44]: 1 month free trial
+              - generic [ref=f19e46]: Cancel anytime
+              - generic [ref=f19e48]: From £9.99/mo
+        - generic [ref=f19e50]:
+          - generic [ref=f19e53]:
+            - heading "What you get" [level=2] [ref=f19e54]
+            - generic [ref=f19e55]:
+              - generic [ref=f19e56]:
+                - heading "High-intent venue demand" [level=3] [ref=f19e61]
+                - paragraph [ref=f19e62]: Real venues actively looking for art, cafés, restaurants, hotels, galleries, offices, and salons.
+              - generic [ref=f19e63]:
+                - heading "Curated marketplace" [level=3] [ref=f19e68]
+                - paragraph [ref=f19e69]: Every artist is reviewed. Your work is matched to relevant spaces that suit your style and medium.
+              - generic [ref=f19e70]:
+                - heading "Your own online storefront" [level=3] [ref=f19e77]
+                - paragraph [ref=f19e78]: Your Wallplace page is your shop. QR codes at venues drive customers straight to your store to browse and buy.
+              - generic [ref=f19e79]:
+                - heading "Venue + online visibility" [level=3] [ref=f19e84]
+                - paragraph [ref=f19e85]: Venues find you by style and medium. Customers find you via QR codes in the venues you're placed in.
+              - generic [ref=f19e86]:
+                - heading "Fair platform fees" [level=3] [ref=f19e90]
+                - paragraph [ref=f19e91]: 5 to 15% platform fee. No gallery taking half. You keep the majority of every sale.
+              - generic [ref=f19e92]:
+                - heading "QR to checkout in seconds" [level=3] [ref=f19e96]
+                - paragraph [ref=f19e97]: Customers scan, browse, and buy, right from the venue wall. Every scan is a sale opportunity with your name on it.
+            - paragraph [ref=f19e98]: We review every application for quality, consistency, and commercial viability. No AI-generated work. This is how we maintain venue trust and ensure your work reaches spaces that genuinely want it.
+          - generic [ref=f19e101]:
+            - heading "The Process" [level=2] [ref=f19e102]
+            - generic [ref=f19e103]:
+              - generic [ref=f19e105]:
+                - generic [ref=f19e106]: "1"
+                - generic [ref=f19e107]: Apply
+              - generic [ref=f19e110]:
+                - generic [ref=f19e111]: "2"
+                - generic [ref=f19e112]: Get Accepted
+              - generic [ref=f19e115]:
+                - generic [ref=f19e116]: "3"
+                - generic [ref=f19e117]: Choose Plan
+              - generic [ref=f19e120]:
+                - generic [ref=f19e121]: "4"
+                - generic [ref=f19e122]: Get Discovered
+              - generic [ref=f19e125]:
+                - generic [ref=f19e126]: "5"
+                - generic [ref=f19e127]: Get Placed & Sold
+          - generic [ref=f19e130]:
+            - generic [ref=f19e131]:
+              - heading "Membership" [level=2] [ref=f19e132]
+              - paragraph [ref=f19e133]: Less than the cost of a day at an art fair. Ongoing commercial visibility in independent venues.
+            - generic [ref=f19e134]:
+              - paragraph [ref=f19e135]: Founding Artist Offer
+              - paragraph [ref=f19e136]: First month free on all plans.
+              - paragraph [ref=f19e137]: Apply to join, first month free.
+            - generic [ref=f19e138]:
+              - generic [ref=f19e140]:
+                - button "Monthly" [ref=f19e141] [cursor=pointer]
+                - button "Annual Save 17%" [ref=f19e142] [cursor=pointer]:
+                  - text: Annual
+                  - generic [ref=f19e143]: Save 17%
+              - generic [ref=f19e144]:
+                - generic [ref=f19e145]:
+                  - heading "Core" [level=3] [ref=f19e146]
+                  - generic [ref=f19e147]:
+                    - generic [ref=f19e148]: £9.99
+                    - generic [ref=f19e149]: /mo
+                  - paragraph [ref=f19e150]: billed monthly
+                  - paragraph [ref=f19e151]: First month free
+                  - paragraph [ref=f19e152]: 15% platform fee on sales
+                  - list [ref=f19e153]:
+                    - listitem [ref=f19e154]: Up to 8 works in your portfolio
+                    - listitem [ref=f19e157]: Standard artist profile
+                    - listitem [ref=f19e160]: Approach 3 new venues a week
+                    - listitem [ref=f19e163]: Visibility to venues browsing the platform
+                    - listitem [ref=f19e166]: Curated matching
+                    - listitem [ref=f19e169]: Basic analytics dashboard
+                  - link "APPLY TO JOIN" [ref=f19e172] [cursor=pointer]:
+                    - /url: /apply
+                - generic [ref=f19e173]:
+                  - generic [ref=f19e174]: Most Popular
+                  - heading "Premium" [level=3] [ref=f19e175]
+                  - generic [ref=f19e176]:
+                    - generic [ref=f19e177]: £24.99
+                    - generic [ref=f19e178]: /mo
+                  - paragraph [ref=f19e179]: billed monthly
+                  - paragraph [ref=f19e180]: First month free
+                  - paragraph [ref=f19e181]: 8% platform fee on sales
+                  - list [ref=f19e182]:
+                    - listitem [ref=f19e183]: Up to 20 works in your portfolio
+                    - listitem [ref=f19e186]: Featured artist profile + badge
+                    - listitem [ref=f19e189]: Priority visibility in venue recommendations
+                    - listitem [ref=f19e192]: Approach 6 new venues a week
+                    - listitem [ref=f19e195]: Full analytics, views, enquiries, conversion
+                    - listitem [ref=f19e198]: Priority response from Wallplace team
+                  - link "APPLY TO JOIN" [ref=f19e201] [cursor=pointer]:
+                    - /url: /apply
+                - generic [ref=f19e202]:
+                  - heading "Pro" [level=3] [ref=f19e203]
+                  - generic [ref=f19e204]:
+                    - generic [ref=f19e205]: £49.99
+                    - generic [ref=f19e206]: /mo
+                  - paragraph [ref=f19e207]: billed monthly
+                  - paragraph [ref=f19e208]: First month free
+                  - paragraph [ref=f19e209]: 5% platform fee on sales
+                  - list [ref=f19e210]:
+                    - listitem [ref=f19e211]: Up to 50 works in your portfolio
+                    - listitem [ref=f19e214]: Premium profile with enhanced presentation
+                    - listitem [ref=f19e217]: Maximum visibility across the platform
+                    - listitem [ref=f19e220]: Approach 15 new venues a week
+                    - listitem [ref=f19e223]: Full analytics + venue breakdown + export
+                    - listitem [ref=f19e226]: Dedicated account support
+                  - link "APPLY TO JOIN" [ref=f19e229] [cursor=pointer]:
+                    - /url: /apply
+              - paragraph [ref=f19e230]: Annual plans include two months free (save ~17%). Cancel anytime.
+          - generic [ref=f19e232]:
+            - heading "What £9.99 a month gets you" [level=2] [ref=f19e233]
+            - generic [ref=f19e234]:
+              - generic [ref=f19e235]:
+                - generic [ref=f19e236]:
+                  - paragraph [ref=f19e237]: Gallery hire
+                  - paragraph [ref=f19e238]: £200 to 1,000/week
+                - generic [ref=f19e239]: ×
+              - generic [ref=f19e240]:
+                - generic [ref=f19e241]:
+                  - paragraph [ref=f19e242]: Art fair table
+                  - paragraph [ref=f19e243]: £300 to 500/day
+                - generic [ref=f19e244]: ×
+              - generic [ref=f19e245]:
+                - generic [ref=f19e246]:
+                  - paragraph [ref=f19e247]: Instagram promotion
+                  - paragraph [ref=f19e248]: £50 to 200/month, no physical presence
+                - generic [ref=f19e249]: ×
+              - generic [ref=f19e251]:
+                - paragraph [ref=f19e252]: Wallplace Core
+                - paragraph [ref=f19e253]: £9.99/month. Venue placements + your own online store. First month free.
+          - generic [ref=f19e257]:
+            - heading "How this is different" [level=2] [ref=f19e258]
+            - table [ref=f19e260]:
+              - rowgroup [ref=f19e261]:
+                - row [ref=f19e262]:
+                  - columnheader [ref=f19e263]
+                  - columnheader "Galleries" [ref=f19e264]
+                  - columnheader "Online Marketplaces" [ref=f19e265]
+                  - columnheader "Instagram" [ref=f19e266]
+                  - columnheader "Wallplace" [ref=f19e267]
+              - rowgroup [ref=f19e268]:
+                - row [ref=f19e269]:
+                  - cell "Platform fee" [ref=f19e270]
+                  - cell "40 to 60%" [ref=f19e271]
+                  - cell "15 to 30%" [ref=f19e272]
+                  - cell "N/A" [ref=f19e273]
+                  - cell "5 to 15%" [ref=f19e274]
+                - row [ref=f19e275]:
+                  - cell "Physical display" [ref=f19e276]
+                  - cell "Yes" [ref=f19e277]
+                  - cell "No" [ref=f19e278]
+                  - cell "No" [ref=f19e279]
+                  - cell "Yes" [ref=f19e280]
+                - row [ref=f19e281]:
+                  - cell "Logistics" [ref=f19e282]
+                  - cell "You handle it" [ref=f19e283]
+                  - cell "You handle it" [ref=f19e284]
+                  - cell "You handle it" [ref=f19e285]
+                  - cell "You handle it (add-on packages available)" [ref=f19e286]
+                - row [ref=f19e287]:
+                  - cell "Cost" [ref=f19e288]
+                  - cell "£200 to 1,000/week" [ref=f19e289]
+                  - cell "Free to £30/month" [ref=f19e290]
+                  - cell "Free" [ref=f19e291]
+                  - cell "£9.99 to £49.99/month" [ref=f19e292]
+                - row [ref=f19e293]:
+                  - cell "Audience" [ref=f19e294]
+                  - cell "Gallery visitors" [ref=f19e295]
+                  - cell "Online browsers" [ref=f19e296]
+                  - cell "Followers" [ref=f19e297]
+                  - cell "Daily venue footfall" [ref=f19e298]
+                - row [ref=f19e299]:
+                  - cell "Curation" [ref=f19e300]
+                  - cell "Selective" [ref=f19e301]
+                  - cell "Open" [ref=f19e302]
+                  - cell "None" [ref=f19e303]
+                  - cell "Selective" [ref=f19e304]
+          - generic [ref=f19e305]:
+            - img "Artist painting" [ref=f19e306]
+            - paragraph [ref=f19e309]: “Your studio is not a showroom. Independent venues are.”
+          - generic [ref=f19e312]:
+            - heading "Frequently asked questions" [level=2] [ref=f19e313]
+            - generic [ref=f19e314]:
+              - generic [ref=f19e315]:
+                - button "Will my work actually sell?" [ref=f19e316] [cursor=pointer]
+                - paragraph [ref=f19e319]: We can't guarantee sales, no honest platform can. What we do is connect you with venues that have real daily footfall and genuine interest in displaying art. Every piece gets a QR code linking to your sales page, and venues are matched to your style and medium. The rest is down to the work.
+              - generic [ref=f19e320]:
+                - button "Why should I pay for this?" [ref=f19e321] [cursor=pointer]
+                - paragraph [ref=f19e324]: Because a gallery would take 40 to 60% of every sale on top of significant upfront costs. Wallplace gives you a platform fee of 5 to 15%, ongoing commercial visibility, sales infrastructure, and access to a growing network of venues, for less than the cost of a round of drinks per month.
+              - generic [ref=f19e325]:
+                - button "Do you handle delivery and installation?" [ref=f19e326] [cursor=pointer]
+                - paragraph [ref=f19e329]: Logistics are your responsibility as standard. We do offer optional installation add-on packages for artists who want that support. Once a venue expresses interest and you agree to place work there, we'll guide you through the process.
+              - generic [ref=f19e330]:
+                - button "Can I still sell through other channels?" [ref=f19e331] [cursor=pointer]
+                - paragraph [ref=f19e334]: Absolutely. Wallplace is an additional channel. You keep full control of your work and can sell through galleries, your own website, fairs, or anywhere else.
+              - generic [ref=f19e335]:
+                - button "What if I'm not accepted?" [ref=f19e336] [cursor=pointer]
+                - paragraph [ref=f19e339]: We give feedback where we can, and you're welcome to reapply after three months. A stronger portfolio edit or a clearer artist statement can change the outcome.
+              - generic [ref=f19e340]:
+                - button "What sizes work best?" [ref=f19e341] [cursor=pointer]
+                - paragraph [ref=f19e344]: Most venues suit work between A3 and A1. Once you're accepted and matched to a venue, we'll advise on sizing and presentation for that specific space.
+              - generic [ref=f19e345]:
+                - button "How does payment work when something sells?" [ref=f19e346] [cursor=pointer]
+                - paragraph [ref=f19e349]: The buyer pays through Wallplace. The funds are held until the artwork is confirmed delivered (or 14 days pass without a buyer dispute, whichever comes first), then we transfer your share, minus the platform fee, straight to your linked bank account.
+              - generic [ref=f19e350]:
+                - button "What happens if I cancel?" [ref=f19e351] [cursor=pointer]
+                - paragraph [ref=f19e354]: You can cancel with 30 days' notice, by email or from your account settings, and your membership stays active until the end of that period. You'll be responsible for collecting your work from venues within 30 days of cancelling. No cancellation fees, no hard feelings.
+              - generic [ref=f19e355]:
+                - button "Is my artwork protected?" [ref=f19e356] [cursor=pointer]
+                - paragraph [ref=f19e359]: Every image on Wallplace is served at reduced resolution with compressed quality, good enough for browsing, not enough for reproduction. Right-click saving is disabled, and images cannot be dragged or selected. The original high-resolution file never leaves your hands, we only display a web-optimised version. Our Terms of Service prohibit unauthorised reproduction, and every sale is tracked and attributed to you as the creator.
+          - generic [ref=f19e361]:
+            - paragraph [ref=f19e362]: Active Demand
+            - heading "Venues are looking for art right now" [level=2] [ref=f19e363]
+            - paragraph [ref=f19e364]: Real commercial spaces actively seeking artwork to display. Enter your postcode to see demand in your area.
+            - generic [ref=f19e365]:
+              - link "SEE VENUE DEMAND" [ref=f19e366] [cursor=pointer]:
+                - /url: /spaces
+              - link "SEARCH BY POSTCODE" [ref=f19e367] [cursor=pointer]:
+                - /url: /spaces
+          - generic [ref=f19e369]:
+            - heading "Your portfolio. Your storefront. Your venues. All in one place." [level=2] [ref=f19e370]
+            - link "APPLY TO JOIN" [ref=f19e372] [cursor=pointer]:
+              - /url: /apply
+            - paragraph [ref=f19e373]: First month free. Membership from £9.99/month.
+            - paragraph [ref=f19e374]: Applications reviewed within 5 business days.
+    - contentinfo "Site footer" [ref=f19e375]:
+      - generic [ref=f19e376]:
+        - generic [ref=f19e377]:
+          - generic [ref=f19e378]:
+            - link "Wallplace" [ref=f19e379] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f19e380]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f19e381]:
+              - paragraph [ref=f19e382]: Be first to see new works
+              - paragraph [ref=f19e383]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f19e385]:
+                - textbox "your@email.com" [ref=f19e386]
+                - button "Subscribe" [ref=f19e387] [cursor=pointer]
+            - link "Instagram" [ref=f19e388] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f19e393]:
+            - heading "For Artists" [level=4] [ref=f19e394]
+            - list [ref=f19e395]:
+              - listitem [ref=f19e396]:
+                - link "Apply to Join" [ref=f19e397] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f19e398]:
+                - link "Pricing" [ref=f19e399] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f19e400]:
+                - link "Browse Venues" [ref=f19e401] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f19e402]:
+                - link "FAQs" [ref=f19e403] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f19e404]:
+            - heading "For Venues" [level=4] [ref=f19e405]
+            - list [ref=f19e406]:
+              - listitem [ref=f19e407]:
+                - link "Discover Art" [ref=f19e408] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f19e409]:
+                - link "Register Your Venue" [ref=f19e410] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f19e411]:
+                - link "Wallplace Curated" [ref=f19e412] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f19e413]:
+                - link "How It Works" [ref=f19e414] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f19e415]:
+                - link "FAQs" [ref=f19e416] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f19e417]:
+            - heading "Company" [level=4] [ref=f19e418]
+            - list [ref=f19e419]:
+              - listitem [ref=f19e420]:
+                - link "About" [ref=f19e421] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f19e422]:
+                - link "Blog" [ref=f19e423] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f19e424]:
+                - link "How It Works" [ref=f19e425] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f19e426]:
+                - link "Sustainability" [ref=f19e427] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f19e428]:
+                - link "Partner with us" [ref=f19e429] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f19e430]:
+                - link "Contact" [ref=f19e431] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f19e432]:
+                - link "Complaints" [ref=f19e433] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f19e434]:
+                - link "Terms" [ref=f19e435] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f19e436]:
+                - link "Artist Agreement" [ref=f19e437] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f19e438]:
+                - link "Venue Agreement" [ref=f19e439] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f19e440]:
+                - link "Privacy" [ref=f19e441] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f19e442]:
+                - link "Cookies" [ref=f19e443] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f19e444]:
+                - link "Returns & Refunds" [ref=f19e445] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f19e446]:
+                - link "IP Policy" [ref=f19e447] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f19e449]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f19e450] [cursor=pointer]: Feedback
+  - alert [ref=f19e453]

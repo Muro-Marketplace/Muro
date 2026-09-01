@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 /** The real `artist_applications` columns, from the committed schema snapshot. */
 const insertAttempts: Record<string, unknown>[] = [];
@@ -20,6 +20,7 @@ const {
   applicationInsertMock,
   profilesSelectMock,
   profilesSelectBySlugMock,
+  profilesSelectByReferralCodeMock,
   profilesInsertMock,
   getAuthenticatedUserMock,
   sendEmailMock,
@@ -28,6 +29,7 @@ const {
   applicationInsertMock: vi.fn(),
   profilesSelectMock: vi.fn(),
   profilesSelectBySlugMock: vi.fn(),
+  profilesSelectByReferralCodeMock: vi.fn(),
   profilesInsertMock: vi.fn(),
   getAuthenticatedUserMock: vi.fn(),
   sendEmailMock: vi.fn(),
@@ -77,6 +79,11 @@ vi.mock("@/lib/supabase-admin", () => ({
           // hoisted fns.
           select: () => ({
             eq: (column: string) => {
+              // Row G L2366: the route resolves a claimed referral code
+              // against the codes that actually exist before storing it.
+              if (column === "referral_code") {
+                return { maybeSingle: async () => profilesSelectByReferralCodeMock() };
+              }
               if (column === "user_id") {
                 return {
                   maybeSingle: async () => {
@@ -161,6 +168,7 @@ beforeEach(() => {
   insertAttempts.length = 0;
   profilesSelectMock.mockReset();
   profilesSelectBySlugMock.mockReset();
+  profilesSelectByReferralCodeMock.mockReset();
   profilesInsertMock.mockReset();
   getAuthenticatedUserMock.mockReset();
   sendEmailMock.mockReset();
@@ -173,6 +181,12 @@ beforeEach(() => {
   });
   profilesSelectMock.mockReturnValue({ data: null, error: null });
   profilesSelectBySlugMock.mockReturnValue({ data: null, error: null });
+  // Default: the claimed code belongs to a real artist, so the tests written
+  // before the code was validated still exercise the stored path.
+  profilesSelectByReferralCodeMock.mockReturnValue({
+    data: { referral_code: "WP-ABC123" },
+    error: null,
+  });
 });
 
 describe("POST /api/apply creates the artist_profiles bridge row", () => {
@@ -355,5 +369,127 @@ describe("POST /api/apply records the referral code (migration 109)", () => {
 
     expect(res.status).toBe(500);
     expect(insertAttempts).toHaveLength(1);
+  });
+});
+
+// A50 (QA 2026-08-28). The whole point of auth-gating the application (per
+// the signup/artist doc comment: "reject impersonation, instead of trusting
+// whatever email the form sent") was never enforced: an authed user could
+// file an application, and trigger the acknowledgement email, for any
+// address. When the caller is known, the application email must be theirs.
+describe("POST /api/apply enforces the authed user's email (A50)", () => {
+  it("refuses a signed-in submission for someone else's address", async () => {
+    const res = await POST(req({ ...VALID_BODY, email: "victim@example.com" }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toContain("finlay@example.com");
+    // Nothing is written and nobody is emailed for the impersonated address.
+    expect(applicationInsertMock).not.toHaveBeenCalled();
+    expect(profilesInsertMock).not.toHaveBeenCalled();
+    await flush();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("matches case-insensitively", async () => {
+    const res = await POST(req({ ...VALID_BODY, email: "FINLAY@Example.com" }));
+    expect(res.status).toBe(200);
+    expect(applicationInsertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the legacy unauthenticated path unchecked", async () => {
+    getAuthenticatedUserMock.mockReturnValue({ user: null, error: { status: 401 } });
+    const res = await POST(req({ ...VALID_BODY, email: "anyone@example.com" }, false));
+    expect(res.status).toBe(200);
+    expect(applicationInsertMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// R4.15 (WS5.5). Both application sends keyed on the bare email address, and
+// email_events keys burn on use: a rejected artist whose old application row
+// was deleted re-applied and triggered neither the confirmation nor the admin
+// alert, silently. The keys now carry the submission's created_at, so each
+// accepted application gets its own pair while double-submits stay covered by
+// the table's unique-email constraint (the 23505 branch skips both sends).
+describe("POST /api/apply application email idempotency keys (R4.15)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keys the receipt and admin ping per submission, not per address", async () => {
+    // Fake only Date so the two submissions carry distinct created_at values
+    // while flush()'s real setTimeout still runs.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-29T09:00:00.000Z"));
+
+    expect((await POST(req())).status).toBe(200);
+    await flush();
+
+    // The re-application: the old row is gone (rejection deleted it), so the
+    // insert succeeds again a day later.
+    vi.setSystemTime(new Date("2026-08-30T09:00:00.000Z"));
+    expect((await POST(req())).status).toBe(200);
+    await flush();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+    const [first, second] = sendEmailMock.mock.calls.map(
+      (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(first).toMatch(/^artist_application_submitted:finlay@example\.com:.+/);
+    // Fail-before: both keys were the bare address, identical, so the second
+    // application's receipt was suppressed as a duplicate.
+    expect(second).not.toBe(first);
+
+    expect(notifyAdminMock).toHaveBeenCalledTimes(2);
+    const [adminFirst, adminSecond] = notifyAdminMock.mock.calls.map(
+      (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(adminFirst).toMatch(/^admin_new_application:finlay@example\.com:.+/);
+    expect(adminSecond).not.toBe(adminFirst);
+  });
+
+  it("still sends nothing at all on a duplicate submission (unique email)", async () => {
+    applicationInsertMock.mockReturnValue({ error: { code: "23505" } });
+
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    await flush();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(notifyAdminMock).not.toHaveBeenCalled();
+  });
+});
+
+// Row G L2366. Application 29 carried the code `QATESTREF`. No artist owns it
+// (`select count(*) from artist_profiles where referral_code='QATESTREF'` is 0)
+// and it was stored anyway, so the admin reviewing the application saw an
+// attribution that could never pay anyone, and `artist_referrals` held 0 rows
+// across the whole production database.
+describe("POST /api/apply validates the referral code (row G L2366)", () => {
+  it("stores a code that a real artist owns", async () => {
+    profilesSelectByReferralCodeMock.mockReturnValue({
+      data: { referral_code: "REALCODE" },
+      error: null,
+    });
+
+    await POST(req({ ...VALID_BODY, referralCode: "realcode" }));
+
+    expect(applicationInsertMock.mock.calls[0][0]).toMatchObject({
+      referred_by_code: "REALCODE",
+    });
+  });
+
+  it("drops a code no artist owns rather than storing it as if it were valid", async () => {
+    profilesSelectByReferralCodeMock.mockReturnValue({ data: null, error: null });
+
+    const res = await POST(req({ ...VALID_BODY, referralCode: "QATESTREF" }));
+
+    expect(res.status).toBe(200);
+    expect(applicationInsertMock.mock.calls[0][0]).toHaveProperty("referred_by_code", null);
+  });
+
+  it("does not look a code up when none was given", async () => {
+    await POST(req(VALID_BODY));
+
+    expect(profilesSelectByReferralCodeMock).not.toHaveBeenCalled();
   });
 });

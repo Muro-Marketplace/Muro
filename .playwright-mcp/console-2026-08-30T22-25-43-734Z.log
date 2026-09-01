@@ -1,0 +1,2 @@
+[     443ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://www.wallplace.co.uk/venue-portal/profile:0
+[   44365ms] [WARNING] The specified value "50-100/day" cannot be parsed, or is out of range. @ https://www.wallplace.co.uk/_next/static/chunks/10qk0phl1b.et.js:0

@@ -190,4 +190,128 @@ describe("ArtistProfileClient ?enquiry=1 auto-open (B12/F17/H9)", () => {
     // guests here with ?enquiry=1 expecting the form to be open.
     expect(await screen.findByPlaceholderText("Your message...")).toBeTruthy();
   });
+
+  // B L730. "Message the artist" on an artwork page arrives here with both
+  // params: ?enquiry=1 opens the form, &work= opens the lightbox behind it so
+  // the enquiry can scope itself to the piece. The lightbox then synced the URL
+  // to the artwork permalink and dropped the query string, putting the address
+  // bar back on the page the visitor had just left. Measured live on
+  // 2026-08-31: the modal appeared at 1,659ms, the URL was rewritten at
+  // 1,916ms.
+  it("does not rewrite the URL to the artwork permalink while the enquiry is open", async () => {
+    searchParamsMock.mockReturnValue(new URLSearchParams("enquiry=1&work=w1"));
+    const pushState = vi.spyOn(window.history, "pushState");
+
+    renderProfile();
+    expect(await screen.findByPlaceholderText("Your message...")).toBeTruthy();
+
+    const targets = pushState.mock.calls.map((c) => String(c[2]));
+    expect(targets.filter((t) => t.includes("/last-light"))).toEqual([]);
+    pushState.mockRestore();
+  });
+
+  it("still scopes the enquiry to the work the visitor came from", async () => {
+    searchParamsMock.mockReturnValue(new URLSearchParams("enquiry=1&work=w1"));
+
+    renderProfile();
+
+    // "Re: <title>" is what makes the artwork param worth sending at all.
+    expect(await screen.findByText("Re: Last Light")).toBeTruthy();
+  });
+
+  it("claims the artwork permalink once the enquiry is dismissed", async () => {
+    // Without this the lightbox loses its shareable link for good.
+    searchParamsMock.mockReturnValue(new URLSearchParams("work=w1"));
+    const pushState = vi.spyOn(window.history, "pushState");
+
+    renderProfile();
+
+    await waitFor(() => {
+      const targets = pushState.mock.calls.map((c) => String(c[2]));
+      expect(targets.some((t) => t.includes("/last-light"))).toBe(true);
+    });
+    pushState.mockRestore();
+  });
+});
+
+// B6: the portfolio theme picker matched `title + medium` substrings rather
+// than the work's theme tags, and an empty result rendered a blank space with
+// no explanation. filterWorksByTheme (portfolio-filters.ts) carries the
+// matching rules; these cover the wiring and the empty state.
+describe("ArtistProfileClient portfolio theme filter (B6)", () => {
+  const TAGGED = {
+    ...WORK,
+    id: "w-tagged",
+    title: "Winter Field",
+    themes: ["Landscapes"],
+  };
+  const OTHER = {
+    ...WORK,
+    id: "w-other",
+    title: "Colours of Autumn",
+    themes: ["Abstract"],
+  };
+
+  function renderWithThemes(activeWorks: unknown[]) {
+    return render(
+      <ArtistProfileClient
+        artistName="Alice"
+        artistSlug="alice"
+        extendedBio=""
+        themes={["Landscapes", "Abstract"]}
+        works={activeWorks as never[]}
+      />,
+    );
+  }
+
+  /** Grid cards carry id="work-<slugified title>"; titles also appear in the
+   *  hover overlay, so query the card rather than the text. */
+  function cardIds(container: HTMLElement): string[] {
+    return Array.from(container.querySelectorAll('[id^="work-"]')).map(
+      (el) => el.id,
+    );
+  }
+
+  /** The Portfolio theme <select>, identified by its "All" option. */
+  function themePicker(): HTMLSelectElement {
+    const combos = screen.getAllByRole("combobox") as HTMLSelectElement[];
+    const match = combos.find((c) =>
+      Array.from(c.options).some((o) => o.value === "All"),
+    );
+    if (!match) throw new Error("theme picker not found");
+    return match;
+  }
+
+  it("selects on the work's theme tags, not on its title", () => {
+    const { container } = renderWithThemes([TAGGED, OTHER]);
+    expect(cardIds(container)).toHaveLength(2);
+
+    fireEvent.change(themePicker(), { target: { value: "Landscapes" } });
+
+    // "Colours of Autumn" is tagged Abstract, so it must not appear under
+    // Landscapes. Pre-fix the filter never read the tags at all.
+    expect(cardIds(container)).toEqual(["work-winter-field"]);
+  });
+
+  it("does not pull in a work just because the theme appears in its title", () => {
+    const { container } = renderWithThemes([TAGGED, OTHER]);
+
+    fireEvent.change(themePicker(), { target: { value: "Abstract" } });
+
+    expect(cardIds(container)).toEqual(["work-colours-of-autumn"]);
+  });
+
+  it("explains an empty result and offers a way back", () => {
+    // Untagged works fall back to the substring match, which finds nothing
+    // for a theme like this one. That used to render a blank space.
+    const { container } = renderWithThemes([{ ...WORK, title: "Last Light" }]);
+
+    fireEvent.change(themePicker(), { target: { value: "Landscapes" } });
+
+    expect(cardIds(container)).toHaveLength(0);
+    expect(screen.getByText("No works under this theme.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show the whole portfolio" }));
+    expect(cardIds(container)).toEqual(["work-last-light"]);
+  });
 });

@@ -14,6 +14,33 @@ import {
 } from "./validations";
 
 describe("waitlistSchema", () => {
+  // Row A L364 / migration 129. The form posts phone, venueName and
+  // venueLocation and this schema declared none of them, so zod stripped all
+  // three at the validation boundary and no writer ever saw them. A venue
+  // joining the waiting list gave us their venue's name and where it is, and we
+  // kept neither, which is what made the list unworkable.
+  it("keeps the three fields the form asks for", () => {
+    const r = waitlistSchema.safeParse({
+      name: "Hannah Reed",
+      email: "hannah@copperkettle.test",
+      userType: "venue",
+      phone: "07700900123",
+      venueName: "The Copper Kettle",
+      venueLocation: "Hampton",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.phone).toBe("07700900123");
+      expect(r.data.venueName).toBe("The Copper Kettle");
+      expect(r.data.venueLocation).toBe("Hampton");
+    }
+  });
+
+  it("still accepts an artist signup that gives none of them", () => {
+    const r = waitlistSchema.safeParse({ name: "Maya", email: "maya@x.com", userType: "artist" });
+    expect(r.success).toBe(true);
+  });
+
   it("accepts a valid signup", () => {
     const r = waitlistSchema.safeParse({ name: "Maya Chen", email: "maya@x.com", userType: "artist" });
     expect(r.success).toBe(true);

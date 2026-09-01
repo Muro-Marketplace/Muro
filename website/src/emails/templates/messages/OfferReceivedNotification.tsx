@@ -1,5 +1,11 @@
-// Stream: notify (placements category). Purchase-offer notifications,
+// Stream: tx (orders_and_payouts). Purchase-offer notifications,
 // fired when a venue makes or counters an offer on an artist's work.
+//
+// R4.12 (WS5.5): was notify/placements, which made a money event with an
+// expiry suppressible by the "Placement updates" toggle, vacation mode and
+// the 10/24h placements throttle. A purchase offer is money, so it now rides
+// the critical always-send category; sendEmail() enforces this via
+// TEMPLATE_CATEGORY_OVERRIDES even for send sites still passing the old one.
 //
 // Replaces the earlier ReviewPostedNotification reuse hack — recipients
 // were getting "5-star review" subject lines for offers, which read
@@ -47,9 +53,9 @@ export function OfferReceivedNotification({
 
   return (
     <EmailShell
-      stream="notify"
+      stream="tx"
       persona={recipientRole}
-      category="placements"
+      category="orders_and_payouts"
       preview={`${venueName} - ${formattedAmount}`}
     >
       <H1>{headline}</H1>
@@ -85,14 +91,14 @@ const entry: TemplateEntry<OfferReceivedNotificationProps> = {
   id: "offer_received_notification",
   name: "Offer received notification",
   description: "Sent when a venue makes (or counters) a purchase offer on an artist's work.",
-  stream: "notify",
+  stream: "tx",
   persona: "multi",
-  category: "placements",
+  category: "orders_and_payouts",
   subject: "{{venueName}} offered {{formattedAmount}}",
   previewText: "Tap to review the offer.",
   component: OfferReceivedNotification,
   mock,
-  canUnsubscribe: true,
+  canUnsubscribe: false,
   hasInAppEquivalent: true,
   priority: 2,
 };

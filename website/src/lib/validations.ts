@@ -31,6 +31,15 @@ export const waitlistSchema = z.object({
   name: safeString(100),
   email,
   userType: z.enum(["artist", "venue", "both"]),
+  // Row A L364 / migration 129. The form posts these three and this schema
+  // declared none of them, so zod stripped them at the validation boundary and
+  // no writer ever saw them. A venue joining the waiting list was asked for
+  // their venue's name and where it is, and we kept neither, which is what made
+  // the list unworkable: nothing distinguished a venue in Hampton from one in
+  // Leeds and there was no way to ring anybody.
+  phone: optionalString(30),
+  venueName: optionalString(200),
+  venueLocation: optionalString(200),
 });
 
 export const contactSchema = z.object({
@@ -92,6 +101,10 @@ export const applySchema = z.object({
   hearAbout: optionalString(200),
   selectedPlan: z.enum(["core", "pro", "premium"]).optional(),
   referralCode: optionalString(20),
+  // The form has required this of consumer applicants since launch and has
+  // always sent it. It was never declared here, so zod stripped it and the
+  // attestation was discarded at the validation boundary. See migration 126.
+  acknowledgedCoolingOff: z.boolean().optional(),
 });
 
 export const registerVenueSchema = z.object({
@@ -262,13 +275,23 @@ export const placementUpdateSchema = z.object({
   // progress bar, clears the timestamp on that stage (and only the
   // most recently reached stage is allowed, see API for the gate).
   unsetStage: z.enum(["scheduled", "installed", "live", "collected"]).optional(),
+  // Owner decision 2026-08-28: the buy-off-the-wall offer for THIS placed
+  // piece. Artist-only (enforced in the route). An explicit null price turns
+  // the offer off; both fields may ride alone or alongside a stage change
+  // (the live-on-wall prompt sends them together).
+  inStorePrice: z.number().positive().max(100_000).nullable().optional(),
+  inStoreFrameIncluded: z.boolean().optional(),
   // A counter offer keeps the row pending but revises the terms and hands the
   // "needs to respond" role back to the original requester.
   counter: z.object({
+    // The route clamps this to the product's 0..50 cap (D26); the wider
+    // bound here keeps old client tabs from 400ing a whole counter.
     revenueSharePercent: z.number().min(0).max(100).optional(),
     qrEnabled: z.boolean().optional(),
     monthlyFeeGbp: monthlyFeeGbp.optional(),
-    arrangementType: z.enum(["free_loan", "paid_loan", "revenue_share", "purchase"]).optional(),
+    // "mixed" (paid loan + revenue share) included since F27: clients now
+    // send the derived canonical type. The route re-derives regardless.
+    arrangementType: z.enum(["free_loan", "paid_loan", "revenue_share", "purchase", "mixed"]).optional(),
     message: optionalString(2000),
   }).optional(),
 });
@@ -307,6 +330,8 @@ const checkoutItemSchema = z.object({
   // (api/checkout), so these are claims to check, never facts to trust.
   lineFulfilment: z.enum(["ship", "collect_venue"]).optional(),
   collectVenueSlug: optionalString(100),
+  // B18: carried for display; never trusted for money (the slug is).
+  collectVenueName: optionalString(200),
   collectPlacementId: optionalString(200),
 });
 

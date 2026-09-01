@@ -1,0 +1,187 @@
+- generic [active] [ref=f114e1]:
+  - generic [ref=f114e2]:
+    - link "Skip to content" [ref=f114e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f114e4]:
+      - generic [ref=f114e6]:
+        - link "Wallplace" [ref=f114e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f114e8]:
+          - link "Marketplace" [ref=f114e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f114e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f114e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f114e13] [cursor=pointer]
+        - generic [ref=f114e16]:
+          - link "Saved" [ref=f114e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f114e21] [cursor=pointer]
+          - button "Notifications" [ref=f114e26] [cursor=pointer]
+          - generic [ref=f114e30]:
+            - link "Venue Portal" [ref=f114e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f114e32] [cursor=pointer]
+          - button "Logout" [ref=f114e35] [cursor=pointer]
+    - main [ref=f114e36]:
+      - generic [ref=f114e37]:
+        - complementary [ref=f114e38]:
+          - navigation [ref=f114e39]:
+            - paragraph [ref=f114e41]: Venue Portal
+            - generic [ref=f114e42]:
+              - list [ref=f114e43]:
+                - listitem [ref=f114e44]:
+                  - link "Dashboard" [ref=f114e45] [cursor=pointer]:
+                    - /url: /venue-portal
+                - listitem [ref=f114e46]:
+                  - link "Venue Profile" [ref=f114e47] [cursor=pointer]:
+                    - /url: /venue-portal/profile
+                - listitem [ref=f114e48]:
+                  - link "Messages" [ref=f114e49] [cursor=pointer]:
+                    - /url: /venue-portal/messages
+                - listitem [ref=f114e50]:
+                  - link "Placements" [ref=f114e51] [cursor=pointer]:
+                    - /url: /venue-portal/placements
+                - listitem [ref=f114e52]:
+                  - link "My Offers" [ref=f114e53] [cursor=pointer]:
+                    - /url: /venue-portal/offers
+                - listitem [ref=f114e54]:
+                  - link "My Walls" [ref=f114e55] [cursor=pointer]:
+                    - /url: /venue-portal/walls
+                - listitem [ref=f114e56]:
+                  - link "Saved" [ref=f114e57] [cursor=pointer]:
+                    - /url: /venue-portal/saved
+                - listitem [ref=f114e58]:
+                  - link "QR Labels" [ref=f114e59] [cursor=pointer]:
+                    - /url: /venue-portal/labels
+                - listitem [ref=f114e60]:
+                  - link "Analytics" [ref=f114e61] [cursor=pointer]:
+                    - /url: /venue-portal/analytics
+                - listitem [ref=f114e62]:
+                  - link "My Orders" [ref=f114e63] [cursor=pointer]:
+                    - /url: /venue-portal/orders
+              - list [ref=f114e65]:
+                - listitem [ref=f114e66]:
+                  - link "Settings" [ref=f114e67] [cursor=pointer]:
+                    - /url: /venue-portal/settings
+                - listitem [ref=f114e68]:
+                  - button "Logout" [ref=f114e69] [cursor=pointer]
+        - generic [ref=f114e71]:
+          - generic [ref=f114e72]:
+            - generic [ref=f114e73]:
+              - heading "Venue Profile & Preferences" [level=1] [ref=f114e74]
+              - paragraph [ref=f114e75]: Keep your profile up to date so artists can tailor their work to your space.
+            - button "Save Changes" [ref=f114e77] [cursor=pointer]
+          - generic [ref=f114e78]:
+            - generic [ref=f114e79]:
+              - generic [ref=f114e80]:
+                - generic [ref=f114e81]:
+                  - heading "Venue Details" [level=2] [ref=f114e82]
+                  - button "Edit" [ref=f114e83] [cursor=pointer]
+                - generic [ref=f114e84]:
+                  - generic [ref=f114e85]:
+                    - paragraph [ref=f114e86]: Venue Name
+                    - paragraph [ref=f114e87]: Your Venue
+                  - generic [ref=f114e88]:
+                    - paragraph [ref=f114e89]: Venue Type
+                    - paragraph [ref=f114e90]: Not set
+                  - generic [ref=f114e91]:
+                    - paragraph [ref=f114e92]: Location
+                    - paragraph [ref=f114e93]: Not set
+                  - generic [ref=f114e94]:
+                    - paragraph [ref=f114e95]: Wall Space
+                    - paragraph [ref=f114e96]: Not set
+                  - generic [ref=f114e97]:
+                    - paragraph [ref=f114e98]: Visitors per day (approx.)
+                    - paragraph [ref=f114e99]: Not set
+              - generic [ref=f114e100]:
+                - generic [ref=f114e101]:
+                  - generic [ref=f114e102]:
+                    - heading "Venue Photos" [level=2] [ref=f114e103]
+                    - paragraph [ref=f114e104]: Up to 10 images of your space. Shown on your public venue page.
+                  - generic [ref=f114e105] [cursor=pointer]: Add photos
+                - paragraph [ref=f114e107]: No photos yet. Drag photos in or click Add photos to bring your space to life.
+              - generic [ref=f114e108]:
+                - heading "Art Preferences" [level=2] [ref=f114e110]
+                - generic [ref=f114e111]:
+                  - generic [ref=f114e112]:
+                    - paragraph [ref=f114e113]: Interested In
+                    - generic [ref=f114e114]:
+                      - generic [ref=f114e115] [cursor=pointer]:
+                        - switch "Revenue share" [checked] [ref=f114e116]
+                        - generic [ref=f114e118]: Revenue share
+                      - generic [ref=f114e119] [cursor=pointer]:
+                        - switch "Paid loan" [checked] [ref=f114e120]
+                        - generic [ref=f114e122]: Paid loan
+                      - generic [ref=f114e123] [cursor=pointer]:
+                        - switch "Direct purchase" [checked] [ref=f114e124]
+                        - generic [ref=f114e126]: Direct purchase
+                  - generic [ref=f114e127]:
+                    - paragraph [ref=f114e128]: Preferred Styles
+                    - generic [ref=f114e129]:
+                      - button "Contemporary" [ref=f114e130] [cursor=pointer]
+                      - button "Abstract" [ref=f114e131] [cursor=pointer]
+                      - button "Minimal" [ref=f114e132] [cursor=pointer]
+                      - button "Figurative" [ref=f114e133] [cursor=pointer]
+                      - button "Landscape" [ref=f114e134] [cursor=pointer]
+                      - button "Urban" [ref=f114e135] [cursor=pointer]
+                      - button "Photography" [ref=f114e136] [cursor=pointer]
+                      - button "Botanical" [ref=f114e137] [cursor=pointer]
+                      - button "Geometric" [ref=f114e138] [cursor=pointer]
+                      - button "Expressionist" [ref=f114e139] [cursor=pointer]
+                  - generic [ref=f114e140]:
+                    - paragraph [ref=f114e141]: Preferred Themes
+                    - generic [ref=f114e142]:
+                      - button "Nature" [ref=f114e143] [cursor=pointer]
+                      - button "City" [ref=f114e144] [cursor=pointer]
+                      - button "People" [ref=f114e145] [cursor=pointer]
+                      - button "Architecture" [ref=f114e146] [cursor=pointer]
+                      - button "Seascape" [ref=f114e147] [cursor=pointer]
+                      - button "Stilllife" [ref=f114e148] [cursor=pointer]
+                      - button "Identity" [ref=f114e149] [cursor=pointer]
+                      - button "Light & Shadow" [ref=f114e150] [cursor=pointer]
+                  - generic [ref=f114e151]:
+                    - paragraph [ref=f114e152]: Artist Location
+                    - generic [ref=f114e153] [cursor=pointer]:
+                      - switch "Prefer artists within 10 miles of my venue" [ref=f114e154]
+                      - generic [ref=f114e156]: Prefer artists within 10 miles of my venue
+              - generic [ref=f114e157]:
+                - generic [ref=f114e158]:
+                  - heading "Display Needs" [level=2] [ref=f114e159]
+                  - button "Edit" [ref=f114e160] [cursor=pointer]
+                - generic [ref=f114e161]:
+                  - generic [ref=f114e162]:
+                    - paragraph [ref=f114e163]: Wall Space Available
+                    - paragraph [ref=f114e164]: Not set
+                  - generic [ref=f114e165]:
+                    - paragraph [ref=f114e166]: Lighting
+                    - paragraph [ref=f114e167]: Not set
+                  - generic [ref=f114e168]:
+                    - paragraph [ref=f114e169]: Installation Notes
+                    - paragraph [ref=f114e170]: Not set
+                  - generic [ref=f114e171]:
+                    - paragraph [ref=f114e172]: Rotation Frequency
+                    - paragraph [ref=f114e173]: Not set
+              - generic [ref=f114e174]:
+                - paragraph [ref=f114e175]: Make sure to save before leaving this page.
+                - button "Save Changes" [ref=f114e176] [cursor=pointer]
+            - complementary [ref=f114e177]:
+              - generic [ref=f114e178]:
+                - paragraph [ref=f114e180]: Live preview
+                - generic [ref=f114e181]:
+                  - generic [ref=f114e182]: Add a venue photo
+                  - generic [ref=f114e184]:
+                    - generic [ref=f114e185]:
+                      - paragraph [ref=f114e186]: Your venue
+                      - paragraph [ref=f114e187]: Venue type · Location
+                    - generic [ref=f114e188]:
+                      - generic [ref=f114e189]: Revenue share
+                      - generic [ref=f114e190]: Paid loan
+                      - generic [ref=f114e191]: Direct purchase
+              - paragraph [ref=f114e192]:
+                - text: This is exactly what artists see on Spaces and on your public venue page. Changes show here live, don’t forget to hit
+                - strong [ref=f114e193]: Save
+                - text: .
+    - button "Feedback and feature requests" [ref=f114e194] [cursor=pointer]: Feedback
+  - alert [ref=f114e197]

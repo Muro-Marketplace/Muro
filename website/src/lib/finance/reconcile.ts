@@ -60,6 +60,11 @@ export interface ReconcileReport {
   venuePence: number;
   platformFeePence: number;
   transferredPence: number;
+  /** WS2.5: blocked rows are money OWED but frozen (no payout capability,
+   *  chargeback hold). The books stay consistent, so they are not drift,
+   *  but an operator must see the queue or it sits forever. */
+  blockedCount: number;
+  blockedPence: number;
   drifts: Drift[];
 }
 
@@ -117,6 +122,8 @@ export function reconcile(
 ): ReconcileReport {
   const byOrder = new Map<string, number>();
   let transfersChecked = 0;
+  let blockedCount = 0;
+  let blockedPence = 0;
   const orphans: TransferRow[] = [];
   const orderIds = new Set(orders.map((o) => o.id));
 
@@ -128,6 +135,10 @@ export function reconcile(
     // of every stripe_transfers row this call happened to be given.
     if (isSyntheticOrderId(t.order_id)) continue;
     transfersChecked++;
+    if ((t.status ?? "").toLowerCase() === "blocked") {
+      blockedCount++;
+      blockedPence += Number(t.amount_cents ?? 0);
+    }
     if (!t.order_id || !orderIds.has(t.order_id)) {
       orphans.push(t);
       continue;
@@ -143,6 +154,8 @@ export function reconcile(
     venuePence: 0,
     platformFeePence: 0,
     transferredPence: 0,
+    blockedCount: 0,
+    blockedPence: 0,
     drifts: [],
   };
 
@@ -209,6 +222,8 @@ export function reconcile(
     }
   }
 
+  report.blockedCount = blockedCount;
+  report.blockedPence = blockedPence;
   return report;
 }
 
@@ -225,6 +240,13 @@ export function formatReport(report: ReconcileReport): string {
     `Transfers scheduled:  ${p(report.transferredPence)}`,
     "",
   ];
+  if (report.blockedCount > 0) {
+    lines.push(
+      `BLOCKED: ${report.blockedCount} transfer(s) totalling ${p(report.blockedPence)} are frozen ` +
+        `(no payout capability or chargeback hold). Money owed that will not move until someone acts.`,
+      "",
+    );
+  }
   if (report.drifts.length === 0) {
     lines.push("No drift. Every order's split sums, and every penny owed has a transfer row.");
     return lines.join("\n");

@@ -15,14 +15,19 @@
 // These assert on whether the WRITE happened as much as on the status code: the
 // security property is that no update reaches placements.
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 
-const { authMock, fromMock, isFlagOnMock, cancelBillingMock, assertNoServerOwnedSpy } = vi.hoisted(() => ({
+const { authMock, fromMock, isFlagOnMock, cancelBillingMock, assertNoServerOwnedSpy, getUserByIdMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn(() => false),
   cancelBillingMock: vi.fn(async () => ({ status: "cancelled" as const })),
   assertNoServerOwnedSpy: vi.fn(),
+  // Defaults to no user, which short-circuits every email branch; the R4.14
+  // counter-key tests point it at a real counterparty.
+  getUserByIdMock: vi.fn(async () => ({
+    data: { user: null as { email?: string; user_metadata?: Record<string, unknown> } | null },
+  })),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
@@ -50,14 +55,15 @@ vi.mock("@/lib/db/writable-fields", async (importOriginal) => {
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
     from: fromMock,
-    auth: { admin: { getUserById: async () => ({ data: { user: null } }) } },
+    auth: { admin: { getUserById: getUserByIdMock } },
   }),
 }));
 vi.mock("@/lib/feature-flags", () => ({ isFlagOn: isFlagOnMock }));
 // K1: the legacy @/lib/email is deleted; both directions of the placement
 // event go through sendEmail now.
 vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
-vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
+const { createNotificationMock } = vi.hoisted(() => ({ createNotificationMock: vi.fn(async () => {}) }));
+vi.mock("@/lib/notifications", () => ({ createNotification: createNotificationMock }));
 
 // The route pulls in paid-loan-billing, which constructs a Stripe client at
 // module load, so without these the file cannot even be imported in a test env
@@ -85,8 +91,10 @@ vi.mock("@/emails/templates/placements/PlacementScheduled", () => ({ PlacementSc
 vi.mock("@/emails/templates/placements/PlacementArtworkInstalled", () => ({ PlacementArtworkInstalled: () => null }));
 vi.mock("@/emails/templates/placements/PlacementEnded", () => ({ PlacementEnded: () => null }));
 
-import { PATCH } from "./route";
+import { PATCH, POST } from "./route";
 import { assertNoServerOwned, PLACEMENT_SERVER_OWNED } from "@/lib/db/writable-fields";
+// Mocked above; imported so the R4.14 tests can assert on the calls.
+import { sendEmail } from "@/lib/email/send";
 
 type Row = {
   artist_user_id: string | null;
@@ -96,6 +104,14 @@ type Row = {
   venue: string | null;
   status: string;
   proposed_by_user_id?: string | null;
+  // Current terms the counter path merges under a partial counter (F32).
+  monthly_fee_gbp?: number | null;
+  qr_enabled?: boolean | null;
+  revenue_share_percent?: number | null;
+  /** 3.4: read so a repeated cancel cannot rewrite who did it. */
+  cancelled_at?: string | null;
+  /** P4: read so an install cannot land before its own scheduled date. */
+  scheduled_for?: string | null;
 };
 
 const updates: Record<string, unknown>[] = [];
@@ -103,36 +119,73 @@ const updates: Record<string, unknown>[] = [];
 /** Rows the message-trail requester lookup should see. */
 type TrailMsg = { sender_id: string | null; metadata: Record<string, unknown> | null };
 
-function setupDb(row: Row | null, trail: TrailMsg[] = []) {
+/** Profile rows for the counter auto-message branch (R4.14 tests). */
+type ProfileStub = { slug: string; name: string };
+
+function setupDb(
+  row: Row | null,
+  trail: TrailMsg[] = [],
+  profiles: { artist?: ProfileStub; venue?: ProfileStub } = {},
+) {
   updates.length = 0;
   fromMock.mockImplementation((table: string) => {
+    if (table === "artist_profiles" && profiles.artist) {
+      const profile = profiles.artist;
+      return {
+        select: () => ({ eq: () => ({ single: async () => ({ data: profile, error: null }) }) }),
+      };
+    }
+    if (table === "venue_profiles" && profiles.venue) {
+      const profile = profiles.venue;
+      return {
+        select: () => ({ eq: () => ({ single: async () => ({ data: profile, error: null }) }) }),
+      };
+    }
     if (table === "placements") {
       return {
-        // The second shape (selectOpts.head) is the Finding 1 collected-undo
-        // capacity gate's head:true count query. Fixed at count: 0, so every
-        // test using this generic setupDb (none of which are exercising the
-        // cap gate itself, that's setupCapDb below) sees an artist safely
-        // under any real cap rather than a broken query chain.
-        select: (_columns?: unknown, selectOpts?: { head?: boolean }) => {
+        // Two shapes. The head:true count is the concurrent-placement cap gate
+        // (Task 3), which every transition into `active` now runs, undo
+        // included; it chains a second .eq() the row-fetch shape does not have,
+        // and without it the gate throws and the whole PATCH answers 400.
+        // `setupCapDb` in the cap block below drives the count itself; here it
+        // answers 0, which is under every plan's cap.
+        select: (_cols?: unknown, selectOpts?: { head?: boolean }) => {
           if (selectOpts?.head) {
-            const chain = {
-              eq: () => chain,
+            const counting = {
+              eq: () => counting,
               then: (resolve: (v: unknown) => unknown) =>
                 Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
             };
-            return chain;
+            return counting;
           }
           return {
             eq: () => ({
+              eq: () => ({
+                single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
+                maybeSingle: async () => ({ data: row, error: null }),
+              }),
               single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
               maybeSingle: async () => ({ data: row, error: null }),
+              contains: () => ({
+                order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+                maybeSingle: async () => ({ data: null, error: null }),
+              }),
               order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
             }),
           };
         },
         update: (payload: Record<string, unknown>) => {
           updates.push(payload);
-          return { eq: async () => ({ error: null }) };
+          // Awaitable at .eq() for the plain paths, and .select()-able for
+          // the counter terms write, which confirms a row actually changed.
+          const afterEq = {
+            select: async () => ({ data: [{ id: "pl-1" }], error: null }),
+            then: (
+              onFulfilled: (v: { error: null }) => unknown,
+              onRejected?: (e: unknown) => unknown,
+            ) => Promise.resolve({ error: null }).then(onFulfilled, onRejected),
+          };
+          return { eq: () => afterEq };
         },
       };
     }
@@ -144,6 +197,10 @@ function setupDb(row: Row | null, trail: TrailMsg[] = []) {
         select: () => ({
           eq: () => ({
             order: () => ({ limit: async () => ({ data: trail, error: null }) }),
+          }),
+          // The counter auto-message thread lookup: .or(...).order().limit().maybeSingle()
+          or: () => ({
+            order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
           }),
         }),
         insert: async () => ({ error: null }),
@@ -194,6 +251,8 @@ beforeEach(() => {
   authMock.mockResolvedValue({ user: { id: ARTIST, email: "a@example.com" }, error: null });
   cancelBillingMock.mockClear();
   assertNoServerOwnedSpy.mockClear();
+  getUserByIdMock.mockReset();
+  getUserByIdMock.mockResolvedValue({ data: { user: null } });
 });
 
 describe("PATCH /api/placements state machine (E20)", () => {
@@ -350,6 +409,33 @@ describe("PATCH /api/placements completion path (E23b)", () => {
     expect(updates[0].collected_at).toBeTruthy();
   });
 
+  it("keys the stage bells so a re-PATCH of the same stage cannot double-bell (WS6.3 / R6.F6a)", async () => {
+    // Fail-before: the comment above the bell block claimed id+stage+user
+    // idempotency that did not exist, so re-PATCHing stage:"collected"
+    // inserted a second identical bell for both parties.
+    createNotificationMock.mockClear();
+    setupDb({
+      artist_user_id: ARTIST,
+      venue_user_id: VENUE,
+      artist_slug: "alice",
+      venue_slug: "kings-arms",
+      venue: "Kings Arms",
+      status: "active",
+      proposed_by_user_id: null,
+    });
+    const res = await patch({ id: "pl-1", stage: "collected" });
+    expect(res.status).toBeLessThan(400);
+    for (const uid of [ARTIST, VENUE]) {
+      expect(createNotificationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: uid,
+          kind: "placement_collected",
+          idempotencyKey: `placement_collected:pl-1:${uid}`,
+        }),
+      );
+    }
+  });
+
   it("still supports undoing collected back to active", async () => {
     // The undo path writes updates.status directly rather than through the
     // caller-supplied `status` field, so the E20 gate must not catch it.
@@ -447,18 +533,18 @@ describe("PATCH /api/placements surfaces write failures (row 22)", () => {
     fromMock.mockImplementation((table: string) => {
       if (table === "placements") {
         return {
-          // Same head:true count-query shape as setupDb above, needed now
-          // the collected-undo capacity gate runs before this update and
-          // would otherwise throw on the second .eq() rather than reach the
-          // write failure this test is actually pinning.
-          select: (_columns?: unknown, selectOpts?: { head?: boolean }) => {
+          // The head:true branch is the concurrent-placement cap count, which
+          // runs on every transition into `active` (undo included). Answers 0,
+          // under every plan's cap, so the write failure below is what the
+          // test actually observes.
+          select: (_cols?: unknown, selectOpts?: { head?: boolean }) => {
             if (selectOpts?.head) {
-              const chain = {
-                eq: () => chain,
+              const counting = {
+                eq: () => counting,
                 then: (resolve: (v: unknown) => unknown) =>
                   Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
               };
-              return chain;
+              return counting;
             }
             return {
               eq: () => ({
@@ -520,6 +606,335 @@ describe("PATCH /api/placements surfaces write failures (row 22)", () => {
     expect(res.status).toBe(500);
     expect(updates).toHaveLength(1);
     expect(updates[0]).toHaveProperty("collected_at", null);
+  });
+});
+
+// ── 121: the buy-off-the-wall offer lives on the placement ──────────────────
+//
+// The artist prices THIS physical piece at live-on-wall; a venue cannot set a
+// price on someone else's work, and an explicit null clears the frame flag
+// with the offer so a stale "frame included" cannot outlive it.
+describe("PATCH /api/placements in-store offer (121)", () => {
+  const ROW: Row = {
+    artist_user_id: "u-artist",
+    venue_user_id: "u-venue",
+    artist_slug: "fin-coles",
+    venue_slug: "testing-venue",
+    venue: "Testing Venue",
+    status: "active",
+  };
+
+  it("lets the artist set the offer, persisting price and frame flag", async () => {
+    setupDb({ ...ROW });
+    authMock.mockResolvedValue({ user: { id: "u-artist", email: "a@example.com" }, error: null });
+    const res = await patch({ id: "p1", inStorePrice: 120, inStoreFrameIncluded: true });
+    expect(res.status).toBe(200);
+    const update = updates.find((u) => "in_store_price" in u);
+    expect(update).toMatchObject({ in_store_price: 120, in_store_frame_included: true });
+  });
+
+  it("an explicit null clears the offer AND the frame flag", async () => {
+    setupDb({ ...ROW });
+    authMock.mockResolvedValue({ user: { id: "u-artist", email: "a@example.com" }, error: null });
+    const res = await patch({ id: "p1", inStorePrice: null });
+    expect(res.status).toBe(200);
+    const update = updates.find((u) => "in_store_price" in u);
+    expect(update).toMatchObject({ in_store_price: null, in_store_frame_included: false });
+  });
+
+  it("403s a venue trying to price the artist's piece", async () => {
+    setupDb({ ...ROW });
+    authMock.mockResolvedValue({ user: { id: "u-venue", email: "v@example.com" }, error: null });
+    const res = await patch({ id: "p1", inStorePrice: 120 });
+    expect(res.status).toBe(403);
+    expect(updates.find((u) => "in_store_price" in u)).toBeUndefined();
+  });
+
+  it("refuses a non-positive price at the schema", async () => {
+    setupDb({ ...ROW });
+    authMock.mockResolvedValue({ user: { id: "u-artist", email: "a@example.com" }, error: null });
+    const res = await patch({ id: "p1", inStorePrice: 0 });
+    expect(res.status).toBe(400);
+  });
+});
+
+// F32 + D26 (WS8 item 2). The counter path stored the client's arrangementType
+// verbatim, so a counter claiming "paid_loan" while enabling QR (the dialog's
+// old mapping) or the legacy "free_loan" for a paid loan (the panel's old
+// mapping) wrote a label that disagreed with the economics. The share also
+// passed through unclamped up to the schema's 100 while every UI caps at 50.
+describe("PATCH /api/placements counter derives arrangement_type + clamps share (F32/D26)", () => {
+  // The venue proposed; the artist (the authenticated default) counters.
+  const PENDING: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "pending",
+    proposed_by_user_id: VENUE,
+    monthly_fee_gbp: null,
+    qr_enabled: true,
+    revenue_share_percent: 10,
+  };
+
+  it("derives mixed for a paid-loan counter with QR on, whatever the client claims", async () => {
+    setupDb({ ...PENDING });
+    const res = await patch({
+      id: "pl-1",
+      counter: { arrangementType: "paid_loan", monthlyFeeGbp: 80, qrEnabled: true, revenueSharePercent: 15 },
+    });
+    expect(res.status).toBe(200);
+    expect(updates[0]).toMatchObject({
+      arrangement_type: "mixed",
+      monthly_fee_gbp: 80,
+      qr_enabled: true,
+      revenue_share_percent: 15,
+    });
+  });
+
+  it("derives paid_loan from the legacy free_loan claim when a fee is attached and QR is off", async () => {
+    // The context panel used to send "free_loan" for paid loans (F27).
+    setupDb({ ...PENDING });
+    const res = await patch({
+      id: "pl-1",
+      counter: { arrangementType: "free_loan", monthlyFeeGbp: 60, qrEnabled: false },
+    });
+    expect(res.status).toBe(200);
+    expect(updates[0]).toMatchObject({ arrangement_type: "paid_loan", monthly_fee_gbp: 60 });
+  });
+
+  it("clamps revenueSharePercent to the product's 50 cap before writing", async () => {
+    setupDb({ ...PENDING });
+    const res = await patch({
+      id: "pl-1",
+      counter: { arrangementType: "revenue_share", qrEnabled: true, revenueSharePercent: 100 },
+    });
+    expect(res.status).toBe(200);
+    expect(updates[0]).toMatchObject({ revenue_share_percent: 50, arrangement_type: "revenue_share" });
+  });
+
+  it("merges a partial counter over the row's current terms before deriving", async () => {
+    // The row already carries a monthly fee; the counter only flips QR on.
+    // Fee (kept) + QR (new) is canonically mixed.
+    setupDb({ ...PENDING, monthly_fee_gbp: 45, qr_enabled: false, revenue_share_percent: null });
+    const res = await patch({ id: "pl-1", counter: { qrEnabled: true } });
+    expect(res.status).toBe(200);
+    expect(updates[0]).toMatchObject({ arrangement_type: "mixed", qr_enabled: true });
+    // The fee itself was not part of the counter, so it is not rewritten.
+    expect(updates[0]).not.toHaveProperty("monthly_fee_gbp");
+  });
+
+  it("still refuses the requester countering their own pending request", async () => {
+    setupDb({ ...PENDING, proposed_by_user_id: ARTIST });
+    const res = await patch({ id: "pl-1", counter: { qrEnabled: false } });
+    expect(res.status).toBe(400);
+    expect(updates).toHaveLength(0);
+  });
+});
+
+// R4.14 (WS5.5). The counter-offer email was keyed on Date.now(), which is not
+// an idempotency key: a platform retry or a double-submit of the same counter
+// sent the email twice. notifications.ts's own docstring names this exact
+// anti-pattern. The key is now derived from the recipient plus the countered
+// terms, so a retried identical request dedupes while a genuinely new counter
+// still sends.
+describe("PATCH /api/placements counter-offer email idempotency key (R4.14)", () => {
+  const PENDING: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "pending",
+    proposed_by_user_id: VENUE,
+    monthly_fee_gbp: null,
+    qr_enabled: true,
+    revenue_share_percent: 10,
+  };
+
+  const PROFILES = {
+    artist: { slug: "alice", name: "Alice" },
+    venue: { slug: "kings-arms", name: "Kings Arms" },
+  };
+
+  const sendEmailSpy = vi.mocked(sendEmail);
+
+  beforeEach(() => {
+    sendEmailSpy.mockClear();
+    getUserByIdMock.mockResolvedValue({
+      data: { user: { email: "venue@example.com", user_metadata: {} } },
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const COUNTER = {
+    id: "pl-1",
+    counter: { arrangementType: "paid_loan", monthlyFeeGbp: 80, qrEnabled: false },
+  };
+
+  it("keys the email deterministically, so a retried request dedupes", async () => {
+    // Fake only Date: with the old Date.now() key, two attempts seconds apart
+    // produced two distinct keys and therefore two emails (fail-before).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-29T10:00:00.000Z"));
+
+    setupDb({ ...PENDING }, [], PROFILES);
+    expect((await patch(COUNTER)).status).toBe(200);
+
+    vi.setSystemTime(new Date("2026-08-29T10:00:05.000Z"));
+    setupDb({ ...PENDING }, [], PROFILES);
+    expect((await patch(COUNTER)).status).toBe(200);
+
+    expect(sendEmailSpy).toHaveBeenCalledTimes(2);
+    const keys = sendEmailSpy.mock.calls.map(
+      (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(keys[0]).toBe(keys[1]);
+    // Scoped to the recipient, so A countering B and B countering back with
+    // identical terms do not collide.
+    expect(keys[0]).toContain(`:to:${VENUE}:`);
+    expect(keys[0]).toMatch(/^placement_counter:pl-1:/);
+  });
+
+  it("gives a counter with different terms its own key", async () => {
+    setupDb({ ...PENDING }, [], PROFILES);
+    expect((await patch(COUNTER)).status).toBe(200);
+
+    setupDb({ ...PENDING }, [], PROFILES);
+    expect(
+      (await patch({ id: "pl-1", counter: { ...COUNTER.counter, monthlyFeeGbp: 95 } })).status,
+    ).toBe(200);
+
+    expect(sendEmailSpy).toHaveBeenCalledTimes(2);
+    const keys = sendEmailSpy.mock.calls.map(
+      (c) => (c[0] as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E21. The venue and artist placement forms both mint the row id client-side
+// (`p-${Date.now()}-…`) and then link the optimistic row at /placements/<id>.
+// That is only safe because the id travels in the POST body and the route
+// persists it verbatim; if the route ever minted its own the links would 404
+// until a refresh. This pins the invariant those links depend on.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Rows the POST asked the DB to insert into `placements`. */
+let placementInserts: Record<string, unknown>[][] = [];
+
+function setupPostDb() {
+  placementInserts = [];
+  fromMock.mockImplementation((table: string) => {
+    if (table === "artist_profiles") {
+      return {
+        select: () => ({
+          eq: (col: string, val: string) => ({
+            single: async () =>
+              // getUserRole asks by user_id (the caller is a venue, so: no row);
+              // the fromVenue branch asks by slug for the target artist.
+              col === "slug"
+                ? { data: { user_id: "u-artist", slug: val, name: "Maya Chen" }, error: null }
+                : { data: null, error: { code: "PGRST116" } },
+          }),
+        }),
+      };
+    }
+    if (table === "venue_profiles") {
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({
+              data: { user_id: VENUE, slug: "copper-kettle", name: "The Copper Kettle" },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "placements") {
+      return {
+        insert: async (rows: Record<string, unknown>[]) => {
+          placementInserts.push(rows);
+          return { error: null };
+        },
+      };
+    }
+    if (table === "messages") {
+      return {
+        select: () => ({
+          or: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }) }),
+        }),
+        insert: async () => ({ error: null }),
+      };
+    }
+    return {
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
+      insert: async () => ({ error: null }),
+    };
+  });
+}
+
+function post(body: unknown) {
+  return POST(
+    new Request("http://localhost/api/placements", {
+      method: "POST",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+const CLIENT_ID = "p-1756000000000-ab12";
+
+describe("POST /api/placements persists the caller's row id (E21)", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: VENUE, email: "v@example.com" }, error: null });
+    setupPostDb();
+  });
+
+  it("stores the id the client generated, so /placements/<id> resolves", async () => {
+    const res = await post({
+      fromVenue: true,
+      artistSlug: "maya-chen",
+      placements: [{
+        id: CLIENT_ID,
+        workTitle: "Last Light",
+        venueSlug: "self",
+        type: "revenue_share",
+        qrEnabled: true,
+        revenueSharePercent: 20,
+      }],
+    });
+
+    expect(res.status).toBe(200);
+    expect(placementInserts).toHaveLength(1);
+    // The optimistic row in the portal renders Open / QR-label links at
+    // /placements/<this id>. If the route minted its own id instead, every one
+    // of those links would 404 until the next full list refresh.
+    expect(placementInserts[0][0].id).toBe(CLIENT_ID);
+  });
+
+  it("keeps every id in a multi-row submit", async () => {
+    const ids = [`${CLIENT_ID}-a`, `${CLIENT_ID}-b`];
+    await post({
+      fromVenue: true,
+      artistSlug: "maya-chen",
+      placements: ids.map((id) => ({
+        id,
+        workTitle: `Work ${id}`,
+        venueSlug: "self",
+        type: "revenue_share",
+        qrEnabled: true,
+      })),
+    });
+
+    expect(placementInserts[0].map((r) => r.id)).toEqual(ids);
   });
 });
 
@@ -934,5 +1349,284 @@ describe("PATCH /api/placements enforces the server-owned guard (Finding 2)", ()
         "placements",
       ),
     ).toThrow(/programme_rent_gbp/);
+  });
+});
+
+// Row 727 / PASS2-placement-lifecycle-log. After a GBP 120 off-the-wall sale
+// the placement went to `status: sold`, every stage control disappeared for
+// both parties, and the progress bar sat at 5 of 6 with "Collected"
+// permanently unreachable. There was no way for either side to close the loan.
+//
+// `sold` IS a terminal outcome (billing is cancelled, the work is unlinked,
+// reviews open), but the piece has still physically left the wall and the
+// record should say when. Two routes to that, and both are wired:
+//
+//   automatic  the buyer confirming collection of the collect order stamps
+//              collected_at on the placement (see /api/orders)
+//   manual     either party can still mark Collected on a sold placement,
+//              which is this block
+describe("PATCH /api/placements can still close a SOLD placement (row 727)", () => {
+  const SOLD: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "sold",
+  };
+
+  it("accepts stage: collected and lands the placement at completed", async () => {
+    setupDb(SOLD);
+
+    const res = await patch({ id: "pl-1", stage: "collected" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(updates[0]).toMatchObject({ status: "completed" });
+    expect(updates[0].collected_at).toEqual(expect.any(String));
+  });
+
+  it("still refuses an earlier stage on a sold placement", async () => {
+    // Scheduling or installing a piece that has been sold off the wall is
+    // meaningless; only the closing stage is reachable from here.
+    setupDb(SOLD);
+
+    const res = await patch({ id: "pl-1", stage: "installed" });
+
+    expect(res.status).toBe(400);
+    expect(updates).toHaveLength(0);
+  });
+
+  it("still refuses a stage on a cancelled placement", async () => {
+    setupDb({ ...SOLD, status: "cancelled" });
+
+    const res = await patch({ id: "pl-1", stage: "collected" });
+
+    expect(res.status).toBe(400);
+    expect(updates).toHaveLength(0);
+  });
+});
+
+// Pass 2 item 3.4. `placements.cancelled_at` and `cancelled_by_user_id` exist
+// and nothing had ever written them, so a cancelled placement carried no record
+// of who ended it or when. Verified NULL on both for p-1788192191293-7xdf,
+// which a venue cancelled during the pass.
+describe("PATCH /api/placements records who cancelled and when (3.4)", () => {
+  const ACTIVE: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+  };
+
+  it("stamps both columns on the transition into cancelled", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", status: "cancelled" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(updates[0].cancelled_at).toEqual(expect.any(String));
+    expect(updates[0].cancelled_by_user_id).toBe(ARTIST);
+  });
+
+  it("stamps nothing on any other transition", async () => {
+    setupDb(ACTIVE);
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("cancelled_at");
+    expect(updates[0]).not.toHaveProperty("cancelled_by_user_id");
+  });
+
+  it("does not rewrite who cancelled on a repeated PATCH", async () => {
+    setupDb({ ...ACTIVE, status: "cancelled", cancelled_at: "2026-08-01T00:00:00.000Z" });
+
+    await patch({ id: "pl-1", status: "cancelled" });
+
+    expect(updates[0] ?? {}).not.toHaveProperty("cancelled_by_user_id");
+  });
+});
+
+// Pass 2 item 3.3 (rows 2168, 2170). Undoing a collection correctly returned
+// the placement to active and cleared collected_at, but left the WORK unlinked:
+// placed_at_venue and current_placement_id both stayed null while an active
+// placement pointed at it, so the artwork page said the piece was on no wall
+// and the stock the collection restored was never taken back.
+//
+// The inventory hook keyed on pending → active only, and an undo is
+// completed → active.
+/** artist_works UPDATE payloads captured by setupInventoryDb. */
+const workWrites: Record<string, unknown>[] = [];
+
+/**
+ * A DB mock that models the inventory hook's four reads: the placement's own
+ * row, the placement's titles, the artist's profile id, and the artist_works
+ * rows matched by title. Separate from setupDb because that one answers every
+ * non-placements table with nothing, which makes the hook a no-op.
+ */
+function setupInventoryDb(row: Row, works: Array<Record<string, unknown>>) {
+  updates.length = 0;
+  workWrites.length = 0;
+  fromMock.mockImplementation((table: string) => {
+    if (table === "placements") {
+      return {
+        select: (_cols?: unknown, selectOpts?: { head?: boolean }) => {
+          if (selectOpts?.head) {
+            const counting = {
+              eq: () => counting,
+              then: (resolve: (v: unknown) => unknown) =>
+                Promise.resolve({ data: null, count: 0, error: null }).then(resolve),
+            };
+            return counting;
+          }
+          return {
+            eq: () => ({
+              single: async () => ({ data: row, error: null }),
+              maybeSingle: async () => ({
+                data: { ...row, work_title: "Sunset", extra_works: [] },
+                error: null,
+              }),
+              order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }),
+            }),
+          };
+        },
+        update: (payload: Record<string, unknown>) => {
+          updates.push(payload);
+          return { eq: async () => ({ error: null }) };
+        },
+      };
+    }
+    if (table === "artist_profiles") {
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: "ap-1" }, error: null }) }) }),
+      };
+    }
+    if (table === "venue_profiles") {
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: { name: "Kings Arms" }, error: null }) }),
+        }),
+      };
+    }
+    if (table === "artist_works") {
+      return {
+        select: () => ({ eq: () => ({ in: async () => ({ data: works, error: null }) }) }),
+        update: (payload: Record<string, unknown>) => {
+          workWrites.push(payload);
+          return { eq: async () => ({ error: null }) };
+        },
+      };
+    }
+    const chain: Record<string, unknown> = {
+      single: async () => ({ data: null, error: null }),
+      maybeSingle: async () => ({ data: null, error: null }),
+      then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+    };
+    chain.eq = () => chain;
+    chain.or = () => chain;
+    chain.in = () => chain;
+    chain.order = () => chain;
+    chain.limit = () => chain;
+    chain.contains = () => chain;
+    return {
+      select: () => chain,
+      insert: async () => ({ error: null }),
+      update: () => ({ eq: async () => ({ error: null }) }),
+      delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+    };
+  });
+}
+
+describe("PATCH /api/placements re-links the work when a collection is undone (3.3)", () => {
+  const COMPLETED: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "completed",
+  };
+
+  /** Every artist_works UPDATE the request made. */
+  function workUpdates(): Record<string, unknown>[] {
+    return workWrites;
+  }
+
+  it("stamps the work back onto the placement", async () => {
+    setupInventoryDb(COMPLETED, [
+      { id: "w-1", quantity_available: 2, current_placement_id: null },
+    ]);
+
+    const res = await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(res.status).toBeLessThan(400);
+    expect(workUpdates()).toHaveLength(1);
+    expect(workUpdates()[0]).toMatchObject({
+      current_placement_id: "pl-1",
+      placed_at_venue: "Kings Arms",
+    });
+  });
+
+  it("takes the stock back that the collection restored", async () => {
+    setupInventoryDb(COMPLETED, [
+      { id: "w-1", quantity_available: 2, current_placement_id: null },
+    ]);
+
+    await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(workUpdates()[0]).toMatchObject({ quantity_available: 1, available: true });
+  });
+
+  it("still clears the timestamp and returns the placement to active", async () => {
+    setupInventoryDb(COMPLETED, []);
+
+    await patch({ id: "pl-1", unsetStage: "collected" });
+
+    expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
+  });
+});
+
+// Production pass 2, P4. "Installed can precede the scheduled date with no
+// complaint, producing 'Scheduled 2 Sept / Installed 31 Aug' in the progress
+// bar." A stepper that reads backwards is worse than an unstamped one: the
+// record is what both parties rely on later.
+//
+// The remedy is to move the plan, not to refuse the fact. Somebody marking a
+// piece installed is reporting what happened.
+describe("PATCH /api/placements keeps the stepper reading forward", () => {
+  const ACTIVE_SCHEDULED: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+    scheduled_for: "2099-09-02T12:00:00.000Z",
+  };
+
+  it("pulls a future scheduled date back to the install it just recorded", async () => {
+    setupDb(ACTIVE_SCHEDULED);
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0].installed_at).toEqual(expect.any(String));
+    expect(updates[0].scheduled_for).toBe(updates[0].installed_at);
+  });
+
+  it("leaves a schedule that already precedes the install alone", async () => {
+    setupDb({ ...ACTIVE_SCHEDULED, scheduled_for: "2020-01-01T00:00:00.000Z" });
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("scheduled_for");
+  });
+
+  it("touches nothing when no install date was ever scheduled", async () => {
+    setupDb({ ...ACTIVE_SCHEDULED, scheduled_for: null });
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(updates[0]).not.toHaveProperty("scheduled_for");
   });
 });

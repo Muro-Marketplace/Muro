@@ -81,9 +81,42 @@ describe("wallplace/no-ad-hoc-cap", () => {
     expect(messages).toHaveLength(0);
   });
 
-  it("allows a placements select without a count indicator (ordinary row read)", () => {
+  it("allows a placements select without a count indicator or an actor filter (ordinary date-ranged read)", () => {
     const messages = lint(
       `db.from("placements").select("*").gte("created_at", since)`,
+    );
+    expect(messages).toHaveLength(0);
+  });
+
+  it("flags a per-actor windowed read with no count indicator", () => {
+    // The shape the cap helper itself now uses: it needs the timestamps, not a
+    // count, to say when the artist's next approach frees up. Without this the
+    // rule would wave a copied counter straight through.
+    const messages = lint(
+      `db.from("placements").select("created_at").eq("created_by_user_id", uid).gte("created_at", since)`,
+    );
+    expect(messages.length).toBeGreaterThanOrEqual(1);
+    expect(messages[0].ruleId).toBe("wallplace/no-ad-hoc-cap");
+  });
+
+  it("flags a per-sender windowed read on messages", () => {
+    const messages = lint(
+      `db.from("messages").select("conversation_id, created_at").eq("sender_id", uid).gte("created_at", since)`,
+    );
+    expect(messages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("still allows the actor-filtered window inside the exempt helper", () => {
+    const messages = lint(
+      `db.from("placements").select("created_at").eq("created_by_user_id", uid).gte("created_at", since)`,
+      "src/lib/outreach-cap.ts",
+    );
+    expect(messages).toHaveLength(0);
+  });
+
+  it("allows an actor filter with no created_at window (all-time list)", () => {
+    const messages = lint(
+      `db.from("placements").select("*").eq("created_by_user_id", uid)`,
     );
     expect(messages).toHaveLength(0);
   });

@@ -25,7 +25,15 @@ export default function ArtistPostsPage() {
   useEffect(() => {
     authFetch("/api/placements?status=active")
       .then((r) => r.json())
-      .then((d) => setActivePlacements(d.placements || []))
+      // D25: the route ignores ?status= (it reads only `archived`), so this
+      // returns placements in EVERY state. Without the filter a pending,
+      // declined or completed placement produced a "Now showing at" line for
+      // work that is not on that wall.
+      .then((d) =>
+        setActivePlacements(
+          ((d.placements || []) as ActivePlacement[]).filter((p) => p.status === "active"),
+        ),
+      )
       .catch(() => setActivePlacements([]));
   }, []);
 

@@ -27,6 +27,12 @@ vi.mock("@/lib/supabase-admin", () => ({
 // does not cover (cancelled / disputed / refunded) go through sendEmail now.
 vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/stripe-connect", () => ({ executeTransfer: vi.fn(async () => {}) }));
+vi.mock("@/lib/refunds/cancellation", () => ({ processCancellationRefund: vi.fn(async () => {}) }));
+vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
+const { createNotificationMock } = vi.hoisted(() => ({
+  createNotificationMock: vi.fn(async () => {}),
+}));
+vi.mock("@/lib/notifications", () => ({ createNotification: createNotificationMock }));
 
 import { PATCH } from "./route";
 import { executeTransfer } from "@/lib/stripe-connect";
@@ -56,6 +62,8 @@ function chainSelectSingle(row: unknown, visible: unknown = row) {
 beforeEach(() => {
   fromMock.mockReset();
   actAs("seller");
+  createNotificationMock.mockReset();
+  createNotificationMock.mockResolvedValue(undefined);
 });
 
 describe("PATCH /api/orders state machine", () => {
@@ -150,7 +158,7 @@ describe("PATCH /api/orders payout + email side-effects", () => {
   // order_events.upsert (lifecycle, best-effort), stripe_transfers.select
   // (pending list), then optionally orders.select again for placement.
   // We keep it simple by table name.
-  function makeDeliveredFromMock(transferIds: string[]) {
+  function makeDeliveredFromMock(transferIds: string[], rowOverride: Record<string, unknown> = {}) {
     let orderSelectCalled = false;
     return vi.fn((table: string) => {
       if (table === "stripe_transfers") {
@@ -160,7 +168,7 @@ describe("PATCH /api/orders payout + email side-effects", () => {
               eq: () => Promise.resolve({ data: transferIds.map((id) => ({ id })) }),
             }),
           }),
-          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }) }),
         };
       }
       // orders table
@@ -179,6 +187,7 @@ describe("PATCH /api/orders payout + email side-effects", () => {
             venue_revenue: null,
             shipping: {},
             items: [],
+            ...rowOverride,
           };
           return {
             select: () => ({
@@ -228,6 +237,53 @@ describe("PATCH /api/orders payout + email side-effects", () => {
     vi.mocked(executeTransfer).mockReset();
     vi.mocked(sendEmail).mockReset();
     fromMock.mockReset();
+  });
+
+  it("WS2.7: delivered releases only THIS artist's legs and the venue's, never a co-artist's", async () => {
+    const executed: string[] = [];
+    vi.mocked(executeTransfer).mockImplementation(async (id: string) => {
+      executed.push(id);
+      return null;
+    });
+    const base = makeDeliveredFromMock([]);
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_transfers") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => Promise.resolve({
+                data: [
+                  { id: "t-mine", recipient_type: "artist", recipient_user_id: "u-artist" },
+                  { id: "t-other", recipient_type: "artist", recipient_user_id: "u-second-artist" },
+                  { id: "t-venue", recipient_type: "venue", recipient_user_id: "u-venue" },
+                ],
+              }),
+            }),
+          }),
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }) }),
+        };
+      }
+      return base(table);
+    });
+    const res = await PATCH(req({ orderId: "o1", status: "delivered" }));
+    expect(res.status).toBe(200);
+    expect(executed.sort()).toEqual(["t-mine", "t-venue"]);
+  });
+
+  it("WS3.4: buyer confirms pickup - a collection order goes confirmed straight to delivered", async () => {
+    fromMock.mockImplementation(
+      makeDeliveredFromMock(["t1"], { status: "confirmed", fulfilment_method: "collect_venue" }),
+    );
+    const res = await PATCH(req({ orderId: "o1", status: "delivered" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("WS3.4: a shipped-fulfilment order still cannot skip confirmed to delivered", async () => {
+    fromMock.mockImplementation(
+      makeDeliveredFromMock(["t1"], { status: "confirmed", fulfilment_method: "ship" }),
+    );
+    const res = await PATCH(req({ orderId: "o1", status: "delivered" }));
+    expect(res.status).toBe(422);
   });
 
   it("delivered PATCH with one failing executeTransfer returns 200 with payoutFailures >= 1", async () => {
@@ -290,7 +346,8 @@ describe("PATCH /api/orders payout + email side-effects", () => {
     fromMock.mockImplementation((table: string) => {
       if (table === "stripe_transfers") {
         return {
-          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }),
+          select: () => ({ eq: () => ({ eq: async () => ({ data: [], error: null }) }) }),
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }) }),
         };
       }
       if (table === "orders") {
@@ -569,5 +626,326 @@ describe("PATCH /api/orders stamps delivered_at", () => {
     await PATCH(patch({ orderId: "ord_1", status: "shipped", trackingNumber: "TRK1" }));
 
     expect(updated ?? {}).not.toHaveProperty("delivered_at");
+  });
+});
+
+// ─── WS3.1 (missing-events gap 1): cancelling a PAID order refunds the buyer ───
+import { processCancellationRefund } from "@/lib/refunds/cancellation";
+
+describe("cancellation refunds the buyer (WS3.1)", () => {
+  function req(body: unknown): Request {
+    return new Request("http://localhost/api/orders", {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function installCancelDb(inserted: Array<Record<string, unknown>>) {
+    vi.mocked(getAuthenticatedUser).mockResolvedValue({
+      user: { id: "u-artist", email: "artist@x.com" },
+      error: null,
+    } as never);
+    let orderSelectCalled = false;
+    const paidRow = {
+      id: "o1", artist_user_id: "u-artist", artist_slug: "alice",
+      buyer_user_id: null, buyer_email: "b@x.com", status: "confirmed",
+      status_history: [], placement_id: null, venue_revenue: null,
+      shipping: {}, items: [{ workId: "w-1", quantity: 1 }],
+      stripe_payment_intent_id: "pi_1", total: 100,
+    };
+    fromMock.mockImplementation((table: string) => {
+      if (table === "refund_requests") {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            inserted.push(row);
+            return { select: () => ({ single: async () => ({ data: { id: "rr-new" }, error: null }) }) };
+          },
+        };
+      }
+      if (table === "stripe_transfers") {
+        return {
+          select: () => ({ eq: () => ({ eq: async () => ({ data: [], error: null }) }) }),
+          update: () => ({ eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }) }),
+        };
+      }
+      if (table === "orders") {
+        if (!orderSelectCalled) {
+          orderSelectCalled = true;
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: paidRow }),
+                or: () => ({ maybeSingle: async () => ({ data: paidRow }) }),
+                single: async () => ({ data: paidRow }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: paidRow }),
+              or: () => ({ maybeSingle: async () => ({ data: paidRow }) }),
+              single: async () => ({ data: paidRow }),
+            }),
+          }),
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        };
+      }
+      return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null }), single: async () => ({ data: null }) }) }),
+        update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        insert: async () => ({ error: null }),
+      };
+    });
+  }
+
+  it("files an approved refund request and runs the cancellation refund", async () => {
+    const inserted: Array<Record<string, unknown>> = [];
+    installCancelDb(inserted);
+    const res = await PATCH(req({ orderId: "o1", status: "cancelled" }));
+    expect(res.status).toBe(200);
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({ order_id: "o1", type: "full", status: "pending", reason: "Order cancelled" });
+    expect(vi.mocked(processCancellationRefund)).toHaveBeenCalledWith(expect.anything(), {
+      refundRequestId: "rr-new",
+      orderId: "o1",
+    });
+  });
+
+  it("a refund failure keeps the cancellation and does not 500", async () => {
+    const inserted: Array<Record<string, unknown>> = [];
+    installCancelDb(inserted);
+    vi.mocked(processCancellationRefund).mockRejectedValueOnce(new Error("stripe down"));
+    const res = await PATCH(req({ orderId: "o1", status: "cancelled" }));
+    expect(res.status).toBe(200);
+  });
+});
+
+// Row 727 / PASS2-placement-lifecycle-log. After a GBP 120 off-the-wall sale
+// the placement went to `sold` and could never reach Collected: the bar sat at
+// 5 of 6 and neither party had a control. The buyer confirming that they have
+// picked the piece up IS the "Collected" event, so it closes the loan.
+//
+// A manual route stays open too (PATCH /api/placements accepts stage:
+// "collected" from `sold`), because a buyer who never confirms must not be able
+// to strand the venue's record.
+describe("confirming a venue collection closes the placement (row 727)", () => {
+  let orderUpdate: Record<string, unknown> | null = null;
+  let placementUpdate: Record<string, unknown> | null = null;
+  let placementSelected: Record<string, unknown> | null = null;
+
+  function setup(order: Record<string, unknown>, placement: Record<string, unknown> | null) {
+    orderUpdate = null;
+    placementUpdate = null;
+    placementSelected = placement;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "orders") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: order }),
+              maybeSingle: async () => ({ data: order }),
+              or: () => ({ maybeSingle: async () => ({ data: order }) }),
+              eq: () => ({ maybeSingle: async () => ({ data: order }) }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            orderUpdate = payload;
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      if (table === "placements") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: placementSelected }),
+              maybeSingle: async () => ({ data: placementSelected }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            placementUpdate = payload;
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      // Everything else answers empty. Self-referential so the multi-.eq()
+      // chains (stripe_transfers filters on order_id AND status) resolve.
+      const chain: Record<string, unknown> = {
+        single: async () => ({ data: null }),
+        maybeSingle: async () => ({ data: null }),
+        then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+      };
+      chain.eq = () => chain;
+      chain.in = () => chain;
+      return {
+        select: () => chain,
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+      };
+    });
+  }
+
+  const COLLECT_ORDER = {
+    id: "ord_collect",
+    status: "confirmed",
+    fulfilment_method: "collect_venue",
+    placement_id: "p-wall",
+    artist_user_id: "u-artist",
+    artist_slug: "maya-chen",
+    buyer_user_id: "u-buyer",
+    buyer_email: "b@x.com",
+    venue_slug: "copper-kettle",
+    venue_revenue: 0,
+    status_history: [{ status: "confirmed", timestamp: "2026-08-31T10:00:00.000Z" }],
+    delivered_at: null,
+  };
+
+  function patch(body: unknown): Request {
+    return new Request("http://localhost/api/orders", {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  beforeEach(() => actAs("buyer"));
+
+  it("stamps collected_at on the placement the sale came off", async () => {
+    setup(COLLECT_ORDER, { id: "p-wall", status: "sold", collected_at: null });
+
+    const res = await PATCH(patch({ orderId: "ord_collect", status: "delivered" }));
+
+    expect(res.status).toBe(200);
+    expect(placementUpdate).toBeTruthy();
+    expect(placementUpdate!.collected_at).toEqual(expect.any(String));
+    expect(placementUpdate!.status).toBe("completed");
+  });
+
+  it("does not restamp a placement that was already closed by hand", async () => {
+    setup(COLLECT_ORDER, {
+      id: "p-wall",
+      status: "completed",
+      collected_at: "2026-08-30T10:00:00.000Z",
+    });
+
+    await PATCH(patch({ orderId: "ord_collect", status: "delivered" }));
+
+    expect(placementUpdate).toBeNull();
+  });
+
+  it("touches no placement on a posted order", async () => {
+    setup(
+      { ...COLLECT_ORDER, fulfilment_method: "ship", status: "shipped" },
+      { id: "p-wall", status: "sold", collected_at: null },
+    );
+
+    await PATCH(patch({ orderId: "ord_collect", status: "delivered" }));
+
+    expect(placementUpdate).toBeNull();
+    expect(orderUpdate).toBeTruthy();
+  });
+});
+
+// Row 874 / production pass 2. "The buyer's three templates fired
+// (customer_order_processing, customer_order_out_for_delivery,
+// customer_order_delivered) and the lifecycle events were recorded, but NO
+// email and no bell reached the artist on any transition, including the one
+// that released their £50.99 payout."
+//
+// The email half is in lib/orders/lifecycle (artist_order_delivered). This is
+// the bell, and it fires only for a transition the artist did NOT make: they
+// drive processing and shipped themselves, and telling someone what they have
+// just clicked is noise.
+describe("the artist is told when someone else moves their order (row 874)", () => {
+  let updated: Record<string, unknown> | null = null;
+
+  function setupOrder(row: Record<string, unknown>) {
+    updated = null;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "orders") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: row }),
+              maybeSingle: async () => ({ data: row }),
+              or: () => ({ maybeSingle: async () => ({ data: row }) }),
+              eq: () => ({ maybeSingle: async () => ({ data: row }) }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            updated = payload;
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      const chain: Record<string, unknown> = {
+        single: async () => ({ data: null }),
+        maybeSingle: async () => ({ data: null }),
+        then: (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null }),
+      };
+      chain.eq = () => chain;
+      chain.in = () => chain;
+      return {
+        select: () => chain,
+        update: () => ({ eq: async () => ({ error: null }) }),
+        insert: async () => ({ error: null }),
+        upsert: async () => ({ error: null }),
+      };
+    });
+  }
+
+  const SHIPPED = {
+    id: "ord_bell",
+    status: "shipped",
+    artist_user_id: "u-artist",
+    artist_slug: "maya-chen",
+    buyer_user_id: "u-buyer",
+    buyer_email: "b@x.com",
+    venue_slug: null,
+    status_history: [],
+    delivered_at: null,
+  };
+
+  function patch(body: unknown): Request {
+    return new Request("http://localhost/api/orders", {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("rings the artist when the buyer confirms delivery", async () => {
+    actAs("buyer");
+    setupOrder(SHIPPED);
+
+    await PATCH(patch({ orderId: "ord_bell", status: "delivered" }));
+
+    expect(createNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "u-artist", title: "Order delivered" }),
+    );
+  });
+
+  it("says nothing to the artist about a move the artist made", async () => {
+    actAs("seller");
+    setupOrder({ ...SHIPPED, status: "processing" });
+
+    await PATCH(patch({ orderId: "ord_bell", status: "shipped", trackingNumber: "TRK1" }));
+
+    expect(createNotificationMock).not.toHaveBeenCalled();
+  });
+
+  it("still writes the order when the bell fails", async () => {
+    actAs("buyer");
+    setupOrder(SHIPPED);
+    createNotificationMock.mockRejectedValueOnce(new Error("bell down"));
+
+    const res = await PATCH(patch({ orderId: "ord_bell", status: "delivered" }));
+
+    expect(res.status).toBe(200);
+    expect(updated).toMatchObject({ status: "delivered" });
   });
 });

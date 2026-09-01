@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import AccountDangerZone from "@/components/AccountDangerZone";
 import { useAuth } from "@/context/AuthContext";
@@ -18,15 +19,31 @@ export default function CustomerSettingsPage() {
   const { prefs, togglePref, error: prefsError } = useNotificationPrefs(user);
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  // C10: the old handler was `if (!error) setResetSent(true)` with no else, so
+  // a Supabase rejection (rate limit, SMTP down) left the button exactly as it
+  // was and the customer saw nothing happen at all.
+  const [resetError, setResetError] = useState<string | null>(null);
 
   async function handlePasswordReset() {
     if (!user?.email) return;
     setResetLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    setResetLoading(false);
-    if (!error) setResetSent(true);
+    setResetError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        setResetError("We could not send the reset email. Please try again in a moment.");
+        return;
+      }
+      setResetSent(true);
+    } catch {
+      // A dropped request surfaces as a thrown fetch error rather than an
+      // `error` field, so it needs the same treatment.
+      setResetError("We could not send the reset email. Please try again in a moment.");
+    } finally {
+      setResetLoading(false);
+    }
   }
 
   return (
@@ -58,13 +75,18 @@ export default function CustomerSettingsPage() {
               {resetSent ? (
                 <p className="text-sm text-accent">Password reset email sent. Check your inbox.</p>
               ) : (
-                <button
-                  onClick={handlePasswordReset}
-                  disabled={resetLoading}
-                  className="text-sm text-accent hover:text-accent-hover transition-colors disabled:opacity-50"
-                >
-                  {resetLoading ? "Sending..." : "Change Password"}
-                </button>
+                <>
+                  <button
+                    onClick={handlePasswordReset}
+                    disabled={resetLoading}
+                    className="text-sm text-accent hover:text-accent-hover transition-colors disabled:opacity-50"
+                  >
+                    {resetLoading ? "Sending..." : "Change Password"}
+                  </button>
+                  {resetError && (
+                    <p className="text-xs text-red-600 mt-2">{resetError}</p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -89,6 +111,16 @@ export default function CustomerSettingsPage() {
           {prefsError && (
             <p className="text-xs text-red-500 mt-3">{prefsError}</p>
           )}
+          {/* C23: the full per-category hub at /account/email was reachable
+              only from the footer of an email we had already sent. Nothing in
+              the portal linked it, so this is the in-product route to it. */}
+          <p className="text-xs text-muted mt-4">
+            Want finer control over what lands in your inbox?{" "}
+            <Link href="/account/email" className="text-accent hover:underline">
+              Manage every email category
+            </Link>
+            .
+          </p>
         </div>
 
         <AccountDangerZone />

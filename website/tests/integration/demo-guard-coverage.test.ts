@@ -33,6 +33,9 @@ const DEMO_EXEMPT = new Set<string>([
   // Unauthenticated public forms and webhooks: no session, so nothing to test.
   "webhooks/stripe/route.ts",
   "webhooks/supabase/route.ts",
+  // WS5.2: svix-signed delivery events from Resend; no session, same class as
+  // the two webhooks above.
+  "webhooks/resend/route.ts",
   "enquiry/route.ts",
   "contact/route.ts",
   "newsletter/route.ts",

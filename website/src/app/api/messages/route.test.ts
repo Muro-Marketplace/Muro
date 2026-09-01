@@ -897,3 +897,139 @@ describe("POST /api/messages links the unread email to the RECIPIENT's portal", 
     );
   });
 });
+
+describe("POST /api/messages refuses support replies clearly (F50)", () => {
+  it("names the contact form instead of claiming the recipient has no account", async () => {
+    // "wallplace-support" is a system slug: the GET handler special-cases it so
+    // the thread renders as "Wallplace Support", but nothing in src/, supabase/
+    // or scripts/ ever creates a profile row that owns it. The POST resolves
+    // recipients only through artist_profiles / venue_profiles, so every reply
+    // came back 404 "They may not have an account yet. If you want us to invite
+    // them, reply with their email" — advice that makes no sense for the
+    // Wallplace team, and that the inbox invited by leaving the reply box up.
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") return chainSelectMaybe({ slug: "alice", user_id: "u-art-a" });
+      return chainSelectMaybe(null);
+    });
+
+    const res = await POST(
+      req({
+        conversationId: "dm-alice__wallplace-support",
+        senderName: "alice",
+        senderType: "artist",
+        recipientSlug: "wallplace-support",
+        content: "Can you help?",
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe("support_thread_readonly");
+    expect(body.error).toContain("/contact");
+  });
+});
+
+// Pass 2 item 3.8 (row 2020). A message the filter BLOCKS writes nothing: no
+// `messages` row (correct, it was refused), but also nothing to
+// `moderation_queue` and nothing to `conversation_reports`. So a user
+// repeatedly trying to take deals off-platform is invisible to admins, and
+// /admin/moderation's Messages filter has nothing to show. A FLAGGED message,
+// which is delivered, has queued since owner decision 11; the blocked one, which
+// is the more serious signal, did not.
+describe("a BLOCKED message leaves a moderation trace (3.8)", () => {
+  const queueInserts: Record<string, unknown>[] = [];
+
+  function setupDb(opts: { queueError?: unknown; verdict?: { allowed: boolean; flagged: boolean; reason: string | undefined } } = {}) {
+    queueInserts.length = 0;
+    authMock.mockResolvedValue({ user: { id: "u-1", email: "sender@example.com" }, error: null });
+    // `@/lib/moderation` is mocked file-wide, so the verdict is set here.
+    // moderation.test.ts owns the patterns themselves; these tests own what the
+    // ROUTE does with a blocking verdict.
+    moderateMock.mockReturnValue(
+      opts.verdict ?? {
+        allowed: false,
+        flagged: true,
+        reason: "Message contains blocked content",
+      },
+    );
+    fromMock.mockImplementation((table: string) => {
+      if (table === "moderation_queue") {
+        return {
+          insert: async (row: Record<string, unknown>) => {
+            queueInserts.push(row);
+            return { error: opts.queueError ?? null };
+          },
+        };
+      }
+      return chainSelectMaybe(null);
+    });
+  }
+
+  function post(content: string) {
+    return POST(
+      new Request("http://localhost/api/messages", {
+        method: "POST",
+        headers: { authorization: "Bearer x", "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: "dm-alice__bob",
+          senderType: "venue",
+          recipientSlug: "bob",
+          content,
+        }),
+      }),
+    );
+  }
+
+  /**
+   * Trips a BLOCKED_PATTERN (phone-number solicitation moving off-platform),
+   * so `allowed: false, flagged: true`. Not a FLAGGED pattern: those are
+   * delivered and have queued since owner decision 11.
+   */
+  const OFF_PLATFORM = "Forget the platform fee, whatsapp me on 07700900123 and we'll sort it";
+
+  it("still refuses the message", async () => {
+    setupDb();
+
+    const res = await post(OFF_PLATFORM);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Message contains blocked content");
+  });
+
+  it("queues it for an admin with the sender, the reason and an excerpt", async () => {
+    setupDb();
+
+    await post(OFF_PLATFORM);
+
+    expect(queueInserts, "the block left no trace at all").toHaveLength(1);
+    expect(queueInserts[0]).toMatchObject({
+      entity_type: "message",
+      status: "pending",
+      submitted_by_user_id: "u-1",
+    });
+    const payload = queueInserts[0].payload as Record<string, unknown>;
+    expect(payload.blocked).toBe(true);
+    expect(payload.flag_reason).toBe("Message contains blocked content");
+    expect(String(payload.excerpt)).toContain("whatsapp me");
+  });
+
+  it("queues nothing for a message refused merely for being too short", async () => {
+    // "Too short" and "too long" are not moderation signals about a person;
+    // queueing them would bury the ones that are. moderateMessage marks those
+    // `flagged: false`, which is the distinction.
+    setupDb({ verdict: { allowed: false, flagged: false, reason: "Message too short" } });
+
+    const res = await post("a");
+
+    expect(res.status).toBe(400);
+    expect(queueInserts).toHaveLength(0);
+  });
+
+  it("still refuses the message when the queue write fails", async () => {
+    setupDb({ queueError: { message: "db down" } });
+
+    const res = await post(OFF_PLATFORM);
+
+    expect(res.status).toBe(400);
+  });
+});

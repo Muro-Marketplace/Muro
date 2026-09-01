@@ -3,36 +3,46 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Cookie Policy",
   description:
-    "Wallplace Cookie Policy. Learn about the cookies we use and how to control them.",
+    "Wallplace Cookie Policy. What we store in your browser and how to control it.",
 };
 
-// Cookie list (#38), vendor-neutral phrasing. The Supabase cookies
-// are still ours functionally; using "Wallplace" as the provider and
-// describing the purpose in plain English keeps this readable to a
-// non-technical visitor while remaining accurate.
-const cookies = [
+// A29/A30: this table used to list sb-access-token / sb-refresh-token
+// cookies (never set by the app, the auth session lives in localStorage)
+// and a wallplace_cookie_consent cookie (actually a localStorage key,
+// wallplace-cookie-consent, with no expiry). It now describes the
+// browser local storage the site really uses. Wallplace itself sets no
+// cookies; keep this table in step with the code if that ever changes.
+const storageEntries = [
   {
-    name: "sb-access-token",
+    name: "sb-...-auth-token (local storage)",
     category: "Strictly Necessary",
     purpose:
-      "Sign-in cookie. Keeps you signed in to your Wallplace account and authorises requests when you visit secure pages (account, checkout, orders). Without it, those features won't work.",
-    duration: "1 hour (refreshed automatically while you are active)",
+      "Sign-in session. Keeps you signed in to your Wallplace account and authorises requests when you visit secure pages (account, checkout, orders). Without it, those features won't work.",
+    duration: "Until you sign out or clear your browser data (refreshed automatically while you are signed in)",
     provider: "Wallplace",
   },
   {
-    name: "sb-refresh-token",
+    name: "wallplace-cookie-consent (local storage)",
     category: "Strictly Necessary",
     purpose:
-      "Session-renewal cookie. Lets your sign-in be refreshed in the background so you don't have to log in again every visit.",
-    duration: "30 days",
+      "Stores your consent-banner choice so we do not ask you repeatedly. Storing this preference is exempt from the consent requirement under PECR regulation 6(4).",
+    duration: "Until you clear your browser data",
     provider: "Wallplace",
   },
   {
-    name: "wallplace_cookie_consent",
+    name: "wallplace-cart (local storage)",
     category: "Strictly Necessary",
     purpose:
-      "Stores your cookie/consent choice so we do not ask you repeatedly. Storing this preference is exempt from the consent requirement under PECR regulation 6(4).",
-    duration: "12 months",
+      "Keeps the artworks in your basket between visits so your basket is still there when you come back.",
+    duration: "Until you complete checkout, empty the basket, or clear your browser data",
+    provider: "Wallplace",
+  },
+  {
+    name: "Other wallplace-... keys (local storage)",
+    category: "Strictly Necessary",
+    purpose:
+      "Small convenience preferences, for example saved items, your postcode for distance search, and dismissed onboarding banners. None of them identify you to third parties.",
+    duration: "Until you clear your browser data",
     provider: "Wallplace",
   },
 ];
@@ -45,7 +55,7 @@ export default function CookiesPage() {
           <div className="max-w-3xl">
             <h1 className="text-4xl lg:text-5xl mb-4">Cookie Policy</h1>
             <p className="text-muted leading-relaxed mb-16">
-              Last updated: April 2026
+              Last updated: August 2026
             </p>
 
             <div className="space-y-10">
@@ -61,18 +71,25 @@ export default function CookiesPage() {
                   other than the website owner are called &ldquo;third-party
                   cookies&rdquo; and may be set by our service providers.
                 </p>
+                <p className="text-muted leading-relaxed mt-4">
+                  Wallplace currently sets no cookies of its own. Instead we
+                  use your browser&rsquo;s local storage, a similar mechanism
+                  where small pieces of information are kept on your device by
+                  your browser and are only readable by this site. This policy
+                  covers both so you can see exactly what is stored.
+                </p>
               </div>
 
               <div>
-                <h2 className="text-2xl mb-4">How We Use Cookies</h2>
+                <h2 className="text-2xl mb-4">How We Use Cookies and Local Storage</h2>
                 <p className="text-muted leading-relaxed mb-6">
-                  We use cookies for the following purposes:
+                  We use browser storage for the following purposes:
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {[
                     {
                       title: "Strictly Necessary",
-                      desc: "These cookies are required for our website to function. They enable core features like security, session management, and form submission. You cannot opt out of these cookies.",
+                      desc: "These local storage entries are required for our website to function. They enable core features like signing in, keeping your basket, and remembering your consent choice. You cannot opt out of these.",
                       required: true,
                     },
                     {
@@ -82,7 +99,7 @@ export default function CookiesPage() {
                     },
                     {
                       title: "Functional",
-                      desc: "We do not currently use functional cookies beyond the strictly necessary cookies listed below.",
+                      desc: "We do not currently use functional cookies beyond the strictly necessary local storage listed below.",
                       required: false,
                     },
                     {
@@ -110,14 +127,15 @@ export default function CookiesPage() {
               </div>
 
               <div>
-                <h2 className="text-2xl mb-4">Cookies We Use</h2>
+                <h2 className="text-2xl mb-4">What We Store</h2>
                 <p className="text-muted leading-relaxed mb-6">
-                  The following table lists the specific cookies used on the
-                  Wallplace website:
+                  The following table lists the browser storage used on the
+                  Wallplace website. All of it is local storage; no cookies
+                  are set:
                 </p>
                 {/* Mobile card list — shown below sm breakpoint */}
                 <div className="sm:hidden space-y-3">
-                  {cookies.map((cookie) => (
+                  {storageEntries.map((cookie) => (
                     <div
                       key={cookie.name}
                       className="border border-border rounded-sm p-4 bg-surface text-sm"
@@ -146,7 +164,7 @@ export default function CookiesPage() {
                     <thead>
                       <tr className="bg-surface border-b border-border">
                         <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wider">
-                          Cookie
+                          Name
                         </th>
                         <th className="text-left py-3 px-4 text-xs font-medium text-muted uppercase tracking-wider">
                           Category
@@ -160,7 +178,7 @@ export default function CookiesPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {cookies.map((cookie, i) => (
+                      {storageEntries.map((cookie, i) => (
                         <tr
                           key={cookie.name}
                           className={`border-b border-border/60 ${
@@ -187,9 +205,9 @@ export default function CookiesPage() {
               </div>
 
               <div>
-                <h2 className="text-2xl mb-4">How to Control Cookies</h2>
+                <h2 className="text-2xl mb-4">How to Control Browser Storage</h2>
                 <p className="text-muted leading-relaxed mb-4">
-                  You have several options for managing cookies:
+                  You have several options for managing what is stored:
                 </p>
                 <div className="space-y-4">
                   <div className="bg-surface border border-border rounded-sm p-5">
@@ -197,11 +215,12 @@ export default function CookiesPage() {
                       Browser settings
                     </h3>
                     <p className="text-sm text-muted leading-relaxed">
-                      Most browsers allow you to view, delete, and block cookies.
-                      You can find instructions for managing cookies in your
-                      browser&rsquo;s help documentation. Please note that
-                      blocking all cookies will affect the functionality of our
-                      website, and some features may not work correctly.
+                      Most browsers let you view and delete site data, which
+                      covers both cookies and local storage, usually under
+                      &ldquo;site data&rdquo; or &ldquo;storage&rdquo; in the
+                      privacy settings. Clearing our site data signs you out
+                      and empties your basket, and some features may not work
+                      correctly if storage is blocked entirely.
                     </p>
                   </div>
                   <div className="bg-surface border border-border rounded-sm p-5">

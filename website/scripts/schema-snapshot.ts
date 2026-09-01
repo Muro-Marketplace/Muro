@@ -25,7 +25,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MISSING_TOKEN_MESSAGE, SNAPSHOT_SQL, serialize, toSnapshot } from "./schema-snapshot.lib";
+import {
+  MISSING_TOKEN_MESSAGE,
+  NOT_NULL_SQL,
+  SNAPSHOT_SQL,
+  serialize,
+  toSnapshot,
+} from "./schema-snapshot.lib";
 
 const PROJECT_REF = "uwkuhygwvasdzwsusiym";
 
@@ -36,26 +42,36 @@ async function main() {
     process.exit(2);
   }
 
-  const res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query: SNAPSHOT_SQL }),
-  });
-  if (!res.ok) {
-    console.error(`schema query failed: ${res.status} ${await res.text()}`);
-    process.exit(1);
+  async function query(sql: string) {
+    const res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ query: sql }),
+    });
+    if (!res.ok) {
+      console.error(`schema query failed: ${res.status} ${await res.text()}`);
+      process.exit(1);
+    }
+    return toSnapshot(await res.json());
   }
 
-  const snapshot = toSnapshot(await res.json());
-  const out = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "tests",
-    "integration",
-    "schema-columns.json",
-  );
-  await fs.writeFile(out, serialize(snapshot));
-  console.log(`Wrote ${Object.keys(snapshot).length} tables to ${path.relative(process.cwd(), out)}`);
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const outDir = path.resolve(here, "..", "tests", "integration");
+
+  // Two snapshots, one credential, one run. They answer different questions of
+  // the same schema and both guards break on the same migration, so a
+  // regeneration that wrote only one of them would just move the breakage.
+  for (const [file, sql] of [
+    ["schema-columns.json", SNAPSHOT_SQL],
+    ["schema-not-null.json", NOT_NULL_SQL],
+  ] as const) {
+    const snapshot = await query(sql);
+    const out = path.join(outDir, file);
+    await fs.writeFile(out, serialize(snapshot));
+    console.log(
+      `Wrote ${Object.keys(snapshot).length} tables to ${path.relative(process.cwd(), out)}`,
+    );
+  }
 }
 
 main().catch((e) => {

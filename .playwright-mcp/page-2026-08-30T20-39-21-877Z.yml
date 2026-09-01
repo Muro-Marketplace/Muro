@@ -1,0 +1,107 @@
+- generic [active] [ref=f21e1]:
+  - generic [ref=f21e2]:
+    - img "Gallery interior" [ref=f21e4]
+    - generic [ref=f21e6]:
+      - generic [ref=f21e8]:
+        - heading "Wallplace" [level=2] [ref=f21e9]
+        - heading "The art marketplace for commercial spaces." [level=1] [ref=f21e10]
+        - paragraph [ref=f21e11]: Connecting artists with venues that want original work on their walls. Join the waitlist to be first in.
+        - generic [ref=f21e12]:
+          - generic [ref=f21e13]:
+            - generic [ref=f21e14]: I am a
+            - generic [ref=f21e15]:
+              - button "Artist" [ref=f21e16] [cursor=pointer]
+              - button "Venue" [ref=f21e17] [cursor=pointer]
+          - generic [ref=f21e18]:
+            - generic [ref=f21e19]: Name
+            - textbox "Your name" [ref=f21e20]
+          - generic [ref=f21e21]:
+            - generic [ref=f21e22]: Email
+            - textbox "you@example.com" [ref=f21e23]
+          - generic [ref=f21e24]:
+            - generic [ref=f21e25]: Phone (optional)
+            - textbox "07xxx xxxxxx" [ref=f21e26]
+          - button "Join the Waitlist" [disabled] [ref=f21e27] [cursor=pointer]
+        - paragraph [ref=f21e28]:
+          - link "Already have access? Sign in" [ref=f21e29] [cursor=pointer]:
+            - /url: /login
+      - button "See how it works" [ref=f21e30] [cursor=pointer]
+    - generic [ref=f21e38]:
+      - generic [ref=f21e41]:
+        - paragraph [ref=f21e42]: How Wallplace Works
+        - heading "A curated marketplace. Two sides. Zero risk." [level=2] [ref=f21e43]
+        - paragraph [ref=f21e44]: Wallplace connects artists who want commercial exposure with venues that want original art on their walls, with flexible, risk-free arrangements for both sides.
+      - generic [ref=f21e50]:
+        - generic [ref=f21e51]:
+          - paragraph [ref=f21e52]: For Artists
+          - heading "Get your work seen. Get paid fairly." [level=3] [ref=f21e53]
+          - paragraph [ref=f21e54]: Your prints displayed in cafés, restaurants, hotels, and galleries, reaching people who actually buy art. Not another social feed. Real, physical walls.
+          - generic [ref=f21e55]:
+            - generic [ref=f21e56]:
+              - generic [ref=f21e57]: "01"
+              - generic [ref=f21e58]:
+                - paragraph [ref=f21e59]: Apply
+                - paragraph [ref=f21e60]: Submit your portfolio for review. We respond within 5 business days. No AI art.
+            - generic [ref=f21e61]:
+              - generic [ref=f21e62]: "02"
+              - generic [ref=f21e63]:
+                - paragraph [ref=f21e64]: Get Curated
+                - paragraph [ref=f21e65]: Your profile goes live. Venues browse, filter, and reach out to you directly.
+            - generic [ref=f21e66]:
+              - generic [ref=f21e67]: "03"
+              - generic [ref=f21e68]:
+                - paragraph [ref=f21e69]: Earn
+                - paragraph [ref=f21e70]: Sell prints outright, offer bundles, take commissions, or arrange revenue-share deals, all through the marketplace.
+        - generic [ref=f21e71]:
+          - generic [ref=f21e78]:
+            - paragraph [ref=f21e79]: Commercial Exposure
+            - paragraph [ref=f21e80]: Your work in front of hundreds of daily visitors in high-footfall venues across the UK.
+          - generic [ref=f21e86]:
+            - paragraph [ref=f21e87]: First Month Free on All Plans
+            - paragraph [ref=f21e88]: Plans start from £9.99/month. No commitments. Cancel any time.
+          - generic [ref=f21e94]:
+            - paragraph [ref=f21e95]: 5 to 15% Platform Fee on Sales
+            - paragraph [ref=f21e96]: No gallery taking 50%. Transparent, fair pricing. Keep most of what you earn.
+      - generic [ref=f21e102]:
+        - generic [ref=f21e103]:
+          - paragraph [ref=f21e104]: For Venues
+          - heading "Art for your space. No upfront cost." [level=3] [ref=f21e105]
+          - paragraph [ref=f21e106]: Whether you run a café, restaurant, hotel, office, or salon, browse curated artist portfolios and source original work for your walls on terms that work for you.
+          - generic [ref=f21e107]:
+            - generic [ref=f21e108]:
+              - generic [ref=f21e109]: "01"
+              - generic [ref=f21e110]:
+                - paragraph [ref=f21e111]: Browse & Filter
+                - paragraph [ref=f21e112]: Search curated portfolios by location, style, and theme. Completely free.
+            - generic [ref=f21e113]:
+              - generic [ref=f21e114]: "02"
+              - generic [ref=f21e115]:
+                - paragraph [ref=f21e116]: Enquire Directly
+                - paragraph [ref=f21e117]: Message artists through the platform. Discuss what you need and agree terms.
+            - generic [ref=f21e118]:
+              - generic [ref=f21e119]: "03"
+              - generic [ref=f21e120]:
+                - paragraph [ref=f21e121]: Get Art on Your Walls
+                - paragraph [ref=f21e122]: Display art for free with optional revenue share, or purchase outright. Rotate any time.
+        - generic [ref=f21e123]:
+          - generic [ref=f21e131]:
+            - paragraph [ref=f21e132]: Display
+            - paragraph [ref=f21e133]: Art on your walls for free. If a customer buys via QR, you earn a share of the sale. Zero risk.
+          - generic [ref=f21e139]:
+            - paragraph [ref=f21e140]: Purchase
+            - paragraph [ref=f21e141]: Buy artwork outright for your permanent collection at transparent prices.
+          - generic [ref=f21e150]:
+            - paragraph [ref=f21e151]: Custom Artwork
+            - paragraph [ref=f21e152]: Request bespoke pieces tailored to your space. Commission artists directly through the platform.
+      - generic [ref=f21e157]:
+        - heading "Be part of it from day one." [level=2] [ref=f21e158]
+        - paragraph [ref=f21e159]:
+          - text: "Join the waitlist for launch updates. Or don’t wait:"
+          - link "artist applications" [ref=f21e160] [cursor=pointer]:
+            - /url: /apply
+          - text: and
+          - link "venue registration" [ref=f21e161] [cursor=pointer]:
+            - /url: /signup/venue
+          - text: are already open.
+        - button "Join the Waitlist" [ref=f21e162] [cursor=pointer]
+  - alert [ref=f21e163]

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authFetch } from "@/lib/api-client";
 
@@ -15,6 +16,11 @@ interface Props {
 export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, artistName, qrEnabled }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Row 2187 area. The setup route's cancel_url returns here as ?cancelled=1
+  // and nothing read it, so backing out of Stripe landed on an unchanged page
+  // with no word either way. Same silent return as ?payment=setup-complete on
+  // the placements list, which is fixed alongside this.
+  const cancelled = useSearchParams().get("cancelled") === "1";
 
   async function startCheckout() {
     setBusy(true);
@@ -43,14 +49,23 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
 
   return (
     <div className="max-w-[640px] mx-auto px-6 py-14">
+      {cancelled && (
+        <div role="status" className="mb-6 rounded-sm border border-border bg-surface px-4 py-3">
+          <p className="text-sm text-foreground">Payment setup cancelled. Nothing was charged.</p>
+          <p className="text-xs text-muted mt-0.5">You can start it again whenever you are ready.</p>
+        </div>
+      )}
       <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-3">Monthly payment setup</p>
       <h1 className="font-serif text-3xl sm:text-4xl text-foreground leading-tight mb-3">
         Pay {artistName} monthly for this placement
       </h1>
+      {/* F35: the Stripe subscription anchors on the setup date, not the
+          1st of the month, so the charge lands monthly on the signup
+          anniversary. Don't say "at the start of each month". */}
       <p className="text-muted leading-relaxed mb-8">
         You agreed a paid loan for <span className="text-foreground font-medium">{workTitle}</span>.
-        Your card is charged <span className="text-foreground font-semibold">&pound;{monthlyFeeGbp}</span> at
-        the start of each month. Cancel any time from your portal, you stay charged
+        Your card is charged <span className="text-foreground font-semibold">&pound;{monthlyFeeGbp}</span> each
+        month from your start date. Cancel any time from your portal, you stay charged
         for the current month only.
       </p>
 
@@ -58,7 +73,7 @@ export default function PaymentClient({ placementId, workTitle, monthlyFeeGbp, a
         <Row label="Work" value={workTitle} />
         <Row label="Artist" value={artistName} />
         <Row label="Monthly fee" value={`£${monthlyFeeGbp}`} />
-        <Row label="QR sales" value={qrEnabled ? "On, a share of QR sales goes to your venue" : "Off"} />
+        <Row label="QR code" value={qrEnabled ? "On, so buyers can scan through to the artist's shop" : "Off"} />
         <Row label="Billing" value="Monthly, starting today. Cancels when you end the placement." />
       </div>
 

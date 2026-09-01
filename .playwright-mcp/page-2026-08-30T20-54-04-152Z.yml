@@ -1,0 +1,377 @@
+- generic [active] [ref=f33e1]:
+  - generic [ref=f33e2]:
+    - link "Skip to content" [ref=f33e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f33e4]:
+      - generic [ref=f33e6]:
+        - link "Wallplace" [ref=f33e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f33e8]:
+          - link "Marketplace" [ref=f33e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f33e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f33e12] [cursor=pointer]
+        - generic [ref=f33e15]:
+          - link "Saved" [ref=f33e16] [cursor=pointer]:
+            - /url: /artist-portal/saved
+          - button "Messages" [ref=f33e20] [cursor=pointer]
+          - button "Notifications" [ref=f33e25] [cursor=pointer]
+          - generic [ref=f33e29]:
+            - link "Artist Portal" [ref=f33e30] [cursor=pointer]:
+              - /url: /artist-portal
+            - button "Portal menu" [ref=f33e31] [cursor=pointer]
+          - button "Logout" [ref=f33e34] [cursor=pointer]
+    - main [ref=f33e35]:
+      - generic [ref=f33e36]:
+        - generic [ref=f33e39]:
+          - paragraph [ref=f33e40]: Artist Applications
+          - heading "Apply to Join Wallplace" [level=1] [ref=f33e41]
+          - paragraph [ref=f33e42]: Wallplace is a curated platform connecting artists with venues that are genuinely looking for artwork. We review every application personally. Being accepted means your work has been judged ready for commercial spaces.
+          - paragraph [ref=f33e43]: We are selective because curation is our value. Venues trust us because every artist we recommend meets a consistent standard of quality, professionalism, and commercial viability.
+        - generic [ref=f33e46]:
+          - generic [ref=f33e47]: Founding Artist Offer
+          - generic [ref=f33e49]:
+            - paragraph [ref=f33e50]: First month free on all plans.
+            - paragraph [ref=f33e51]: No commitment, cancel any time.
+        - generic [ref=f33e54]:
+          - generic [ref=f33e55]:
+            - heading "The Application" [level=2] [ref=f33e56]
+            - paragraph [ref=f33e57]: Tell us about your practice, what you offer, and the kinds of venues that suit your work. The more detail you provide, the better we can match you.
+            - generic [ref=f33e58]:
+              - paragraph [ref=f33e59]: "What we look for:"
+              - list [ref=f33e60]:
+                - listitem [ref=f33e61]: Technical quality and consistency
+                - listitem [ref=f33e64]: A coherent body of work
+                - listitem [ref=f33e67]: Commercial viability for venue display
+                - listitem [ref=f33e70]: Professional approach and communication
+                - listitem [ref=f33e73]: Original work, no AI-generated pieces
+            - paragraph [ref=f33e76]: We aim to respond within 5 business days of receiving your application.
+          - generic [ref=f33e78]:
+            - generic [ref=f33e79]:
+              - heading "About You" [level=3] [ref=f33e80]
+              - generic [ref=f33e81]:
+                - generic [ref=f33e82]:
+                  - generic [ref=f33e83] [cursor=pointer]: Full Name *
+                  - textbox "Full Name *" [ref=f33e84]:
+                    - /placeholder: Your full name
+                - generic [ref=f33e85]:
+                  - generic [ref=f33e86] [cursor=pointer]: Email Address *
+                  - textbox "Email Address *" [ref=f33e87]:
+                    - /placeholder: your@email.com
+                - generic [ref=f33e88]:
+                  - generic [ref=f33e89] [cursor=pointer]: Location *
+                  - textbox "Location *" [ref=f33e90]:
+                    - /placeholder: e.g. Hackney, London
+                - generic [ref=f33e91]:
+                  - generic [ref=f33e92] [cursor=pointer]: Instagram Handle
+                  - textbox "Instagram Handle" [ref=f33e93]:
+                    - /placeholder: "@yourhandle"
+                - generic [ref=f33e94]:
+                  - generic [ref=f33e95] [cursor=pointer]: Website / Portfolio (optional)
+                  - textbox "Website / Portfolio (optional)" [ref=f33e96]:
+                    - /placeholder: Link to your website, Instagram, Behance, or similar
+                  - paragraph [ref=f33e97]: Any public link that shows your work. Share what you have, you can add more later when you build your profile on Wallplace.
+                - generic [ref=f33e98]:
+                  - generic [ref=f33e99]: Sample works (optional)
+                  - paragraph [ref=f33e100]: No website or Instagram? Paste up to three public links to images of your work (Google Drive, Imgur, Dropbox, etc.). You can also skip this and upload sample works straight to your profile after we accept your application.
+                  - generic [ref=f33e101]:
+                    - textbox "Link to sample 1 (optional)" [ref=f33e102]
+                    - textbox "Link to sample 2 (optional)" [ref=f33e103]
+                    - textbox "Link to sample 3 (optional)" [ref=f33e104]
+                - generic [ref=f33e105]:
+                  - generic [ref=f33e106] [cursor=pointer]: Are you applying as an individual or a business? *
+                  - combobox "Are you applying as an individual or a business? *" [ref=f33e107] [cursor=pointer]:
+                    - option "Select one" [selected]
+                    - option "Individual / sole artist (not in the course of business)"
+                    - option "Business, limited company, or partnership / sole trader acting in the course of business"
+                  - paragraph [ref=f33e108]: This determines which UK consumer-protection rules apply to your Wallplace membership subscription. You can change this later if your status changes.
+            - generic [ref=f33e109]:
+              - heading "Your Practice" [level=3] [ref=f33e110]
+              - generic [ref=f33e111]:
+                - generic [ref=f33e112]:
+                  - paragraph [ref=f33e113]: Discipline *
+                  - paragraph [ref=f33e114]: Pick the single top-level discipline your work sits in.
+                  - generic [ref=f33e115]:
+                    - generic [ref=f33e116] [cursor=pointer]:
+                      - radio "Photography" [ref=f33e117]
+                      - generic [ref=f33e118]: Photography
+                    - generic [ref=f33e119] [cursor=pointer]:
+                      - radio "Painting" [ref=f33e120]
+                      - generic [ref=f33e121]: Painting
+                    - generic [ref=f33e122] [cursor=pointer]:
+                      - radio "Drawing & Illustration" [ref=f33e123]
+                      - generic [ref=f33e124]: Drawing & Illustration
+                    - generic [ref=f33e125] [cursor=pointer]:
+                      - radio "Sketching" [ref=f33e126]
+                      - generic [ref=f33e127]: Sketching
+                    - generic [ref=f33e128] [cursor=pointer]:
+                      - radio "Sculpture" [ref=f33e129]
+                      - generic [ref=f33e130]: Sculpture
+                    - generic [ref=f33e131] [cursor=pointer]:
+                      - radio "Mixed / Other" [ref=f33e132]
+                      - generic [ref=f33e133]: Mixed / Other
+                - generic [ref=f33e134]:
+                  - generic [ref=f33e135] [cursor=pointer]: Primary Medium (optional)
+                  - combobox "Primary Medium (optional)" [ref=f33e136] [cursor=pointer]:
+                    - option "Select your primary medium (optional)" [selected]
+                    - option "Oil Painting"
+                    - option "Watercolour"
+                    - option "Acrylic Painting"
+                    - option "Drawing & Illustration"
+                    - option "Street Photography"
+                    - option "Landscape Photography"
+                    - option "Portrait Photography"
+                    - option "Documentary Photography"
+                    - option "Fine Art Photography"
+                    - option "Abstract Photography"
+                    - option "Architectural Photography"
+                    - option "Still Life Photography"
+                    - option "Printmaking"
+                    - option "Mixed Media"
+                    - option "Collage"
+                    - option "Digital Art"
+                    - option "Sculpture"
+                    - option "Textile Art"
+                    - option "Other"
+                - generic [ref=f33e137]:
+                  - generic [ref=f33e138] [cursor=pointer]: Artist Statement
+                  - textbox "Artist Statement" [ref=f33e139]:
+                    - /placeholder: Optional, a few lines about your practice, what drives your work, and what makes it suited to commercial spaces. You can add this later.
+                  - paragraph [ref=f33e140]: Skip for now and add it when you’re ready.
+            - generic [ref=f33e141]:
+              - heading "What You Offer" [level=3] [ref=f33e142]
+              - generic [ref=f33e143]:
+                - generic [ref=f33e144]:
+                  - paragraph [ref=f33e145]: I can supply (select all that apply) *
+                  - generic [ref=f33e146]:
+                    - generic [ref=f33e147] [cursor=pointer]:
+                      - checkbox "Original works" [ref=f33e148]
+                      - generic [ref=f33e149]: Original works
+                    - generic [ref=f33e150] [cursor=pointer]:
+                      - checkbox "Prints & reproductions" [ref=f33e151]
+                      - generic [ref=f33e152]: Prints & reproductions
+                    - generic [ref=f33e153] [cursor=pointer]:
+                      - checkbox "Framed works" [ref=f33e154]
+                      - generic [ref=f33e155]: Framed works
+                    - generic [ref=f33e156] [cursor=pointer]:
+                      - checkbox "Commissions" [ref=f33e157]
+                      - generic [ref=f33e158]: Commissions
+                - generic [ref=f33e159]:
+                  - paragraph [ref=f33e160]: I am open to (select all that apply) *
+                  - paragraph [ref=f33e161]: Three ways your work can reach venues. Revenue share means your art is displayed free in a venue and you split QR-code sales with them. Paid loan means the venue pays you a monthly fee to display the work. Direct purchase means the venue buys the piece outright.
+                  - generic [ref=f33e162]:
+                    - generic [ref=f33e163] [cursor=pointer]:
+                      - checkbox "Revenue share" [ref=f33e164]
+                      - generic [ref=f33e165]: Revenue share
+                    - generic [ref=f33e166] [cursor=pointer]:
+                      - checkbox "Paid loan" [ref=f33e167]
+                      - generic [ref=f33e168]: Paid loan
+                    - generic [ref=f33e169] [cursor=pointer]:
+                      - checkbox "Direct purchase" [ref=f33e170]
+                      - generic [ref=f33e171]: Direct purchase
+                - generic [ref=f33e172]:
+                  - generic [ref=f33e173] [cursor=pointer]: Delivery Radius *
+                  - combobox "Delivery Radius *" [ref=f33e174] [cursor=pointer]:
+                    - option "How far can you deliver artwork?" [selected]
+                    - option "Within 5 miles"
+                    - option "Within 10 miles"
+                    - option "Within 15 miles"
+                    - option "Central London only"
+                    - option "Greater London"
+                    - option "London + South East"
+                    - option "Nationwide"
+            - generic [ref=f33e175]:
+              - heading "Venue Preferences" [level=3] [ref=f33e176]
+              - generic [ref=f33e178]:
+                - paragraph [ref=f33e179]: Venue types suited to your work (select all that apply)
+                - generic [ref=f33e180]:
+                  - generic [ref=f33e181] [cursor=pointer]:
+                    - checkbox "Cafes & Coffee Shops" [ref=f33e182]
+                    - generic [ref=f33e183]: Cafes & Coffee Shops
+                  - generic [ref=f33e184] [cursor=pointer]:
+                    - checkbox "Restaurants & Bars" [ref=f33e185]
+                    - generic [ref=f33e186]: Restaurants & Bars
+                  - generic [ref=f33e187] [cursor=pointer]:
+                    - checkbox "Hotels & Hospitality" [ref=f33e188]
+                    - generic [ref=f33e189]: Hotels & Hospitality
+                  - generic [ref=f33e190] [cursor=pointer]:
+                    - checkbox "Coworking Spaces" [ref=f33e191]
+                    - generic [ref=f33e192]: Coworking Spaces
+                  - generic [ref=f33e193] [cursor=pointer]:
+                    - checkbox "Offices & Corporate" [ref=f33e194]
+                    - generic [ref=f33e195]: Offices & Corporate
+                  - generic [ref=f33e196] [cursor=pointer]:
+                    - checkbox "Retail & Boutiques" [ref=f33e197]
+                    - generic [ref=f33e198]: Retail & Boutiques
+                  - generic [ref=f33e199] [cursor=pointer]:
+                    - checkbox "Creative Studios" [ref=f33e200]
+                    - generic [ref=f33e201]: Creative Studios
+                  - generic [ref=f33e202] [cursor=pointer]:
+                    - checkbox "Events Spaces" [ref=f33e203]
+                    - generic [ref=f33e204]: Events Spaces
+                  - generic [ref=f33e205] [cursor=pointer]:
+                    - checkbox "Healthcare & Wellness" [ref=f33e206]
+                    - generic [ref=f33e207]: Healthcare & Wellness
+                  - generic [ref=f33e208] [cursor=pointer]:
+                    - checkbox "Any venue type" [ref=f33e209]
+                    - generic [ref=f33e210]: Any venue type
+            - generic [ref=f33e211]:
+              - generic [ref=f33e212] [cursor=pointer]: How did you hear about Wallplace?
+              - combobox "How did you hear about Wallplace?" [ref=f33e213] [cursor=pointer]:
+                - option "Select an option" [selected]
+                - option "Instagram"
+                - option "Google / Web Search"
+                - option "Word of mouth"
+                - option "Another artist"
+                - option "Event or exhibition"
+                - option "Press or media"
+                - option "Other"
+            - generic [ref=f33e214]:
+              - generic [ref=f33e215] [cursor=pointer]: Referral code
+              - textbox "Referral code" [ref=f33e216]:
+                - /placeholder: e.g. ABCD23
+              - paragraph [ref=f33e217]: If an existing artist referred you, enter their code so they get a free month when you upgrade.
+            - generic [ref=f33e218]:
+              - heading "Choose Your Plan" [level=3] [ref=f33e219]
+              - paragraph [ref=f33e220]: First month free on all plans. You can change your plan at any time after joining.
+              - generic [ref=f33e221]:
+                - button "Core £9.99 /month 15% platform fee Up to 8 works, standard profile, basic analytics." [ref=f33e222] [cursor=pointer]:
+                  - generic [ref=f33e223]: Core
+                  - generic [ref=f33e225]:
+                    - generic [ref=f33e226]: £9.99
+                    - generic [ref=f33e227]: /month
+                  - paragraph [ref=f33e228]: 15% platform fee
+                  - paragraph [ref=f33e229]: Up to 8 works, standard profile, basic analytics.
+                - button "Premium Popular £24.99 /month 8% platform fee Up to 20 works, featured profile, message venues, full analytics." [ref=f33e232] [cursor=pointer]:
+                  - generic [ref=f33e233]:
+                    - generic [ref=f33e234]: Premium
+                    - generic [ref=f33e235]: Popular
+                  - generic [ref=f33e236]:
+                    - generic [ref=f33e237]: £24.99
+                    - generic [ref=f33e238]: /month
+                  - paragraph [ref=f33e239]: 8% platform fee
+                  - paragraph [ref=f33e240]: Up to 20 works, featured profile, message venues, full analytics.
+                - button "Pro £49.99 /month 5% platform fee Up to 50 works, premium profile, message venues, dedicated support." [ref=f33e242] [cursor=pointer]:
+                  - generic [ref=f33e243]: Pro
+                  - generic [ref=f33e245]:
+                    - generic [ref=f33e246]: £49.99
+                    - generic [ref=f33e247]: /month
+                  - paragraph [ref=f33e248]: 5% platform fee
+                  - paragraph [ref=f33e249]: Up to 50 works, premium profile, message venues, dedicated support.
+            - generic [ref=f33e251]:
+              - generic [ref=f33e252] [cursor=pointer]:
+                - checkbox "I agree to the Terms of Service and Privacy Policy" [ref=f33e253]
+                - generic [ref=f33e254]:
+                  - text: I agree to the
+                  - link "Terms of Service" [ref=f33e255]:
+                    - /url: /terms
+                  - text: and
+                  - link "Privacy Policy" [ref=f33e256]:
+                    - /url: /privacy
+              - generic [ref=f33e257] [cursor=pointer]:
+                - checkbox "I agree to the Artist Agreement" [ref=f33e258]
+                - generic [ref=f33e259]:
+                  - text: I agree to the
+                  - link "Artist Agreement" [ref=f33e260]:
+                    - /url: /artist-agreement
+              - generic [ref=f33e261] [cursor=pointer]:
+                - checkbox "I understand that I am responsible for insuring my own artwork, including during transit and while on display in venues. Wallplace does not provide artwork insurance." [ref=f33e262]
+                - generic [ref=f33e263]: I understand that I am responsible for insuring my own artwork, including during transit and while on display in venues. Wallplace does not provide artwork insurance.
+            - button "Submit Application" [disabled] [ref=f33e265] [cursor=pointer]
+    - contentinfo "Site footer" [ref=f33e266]:
+      - generic [ref=f33e267]:
+        - generic [ref=f33e268]:
+          - generic [ref=f33e269]:
+            - link "Wallplace" [ref=f33e270] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f33e271]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f33e272]:
+              - paragraph [ref=f33e273]: Be first to see new works
+              - paragraph [ref=f33e274]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f33e276]:
+                - textbox "your@email.com" [ref=f33e277]
+                - button "Subscribe" [ref=f33e278] [cursor=pointer]
+            - link "Instagram" [ref=f33e279] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f33e284]:
+            - heading "For Artists" [level=4] [ref=f33e285]
+            - list [ref=f33e286]:
+              - listitem [ref=f33e287]:
+                - link "Apply to Join" [ref=f33e288] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f33e289]:
+                - link "Pricing" [ref=f33e290] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f33e291]:
+                - link "Browse Venues" [ref=f33e292] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f33e293]:
+                - link "FAQs" [ref=f33e294] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f33e295]:
+            - heading "For Venues" [level=4] [ref=f33e296]
+            - list [ref=f33e297]:
+              - listitem [ref=f33e298]:
+                - link "Discover Art" [ref=f33e299] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f33e300]:
+                - link "Register Your Venue" [ref=f33e301] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f33e302]:
+                - link "Wallplace Curated" [ref=f33e303] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f33e304]:
+                - link "How It Works" [ref=f33e305] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f33e306]:
+                - link "FAQs" [ref=f33e307] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f33e308]:
+            - heading "Company" [level=4] [ref=f33e309]
+            - list [ref=f33e310]:
+              - listitem [ref=f33e311]:
+                - link "About" [ref=f33e312] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f33e313]:
+                - link "Blog" [ref=f33e314] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f33e315]:
+                - link "How It Works" [ref=f33e316] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f33e317]:
+                - link "Sustainability" [ref=f33e318] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f33e319]:
+                - link "Partner with us" [ref=f33e320] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f33e321]:
+                - link "Contact" [ref=f33e322] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f33e323]:
+                - link "Complaints" [ref=f33e324] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f33e325]:
+                - link "Terms" [ref=f33e326] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f33e327]:
+                - link "Artist Agreement" [ref=f33e328] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f33e329]:
+                - link "Venue Agreement" [ref=f33e330] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f33e331]:
+                - link "Privacy" [ref=f33e332] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f33e333]:
+                - link "Cookies" [ref=f33e334] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f33e335]:
+                - link "Returns & Refunds" [ref=f33e336] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f33e337]:
+                - link "IP Policy" [ref=f33e338] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f33e340]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f33e341] [cursor=pointer]: Feedback
+  - alert [ref=f33e344]

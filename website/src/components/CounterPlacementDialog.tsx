@@ -4,6 +4,8 @@ import { useState } from "react";
 import { mutate, ApiError } from "@/lib/api-client";
 import Toggle from "@/components/Toggle";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { deriveArrangementType, type ArrangementType } from "@/lib/placements/arrangement";
+import { MAX_VENUE_SHARE_PERCENT } from "@/lib/pricing";
 
 const NOTE_MAX = 600;
 
@@ -23,7 +25,8 @@ export interface CounterResult {
   monthlyFeeGbp: number | null;
   qrEnabled: boolean;
   revenueSharePercent: number | null;
-  arrangementType: "free_loan" | "paid_loan" | "revenue_share" | "purchase";
+  /** Canonical derived type, including "mixed" for paid loan + QR (F27). */
+  arrangementType: ArrangementType;
   /** Current user's id, lets the caller optimistically flip requester_user_id. */
   senderUserId: string | null;
 }
@@ -60,6 +63,8 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
   // state only, stuck-at-zero happened because the state was `number`
   // and `Number("") || 0` coerced backspace back to 0 every keystroke.
   const [revShare, setRevShare] = useState<number | "">(seedRev > 0 ? seedRev : "");
+  /** Row 2144: true when the last keystroke was clamped, so the cap can say so. */
+  const [shareCapped, setShareCapped] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,15 +73,18 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
     setBusy(true);
     setError(null);
     try {
-      // paidLoan toggle on -> paid_loan; QR-only (no monthly fee) -> revenue_share;
-      // neither toggle on -> free_loan (free display).
-      const arrangementType: "free_loan" | "paid_loan" | "revenue_share" = paidLoan
-        ? "paid_loan"
-        : qr
-          ? "revenue_share"
-          : "free_loan";
       const finalMonthlyFee = paidLoan && typeof fee === "number" ? fee : null;
       const finalRevShare = qr && typeof revShare === "number" && revShare > 0 ? revShare : null;
+      // F27: derive the canonical type from the actual terms instead of a
+      // hand-rolled ladder. Paid loan + QR is "mixed"; the old mapping sent
+      // "paid_loan" and dropped the revenue-share half of the arrangement.
+      // The server re-derives anyway, this keeps the optimistic result and
+      // any legacy server honest.
+      const arrangementType = deriveArrangementType({
+        monthly_fee_gbp: finalMonthlyFee,
+        qr_enabled: qr,
+        revenue_share_percent: finalRevShare,
+      });
       // mutate throws on a non-2xx, so the counter event below only fires on a
       // confirmed 2xx (same success-only gating as the other placement handlers).
       await mutate("/api/placements", {
@@ -186,25 +194,38 @@ export default function CounterPlacementDialog({ placementId, currentUserId, ini
           {qr && (
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted flex-1">{paidLoan ? "Share on QR sales" : ARRANGEMENT_LABEL.revenue_share}</span>
+                <span className="text-xs text-muted flex-1">{paidLoan ? "Share on sales from the wall" : ARRANGEMENT_LABEL.revenue_share}</span>
                 <input
                   type="number"
                   min={0}
-                  max={50}
+                  max={MAX_VENUE_SHARE_PERCENT}
                   step={1}
                   value={revShare}
                   onChange={(e) => {
                     const v = e.target.value;
-                    if (v === "") { setRevShare(""); return; }
+                    if (v === "") { setRevShare(""); setShareCapped(false); return; }
                     const n = Number(v);
-                    if (!Number.isNaN(n)) setRevShare(Math.min(50, Math.max(0, n)));
+                    if (Number.isNaN(n)) return;
+                    // Row 2144. The clamp was silent: typing 70 became 50 with
+                    // no request sent and nothing said, so the number changed
+                    // under the venue's cursor with no explanation.
+                    setShareCapped(n > MAX_VENUE_SHARE_PERCENT);
+                    setRevShare(Math.min(MAX_VENUE_SHARE_PERCENT, Math.max(0, n)));
                   }}
                   placeholder="e.g. 15"
                   className="w-16 px-2 py-2 bg-surface border border-border rounded-sm text-sm text-center focus:outline-none focus:border-accent/50"
                 />
                 <span className="text-xs text-muted">%</span>
               </div>
-              <p className="text-[11px] text-muted mt-1">Max 50% to the venue.</p>
+              {shareCapped ? (
+                <p role="status" className="text-[11px] text-amber-700 mt-1">
+                  Capped at {MAX_VENUE_SHARE_PERCENT}%, the most a venue can take.
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted mt-1">
+                  Max {MAX_VENUE_SHARE_PERCENT}% to the venue.
+                </p>
+              )}
             </div>
           )}
 

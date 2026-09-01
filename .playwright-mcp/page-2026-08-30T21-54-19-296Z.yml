@@ -1,0 +1,133 @@
+- generic [active] [ref=f91e1]:
+  - generic [ref=f91e2]:
+    - link "Skip to content" [ref=f91e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f91e4]:
+      - generic [ref=f91e6]:
+        - link "Wallplace" [ref=f91e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f91e8]:
+          - link "Marketplace" [ref=f91e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Spaces" [ref=f91e10] [cursor=pointer]:
+            - /url: /spaces
+          - button "More" [ref=f91e12] [cursor=pointer]
+        - generic [ref=f91e15]:
+          - link "Saved" [ref=f91e16] [cursor=pointer]:
+            - /url: /customer-portal/saved
+          - button "Notifications" [ref=f91e20] [cursor=pointer]
+          - generic [ref=f91e24]:
+            - link "My Account" [ref=f91e25] [cursor=pointer]:
+              - /url: /customer-portal
+            - button "Portal menu" [ref=f91e26] [cursor=pointer]
+          - button "Logout" [ref=f91e29] [cursor=pointer]
+    - main [ref=f91e30]:
+      - generic [ref=f91e33]:
+        - heading "Account security" [level=1] [ref=f91e34]
+        - paragraph [ref=f91e35]: If you didn’t request a recent sign-in or change to your account, secure it now by resetting your password.
+        - generic [ref=f91e36]:
+          - link "Reset password" [ref=f91e37] [cursor=pointer]:
+            - /url: /forgot-password
+          - link "Sign in" [ref=f91e38] [cursor=pointer]:
+            - /url: /login
+        - paragraph [ref=f91e39]:
+          - text: If you think your account has been compromised, email
+          - link "security@wallplace.co.uk" [ref=f91e40] [cursor=pointer]:
+            - /url: mailto:security@wallplace.co.uk
+          - text: with the date and time of the suspicious activity.
+    - contentinfo "Site footer" [ref=f91e41]:
+      - generic [ref=f91e42]:
+        - generic [ref=f91e43]:
+          - generic [ref=f91e44]:
+            - link "Wallplace" [ref=f91e45] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f91e46]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f91e47]:
+              - paragraph [ref=f91e48]: Be first to see new works
+              - paragraph [ref=f91e49]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f91e51]:
+                - textbox "your@email.com" [ref=f91e52]
+                - button "Subscribe" [ref=f91e53] [cursor=pointer]
+            - link "Instagram" [ref=f91e54] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f91e59]:
+            - heading "For Artists" [level=4] [ref=f91e60]
+            - list [ref=f91e61]:
+              - listitem [ref=f91e62]:
+                - link "Apply to Join" [ref=f91e63] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f91e64]:
+                - link "Pricing" [ref=f91e65] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f91e66]:
+                - link "Browse Venues" [ref=f91e67] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f91e68]:
+                - link "FAQs" [ref=f91e69] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f91e70]:
+            - heading "For Venues" [level=4] [ref=f91e71]
+            - list [ref=f91e72]:
+              - listitem [ref=f91e73]:
+                - link "Discover Art" [ref=f91e74] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f91e75]:
+                - link "Register Your Venue" [ref=f91e76] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f91e77]:
+                - link "Wallplace Curated" [ref=f91e78] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f91e79]:
+                - link "How It Works" [ref=f91e80] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f91e81]:
+                - link "FAQs" [ref=f91e82] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f91e83]:
+            - heading "Company" [level=4] [ref=f91e84]
+            - list [ref=f91e85]:
+              - listitem [ref=f91e86]:
+                - link "About" [ref=f91e87] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f91e88]:
+                - link "Blog" [ref=f91e89] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f91e90]:
+                - link "How It Works" [ref=f91e91] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f91e92]:
+                - link "Sustainability" [ref=f91e93] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f91e94]:
+                - link "Partner with us" [ref=f91e95] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f91e96]:
+                - link "Contact" [ref=f91e97] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f91e98]:
+                - link "Complaints" [ref=f91e99] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f91e100]:
+                - link "Terms" [ref=f91e101] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f91e102]:
+                - link "Artist Agreement" [ref=f91e103] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f91e104]:
+                - link "Venue Agreement" [ref=f91e105] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f91e106]:
+                - link "Privacy" [ref=f91e107] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f91e108]:
+                - link "Cookies" [ref=f91e109] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f91e110]:
+                - link "Returns & Refunds" [ref=f91e111] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f91e112]:
+                - link "IP Policy" [ref=f91e113] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f91e115]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f91e116] [cursor=pointer]: Feedback
+  - alert [ref=f91e119]

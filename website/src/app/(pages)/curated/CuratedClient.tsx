@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/api-client";
 import Accordion from "@/components/Accordion";
 import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
@@ -104,7 +105,7 @@ const FAQ_ITEMS = [
   {
     question: "How does the art actually get on the wall?",
     answer:
-      "You pick from three placement methods: free QR-loan (the artist gets a share of QR sales, you pay nothing for the art), paid loan (a monthly fee to display), or outright purchase.",
+      "You pick from three placement methods: free loan (you take a share of sales from the wall, and pay nothing for the art), paid loan (a monthly fee to display), or outright purchase.",
   },
   {
     question: "Do you visit in person?",
@@ -122,7 +123,12 @@ export default function CuratedClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const cancelled = searchParams.get("cancelled") === "1";
-  const { userType, loading: authLoading } = useAuth();
+  // E37: the session is read here so a signed-in venue's curation submission
+  // is attributed to them. The POST used to go out with Content-Type alone,
+  // and /api/curation resolves requester_user_id solely from a bearer token,
+  // so every submission was stored anonymous even when the venue was logged
+  // in, and nothing tied the request back to their account.
+  const { userType, loading: authLoading, session } = useAuth();
 
   const [selectedTier, setSelectedTier] = useState<CuratedTierKey | null>(null);
   const [form, setForm] = useState({
@@ -146,6 +152,37 @@ export default function CuratedClient() {
     wantsPaidLoan: false,
     wantsDirectPurchase: false,
   });
+
+  // Row 1924. "The curation brief form prefills nothing, though the venue
+  // profile holds the name, email and location." A signed-in venue retyped
+  // three things the account already knows, on a form whose first refusal is
+  // that those three are required. Fetched once on mount and never written over
+  // anything already typed, so it cannot fight the user.
+  useEffect(() => {
+    if (authLoading || userType !== "venue") return;
+    let cancelled = false;
+    authFetch("/api/venue-profile")
+      .then((r: Response) => r.json())
+      .then((data: { profile?: { name?: string | null; contact_name?: string | null; email?: string | null; phone?: string | null; type?: string | null; location?: string | null } }) => {
+        const p = data?.profile;
+        if (cancelled || !p) return;
+        setForm((prev) => ({
+          ...prev,
+          venueName: prev.venueName || p.name || "",
+          contactName: prev.contactName || p.contact_name || "",
+          contactEmail: prev.contactEmail || p.email || "",
+          contactPhone: prev.contactPhone || p.phone || "",
+          venueType: prev.venueType || p.type || "",
+          location: prev.location || p.location || "",
+        }));
+      })
+      .catch(() => {
+        /* Not signed in, or a network blip: the blank form still works. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, userType]);
 
   // Budget is only meaningful for arrangements where the venue actually
   // spends money — paid loan (monthly fee) or direct purchase (outright
@@ -217,7 +254,14 @@ export default function CuratedClient() {
     try {
       const res = await fetch("/api/curation", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // Anonymous submissions stay supported: with no session the header
+          // is simply absent, which is the route's existing path.
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
+        },
         body: JSON.stringify({
           tier: selectedTier,
           venueName: form.venueName,
@@ -676,7 +720,7 @@ export default function CuratedClient() {
 
                 {/* Placement method preferences. Three methods mirror the
                     core Wallplace commercial models: QR-enabled loan
-                    (free on wall, venue earns a share of QR sales), paid
+                    (free on wall, venue earns a share of sales from the wall), paid
                     loan (venue pays a monthly fee to display), direct
                     purchase (venue buys outright). Venues can pick more
                     than one. */}
@@ -689,7 +733,7 @@ export default function CuratedClient() {
                       checked={form.wantsQrLoan}
                       onChange={(v) => update("wantsQrLoan", v)}
                       title="QR-enabled loan"
-                      desc="Free on your wall. Share QR sales with the artist."
+                      desc="Free on your wall. You take a share of sales from it."
                     />
                     <MethodCheckbox
                       checked={form.wantsPaidLoan}

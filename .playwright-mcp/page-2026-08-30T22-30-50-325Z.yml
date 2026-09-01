@@ -1,0 +1,398 @@
+- generic [active] [ref=f119e1]:
+  - generic [ref=f119e2]:
+    - link "Skip to content" [ref=f119e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f119e4]:
+      - generic [ref=f119e6]:
+        - link "Wallplace" [ref=f119e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f119e8]:
+          - link "Marketplace" [ref=f119e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f119e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f119e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f119e13] [cursor=pointer]
+        - generic [ref=f119e16]:
+          - link "Saved" [ref=f119e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f119e21] [cursor=pointer]
+          - button "Notifications" [ref=f119e26] [cursor=pointer]
+          - generic [ref=f119e30]:
+            - link "Venue Portal" [ref=f119e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f119e32] [cursor=pointer]
+          - button "Logout" [ref=f119e35] [cursor=pointer]
+    - main [ref=f119e36]:
+      - generic [ref=f119e37]:
+        - generic [ref=f119e38]:
+          - img "Mt. Fitz Roy, Patagonia" [ref=f119e40]
+          - generic [ref=f119e44]:
+            - paragraph [ref=f119e45]: Wallplace Curated
+            - heading "Hand-picked art for your space." [level=1] [ref=f119e46]
+            - paragraph [ref=f119e47]: Tell us about your space, audience, and the feel you want. Our curators hand-pick a shortlist of works from Wallplace artists that fit. From £49.
+            - generic [ref=f119e48]:
+              - link "PICK A PLAN" [ref=f119e49] [cursor=pointer]:
+                - /url: "#plans"
+              - link "HOW IT WORKS" [ref=f119e50] [cursor=pointer]:
+                - /url: "#how"
+          - generic [ref=f119e51]:
+            - button "See how it works" [ref=f119e53] [cursor=pointer]
+            - generic [ref=f119e59]:
+              - generic [ref=f119e60]: From £49
+              - generic [ref=f119e62]: Delivered in 5 business days
+              - generic [ref=f119e64]: Cancel managed plans anytime
+        - generic [ref=f119e65]:
+          - generic [ref=f119e68]:
+            - heading "How it works" [level=2] [ref=f119e69]
+            - generic [ref=f119e70]:
+              - generic [ref=f119e71]:
+                - text: "01"
+                - heading "Brief" [level=3] [ref=f119e72]
+                - paragraph [ref=f119e73]: Tell us about the space, audience, and the feel you want.
+              - generic [ref=f119e74]:
+                - text: "02"
+                - heading "Curate" [level=3] [ref=f119e75]
+                - paragraph [ref=f119e76]: A Wallplace curator hand-picks 5 to 8 works that fit your brief.
+              - generic [ref=f119e77]:
+                - text: "03"
+                - heading "Place" [level=3] [ref=f119e78]
+                - paragraph [ref=f119e79]: Pick what you love. We arrange placement or purchase.
+            - paragraph [ref=f119e80]: "Typical turnaround: 5 business days from brief to shortlist."
+          - generic [ref=f119e83]:
+            - generic [ref=f119e84]:
+              - heading "Plans" [level=2] [ref=f119e85]
+              - paragraph [ref=f119e86]: One-off curation when you need it. Managed rotation when you don’t.
+            - generic [ref=f119e87]:
+              - generic [ref=f119e88]:
+                - heading "One-off curation" [level=3] [ref=f119e89]
+                - paragraph [ref=f119e90]: Pay once, we deliver your shortlist.
+              - generic [ref=f119e91]:
+                - generic [ref=f119e92]:
+                  - button "Single wall £49 One feature wall, hand-picked. Shortlist of 5 to 8 works suited to your space Size, style and budget matched to your brief Delivered by email within 5 business days Book for £49" [ref=f119e93] [cursor=pointer]:
+                    - paragraph [ref=f119e94]: Single wall
+                    - paragraph [ref=f119e95]: £49
+                    - paragraph [ref=f119e96]: One feature wall, hand-picked.
+                    - list [ref=f119e97]:
+                      - listitem [ref=f119e98]:
+                        - generic [ref=f119e101]: Shortlist of 5 to 8 works suited to your space
+                      - listitem [ref=f119e102]:
+                        - generic [ref=f119e105]: Size, style and budget matched to your brief
+                      - listitem [ref=f119e106]:
+                        - generic [ref=f119e109]: Delivered by email within 5 business days
+                    - generic [ref=f119e110]: Book for £49
+                  - link "Read the full plan" [ref=f119e114] [cursor=pointer]:
+                    - /url: /curated/single_wall
+                - generic [ref=f119e117]:
+                  - generic [ref=f119e118]: Most popular
+                  - button "Full space £149 Every wall in your venue, considered together. Multi-wall shortlist with grouping notes Mood and palette guidance for a coherent look Optional revisions if you'd like alternatives Delivered within 5 business days Book for £149" [ref=f119e119] [cursor=pointer]:
+                    - paragraph [ref=f119e120]: Full space
+                    - paragraph [ref=f119e121]: £149
+                    - paragraph [ref=f119e122]: Every wall in your venue, considered together.
+                    - list [ref=f119e123]:
+                      - listitem [ref=f119e124]:
+                        - generic [ref=f119e127]: Multi-wall shortlist with grouping notes
+                      - listitem [ref=f119e128]:
+                        - generic [ref=f119e131]: Mood and palette guidance for a coherent look
+                      - listitem [ref=f119e132]:
+                        - generic [ref=f119e135]: Optional revisions if you'd like alternatives
+                      - listitem [ref=f119e136]:
+                        - generic [ref=f119e139]: Delivered within 5 business days
+                    - generic [ref=f119e140]: Book for £149
+                  - link "Read the full plan" [ref=f119e144] [cursor=pointer]:
+                    - /url: /curated/full_space
+                - generic [ref=f119e147]:
+                  - button "Bespoke project From £299 For hotels, hospitality groups, offices, or larger venues. Full curation plan tailored to your brand and space Artist shortlist + commissioned work if needed Rotation schedule and installation guidance Quote based on scope, just tell us what you need Request a quote" [ref=f119e148] [cursor=pointer]:
+                    - paragraph [ref=f119e149]: Bespoke project
+                    - paragraph [ref=f119e150]: From £299
+                    - paragraph [ref=f119e151]: For hotels, hospitality groups, offices, or larger venues.
+                    - list [ref=f119e152]:
+                      - listitem [ref=f119e153]:
+                        - generic [ref=f119e156]: Full curation plan tailored to your brand and space
+                      - listitem [ref=f119e157]:
+                        - generic [ref=f119e160]: Artist shortlist + commissioned work if needed
+                      - listitem [ref=f119e161]:
+                        - generic [ref=f119e164]: Rotation schedule and installation guidance
+                      - listitem [ref=f119e165]:
+                        - generic [ref=f119e168]: Quote based on scope, just tell us what you need
+                    - generic [ref=f119e169]: Request a quote
+                  - link "Read the full plan" [ref=f119e173] [cursor=pointer]:
+                    - /url: /curated/bespoke
+            - generic [ref=f119e176]:
+              - generic [ref=f119e177]:
+                - heading "Managed curation" [level=3] [ref=f119e178]
+                - paragraph [ref=f119e179]: Ongoing rotation as a subscription. Cancel anytime.
+              - generic [ref=f119e180]:
+                - generic [ref=f119e181]:
+                  - button "Monthly rotation £79.99 / month New shortlist every month, walls kept fresh. New curated shortlist each month Rotation suggestions tuned to season and traffic Priority support and swap coordination Cancel anytime Start monthly, £79.99/mo" [ref=f119e182] [cursor=pointer]:
+                    - paragraph [ref=f119e183]: Monthly rotation
+                    - paragraph [ref=f119e184]: £79.99 / month
+                    - paragraph [ref=f119e185]: New shortlist every month, walls kept fresh.
+                    - list [ref=f119e186]:
+                      - listitem [ref=f119e187]:
+                        - generic [ref=f119e190]: New curated shortlist each month
+                      - listitem [ref=f119e191]:
+                        - generic [ref=f119e194]: Rotation suggestions tuned to season and traffic
+                      - listitem [ref=f119e195]:
+                        - generic [ref=f119e198]: Priority support and swap coordination
+                      - listitem [ref=f119e199]:
+                        - generic [ref=f119e202]: Cancel anytime
+                    - generic [ref=f119e203]: Start monthly, £79.99/mo
+                  - link "Read the full plan" [ref=f119e207] [cursor=pointer]:
+                    - /url: /curated/managed_monthly
+                - generic [ref=f119e210]:
+                  - button "Quarterly refresh £199.99 / quarter Seasonal refresh, less admin. One considered refresh every three months Works best paired with a rotating loan arrangement Seasonal mood guidance included Cancel anytime Start quarterly, £199.99/qtr" [ref=f119e211] [cursor=pointer]:
+                    - paragraph [ref=f119e212]: Quarterly refresh
+                    - paragraph [ref=f119e213]: £199.99 / quarter
+                    - paragraph [ref=f119e214]: Seasonal refresh, less admin.
+                    - list [ref=f119e215]:
+                      - listitem [ref=f119e216]:
+                        - generic [ref=f119e219]: One considered refresh every three months
+                      - listitem [ref=f119e220]:
+                        - generic [ref=f119e223]: Works best paired with a rotating loan arrangement
+                      - listitem [ref=f119e224]:
+                        - generic [ref=f119e227]: Seasonal mood guidance included
+                      - listitem [ref=f119e228]:
+                        - generic [ref=f119e231]: Cancel anytime
+                    - generic [ref=f119e232]: Start quarterly, £199.99/qtr
+                  - link "Read the full plan" [ref=f119e236] [cursor=pointer]:
+                    - /url: /curated/managed_quarterly
+            - generic [ref=f119e239]:
+              - generic [ref=f119e240]:
+                - paragraph [ref=f119e241]: Included in any plan
+                - paragraph [ref=f119e242]: A curator’s time and judgement. A delivered shortlist with notes. One revision round on £49 and £149 plans. Refund in full if nothing fits.
+              - generic [ref=f119e243]:
+                - paragraph [ref=f119e244]: Priced separately
+                - paragraph [ref=f119e245]: The artwork itself, free QR-loan, paid loan, or direct purchase, your choice. Installation. Rotation logistics on Bespoke.
+              - generic [ref=f119e246]:
+                - paragraph [ref=f119e247]: When to upgrade
+                - paragraph [ref=f119e248]: Single wall → Full space when you have 2+ walls or want continuity across them. One-off → Managed when refresh frequency matters more than spend.
+          - generic [ref=f119e252]:
+            - paragraph [ref=f119e253]: “Walls do something to a room. We help you choose what.”
+            - paragraph [ref=f119e254]: Wallplace curators
+          - generic [ref=f119e257]:
+            - heading "Where curators place art" [level=2] [ref=f119e258]
+            - paragraph [ref=f119e259]: Examples of the kind of spaces Curated is designed for.
+            - generic [ref=f119e260]:
+              - generic [ref=f119e261]:
+                - img "Boutique hotel, Margate" [ref=f119e263]
+                - paragraph [ref=f119e264]: Boutique hotel, Margate
+              - generic [ref=f119e265]:
+                - img "Members' club, Soho" [ref=f119e267]
+                - paragraph [ref=f119e268]: Members' club, Soho
+              - generic [ref=f119e269]:
+                - img "Independent café, Peckham" [ref=f119e271]
+                - paragraph [ref=f119e272]: Independent café, Peckham
+          - generic [ref=f119e275]:
+            - heading "Common questions" [level=2] [ref=f119e276]
+            - generic [ref=f119e277]:
+              - generic [ref=f119e278]:
+                - button "Who is this for?" [ref=f119e279] [cursor=pointer]
+                - paragraph [ref=f119e282]: Cafés, restaurants, hotels, bars, offices, co-working spaces, clinics, retail. Any venue with walls and a sense of how they want them to feel.
+              - generic [ref=f119e283]:
+                - button "How is this different from just browsing artists?" [ref=f119e284] [cursor=pointer]
+                - paragraph [ref=f119e287]: Browsing is free and works if you know what you want. Curated is for venues who want a Wallplace curator to do the picking and the artist matching.
+              - generic [ref=f119e288]:
+                - button "How long does it take?" [ref=f119e289] [cursor=pointer]
+                - paragraph [ref=f119e292]: Most shortlists land within 5 business days of your brief. Bespoke projects start with a 30-minute scope call and the timeline is set from there.
+              - generic [ref=f119e293]:
+                - button "What's NOT included in the price?" [ref=f119e294] [cursor=pointer]
+                - paragraph [ref=f119e297]: The artwork itself. Curated covers the curation. Getting the art on the wall (free QR-loan, paid loan, or outright purchase) is arranged separately.
+              - generic [ref=f119e298]:
+                - button "What if I don't love any of the shortlist?" [ref=f119e299] [cursor=pointer]
+                - paragraph [ref=f119e302]: The £49 and £149 plans include one revision round. If nothing fits at all, we refund in full.
+              - generic [ref=f119e303]:
+                - button "How does the art actually get on the wall?" [ref=f119e304] [cursor=pointer]
+                - paragraph [ref=f119e307]: "You pick from three placement methods: free QR-loan (the artist gets a share of QR sales, you pay nothing for the art), paid loan (a monthly fee to display), or outright purchase."
+              - generic [ref=f119e308]:
+                - button "Can I cancel a managed plan?" [ref=f119e309] [cursor=pointer]
+                - paragraph [ref=f119e312]: Yes, any time, no notice period. You keep the last shortlist.
+              - generic [ref=f119e313]:
+                - button "Do you visit in person?" [ref=f119e314] [cursor=pointer]
+                - paragraph [ref=f119e317]: Not on £49 to £199.99 plans. Bespoke projects include a scope call and, where it makes sense, an on-site walkthrough.
+          - generic [ref=f119e319]:
+            - generic [ref=f119e320]:
+              - generic [ref=f119e321]:
+                - link "Pick a plan above" [ref=f119e322] [cursor=pointer]:
+                  - /url: "#plans"
+                - text: first, then fill in the brief here.
+              - heading "Tell us about your space" [level=2] [ref=f119e323]
+              - paragraph [ref=f119e324]: We'll build a curated shortlist tuned to your space.
+              - generic [ref=f119e325]:
+                - generic [ref=f119e326]:
+                  - generic [ref=f119e327]:
+                    - generic [ref=f119e328]: Venue name *
+                    - textbox [ref=f119e329]
+                  - generic [ref=f119e330]:
+                    - generic [ref=f119e331]: Venue type
+                    - combobox [ref=f119e332] [cursor=pointer]:
+                      - option "Select…" [selected]
+                      - option "Café"
+                      - option "Restaurant"
+                      - option "Hotel"
+                      - option "Bar / pub"
+                      - option "Office"
+                      - option "Co-working"
+                      - option "Retail"
+                      - option "Clinic"
+                      - option "Gallery"
+                      - option "Event space"
+                      - option "Other"
+                - generic [ref=f119e333]:
+                  - generic [ref=f119e334]:
+                    - generic [ref=f119e335]: Your name *
+                    - textbox [ref=f119e336]
+                  - generic [ref=f119e337]:
+                    - generic [ref=f119e338]: Email *
+                    - textbox [ref=f119e339]
+                - generic [ref=f119e340]:
+                  - generic [ref=f119e341]:
+                    - generic [ref=f119e342]: Phone
+                    - textbox [ref=f119e343]
+                  - generic [ref=f119e344]:
+                    - generic [ref=f119e345]: Location (town/city)
+                    - textbox [ref=f119e346]
+                - generic [ref=f119e347]:
+                  - generic [ref=f119e348]: How would you like to get the art?
+                  - generic [ref=f119e349]:
+                    - button [ref=f119e350] [cursor=pointer]:
+                      - generic [ref=f119e353]:
+                        - paragraph [ref=f119e354]: QR-enabled loan
+                        - paragraph [ref=f119e355]: Free on your wall. Share QR sales with the artist.
+                    - button [ref=f119e356] [cursor=pointer]:
+                      - generic [ref=f119e359]:
+                        - paragraph [ref=f119e360]: Paid loan
+                        - paragraph [ref=f119e361]: Pay the artist a monthly fee to display their work.
+                    - button [ref=f119e362] [cursor=pointer]:
+                      - generic [ref=f119e365]:
+                        - paragraph [ref=f119e366]: Direct purchase
+                        - paragraph [ref=f119e367]: Buy a piece outright for your permanent collection.
+                - generic [ref=f119e368]:
+                  - generic [ref=f119e369]:
+                    - generic [ref=f119e370]: Wall count
+                    - spinbutton "e.g. 3" [ref=f119e371]
+                  - generic [ref=f119e372]:
+                    - generic [ref=f119e373]: Timeframe
+                    - textbox "e.g. ASAP, within 2 weeks" [ref=f119e374]
+                - generic [ref=f119e375]:
+                  - generic [ref=f119e376]: Style you like
+                  - textbox "e.g. muted minimalist photography, bold colour abstracts, urban street scenes" [ref=f119e377]
+                - generic [ref=f119e378]:
+                  - generic [ref=f119e379]: Audience / guests
+                  - textbox "Who's in your space, their taste, demographic, time of day" [ref=f119e380]
+                - generic [ref=f119e381]:
+                  - generic [ref=f119e382]: Mood / atmosphere
+                  - textbox "Calm, energetic, cosy, clean, warm, considered…" [ref=f119e383]
+                - generic [ref=f119e384]:
+                  - generic [ref=f119e385]: References, links, or anything else
+                  - textbox "Share Instagram links, Pinterest boards, or photos of the space (paste URLs)." [ref=f119e386]
+                - generic [ref=f119e387]:
+                  - paragraph [ref=f119e388]: Select a plan above to continue.
+                  - button "Select a plan" [disabled] [ref=f119e389] [cursor=pointer]
+            - paragraph [ref=f119e390]:
+              - text: Already on Wallplace?
+              - link "Log in to your venue portal" [ref=f119e391] [cursor=pointer]:
+                - /url: /venue-portal
+              - text: .
+          - generic [ref=f119e393]:
+            - heading "Hand-picked art for your space." [level=2] [ref=f119e394]
+            - paragraph [ref=f119e395]: From £49 · 5 business days · No long-term commitment.
+            - link "PICK A PLAN" [ref=f119e396] [cursor=pointer]:
+              - /url: "#plans"
+    - contentinfo "Site footer" [ref=f119e397]:
+      - generic [ref=f119e398]:
+        - generic [ref=f119e399]:
+          - generic [ref=f119e400]:
+            - link "Wallplace" [ref=f119e401] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f119e402]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f119e403]:
+              - paragraph [ref=f119e404]: Be first to see new works
+              - paragraph [ref=f119e405]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f119e407]:
+                - textbox "your@email.com" [ref=f119e408]
+                - button "Subscribe" [ref=f119e409] [cursor=pointer]
+            - link "Instagram" [ref=f119e410] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f119e415]:
+            - heading "For Artists" [level=4] [ref=f119e416]
+            - list [ref=f119e417]:
+              - listitem [ref=f119e418]:
+                - link "Apply to Join" [ref=f119e419] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f119e420]:
+                - link "Pricing" [ref=f119e421] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f119e422]:
+                - link "Browse Venues" [ref=f119e423] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f119e424]:
+                - link "FAQs" [ref=f119e425] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f119e426]:
+            - heading "For Venues" [level=4] [ref=f119e427]
+            - list [ref=f119e428]:
+              - listitem [ref=f119e429]:
+                - link "Discover Art" [ref=f119e430] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f119e431]:
+                - link "Register Your Venue" [ref=f119e432] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f119e433]:
+                - link "Wallplace Curated" [ref=f119e434] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f119e435]:
+                - link "How It Works" [ref=f119e436] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f119e437]:
+                - link "FAQs" [ref=f119e438] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f119e439]:
+            - heading "Company" [level=4] [ref=f119e440]
+            - list [ref=f119e441]:
+              - listitem [ref=f119e442]:
+                - link "About" [ref=f119e443] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f119e444]:
+                - link "Blog" [ref=f119e445] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f119e446]:
+                - link "How It Works" [ref=f119e447] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f119e448]:
+                - link "Sustainability" [ref=f119e449] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f119e450]:
+                - link "Partner with us" [ref=f119e451] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f119e452]:
+                - link "Contact" [ref=f119e453] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f119e454]:
+                - link "Complaints" [ref=f119e455] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f119e456]:
+                - link "Terms" [ref=f119e457] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f119e458]:
+                - link "Artist Agreement" [ref=f119e459] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f119e460]:
+                - link "Venue Agreement" [ref=f119e461] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f119e462]:
+                - link "Privacy" [ref=f119e463] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f119e464]:
+                - link "Cookies" [ref=f119e465] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f119e466]:
+                - link "Returns & Refunds" [ref=f119e467] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f119e468]:
+                - link "IP Policy" [ref=f119e469] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f119e471]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f119e472] [cursor=pointer]: Feedback
+  - alert [ref=f119e475]

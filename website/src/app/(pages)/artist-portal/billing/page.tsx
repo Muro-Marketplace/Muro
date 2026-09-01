@@ -8,6 +8,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { PLAN_PRICES, PLATFORM_FEE_PERCENT } from "@/lib/pricing";
+import { OUTREACH_WEEKLY_LIMIT } from "@/lib/outreach-cap";
+import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 
 interface ProfileSubscription {
   subscription_status: string;
@@ -19,11 +21,15 @@ interface ProfileSubscription {
 }
 
 // Monthly prices; annual saves ~17% (10 months' equivalent).
-const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAnnual: number; fee: string }> = {
-  core: { name: "Core", priceMonthly: PLAN_PRICES.core.monthlyGbp, priceAnnual: PLAN_PRICES.core.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%` },
-  premium: { name: "Premium", priceMonthly: PLAN_PRICES.premium.monthlyGbp, priceAnnual: PLAN_PRICES.premium.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%` },
-  pro: { name: "Pro", priceMonthly: PLAN_PRICES.pro.monthlyGbp, priceAnnual: PLAN_PRICES.pro.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%` },
-  none: { name: "No plan", priceMonthly: 0, priceAnnual: 0, fee: "n/a" },
+// Prices, fee and the weekly approach allowance all come from their one
+// source. `approaches` is the plan's headline figure, shown next to the price
+// so the page says what the plan buys and not only what it costs; the live
+// remaining count comes from /api/outreach/allowance.
+const PLAN_DETAILS: Record<string, { name: string; priceMonthly: number; priceAnnual: number; fee: string; approaches: number | null }> = {
+  core: { name: "Core", priceMonthly: PLAN_PRICES.core.monthlyGbp, priceAnnual: PLAN_PRICES.core.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%`, approaches: OUTREACH_WEEKLY_LIMIT.core },
+  premium: { name: "Premium", priceMonthly: PLAN_PRICES.premium.monthlyGbp, priceAnnual: PLAN_PRICES.premium.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%`, approaches: OUTREACH_WEEKLY_LIMIT.premium },
+  pro: { name: "Pro", priceMonthly: PLAN_PRICES.pro.monthlyGbp, priceAnnual: PLAN_PRICES.pro.annualGbp, fee: `${PLATFORM_FEE_PERCENT}%`, approaches: OUTREACH_WEEKLY_LIMIT.pro },
+  none: { name: "No plan", priceMonthly: 0, priceAnnual: 0, fee: "n/a", approaches: null },
 };
 
 function annualMonthlyEquivalent(priceAnnual: number): string {
@@ -83,6 +89,9 @@ export default function BillingPage() {
   const [sub, setSub] = useState<ProfileSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
+  // Live remaining approaches for the rolling week, so the upgrade decision
+  // is made against the real number rather than the plan's headline.
+  const allowance = useOutreachAllowance();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [planChanged, setPlanChanged] = useState(false);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
@@ -129,6 +138,12 @@ export default function BillingPage() {
         subscription_period_end: data.profile.subscription_period_end || null,
         trial_end: data.profile.trial_end || null,
         is_founding_artist: data.profile.is_founding_artist || false,
+        // D9 (QA 2026-08-28): this field was never copied into state, so the
+        // referral panel below could not render for anyone. The code is
+        // auto-generated on the profile; redemption is real (the referred
+        // artist enters it on the application form, and the Stripe webhook
+        // credits the referrer 30 fee-free days on their first payment).
+        referral_code: data.profile.referral_code || null,
       };
       setSub(next);
       return next;
@@ -313,6 +328,47 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* What the plan is actually buying this week. Renders nothing while the
+          lookup is in flight, for a venue, or on an unlimited plan. */}
+      <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-5" />
+
+      {/* Referral code (D9, QA 2026-08-28). Was dead: fetchSub never copied
+          referral_code into state, so `sub?.referral_code` was always
+          undefined and this panel could not render for anyone. It also lived
+          inside the no-subscription branch, hiding it from exactly the
+          artists most likely to refer; it now renders for any artist whose
+          profile carries a code. Redemption is wired end to end: the new
+          artist enters the code on /apply (referred_by_code, migration 109)
+          and the Stripe webhook credits the referrer 30 fee-free days on
+          the referred artist's first payment (migration 115). */}
+      {sub?.referral_code && (
+        <div className="bg-accent/5 border border-accent/20 rounded-sm px-4 py-4 mb-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-widest text-accent mb-1">Your referral code</p>
+              <p className="text-sm text-foreground">
+                Refer another artist and get <strong>30 days free</strong> when they upgrade to a paid plan.
+              </p>
+              <p className="text-xs text-muted mt-1">
+                They enter your code on the application form. Your free days are applied when they first pay.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <code className="px-3 py-1.5 bg-white border border-border rounded-sm text-sm font-mono tracking-wider text-foreground select-all">
+                {sub.referral_code}
+              </code>
+              <button
+                type="button"
+                onClick={() => { navigator.clipboard.writeText(sub.referral_code || ""); }}
+                className="px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors cursor-pointer"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Current plan */}
       {hasSubscription ? (
         <div className="bg-surface border border-border rounded-sm p-6 mb-5">
@@ -324,6 +380,7 @@ export default function BillingPage() {
               </div>
               <p className="text-sm text-muted">
                 {details.priceMonthly > 0 ? `\u00a3${details.priceMonthly}/mo or \u00a3${details.priceAnnual}/yr` : ""} &middot; {details.fee} platform fee on sales
+                {details.approaches !== null && ` \u00b7 ${details.approaches} new venue approaches a week`}
               </p>
             </div>
             <button
@@ -379,32 +436,6 @@ export default function BillingPage() {
             </div>
           )}
 
-          {/* Referral code, item 25 */}
-          {sub?.referral_code && (
-            <div className="bg-accent/5 border border-accent/20 rounded-sm px-4 py-4 mb-5">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-widest text-accent mb-1">Your referral code</p>
-                  <p className="text-sm text-foreground">
-                    Refer another artist and get <strong>30 days free</strong> when they upgrade to a paid plan.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <code className="px-3 py-1.5 bg-white border border-border rounded-sm text-sm font-mono tracking-wider text-foreground select-all">
-                    {sub.referral_code}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => { navigator.clipboard.writeText(sub.referral_code || ""); }}
-                    className="px-3 py-1.5 text-xs font-medium text-accent border border-accent/30 hover:bg-accent/5 rounded-sm transition-colors cursor-pointer"
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
             <h2 className="text-lg font-medium">Choose a plan</h2>
             <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
@@ -442,7 +473,13 @@ export default function BillingPage() {
             })}
           </div>
           <p className="text-xs text-muted mt-3 text-center">
-            All plans include a first month free. Annual plans save ~17%.
+            {/* D10: /api/subscribe grants a trial only to first-time
+                subscribers (status "none"); past_due / canceled /
+                incomplete profiles are charged from day one, so they
+                must not be promised a free month here. */}
+            {status === "none"
+              ? "All plans include a first month free. Annual plans save ~17%."
+              : "Billing starts as soon as you subscribe. Annual plans save ~17%."}
           </p>
         </div>
       )}
@@ -454,7 +491,10 @@ export default function BillingPage() {
             <h2 className="text-base font-medium">Change Plan</h2>
             <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
           </div>
-          <p className="text-sm text-muted mb-5">Upgrade or downgrade anytime. Changes are prorated automatically.</p>
+          {/* D11: plan changes are replace-then-cancel (a fresh Checkout
+              subscription; the old one is cancelled once the webhook
+              lands), not a prorated swap, so say what actually happens. */}
+          <p className="text-sm text-muted mb-5">Upgrade or downgrade anytime. You check out for the new plan, it starts straight away, and your old plan is cancelled as soon as the new one is running.</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {(["core", "premium", "pro"] as const).map((p) => {
               const d = PLAN_DETAILS[p];

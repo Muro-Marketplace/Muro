@@ -31,7 +31,17 @@ vi.mock("@/lib/stripe", () => ({
     subscriptions: { create: subscriptionsCreateMock, update: subscriptionsUpdateMock },
   },
 }));
-vi.mock("@/lib/stripe-connect", () => ({ scheduleTransfer: scheduleTransferMock }));
+vi.mock("@/lib/stripe-connect", () => ({
+  scheduleTransfer: scheduleTransferMock,
+  recordBlockedLeg: vi.fn(async () => {}),
+}));
+// WS4.6: the payout gate is real capability now, not a truthy account id.
+vi.mock("@/lib/payouts/capability", () => ({
+  canReceivePayout: vi.fn(async () => ({ ok: true, accountId: "acct_test" })),
+}));
+vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
+vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
+vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/platform-fee", () => ({
   platformFeePercentForArtist: platformFeePctMock,
   DEFAULT_PLAN_FEE_PERCENT: 10,
@@ -243,6 +253,47 @@ describe("cancelPaidLoanBilling()", () => {
       cancel_at_period_end: true,
     });
   });
+
+  // Rows 2179-2187 / PASS2-offers-and-paid-loan-log. After the venue cancelled
+  // placement p-1788192191293-7xdf, the page showed "Cancelled" at the top and,
+  // further down, "Monthly payment active, £12.00/mo. Next payment on 30
+  // September. Manage it any time from this page."
+  //
+  // Stripe HAD been told: `cancel_at_period_end: true` was sent, which is why
+  // the row deliberately stays `active` (tearing it down early would cut short
+  // a period the venue has paid for). But nothing recorded that a cancellation
+  // was scheduled, so every reader saw a healthy subscription and
+  // `current_period_end` was rendered as "next payment" when it is in fact the
+  // last day of cover. Migration 127 adds the column; this writes it.
+  it("records that a cancellation is scheduled, so readers stop calling it healthy", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    subscriptionsUpdateMock.mockResolvedValue({});
+    const { db, updates } = buildDb({
+      liveBillings: [{ id: "row1", stripe_subscription_id: "sub_111", status: "active" }],
+    });
+
+    await cancelPaidLoanBilling("p1", db as Parameters<typeof cancelPaidLoanBilling>[1]);
+
+    const flagged = (updates as Array<{ table: string; row: Record<string, unknown> }>).find(
+      (u) => u.table === "placement_recurring_billings" && u.row.cancel_at_period_end === true,
+    );
+    expect(flagged, "nothing recorded that the subscription is winding down").toBeTruthy();
+  });
+
+  it("does not flag the row when Stripe refused the cancellation", async () => {
+    // The flag is a claim about Stripe's state. Writing it after a failed call
+    // would tell the venue they are not being charged when they still are.
+    isFlagOnMock.mockReturnValue(true);
+    subscriptionsUpdateMock.mockRejectedValue(new Error("stripe down"));
+    const { db, updates } = buildDb({
+      liveBillings: [{ id: "row1", stripe_subscription_id: "sub_111", status: "active" }],
+    });
+
+    await expect(
+      cancelPaidLoanBilling("p1", db as Parameters<typeof cancelPaidLoanBilling>[1]),
+    ).rejects.toThrow();
+    expect(updates).toHaveLength(0);
+  });
 });
 
 describe("handleInvoicePaid()", () => {
@@ -279,6 +330,41 @@ describe("handleInvoicePaid()", () => {
     // 10_000 pence × (1 - 0.15) = 8500 pence
     expect(scheduleTransferMock.mock.calls[0][0].amountCents).toBe(8_500);
     expect(scheduleTransferMock.mock.calls[0][0].orderId).toBe("placement:p1:in_1");
+  });
+
+  it("R2.13: an invoice for a NON-ACTIVE placement still pays but trips the admin alarm", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    platformFeePctMock.mockReturnValue(15);
+    const { db } = buildDb({
+      billingForSubscription: {
+        id: "row1",
+        placement_id: "p1",
+        payer_user_id: "v1",
+        payee_user_id: "a1",
+        monthly_amount_pence: 10_000,
+        current_period_end: null,
+      },
+      artistConnect: { stripe_connect_account_id: "acct_artist" },
+      placement: { status: "sold" },
+    });
+    const handled = await handleInvoicePaid(
+      {
+        id: "in_stale",
+        subscription: "sub_111",
+        period_start: 1_700_000_000,
+        period_end: 1_702_500_000,
+        lines: { data: [{ period: { start: 1_700_000_000, end: 1_702_500_000 } }] },
+      } as unknown as Parameters<typeof handleInvoicePaid>[0],
+      db as Parameters<typeof handleInvoicePaid>[1],
+    );
+    expect(handled).toBe(true);
+    const { sendAdminAlert } = await import("@/lib/email/admin-alert");
+    const alerts = vi.mocked(sendAdminAlert).mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.idempotencyKey === "paid_loan_nonactive:in_stale");
+    expect(alerts).toHaveLength(1);
+    // The venue WAS charged, so the artist share still schedules.
+    expect(scheduleTransferMock).toHaveBeenCalled();
   });
 
   it("returns false when no billing row matches", async () => {

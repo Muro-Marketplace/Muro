@@ -12,14 +12,18 @@
 // and unknown keys are silently dropped, and a body with no valid fields
 // returns 400.
 //
-// Known gap (customer_profiles): the production DB does not currently have
-// a customer_profiles table — the `001_analytics_events.sql` repo migration
-// that defined it was never applied, and the prod bootstrap from
-// `supabase-all-migrations.sql` omits it. So GET/PATCH for customers will
-// hit a non-existent table and return 500. The customer settings page's
-// `useNotificationPrefs` hook swallows the GET error and shows the opt-in
-// defaults, but PATCH will surface the failure. A follow-up plan should
-// either create customer_profiles or remove the customer notif-prefs UI.
+// Venue rows (E13/E14): venue_profiles has no order_notifications_enabled
+// column, so venues read and write only the two columns that exist — see
+// fieldsForRole. Selecting the missing column made PostgREST reject the
+// whole statement, 500ing every venue GET.
+//
+// customer_profiles (C11, QA 2026-08-28): the table exists in production
+// (unique index on user_id), but nothing in the signup flow ever inserts a
+// row, so the customer PATCH used to be an UPDATE ... WHERE user_id = X that
+// matched zero rows and still answered ok — the toggle looked saved and
+// silently reverted on the next load. Customer PATCHes now get-or-create the
+// row via an upsert keyed on the verified auth user id, so the write always
+// lands (or fails loudly as a 500 the settings card surfaces).
 //
 // Security: the user_id used for both read and write comes from the
 // verified bearer token (auth.user.id), never from the request body.
@@ -54,6 +58,20 @@ function tableForRole(role: UserRole | null): string | null {
   return null; // admin / unknown / null → unsupported
 }
 
+// E13/E14: venue_profiles has no order_notifications_enabled column
+// (tests/integration/schema-columns.json), and PostgREST rejects a select
+// naming a missing column, so the all-fields select 500'd every venue GET
+// and the venue "Order updates" PATCH failed every time. Each role reads
+// and writes only the columns its table actually has.
+const VENUE_PREF_FIELDS = [
+  "email_digest_enabled",
+  "message_notifications_enabled",
+] as const;
+
+function fieldsForRole(role: UserRole | null): readonly Pref[] {
+  return role === "venue" ? VENUE_PREF_FIELDS : PREF_FIELDS;
+}
+
 function isPrefField(key: string): key is Pref {
   return (PREF_FIELDS as readonly string[]).includes(key);
 }
@@ -73,10 +91,11 @@ export async function GET(request: Request) {
 
   const db = getSupabaseAdmin();
   const userId = auth.user!.id;
+  const fields = fieldsForRole(role);
 
   const { data, error } = await db
     .from(table)
-    .select(PREF_FIELDS.join(","))
+    .select(fields.join(","))
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -89,14 +108,14 @@ export async function GET(request: Request) {
   }
 
   // Build the response: any missing row or null column falls back to the
-  // opt-in default of true.
-  const preferences: Preferences = { ...DEFAULT_PREFERENCES };
-  if (data) {
-    const row = data as Partial<Record<Pref, boolean | null>>;
-    for (const field of PREF_FIELDS) {
-      const v = row[field];
-      preferences[field] = typeof v === "boolean" ? v : true;
-    }
+  // opt-in default of true. Only the role's own fields are returned, so a
+  // venue response simply omits order_notifications_enabled rather than
+  // inventing a value for a column its table does not have.
+  const preferences: Partial<Preferences> = {};
+  const row = (data ?? {}) as Partial<Record<Pref, boolean | null>>;
+  for (const field of fields) {
+    const v = row[field];
+    preferences[field] = typeof v === "boolean" ? v : DEFAULT_PREFERENCES[field];
   }
 
   return NextResponse.json({ preferences });
@@ -138,11 +157,14 @@ export async function PATCH(request: Request) {
     );
   }
 
-  // Whitelist: only known boolean fields make it into the update.
-  // Unknown keys and non-boolean values are silently dropped.
+  // Whitelist: only known boolean fields THIS role's table has make it
+  // into the update. Unknown keys, non-boolean values and fields the
+  // table lacks (order_notifications_enabled for venues, E14) are
+  // silently dropped, matching how bogus keys are treated.
+  const fields = fieldsForRole(role);
   const update: Partial<Preferences> = {};
   for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
-    if (isPrefField(key) && typeof value === "boolean") {
+    if (isPrefField(key) && (fields as readonly string[]).includes(key) && typeof value === "boolean") {
       update[key] = value;
     }
   }
@@ -156,6 +178,28 @@ export async function PATCH(request: Request) {
 
   const db = getSupabaseAdmin();
   const userId = auth.user!.id;
+
+  if (table === "customer_profiles") {
+    // Get-or-create (C11): no signup path seeds a customer_profiles row, so a
+    // plain UPDATE matches nothing and "saves" into the void. The upsert keys
+    // on the user_id unique index; user_id and email come from the verified
+    // token, never the body. Columns absent from `update` keep their DB
+    // defaults on insert and their current values on conflict-update.
+    const { error } = await db
+      .from(table)
+      .upsert(
+        { user_id: userId, email: auth.user!.email ?? null, ...update },
+        { onConflict: "user_id" },
+      );
+    if (error) {
+      console.error(`[account/preferences] PATCH upsert ${table} failed:`, error.message);
+      return NextResponse.json(
+        { error: "Could not save preferences." },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ ok: true, preferences: update });
+  }
 
   const { error } = await db.from(table).update(update).eq("user_id", userId);
   if (error) {

@@ -11,7 +11,14 @@ vi.mock("@/lib/supabase", () => ({
   supabase: { auth: { getSession: getSessionMock } },
 }));
 
-import { mutate, authFetch, ApiError, NetworkError, isTransient } from "./api-client";
+import {
+  ApiError,
+  NetworkError,
+  apiErrorMessage,
+  authFetch,
+  isTransient,
+  mutate,
+} from "./api-client";
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -73,5 +80,61 @@ describe("isTransient() (05 §1.1)", () => {
     expect(isTransient(new ApiError(500, "x", null, null))).toBe(true);
     expect(isTransient(new ApiError(403, "x", "post_limit_reached", null))).toBe(false);
     expect(isTransient(new Error("plain"))).toBe(false);
+  });
+});
+
+// Production pass 2 named the pattern: five refusals returned a correct,
+// well-worded error that the UI never showed, so the user saw a button that did
+// nothing. This is the one place the message is unpacked, so the five surfaces
+// cannot each get it subtly wrong.
+describe("apiErrorMessage", () => {
+  const payloadError = (status: number, payload: unknown) =>
+    new ApiError(
+      status,
+      typeof (payload as { error?: unknown })?.error === "string"
+        ? ((payload as { error: string }).error)
+        : `Request failed (${status})`,
+      typeof (payload as { error?: unknown })?.error === "string"
+        ? ((payload as { error: string }).error)
+        : null,
+      payload,
+    );
+
+  it("uses the server's own sentence", () => {
+    const err = payloadError(400, { error: "Install date can't be in the past." });
+    expect(apiErrorMessage(err, "fallback")).toBe("Install date can't be in the past.");
+  });
+
+  it("prefers the specific issues array over the generic headline", () => {
+    // The blog submit answers `422 {"error":"Not ready for review","issues":[…]}`.
+    // "Not ready for review" tells the author nothing they can act on.
+    const err = payloadError(422, {
+      error: "Not ready for review",
+      issues: ["Body needs at least 200 characters before submitting."],
+    });
+    expect(apiErrorMessage(err, "fallback")).toBe(
+      "Body needs at least 200 characters before submitting.",
+    );
+  });
+
+  it("joins multiple issues", () => {
+    const err = payloadError(422, { error: "Not ready", issues: ["A.", "B."] });
+    expect(apiErrorMessage(err, "fallback")).toBe("A. B.");
+  });
+
+  it("ignores an issues array that carries nothing useful", () => {
+    const err = payloadError(422, { error: "Not ready for review", issues: ["", "   "] });
+    expect(apiErrorMessage(err, "fallback")).toBe("Not ready for review");
+  });
+
+  it("says the network failed rather than blaming the input", () => {
+    expect(apiErrorMessage(new NetworkError("offline"), "fallback")).toBe(
+      "Network error. Please try again.",
+    );
+  });
+
+  it("falls back for anything that is not an API failure", () => {
+    expect(apiErrorMessage(new Error("boom"), "Could not save")).toBe("Could not save");
+    expect(apiErrorMessage(undefined, "Could not save")).toBe("Could not save");
   });
 });

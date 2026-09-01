@@ -40,6 +40,7 @@ vi.mock("@/components/SaveButton", () => ({ default: () => null }));
 vi.mock("@/components/offers/MakeOfferModal", () => ({ default: () => null }));
 
 import CollectionDetailPage from "./page";
+import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
 // A DB-backed work: UUID id, title that slugifies differently from the id.
 const WORK = {
@@ -123,5 +124,54 @@ describe("Collection work tiles link by slugified title (B13)", () => {
     fireEvent.click(card!);
 
     expect(push).toHaveBeenCalledWith("/browse/maya-chen/study-in-blue-no-7");
+  });
+});
+
+describe("Collection arrangement chips use the shared labels (B15)", () => {
+  const ARRANGEMENTS = {
+    openToFreeLoan: true,
+    openToRevenueShare: true,
+    revenueSharePercent: 30,
+    openToOutrightPurchase: true,
+  };
+
+  beforeEach(() => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        collection: COLLECTION,
+        works: [WORK],
+        artistArrangements: ARRANGEMENTS,
+      }),
+    } as Response);
+  });
+
+  it("labels the openToFreeLoan flag as a paid loan, never 'Display'", async () => {
+    const { container } = render(<CollectionDetailPage />);
+
+    await waitFor(() => {
+      expect(container.textContent).toContain("Coastal Series");
+    });
+
+    // `openToFreeLoan` is the legacy alias for a PAID loan (K3), and the
+    // browse artist cards render it as ARRANGEMENT_LABEL.paid_loan. This
+    // page said "Display", which reads as free.
+    expect(container.textContent).toContain(ARRANGEMENT_LABEL.paid_loan);
+    const chips = Array.from(container.querySelectorAll("span")).map((s) => s.textContent);
+    expect(chips).not.toContain("Display");
+  });
+
+  it("uses the shared vocabulary for the other two chips too", async () => {
+    const { container } = render(<CollectionDetailPage />);
+
+    await waitFor(() => {
+      expect(container.textContent).toContain("Coastal Series");
+    });
+
+    expect(container.textContent).toContain(`${ARRANGEMENT_LABEL.revenue_share} · 30%`);
+    expect(container.textContent).toContain(ARRANGEMENT_LABEL.purchase);
+    const chips = Array.from(container.querySelectorAll("span")).map((s) => s.textContent);
+    expect(chips).not.toContain("Rev share · 30%");
+    expect(chips).not.toContain("Purchase");
   });
 });

@@ -38,6 +38,17 @@ export interface PaidLoanPaymentChipProps {
   compact?: boolean;
   /** ISO date of the next renewal; shown on the active banner when known. */
   currentPeriodEnd?: string | null;
+  /**
+   * True once Stripe has been asked to end this subscription at the end of the
+   * current period (migration 127).
+   *
+   * Rows 2179-2187: without it, a cancelled placement's banner read "Monthly
+   * payment active, £12.00/mo. Next payment on 30 September" underneath a
+   * heading saying Cancelled. The row genuinely is still `active` in Stripe
+   * until the period ends, so status alone cannot tell the two apart, and
+   * `currentPeriodEnd` is the LAST DAY OF COVER here, not a payment date.
+   */
+  cancelAtPeriodEnd?: boolean | null;
 }
 
 const ACTIVE_STATES = new Set(["active", "trialing"]);
@@ -52,6 +63,7 @@ export default function PaidLoanPaymentChip({
   role,
   compact = false,
   currentPeriodEnd,
+  cancelAtPeriodEnd = false,
 }: PaidLoanPaymentChipProps) {
   const isPaidLoan =
     isPaidLoanArrangement(arrangementType, monthlyFeeGbp) || (monthlyFeeGbp ?? 0) > 0;
@@ -65,6 +77,40 @@ export default function PaidLoanPaymentChip({
   // Owner decision 2026-08-28: when billing IS running, say so loudly instead
   // of rendering nothing. A paid loan whose money side is invisible reads as
   // "not set up" to both parties.
+  // Rows 2179-2187. Winding down is not the same as running, and it is not the
+  // same as stopped either: cover continues to the end of the period the venue
+  // has already paid for, and then the money stops. Said plainly, because the
+  // alternative was telling a venue who had just cancelled that they would be
+  // charged again next month.
+  if (isHealthy && cancelAtPeriodEnd) {
+    const endsOn = currentPeriodEnd
+      ? new Date(currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long" })
+      : null;
+    if (compact) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-surface text-muted border border-border">
+          Monthly payment ending
+        </span>
+      );
+    }
+    return (
+      <div className="mb-6 bg-surface border border-border rounded-sm p-4">
+        <p className="text-sm font-medium text-foreground">
+          Monthly payment has been cancelled
+        </p>
+        <p className="text-xs text-muted mt-0.5">
+          {role === "venue"
+            ? endsOn
+              ? `You won't be charged again. The month you have paid for runs to ${endsOn}.`
+              : "You won't be charged again. The month you have already paid for runs to the end of its period."
+            : endsOn
+              ? `The venue has ended the monthly payment. Your last payment covers up to ${endsOn}.`
+              : "The venue has ended the monthly payment. Your last payment covers the period already paid for."}
+        </p>
+      </div>
+    );
+  }
+
   if (isHealthy) {
     if (compact) {
       return (
@@ -83,10 +129,15 @@ export default function PaidLoanPaymentChip({
             Monthly payment active{typeof monthlyFeeGbp === "number" && monthlyFeeGbp > 0 ? `, £${monthlyFeeGbp.toFixed(2)}/mo` : ""}
           </p>
           <p className="text-xs text-green-700 mt-0.5">
+            {/* Rows 2179-2187: "Manage it any time from this page" was a dead
+                promise. There is no manage, change-card or cancel-billing
+                control on the placement page in any state. What IS true is that
+                ending the placement ends the payment, so say that instead of
+                pointing at a control that does not exist. */}
             {role === "venue"
               ? renewal
-                ? `Next payment on ${renewal}. Manage it any time from this page.`
-                : "Payments are running. Manage them any time from this page."
+                ? `Next payment on ${renewal}. Ending this placement ends the payment.`
+                : "Payments are running. Ending this placement ends the payment."
               : renewal
                 ? `The venue's payment is set up. Next payment on ${renewal}.`
                 : "The venue's payment is set up and running."}
@@ -136,12 +187,15 @@ export default function PaidLoanPaymentChip({
         ? `Pay the artist their monthly fee${fee}, they're already displaying the work.`
         : `Get billing set up before the work is installed${fee}.`;
     }
-    // Artist
+    // Artist. F33: nothing automatically nudges the venue in either state,
+    // so don't claim it. The dunning case does have Stripe's retries
+    // behind it; the live-without-payment case has no automation at all,
+    // the honest advice is to chase the venue directly.
     if (isProblem) {
-      return "We've nudged the venue. Stripe will retry the charge automatically.";
+      return "Stripe will retry the charge automatically. If it keeps failing, message the venue.";
     }
     return isLive
-      ? "The artwork is on the wall but the venue hasn't started billing yet, we've nudged them."
+      ? "The artwork is on the wall but the venue hasn't started billing yet. A message to the venue is the quickest way to chase it."
       : "The venue hasn't set up the monthly card yet. They can do this from their placements list.";
   })();
 

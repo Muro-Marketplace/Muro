@@ -47,6 +47,9 @@ const OFFER = {
 const LIVE_PROFILE_COLUMNS = [
   "slug", "subscription_plan", "subscription_status", "user_id", "name",
   "stripe_connect_account_id", "stripe_connect_onboarding_complete",
+  // Rows 933-939: the offer session collects a delivery address, and the
+  // artist's own shipping scope decides which countries it may offer.
+  "ships_internationally",
 ];
 
 let profileSelects: string[] = [];
@@ -503,5 +506,152 @@ describe("POST /api/offers/[id]/checkout venue share (Task 5)", () => {
     const cut = Number(m.offer_venue_cut_pence);
     const net = Number(m.offer_artist_net_pence);
     expect(fee + cut + net).toBe(2505);
+  });
+});
+
+// B31/F42 (WS8 item 8). The cancel_url pointed at /customer-portal/offers,
+// which has never existed; the payer on an offer is a venue, so backing out of
+// Stripe landed mid-payment on a 404.
+describe("POST /api/offers/[id]/checkout cancel_url (B31/F42)", () => {
+  it("returns the venue to their own offers page, not a page that does not exist", async () => {
+    const res = await post();
+    expect(res.status).toBe(200);
+    const calls = sessionsCreateMock.mock.calls as unknown as Array<[{ cancel_url: string }]>;
+    expect(calls[0][0].cancel_url).toBe("http://localhost:3000/venue-portal/offers");
+    expect(calls[0][0].cancel_url).not.toContain("/customer-portal/");
+  });
+});
+
+describe("POST /api/offers/[id]/checkout refuses lapsed offers (F41)", () => {
+  const PAST = "2026-01-01T00:00:00.000Z";
+
+  it("refuses to charge for an offer that ran past its deadline unaccepted", async () => {
+    setupDb({ ...OFFER, expires_at: PAST, accepted_at: null });
+
+    const res = await post();
+
+    // Fail-before: the route checked only status === "accepted", so an offer
+    // whose window had closed still reached Stripe.
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ code: "offer_expired" });
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses an offer accepted after its deadline (the legacy rows)", async () => {
+    setupDb({ ...OFFER, expires_at: PAST, accepted_at: "2026-03-01T00:00:00.000Z" });
+
+    const res = await post();
+
+    expect(res.status).toBe(409);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("closes the lapsed row with a compare-and-set on accepted", async () => {
+    setupDb({ ...OFFER, expires_at: PAST, accepted_at: null });
+
+    await post();
+
+    const closed = offerUpdates.find((u) => u.payload.status === "expired");
+    expect(closed).toBeTruthy();
+    expect(closed!.filters).toContainEqual(["status", "accepted"]);
+  });
+
+  it("still takes payment for a deal accepted while the offer was live", async () => {
+    setupDb({ ...OFFER, expires_at: PAST, accepted_at: "2025-12-25T00:00:00.000Z" });
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(sessionsCreateMock).toHaveBeenCalled();
+  });
+
+  it("leaves open-ended offers alone", async () => {
+    setupDb({ ...OFFER, expires_at: null });
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("POST /api/offers/[id]/checkout refuses a non-positive amount (F49)", () => {
+  it("never builds a Stripe line for a £0.00 offer", async () => {
+    // The legacy existing_works fulfil branch could mint an accepted offer at
+    // amount_pence 0. The fulfil route now refuses that, but rows minted before
+    // the fix still exist, and this route built the line straight from
+    // offer.amount_pence with no guard at all.
+    setupDb({ ...OFFER, amount_pence: 0 });
+
+    const res = await post();
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({ code: "offer_not_priced" });
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a negative amount as firmly", async () => {
+    setupDb({ ...OFFER, amount_pence: -100 });
+
+    const res = await post();
+
+    expect(res.status).toBe(422);
+    expect(sessionsCreateMock).not.toHaveBeenCalled();
+  });
+});
+
+// Rows 933-939, 2245 / PASS2-offers-and-paid-loan-log. An accepted offer
+// produced an order nobody could fulfil. OFR-5A2LJH2CJ7KPVNMO carried
+// fulfilment_method "ship", shipping_cost 0, and a shipping block whose every
+// field was empty apart from the note "Accepted offer off_… . No delivery
+// address collected at checkout." The system knew; the artist did not, and the
+// portal showed "SHIP TO: ," above a live "Mark as Shipped" button.
+//
+// No delivery address is collected anywhere in the offer flow, so it is
+// collected on the Stripe page the buyer is already standing on. That is where
+// the cart path's own address form would otherwise have to be rebuilt, and
+// Stripe's is localised, validated and familiar.
+describe("POST /api/offers/[id]/checkout collects a delivery address (rows 933-939)", () => {
+  function session(): Record<string, unknown> {
+    return (sessionsCreateMock.mock.calls as unknown as Array<[Record<string, unknown>]>)[0][0];
+  }
+
+  it("asks Stripe for the buyer's shipping address", async () => {
+    setupDb();
+
+    const res = await post();
+
+    expect(res.status).toBe(200);
+    expect(session().shipping_address_collection).toBeTruthy();
+  });
+
+  it("offers only the UK for an artist who has not opted in to shipping abroad", async () => {
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "core", ships_internationally: false });
+
+    await post();
+
+    const collection = session().shipping_address_collection as { allowed_countries: string[] };
+    expect(collection.allowed_countries).toEqual(["GB"]);
+  });
+
+  it("offers the full destination list for an artist who does ship abroad", async () => {
+    setupDb(OFFER, { slug: "fin-coles", subscription_plan: "core", ships_internationally: true });
+
+    await post();
+
+    const collection = session().shipping_address_collection as { allowed_countries: string[] };
+    expect(collection.allowed_countries.length).toBeGreaterThan(1);
+    expect(collection.allowed_countries).toContain("GB");
+  });
+
+  it("names the works on the Stripe page instead of only the offer id", async () => {
+    // Row 2245: the buyer saw "Wallplace offer · off_…" and "Accepted offer for
+    // 1 work", which tells them nothing about what they are paying for.
+    setupDb();
+    workRows = [{ id: "w-1", title: "Sand Dunes", available: true, quantity_available: null }];
+
+    await post();
+
+    const items = session().line_items as Array<{ price_data: { product_data: { name: string; description: string } } }>;
+    expect(items[0].price_data.product_data.name).toContain("Sand Dunes");
   });
 });

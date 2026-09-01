@@ -160,6 +160,9 @@ describe("Checkout confirmation lookup failure (B21)", () => {
     );
     expect(hrefs).toContain("/browse");
     expect(hrefs).toContain("/spaces");
-    expect(hrefs).toContain("/browse/collections");
+    // QA 2026-08-30 bug 39: this asserted "/browse/collections", which 404s.
+    // The collections view lives at /browse?view=collections; the bare path has
+    // no route, so the post-purchase screen was sending buyers to a dead page.
+    expect(hrefs).toContain("/browse?view=collections");
   });
 });

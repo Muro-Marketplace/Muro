@@ -1,0 +1,133 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - link "Skip to content" [ref=f4e3] [cursor=pointer]:
+      - /url: "#main-content"
+    - banner [ref=f4e4]:
+      - generic [ref=f4e6]:
+        - link "Wallplace" [ref=f4e7] [cursor=pointer]:
+          - /url: /
+        - navigation "Main navigation" [ref=f4e8]:
+          - link "Marketplace" [ref=f4e9] [cursor=pointer]:
+            - /url: /browse
+          - link "Wallplace Curated" [ref=f4e10] [cursor=pointer]:
+            - /url: /curated
+          - link "Blog" [ref=f4e11] [cursor=pointer]:
+            - /url: /blog
+          - button "More" [ref=f4e13] [cursor=pointer]
+        - generic [ref=f4e16]:
+          - link "Saved" [ref=f4e17] [cursor=pointer]:
+            - /url: /venue-portal/saved
+          - button "Messages" [ref=f4e21] [cursor=pointer]
+          - button "Notifications" [ref=f4e26] [cursor=pointer]
+          - generic [ref=f4e30]:
+            - link "Venue Portal" [ref=f4e31] [cursor=pointer]:
+              - /url: /venue-portal
+            - button "Portal menu" [ref=f4e32] [cursor=pointer]
+          - button "Logout" [ref=f4e35] [cursor=pointer]
+    - main [ref=f4e36]:
+      - generic [ref=f4e37]: Loading placement…
+    - contentinfo "Site footer" [ref=f4e38]:
+      - generic [ref=f4e39]:
+        - generic [ref=f4e40]:
+          - generic [ref=f4e41]:
+            - link "Wallplace" [ref=f4e42] [cursor=pointer]:
+              - /url: /
+            - paragraph [ref=f4e43]: The curated art marketplace connecting artists with commercial spaces.
+            - generic [ref=f4e44]:
+              - paragraph [ref=f4e45]: Be first to see new works
+              - paragraph [ref=f4e46]: Monthly email with new artists, collections, and venues. No spam.
+              - generic [ref=f4e48]:
+                - textbox "your@email.com" [ref=f4e49]
+                - button "Subscribe" [ref=f4e50] [cursor=pointer]
+            - link "Instagram" [ref=f4e51] [cursor=pointer]:
+              - /url: https://instagram.com/thewallplace
+          - generic [ref=f4e56]:
+            - heading "For Artists" [level=4] [ref=f4e57]
+            - list [ref=f4e58]:
+              - listitem [ref=f4e59]:
+                - link "Apply to Join" [ref=f4e60] [cursor=pointer]:
+                  - /url: /apply
+              - listitem [ref=f4e61]:
+                - link "Pricing" [ref=f4e62] [cursor=pointer]:
+                  - /url: /pricing
+              - listitem [ref=f4e63]:
+                - link "Browse Venues" [ref=f4e64] [cursor=pointer]:
+                  - /url: /spaces
+              - listitem [ref=f4e65]:
+                - link "FAQs" [ref=f4e66] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f4e67]:
+            - heading "For Venues" [level=4] [ref=f4e68]
+            - list [ref=f4e69]:
+              - listitem [ref=f4e70]:
+                - link "Discover Art" [ref=f4e71] [cursor=pointer]:
+                  - /url: /browse
+              - listitem [ref=f4e72]:
+                - link "Register Your Venue" [ref=f4e73] [cursor=pointer]:
+                  - /url: /signup/venue
+              - listitem [ref=f4e74]:
+                - link "Wallplace Curated" [ref=f4e75] [cursor=pointer]:
+                  - /url: /curated
+              - listitem [ref=f4e76]:
+                - link "How It Works" [ref=f4e77] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f4e78]:
+                - link "FAQs" [ref=f4e79] [cursor=pointer]:
+                  - /url: /faqs
+          - generic [ref=f4e80]:
+            - heading "Company" [level=4] [ref=f4e81]
+            - list [ref=f4e82]:
+              - listitem [ref=f4e83]:
+                - link "About" [ref=f4e84] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=f4e85]:
+                - link "Blog" [ref=f4e86] [cursor=pointer]:
+                  - /url: /blog
+              - listitem [ref=f4e87]:
+                - link "How It Works" [ref=f4e88] [cursor=pointer]:
+                  - /url: /how-it-works
+              - listitem [ref=f4e89]:
+                - link "Sustainability" [ref=f4e90] [cursor=pointer]:
+                  - /url: /sustainability
+              - listitem [ref=f4e91]:
+                - link "Partner with us" [ref=f4e92] [cursor=pointer]:
+                  - /url: /partners
+              - listitem [ref=f4e93]:
+                - link "Contact" [ref=f4e94] [cursor=pointer]:
+                  - /url: /contact
+              - listitem [ref=f4e95]:
+                - link "Complaints" [ref=f4e96] [cursor=pointer]:
+                  - /url: /complaints
+              - listitem [ref=f4e97]:
+                - link "Terms" [ref=f4e98] [cursor=pointer]:
+                  - /url: /terms
+              - listitem [ref=f4e99]:
+                - link "Artist Agreement" [ref=f4e100] [cursor=pointer]:
+                  - /url: /artist-agreement
+              - listitem [ref=f4e101]:
+                - link "Venue Agreement" [ref=f4e102] [cursor=pointer]:
+                  - /url: /venue-agreement
+              - listitem [ref=f4e103]:
+                - link "Privacy" [ref=f4e104] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=f4e105]:
+                - link "Cookies" [ref=f4e106] [cursor=pointer]:
+                  - /url: /cookies
+              - listitem [ref=f4e107]:
+                - link "Returns & Refunds" [ref=f4e108] [cursor=pointer]:
+                  - /url: /returns
+              - listitem [ref=f4e109]:
+                - link "IP Policy" [ref=f4e110] [cursor=pointer]:
+                  - /url: /ip-policy
+        - paragraph [ref=f4e112]: © 2026 Wallplace. All rights reserved.
+    - button "Feedback and feature requests" [ref=f4e113] [cursor=pointer]: Feedback
+  - generic [ref=f4e119]:
+    - paragraph [ref=f4e120]:
+      - text: We use essential cookies to make this site work. See our
+      - link "cookie policy" [ref=f4e121] [cursor=pointer]:
+        - /url: /cookies
+      - text: .
+    - generic [ref=f4e122]:
+      - button "Decline" [ref=f4e123] [cursor=pointer]
+      - button "Accept" [ref=f4e124] [cursor=pointer]
+  - alert [ref=f4e125]

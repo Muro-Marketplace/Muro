@@ -143,7 +143,7 @@ export default function PayoutExplainerModal({ audience, userId, active }: Props
           <li className="flex gap-3">
             <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-hidden />
             <p>
-              In-store QR sales pay out the same day.
+              In-store sales pay out the same day.
             </p>
           </li>
         </ul>

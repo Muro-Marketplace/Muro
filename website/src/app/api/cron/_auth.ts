@@ -6,6 +6,7 @@
 //   curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/weekly-artist-digest
 
 import { NextResponse } from "next/server";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
 
 export function requireCronAuth(request: Request): NextResponse | null {
   const expected = process.env.CRON_SECRET;
@@ -46,4 +47,50 @@ export async function runBatch<T>(
     }
   }
   return { succeeded, failed };
+}
+
+/**
+ * Builds the terminal response for a cron run (WS6.5 / R6.F8).
+ *
+ * Vercel's cron dashboard only surfaces non-2xx runs, and every job here
+ * used to answer 200 with `{failed: n}` even when every single item failed,
+ * so a job could be broken for a month with no trace beyond function logs
+ * nobody is paged on. The rule now:
+ *
+ * - some or all items succeeded (or there was nothing to do): 200 with counts;
+ * - EVERY attempted item failed: 500, plus one sendAdminAlert, day-bucketed
+ *   so a same-day manual re-run does not send a second copy. All-failed means
+ *   the job itself is broken, not that it hit a bad row.
+ *
+ * Partial failure stays 200 on purpose: one poisoned row must not page anyone
+ * or make the whole run look red, that is what the per-item counts are for.
+ */
+export async function finishCronRun(
+  job: string,
+  counts: { succeeded: number; failed: number },
+  payload: Record<string, unknown>,
+): Promise<NextResponse> {
+  const allFailed = counts.failed > 0 && counts.succeeded === 0;
+  if (!allFailed) {
+    return NextResponse.json({ ok: true, ...payload });
+  }
+  try {
+    await sendAdminAlert({
+      idempotencyKey: `cron_all_failed:${job}:${new Date().toISOString().slice(0, 10)}`,
+      subject: `Cron ${job}: every item failed`,
+      summary:
+        `The ${job} cron attempted ${counts.failed} item${counts.failed === 1 ? "" : "s"} and every one failed. ` +
+        `That points at the job being broken (bad query, dead dependency), not at bad rows. ` +
+        `Vercel function logs for /api/cron/${job} have the per-item errors.`,
+      fields: [
+        { label: "Job", value: job },
+        { label: "Items failed", value: String(counts.failed) },
+      ],
+      metadata: { job, ...counts },
+    });
+  } catch (err) {
+    // The alert is best-effort; the 500 below is what Vercel's monitor sees.
+    console.error(`[cron/${job}] all-failed admin alert did not send:`, err);
+  }
+  return NextResponse.json({ ok: false, ...payload }, { status: 500 });
 }

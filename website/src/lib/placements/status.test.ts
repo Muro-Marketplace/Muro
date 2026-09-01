@@ -2,12 +2,13 @@ import { describe, it, expect } from "vitest";
 import {
   STAGE_ORDER,
   currentStage,
+  isBillingWindingDown,
   nextStage,
   normaliseStatus,
   statusBadgeClass,
-  viewerRole,
   type DisplayStatus,
   type PlacementLifecycle,
+  viewerRole,
 } from "./status";
 
 // K3: the `arrangementLabel()` block that lived here moved to
@@ -153,5 +154,31 @@ describe("viewerRole", () => {
     // placement with nobody able to move it.
     expect(viewerRole({ status: "pending" }, "u1")).toBe("responder");
     expect(viewerRole({ status: "pending", requesterUserId: null }, "u1")).toBe("responder");
+  });
+});
+
+// Rows 2179-2187 / PASS2-offers-and-paid-loan-log. A cancelled paid-loan
+// placement told the venue "Monthly payment active, £12.00/mo. Next payment on
+// 30 September" on the same page that said Cancelled. The subscription really
+// is still `active` in Stripe until the paid-for period runs out, so status
+// alone cannot separate "running" from "winding down"; the placement's own
+// terminal status is what does.
+describe("isBillingWindingDown", () => {
+  it("is true for every status that runs the billing cancellation", () => {
+    for (const status of ["cancelled", "completed", "sold"]) {
+      expect(isBillingWindingDown(status), status).toBe(true);
+    }
+  });
+
+  it("is false while the placement is still running", () => {
+    for (const status of ["pending", "active", "paused", "declined"]) {
+      expect(isBillingWindingDown(status), status).toBe(false);
+    }
+  });
+
+  it("is case-insensitive and safe on nothing at all", () => {
+    expect(isBillingWindingDown("Cancelled")).toBe(true);
+    expect(isBillingWindingDown(null)).toBe(false);
+    expect(isBillingWindingDown(undefined)).toBe(false);
   });
 });
