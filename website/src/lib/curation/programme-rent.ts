@@ -15,9 +15,24 @@
 // webhook redelivery from double-accruing. This function's contribution is
 // recognising that specific failure (Postgres 23505) as an expected replay
 // rather than an error, and counting it as `skipped` instead of throwing.
-// Any other insert failure is a real problem and is thrown, to be caught by
-// the caller's own try/catch (billing.ts wraps this call so an accrual
-// failure never breaks the invoice reconciliation it runs after).
+//
+// Finding 1 (review fix): any OTHER insert failure used to throw immediately,
+// which unwound this whole function and abandoned every placement the loop
+// hadn't reached yet. Because this function is keyed on the exact invoiceId,
+// nothing about that failure was ever retried: a Stripe webhook redelivery
+// hits the SAME invoiceId, so placements already accrued before the throw
+// just 23505-skip on replay, and the ones after the throw are never
+// attempted again. That artist's rent for the period was lost outright, not
+// delayed. A non-23505 insert failure is now caught per iteration, counted
+// in the returned `failed` total (with the placement ids in
+// `failedPlacementIds`), and the loop carries on to the rest — one
+// placement's transient DB error must not cost every OTHER placement in the
+// same invoice its accrual. A non-empty failure list also fires
+// sendAdminAlert (best-effort, its own try/catch) so a human can backfill.
+// The only throw left in this function is the upstream SELECT below, which
+// happens before any insert is attempted and so cannot itself abandon a
+// partially-completed batch; that one is still the caller's (billing.ts)
+// problem via its own try/catch.
 //
 // The pool guard (PROGRAMME_RENT_SHARE_MAX, currently 70%) runs once, before
 // any insert is attempted, against the REAL linked placements — not
@@ -63,6 +78,20 @@ export interface AccrueProgrammeRentResult {
    * skipped, everything is.
    */
   skipped: number;
+  /**
+   * Finding 1 (review fix): placements whose insert failed for a reason
+   * OTHER than the 23505 replay above — a real DB error, not an expected
+   * idempotent skip. Zero whenever blockedReason is set, for the same reason
+   * `skipped` is. A non-zero value here means real rent went unrecorded for
+   * this invoice; sendAdminAlert has already been fired (best-effort) so a
+   * human can backfill — see failedPlacementIds for which placements.
+   */
+  failed: number;
+  /**
+   * The placement ids behind `failed`, for the admin alert and any manual
+   * backfill. Present only when `failed` is greater than zero.
+   */
+  failedPlacementIds?: string[];
   /** Set only when the rent-pool guard refused to accrue anything at all. */
   blockedReason?: string;
 }
@@ -103,7 +132,7 @@ export async function accrueProgrammeRent(
 
   const placements = (data ?? []) as EligiblePlacementRow[];
   if (placements.length === 0) {
-    return { accrued: 0, skipped: 0 };
+    return { accrued: 0, skipped: 0, failed: 0 };
   }
 
   // Both sides of the guard are MONTHLY rates. periodMonths scales the
@@ -157,11 +186,12 @@ export async function accrueProgrammeRent(
       });
     }
 
-    return { accrued: 0, skipped: 0, blockedReason };
+    return { accrued: 0, skipped: 0, failed: 0, blockedReason };
   }
 
   let accrued = 0;
   let skipped = 0;
+  const failedPlacementIds: string[] = [];
   for (const p of placements) {
     const amountPence = Math.round(p.programme_rent_gbp * 100) * periodMonths;
     const { error: insertError } = await db.from("programme_rent_accruals").insert({
@@ -180,16 +210,60 @@ export async function accrueProgrammeRent(
         skipped++;
         continue;
       }
+      // Finding 1 (review fix): caught per iteration rather than thrown, so
+      // this placement's failure cannot abandon the ones still to come. See
+      // the module header for why a throw here would have been unretryable.
       console.error("[programme-rent] accrual insert failed", {
         curationRequestId,
         placementId: p.id,
         invoiceId,
         insertError,
       });
-      throw new Error(`[programme-rent] accrual insert failed: ${insertError.message}`);
+      failedPlacementIds.push(p.id);
+      continue;
     }
     accrued++;
   }
 
-  return { accrued, skipped };
+  if (failedPlacementIds.length > 0) {
+    // Independent try/catch, matching the pool-guard alert above: an
+    // alert-delivery failure must not turn into a thrown exception from a
+    // function whose contract here is to return, not throw, and must not
+    // stop this function reporting what it actually managed to accrue.
+    try {
+      await sendAdminAlert({
+        idempotencyKey: `programme_rent_accrual_failed:${invoiceId}`,
+        subject:
+          `Programme rent accrual failed for ${failedPlacementIds.length} ` +
+          `placement${failedPlacementIds.length === 1 ? "" : "s"}`,
+        summary:
+          `Rent accrual for curation request ${curationRequestId} (invoice ${invoiceId}) failed to write for ` +
+          `${failedPlacementIds.length} of ${placements.length} linked placements. This rent was NOT recorded ` +
+          `and needs a manual backfill.`,
+        fields: [
+          { label: "Request", value: curationRequestId },
+          { label: "Invoice", value: invoiceId },
+          { label: "Failed placements", value: failedPlacementIds.join(", ") },
+          { label: "Accrued", value: String(accrued) },
+          { label: "Skipped (already accrued)", value: String(skipped) },
+        ],
+        actionPath: "/admin/curation",
+        actionLabel: "View in admin",
+      });
+    } catch (err) {
+      console.error("[programme-rent] accrual-failed admin alert failed", {
+        curationRequestId,
+        invoiceId,
+        failedPlacementIds,
+        err,
+      });
+    }
+  }
+
+  return {
+    accrued,
+    skipped,
+    failed: failedPlacementIds.length,
+    ...(failedPlacementIds.length > 0 ? { failedPlacementIds } : {}),
+  };
 }

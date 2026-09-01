@@ -42,6 +42,7 @@ const { sendAdminAlertMock, sendEmailMock, accrueProgrammeRentMock } = vi.hoiste
   accrueProgrammeRentMock: vi.fn(async (_db: unknown, _input: unknown) => ({
     accrued: 0,
     skipped: 0,
+    failed: 0,
   })),
 }));
 

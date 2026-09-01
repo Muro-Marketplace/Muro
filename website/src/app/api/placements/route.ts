@@ -9,6 +9,7 @@ import { deriveArrangementType } from "@/lib/placements/arrangement";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
+import { assertNoServerOwned, PLACEMENT_SERVER_OWNED } from "@/lib/db/writable-fields";
 import { checkArtistOutreachCap } from "@/lib/outreach-cap";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
@@ -517,6 +518,15 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     }));
 
+    // Finding 2 (review fix): defence in depth, matching how upsertArtistProfile
+    // guards artist_profiles (see PLACEMENT_SERVER_OWNED's own doc comment for
+    // why this is per-call-site rather than one shared upsert). fullRows is
+    // built entirely from explicitly named fields above, never a body spread,
+    // so this never throws today -- it throws the day that stops being true.
+    for (const row of fullRows) {
+      assertNoServerOwned(row, PLACEMENT_SERVER_OWNED, "placements");
+    }
+
     // Row 22 (D65): the strip-and-retry loop that used to sit here is DELETED.
     // All eight candidate columns (proposed_by_user_id, venue_slug, artist_slug,
     // monthly_fee_gbp, qr_enabled, message, extra_works, work_size) exist in prod,
@@ -1022,6 +1032,11 @@ export async function PATCH(request: Request) {
       if (isArtist) termsUpdates.hidden_for_artist = false;
       if (isVenue) termsUpdates.hidden_for_venue = false;
 
+      // Finding 2 (review fix): see the comment on the POST insert's guard
+      // above -- same rationale, same "currently always a no-op" property,
+      // since termsUpdates is built above from named `counter.*` fields only.
+      assertNoServerOwned(termsUpdates, PLACEMENT_SERVER_OWNED, "placements");
+
       let termsSaved = false;
       {
         const { data, error: termsErr } = await db.from("placements").update(termsUpdates).eq("id", id).select("id");
@@ -1402,6 +1417,13 @@ export async function PATCH(request: Request) {
         updates.status = "active";
       }
     }
+
+    // Finding 2 (review fix): see the comment on the POST insert's guard
+    // above -- same rationale, same "currently always a no-op" property,
+    // since `updates` above is built entirely from named fields (status,
+    // stage-derived timestamps, hidden_for_*, collected_at, ...), never a
+    // body spread.
+    assertNoServerOwned(updates, PLACEMENT_SERVER_OWNED, "placements");
 
     // Row 22 (D65): the blanket retry that used to sit here is DELETED. It was the
     // broadest of the five — it fired on ANY error (a permission failure, a

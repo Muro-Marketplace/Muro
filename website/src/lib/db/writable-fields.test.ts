@@ -166,8 +166,10 @@ describe("allowlist integrity", () => {
     // migration 122. Both drive real money (accrueProgrammeRent), so a
     // client setting either would let an artist or venue fabricate rent
     // income -- pinned here the same way the ARTIST_PROFILE_SERVER_OWNED
-    // entries above are, even though no placements route calls
-    // assertNoServerOwned yet (see the constant's own doc comment).
+    // entries above are. Review fix: this constant is now actually wired
+    // into api/placements/route.ts's write sites (see PLACEMENT_SERVER_OWNED's
+    // own doc comment); src/app/api/placements/route.test.ts's "Finding 2"
+    // describe block proves the wiring itself, from inside the real route.
     expect(PLACEMENT_SERVER_OWNED).toContain("programme_request_id");
     expect(PLACEMENT_SERVER_OWNED).toContain("programme_rent_gbp");
     expect(Object.isFrozen(PLACEMENT_SERVER_OWNED)).toBe(true);

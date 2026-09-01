@@ -17,14 +17,36 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { authMock, fromMock, isFlagOnMock, cancelBillingMock } = vi.hoisted(() => ({
+const { authMock, fromMock, isFlagOnMock, cancelBillingMock, assertNoServerOwnedSpy } = vi.hoisted(() => ({
   authMock: vi.fn(),
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn(() => false),
   cancelBillingMock: vi.fn(async () => ({ status: "cancelled" as const })),
+  assertNoServerOwnedSpy: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
+// Finding 2 (review fix): PLACEMENT_SERVER_OWNED used to have zero call
+// sites. This wraps the REAL assertNoServerOwned (rather than replacing it
+// with a stub), so the "Finding 2" describe block below proves two things at
+// once: the route's write paths actually call it now (the wiring — spied via
+// assertNoServerOwnedSpy), and the real function still enforces the
+// allowlist when they do (not a test double that always says yes).
+vi.mock("@/lib/db/writable-fields", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/db/writable-fields")>();
+  return {
+    ...actual,
+    assertNoServerOwned: (
+      payload: Record<string, unknown>,
+      serverOwned: readonly string[],
+      table: string,
+      allow?: readonly string[],
+    ) => {
+      assertNoServerOwnedSpy(payload, serverOwned, table, allow);
+      return actual.assertNoServerOwned(payload, serverOwned, table, allow);
+    },
+  };
+});
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
     from: fromMock,
@@ -64,6 +86,7 @@ vi.mock("@/emails/templates/placements/PlacementArtworkInstalled", () => ({ Plac
 vi.mock("@/emails/templates/placements/PlacementEnded", () => ({ PlacementEnded: () => null }));
 
 import { PATCH } from "./route";
+import { assertNoServerOwned, PLACEMENT_SERVER_OWNED } from "@/lib/db/writable-fields";
 
 type Row = {
   artist_user_id: string | null;
@@ -170,6 +193,7 @@ beforeEach(() => {
   isFlagOnMock.mockReturnValue(false);
   authMock.mockResolvedValue({ user: { id: ARTIST, email: "a@example.com" }, error: null });
   cancelBillingMock.mockClear();
+  assertNoServerOwnedSpy.mockClear();
 });
 
 describe("PATCH /api/placements state machine (E20)", () => {
@@ -761,5 +785,154 @@ describe("PATCH /api/placements concurrent placement cap (Task 3)", () => {
       expect(res.status).toBeLessThan(400);
       expect(updates[0]).toMatchObject({ status: "active", collected_at: null });
     });
+  });
+});
+
+// ─── Finding 2: PLACEMENT_SERVER_OWNED had zero call sites ───
+//
+// Same shape as E23a (the demo guard with two doc comments claiming it was
+// wired while nothing ever called it): a control that exists, is
+// unit-tested (writable-fields.test.ts), and protects nothing. assertNoServerOwned
+// is now called on every write this route makes to `placements` that is built
+// from more than a single hardcoded literal key (the POST insert, the PATCH
+// counter-terms update, and the PATCH status/stage update — see the comments
+// at each call site in route.ts).
+//
+// Today none of those payloads can actually carry programme_request_id /
+// programme_rent_gbp: placementUpdateSchema has no field for either, and
+// every one of those payloads is built from explicitly named fields, never a
+// body spread (see PLACEMENT_SERVER_OWNED's own doc comment in
+// writable-fields.ts). So there is no HTTP request this file can send that
+// would prove "the guard rejects a real live request" — there is no live
+// request that reaches the guard with a violating payload to reject. What
+// these tests prove instead: (1) the wiring itself — the route calls
+// assertNoServerOwned on its real write paths, with PLACEMENT_SERVER_OWNED
+// and "placements", not zero times, which is the actual bug this fixes —
+// and (2) the exact call the route makes does reject a payload carrying
+// programme_rent_gbp, so the day a future change lets that field reach
+// `updates` or `termsUpdates`, this stops it rather than silently writing it.
+describe("PATCH /api/placements enforces the server-owned guard (Finding 2)", () => {
+  const ACTIVE_ROW: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+    proposed_by_user_id: null,
+  };
+
+  it("calls assertNoServerOwned against PLACEMENT_SERVER_OWNED on the status/stage write path", async () => {
+    setupDb(ACTIVE_ROW);
+    const res = await patch({ id: "pl-1", stage: "installed" });
+    expect(res.status).toBeLessThan(400);
+    expect(updates.length).toBeGreaterThan(0);
+    expect(assertNoServerOwnedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ installed_at: expect.any(String) }),
+      PLACEMENT_SERVER_OWNED,
+      "placements",
+      undefined,
+    );
+    // The spied call really is the DB payload that got written, not some
+    // separate object the route builds only to hand to the guard.
+    expect(assertNoServerOwnedSpy.mock.calls[0][0]).toBe(updates[0]);
+  });
+
+  /**
+   * Dedicated DB shape for the counter branch: its write is
+   * `.update(termsUpdates).eq("id", id).select("id")`, then a SEPARATE
+   * `.update({ proposed_by_user_id }).eq("id", id)` role-flip with no
+   * `.select()` — a different chain shape than setupDb's single-`.eq()`
+   * update, so it needs its own `.eq()` that works both awaited directly
+   * (the role-flip) and further chained with `.select()` (the terms write).
+   */
+  function setupCounterDb(row: Row, trail: TrailMsg[] = []) {
+    updates.length = 0;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "placements") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            updates.push(payload);
+            return {
+              eq: () => {
+                const chain = {
+                  select: async () => ({ data: [{ id: "pl-1" }], error: null }),
+                  then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+                    Promise.resolve({ error: null }).then(resolve, reject),
+                };
+                return chain;
+              },
+            };
+          },
+        };
+      }
+      if (table === "messages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({ limit: async () => ({ data: trail, error: null }) }),
+            }),
+          }),
+          insert: async () => ({ error: null }),
+        };
+      }
+      // artist_profiles / venue_profiles: answering null for `mine`/`theirs`
+      // skips the auto-message block entirely (`if (mine && theirs)`), which
+      // is fine — that block is irrelevant to what this test is proving.
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({ data: null, error: null }),
+            maybeSingle: async () => ({ data: null, error: null }),
+          }),
+        }),
+      };
+    });
+  }
+
+  it("calls assertNoServerOwned against PLACEMENT_SERVER_OWNED on the counter-terms write path", async () => {
+    setupCounterDb({
+      artist_user_id: ARTIST,
+      venue_user_id: VENUE,
+      artist_slug: "alice",
+      venue_slug: "kings-arms",
+      venue: "Kings Arms",
+      status: "pending",
+      // The VENUE proposed this placement, so the ARTIST (the default
+      // authenticated user) is free to counter it.
+      proposed_by_user_id: VENUE,
+    });
+    const res = await patch({ id: "pl-1", counter: { monthlyFeeGbp: 25 } });
+    expect(res.status).toBeLessThan(400);
+    expect(assertNoServerOwnedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ monthly_fee_gbp: 25 }),
+      PLACEMENT_SERVER_OWNED,
+      "placements",
+      undefined,
+    );
+    // Guards the terms write specifically, not the later role-flip write
+    // (`{ proposed_by_user_id }`) — that second update is a single hardcoded
+    // literal key that can never carry a server-owned column.
+    expect(updates[0]).toMatchObject({ monthly_fee_gbp: 25 });
+    expect(assertNoServerOwnedSpy.mock.calls[0][0]).toBe(updates[0]);
+  });
+
+  it("a payload carrying programme_rent_gbp is rejected by the exact guard call the route makes", () => {
+    // No live HTTP request can construct this payload today (see this
+    // block's header comment) — this calls the identical function, allowlist
+    // and table name the two tests above just proved the route invokes, to
+    // show what happens the day one of those payloads does carry it.
+    expect(() =>
+      assertNoServerOwned(
+        { status: "active", programme_rent_gbp: 999, programme_request_id: "cr_1" },
+        PLACEMENT_SERVER_OWNED,
+        "placements",
+      ),
+    ).toThrow(/programme_rent_gbp/);
   });
 });

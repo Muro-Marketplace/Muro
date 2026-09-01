@@ -251,17 +251,30 @@ export const ARTIST_WORK_SERVER_OWNED = Object.freeze([
  * placement on every paid programme invoice -- so a client setting either
  * would let an artist or venue fabricate rent income.
  *
- * NOT an exhaustive server-owned list for placements, unlike the
- * ARTIST_PROFILE_SERVER_OWNED / VENUE_PROFILE_SERVER_OWNED pair above:
- * api/placements/route.ts does not build its writes through pickWritable().
- * Its PATCH validates against placementUpdateSchema (lib/validations.ts), a
- * narrow zod object with no field for either column, so today's actual
- * protection is that omission, not this list. Recorded here anyway, in the
- * one place this codebase already looks for "is this column server-owned",
- * so a future write path -- an admin route linking a placement to a
- * programme, deliberately left unbuilt by this task -- has a documented
- * allowlist to check against, and assertNoServerOwned() can guard it the
- * moment that path exists.
+ * Review fix (E23a repeat): this constant used to have ZERO call sites --
+ * exactly the shape flagged elsewhere in this codebase (see the E23a comment
+ * in api/placements/route.ts): a control that exists, is unit-tested, and
+ * protects nothing. It is now enforced by `assertNoServerOwned(payload,
+ * PLACEMENT_SERVER_OWNED, "placements")` at every write site in
+ * api/placements/route.ts -- the POST insert and both PATCH updates (the
+ * counter-terms write and the status/stage write).
+ *
+ * Still NOT the same shape as the ARTIST_PROFILE_SERVER_OWNED /
+ * VENUE_PROFILE_SERVER_OWNED pair above, where ONE upsert function
+ * (upsertArtistProfile / upsertVenueProfile) is the single choke point every
+ * write funnels through, so ONE assertNoServerOwned() call guards all of
+ * them. `placements` has no equivalent choke point -- api/placements/route.ts
+ * builds each write payload inline at its own call site rather than through a
+ * shared pickWritable()-fed upsert -- so there is no single function to hang
+ * one call off. Guarded at each of the three sites instead, which is also why
+ * none of them can throw today: `placementUpdateSchema` (lib/validations.ts)
+ * has no field for either column and every payload here is built from
+ * explicitly named fields, never a body spread, so there is no live path that
+ * reaches either column with a client-supplied value. Each call is
+ * currently a no-op that passes -- which is the point: defence in depth
+ * against the day a future edit adds a body-sourced field to one of these
+ * payloads without checking this list first, e.g. an admin route linking a
+ * placement to a programme, deliberately left unbuilt by this task.
  */
 export const PLACEMENT_SERVER_OWNED = Object.freeze([
   "programme_request_id",
