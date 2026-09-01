@@ -137,6 +137,68 @@ describe("reconcile", () => {
   });
 });
 
+describe("synthetic order ids (placement:, programme-settlement: are outside the orders domain)", () => {
+  // Task 7 Step 1 finding: `scripts/audit/reconcile-money.ts` only ever
+  // fetches stripe_transfers scoped to `.in("order_id", <real order ids
+  // from the orders table>)`, so a `placement:<id>:<invoiceId>` or
+  // `programme-settlement:<quarterKey>:<artistUserId>` row is never even
+  // pulled into the array this function sees when run for real — that is
+  // what currently keeps paid-loan and programme-settlement transfers off
+  // the drift report. These tests pin the SAME guarantee directly on the
+  // pure function, so it holds even if a future caller widens its query
+  // (e.g. an unscoped scan of stripe_transfers), rather than being an
+  // accident of one script's SQL shape.
+  it("does not flag a placement: transfer as an orphan, and excludes it from transfersChecked/transferredPence", () => {
+    const r = reconcile(
+      [order()],
+      [transfer(), transfer({ order_id: "placement:pl_1:in_1", amount_cents: 5000 })],
+    );
+    expect(r.drifts).toEqual([]);
+    expect(r.transfersChecked).toBe(1);
+    expect(r.transferredPence).toBe(8000);
+  });
+
+  it("does not flag a programme-settlement: transfer as an orphan, and excludes it from transfersChecked/transferredPence", () => {
+    const r = reconcile(
+      [order()],
+      [transfer(), transfer({ order_id: "programme-settlement:2026Q3:artist_1", amount_cents: 3000 })],
+    );
+    expect(r.drifts).toEqual([]);
+    expect(r.transfersChecked).toBe(1);
+    expect(r.transferredPence).toBe(8000);
+  });
+
+  it("a programme-settlement: transfer with no orders in the batch at all still reports no drift", () => {
+    const r = reconcile(
+      [],
+      [transfer({ order_id: "programme-settlement:2026Q3:artist_1", amount_cents: 3000 })],
+    );
+    expect(r.drifts).toEqual([]);
+    expect(r.ordersChecked).toBe(0);
+    expect(r.transfersChecked).toBe(0);
+  });
+
+  it("a BLOCKED programme-settlement: transfer is exempt the same way a committed one is", () => {
+    // recordBlockedLeg writes status "blocked", which COMMITTED treats as
+    // committed money (line 73) — the exemption must hold for that status
+    // too, not just "pending"/"paid".
+    const r = reconcile(
+      [],
+      [transfer({ order_id: "programme-settlement:2026Q3:artist_2", status: "blocked", amount_cents: 1200 })],
+    );
+    expect(r.drifts).toEqual([]);
+  });
+
+  it("still flags a transfer whose order_id merely CONTAINS the word placement, not starting with the exact prefix", () => {
+    // Regression guard: the new skip must be a startsWith match on the exact
+    // synthetic prefixes, not a loose substring test that could swallow a
+    // real orphaned order id that happens to mention "placement".
+    const r = reconcile([order()], [transfer(), transfer({ order_id: "ord_placement_typo" })]);
+    const orphan = r.drifts.find((d) => d.kind === "transfer_without_order");
+    expect(orphan?.orderId).toBe("ord_placement_typo");
+  });
+});
+
 describe("formatReport", () => {
   it("says plainly when nothing is wrong", () => {
     expect(formatReport(reconcile([order()], [transfer()]))).toContain("No drift");

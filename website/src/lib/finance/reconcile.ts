@@ -75,6 +75,42 @@ const COMMITTED = new Set(["pending", "paid", "blocked", "failed"]);
 /** Rounding slack, in pence. Shipping and fees are floats in the DB. */
 const TOLERANCE_PENCE = 1;
 
+/**
+ * Order-id prefixes that mark a `stripe_transfers` row as money that was
+ * never charged through an `orders` row at all, so it is outside what this
+ * function can check by definition (module header: "what this can and
+ * cannot see") — there is no `orders.total` to split against and no
+ * `artist_revenue` figure to match a transfer to.
+ *
+ *   placement:<placementId>:<invoiceId>            paid-loan recurring
+ *     billing (src/lib/placements/paid-loan-billing.ts, handleInvoicePaid)
+ *   programme-settlement:<quarterKey>:<artistUserId>  Wallplace Programmes
+ *     quarterly rent settlement (src/lib/curation/programme-rent.ts,
+ *     settleProgrammeRent)
+ *
+ * Task 7 Step 1 finding: as actually run today, BOTH prefixes already avoid
+ * tripping `transfer_without_order` — but not because this function knows
+ * about them. `scripts/audit/reconcile-money.ts` fetches `stripe_transfers`
+ * scoped to `.in("order_id", <real order ids pulled from orders>)`, so a
+ * synthetic, non-UUID order_id is never even fetched into the array this
+ * function sees; it is invisible before `reconcile()` runs at all. That is a
+ * property of one script's query shape, not a guarantee this function made.
+ *
+ * Recognising the prefixes HERE, explicitly, turns the same exemption into a
+ * property of `reconcile()` itself: it now holds even for a future caller
+ * that scans stripe_transfers unscoped, and it is directly testable against
+ * the pure function (reconcile.test.ts) rather than only provable by reading
+ * the shell script's SQL. It changes no current output — these rows were
+ * already excluded from every real run — it only makes the contract robust
+ * and explicit instead of incidental.
+ */
+const SYNTHETIC_ORDER_ID_PREFIXES = ["placement:", "programme-settlement:"];
+
+function isSyntheticOrderId(orderId: string | null | undefined): boolean {
+  if (!orderId) return false;
+  return SYNTHETIC_ORDER_ID_PREFIXES.some((prefix) => orderId.startsWith(prefix));
+}
+
 export function reconcile(
   orders: ReconcilableOrder[],
   transfers: TransferRow[],
@@ -86,6 +122,11 @@ export function reconcile(
 
   for (const t of transfers) {
     if (!COMMITTED.has((t.status ?? "").toLowerCase())) continue;
+    // Out of the orders domain entirely — see SYNTHETIC_ORDER_ID_PREFIXES.
+    // Skipped before transfersChecked increments, so that count reflects
+    // transfers actually checked against an order, not the wider universe
+    // of every stripe_transfers row this call happened to be given.
+    if (isSyntheticOrderId(t.order_id)) continue;
     transfersChecked++;
     if (!t.order_id || !orderIds.has(t.order_id)) {
       orphans.push(t);

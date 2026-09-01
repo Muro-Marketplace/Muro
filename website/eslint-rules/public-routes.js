@@ -94,6 +94,9 @@ const DEMO_EXEMPT_ROUTES = {
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
   "src/app/api/admin/moderation/route.ts":
     "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
+  // Task 7 Part B. Links/unlinks a placement to a Wallplace Programme.
+  "src/app/api/admin/placements/[id]/link-programme/route.ts":
+    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
 };
 
 module.exports = { PUBLIC_ROUTES, DEMO_EXEMPT_ROUTES };

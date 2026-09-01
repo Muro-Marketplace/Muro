@@ -26,8 +26,13 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
+// Type-only: erased at compile time, so referencing these inside
+// vi.hoisted()'s factory (which runs before the module's real imports, at
+// runtime) is safe — nothing here survives past the type checker.
+import type { PayoutCapability, PayoutTarget } from "@/lib/payouts/capability";
+import type { ScheduleTransferParams } from "@/lib/stripe-connect";
 
-const { sendAdminAlertMock } = vi.hoisted(() => ({
+const { sendAdminAlertMock, canReceivePayoutMock, scheduleTransferMock, recordBlockedLegMock } = vi.hoisted(() => ({
   sendAdminAlertMock: vi.fn(
     async (_input: {
       idempotencyKey: string;
@@ -36,11 +41,30 @@ const { sendAdminAlertMock } = vi.hoisted(() => ({
       fields?: { label: string; value: string }[];
     }) => ({ ok: true as const, skipped: false as const, messageId: "m" }),
   ),
+  // Typed against the real PayoutTarget/PayoutCapability (ok: boolean, not a
+  // discriminated union), so a per-test .mockImplementation() override that
+  // returns the ok:false shape typechecks against the SAME signature this
+  // default was declared with, rather than TS locking in the narrower
+  // ok:true-only shape this default happens to return.
+  canReceivePayoutMock: vi.fn(
+    async (_db: unknown, target: PayoutTarget): Promise<PayoutCapability> => ({
+      ok: true,
+      accountId: `acct_${target.userId}`,
+      reason: null,
+    }),
+  ),
+  scheduleTransferMock: vi.fn(async (_params: ScheduleTransferParams) => "tr_default"),
+  recordBlockedLegMock: vi.fn(async (_db: unknown, _args: unknown) => undefined),
 }));
 
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: sendAdminAlertMock }));
+vi.mock("@/lib/payouts/capability", () => ({ canReceivePayout: canReceivePayoutMock }));
+vi.mock("@/lib/stripe-connect", () => ({
+  scheduleTransfer: scheduleTransferMock,
+  recordBlockedLeg: recordBlockedLegMock,
+}));
 
-import { accrueProgrammeRent } from "./programme-rent";
+import { accrueProgrammeRent, settleProgrammeRent, quarterKeyFor } from "./programme-rent";
 
 interface FakePlacement {
   id: string;
@@ -545,5 +569,314 @@ describe("accrueProgrammeRent — Finding 1: a mid-loop error must not cost its 
     expect(result).toEqual({ accrued: 0, skipped: 1, failed: 0 });
     expect(inserted).toHaveLength(1);
     expect(sendAdminAlertMock).not.toHaveBeenCalled();
+  });
+});
+
+// Task 7: quarterly rent settlement.
+//
+// settleProgrammeRent sums each artist's unsettled accruals and pays them in
+// ONE transfer, keyed on a synthetic order id
+// (`programme-settlement:<quarterKey>:<artistUserId>`) that is stable for
+// the quarter — the same idempotency shape paid-loan-billing.ts already uses
+// for `placement:<id>:<invoiceId>`.
+//
+// Settlement rule implemented: Vercel cron cannot express "quarterly", so
+// this runs monthly, but only settles accruals older than the CURRENT
+// quarter's start boundary (relative to `asOf`) — never the still-open
+// quarter an accrual was just written in. The alternative the brief offered
+// (settle everything unsettled, every run) was rejected: it would transfer
+// money to artists on whatever cadence accruals happen to land, defeating
+// the entire reason settlement is quarterly in the first place (context:
+// Stripe's ~£1.60/connected-account/month-with-any-activity fee, which the
+// quarterly batching exists to avoid). A monthly run this way is a no-op
+// most months and catches up a closed quarter every third one.
+describe("settleProgrammeRent", () => {
+  interface FakeAccrualRow {
+    id: string;
+    artist_user_id: string | null;
+    amount_pence: number;
+    accrued_at: string;
+    settled_at: string | null;
+    settled_transfer_order_id: string | null;
+  }
+
+  /** Safely inside Q3 2026 — before the Q4 cutoff every test below uses by default. */
+  const OLD_ACCRUAL_DATE = "2026-08-01T00:00:00.000Z";
+  /** The instant most tests settle "as of": the 1st of Q4, 09:00 UTC — the cron's own schedule. */
+  const ASOF_Q4_START = new Date("2026-10-01T09:00:00.000Z");
+
+  function accrualRow(overrides: Partial<FakeAccrualRow> & { id: string }): FakeAccrualRow {
+    return {
+      artist_user_id: `artist_${overrides.id}`,
+      amount_pence: 1000,
+      accrued_at: OLD_ACCRUAL_DATE,
+      settled_at: null,
+      settled_transfer_order_id: null,
+      ...overrides,
+    };
+  }
+
+  /**
+   * A programme_rent_accruals fake supporting exactly the chain
+   * settleProgrammeRent needs: select().is("settled_at", null).lt("accrued_at", x)
+   * and update({...}).in("id", [...]). The update MUTATES the underlying rows
+   * array in place, so calling settleProgrammeRent twice against the SAME
+   * `rows` reference reproduces a real rerun: the second call's SELECT sees
+   * whatever the first call's UPDATE actually wrote, not a fresh fixture.
+   */
+  function makeSettlementDb(rows: FakeAccrualRow[]) {
+    const updateCalls: Array<{ ids: string[]; payload: Record<string, unknown> }> = [];
+    const db = {
+      from(table: string) {
+        if (table !== "programme_rent_accruals") throw new Error(`unexpected table ${table}`);
+        return {
+          select: () => {
+            let filtered = rows.slice();
+            const builder = {
+              is(col: keyof FakeAccrualRow, val: null) {
+                if (val === null) filtered = filtered.filter((r) => r[col] === null);
+                return builder;
+              },
+              lt(col: keyof FakeAccrualRow, val: string) {
+                filtered = filtered.filter((r) => String(r[col]) < val);
+                return builder;
+              },
+              then(
+                onFulfilled: (v: { data: FakeAccrualRow[] | null; error: { message: string } | null }) => unknown,
+                onRejected?: (e: unknown) => unknown,
+              ) {
+                return Promise.resolve({ data: filtered, error: null }).then(onFulfilled, onRejected);
+              },
+            };
+            return builder;
+          },
+          update: (payload: Record<string, unknown>) => ({
+            in: (col: "id", ids: string[]) => {
+              updateCalls.push({ ids, payload });
+              for (const row of rows) {
+                if (col === "id" && ids.includes(row.id)) Object.assign(row, payload);
+              }
+              return Promise.resolve({ error: null });
+            },
+          }),
+        };
+      },
+    } as unknown as SupabaseClient;
+    return { db, rows, updateCalls };
+  }
+
+  beforeEach(() => {
+    // Re-establish defaults every test: vi.clearAllMocks() (the outer
+    // beforeEach) clears call history but NOT a previous test's
+    // .mockImplementation() override, so without this a blocked/thrown
+    // override from one test would leak into the next.
+    canReceivePayoutMock.mockImplementation(
+      async (_db: unknown, target: PayoutTarget): Promise<PayoutCapability> => ({
+        ok: true,
+        accountId: `acct_${target.userId}`,
+        reason: null,
+      }),
+    );
+    scheduleTransferMock.mockImplementation(async (_params: ScheduleTransferParams) => "tr_default");
+    recordBlockedLegMock.mockImplementation(async () => undefined);
+  });
+
+  it("quarterKeyFor derives the calendar quarter from asOf, in UTC", () => {
+    expect(quarterKeyFor(new Date("2026-01-15T00:00:00.000Z"))).toBe("2026Q1");
+    expect(quarterKeyFor(new Date("2026-03-31T23:59:59.000Z"))).toBe("2026Q1");
+    expect(quarterKeyFor(new Date("2026-04-01T00:00:00.000Z"))).toBe("2026Q2");
+    expect(quarterKeyFor(new Date("2026-07-01T00:00:00.000Z"))).toBe("2026Q3");
+    expect(quarterKeyFor(new Date("2026-10-01T09:00:00.000Z"))).toBe("2026Q4");
+    expect(quarterKeyFor(new Date("2026-12-31T00:00:00.000Z"))).toBe("2026Q4");
+  });
+
+  it("two artists with accruals across two invoices each get exactly one transfer per artist for the correct sum", async () => {
+    const { db, rows } = makeSettlementDb([
+      accrualRow({ id: "a1", artist_user_id: "artist_a", amount_pence: 3000 }),
+      accrualRow({ id: "a2", artist_user_id: "artist_a", amount_pence: 2000 }),
+      accrualRow({ id: "b1", artist_user_id: "artist_b", amount_pence: 1000 }),
+      accrualRow({ id: "b2", artist_user_id: "artist_b", amount_pence: 1500 }),
+    ]);
+
+    const result = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+    expect(result).toEqual({ artistsPaid: 2, blocked: 0, totalPence: 7500 });
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(2);
+    const callsByRecipient = Object.fromEntries(
+      scheduleTransferMock.mock.calls.map((c) => [(c[0] as { recipientUserId: string }).recipientUserId, c[0]]),
+    );
+    expect(callsByRecipient.artist_a).toMatchObject({
+      orderId: "programme-settlement:2026Q4:artist_a",
+      recipientType: "artist",
+      connectAccountId: "acct_artist_a",
+      amountCents: 5000,
+      immediate: false,
+    });
+    expect(callsByRecipient.artist_b).toMatchObject({
+      orderId: "programme-settlement:2026Q4:artist_b",
+      amountCents: 2500,
+    });
+    // Every contributing row is stamped, and stamped with the SAME order id
+    // as its artist's transfer.
+    for (const row of rows) {
+      expect(row.settled_at).toBe(ASOF_Q4_START.toISOString());
+      expect(row.settled_transfer_order_id).toBe(`programme-settlement:2026Q4:${row.artist_user_id}`);
+    }
+  });
+
+  it("a rerun with everything already settled schedules nothing", async () => {
+    const { db } = makeSettlementDb([
+      accrualRow({ id: "a1", artist_user_id: "artist_a", amount_pence: 3000 }),
+      accrualRow({ id: "b1", artist_user_id: "artist_b", amount_pence: 1000 }),
+    ]);
+
+    const first = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+    expect(first).toEqual({ artistsPaid: 2, blocked: 0, totalPence: 4000 });
+
+    scheduleTransferMock.mockClear();
+    recordBlockedLegMock.mockClear();
+
+    // Same db — the first call's UPDATE already stamped settled_at on both
+    // rows, so this rerun's SELECT (settled_at IS NULL) finds nothing.
+    const second = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+    expect(second).toEqual({ artistsPaid: 0, blocked: 0, totalPence: 0 });
+    expect(scheduleTransferMock).not.toHaveBeenCalled();
+    expect(recordBlockedLegMock).not.toHaveBeenCalled();
+  });
+
+  it("an artist failing canReceivePayout gets a blocked leg and stays unsettled, while the other artist is still paid", async () => {
+    const { db, rows } = makeSettlementDb([
+      accrualRow({ id: "a1", artist_user_id: "artist_ok", amount_pence: 4000 }),
+      accrualRow({ id: "b1", artist_user_id: "artist_blocked", amount_pence: 1200 }),
+      accrualRow({ id: "b2", artist_user_id: "artist_blocked", amount_pence: 800 }),
+    ]);
+    canReceivePayoutMock.mockImplementation(
+      async (_db: unknown, target: PayoutTarget): Promise<PayoutCapability> =>
+        target.userId === "artist_blocked"
+          ? { ok: false, accountId: null, reason: "no_account" }
+          : { ok: true, accountId: `acct_${target.userId}`, reason: null },
+    );
+
+    const result = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+    expect(result).toEqual({ artistsPaid: 1, blocked: 1, totalPence: 4000 });
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientUserId: "artist_ok", amountCents: 4000 }),
+    );
+    expect(recordBlockedLegMock).toHaveBeenCalledTimes(1);
+    expect(recordBlockedLegMock).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        orderId: "programme-settlement:2026Q4:artist_blocked",
+        recipientUserId: "artist_blocked",
+        recipientType: "artist",
+        amountCents: 2000,
+        reason: "no_account",
+      }),
+    );
+    // Blocked artist's rows are untouched — left unsettled for a later retry.
+    const blockedRows = rows.filter((r) => r.artist_user_id === "artist_blocked");
+    expect(blockedRows.every((r) => r.settled_at === null)).toBe(true);
+    // The paid artist's row DID settle.
+    expect(rows.find((r) => r.id === "a1")?.settled_at).toBe(ASOF_Q4_START.toISOString());
+  });
+
+  it("a thrown transfer for one artist does not prevent the other's, and leaves the failed artist unsettled", async () => {
+    const { db, rows } = makeSettlementDb([
+      accrualRow({ id: "a1", artist_user_id: "artist_ok", amount_pence: 5000 }),
+      accrualRow({ id: "b1", artist_user_id: "artist_throws", amount_pence: 2200 }),
+    ]);
+    scheduleTransferMock.mockImplementation(async (params: ScheduleTransferParams) => {
+      if (params.recipientUserId === "artist_throws") {
+        throw new Error("stripe unavailable");
+      }
+      return "tr_ok";
+    });
+
+    const result = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+    // Not "blocked" (that means canReceivePayout said no) — a thrown transfer
+    // is a different failure mode, and is not counted in either number, but
+    // must not stop artist_ok's payment or crash the run.
+    expect(result).toEqual({ artistsPaid: 1, blocked: 0, totalPence: 5000 });
+    expect(rows.find((r) => r.id === "a1")?.settled_at).toBe(ASOF_Q4_START.toISOString());
+    expect(rows.find((r) => r.id === "b1")?.settled_at).toBeNull();
+    // A human is told, so the failure doesn't sit invisible until the next run.
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    const alert = sendAdminAlertMock.mock.calls[0][0];
+    expect((alert.summary ?? "") + (alert.subject ?? "")).toMatch(/settlement|failed/i);
+    expect((alert.fields ?? []).map((f) => f.value).join(" ")).toContain("artist_throws");
+  });
+
+  it("computes a synthetic order id that is stable for the quarter, so a rerun within it is idempotent", async () => {
+    const { db: db1 } = makeSettlementDb([
+      accrualRow({ id: "r1", artist_user_id: "artist_a", amount_pence: 1000 }),
+    ]);
+    const { db: db2 } = makeSettlementDb([
+      accrualRow({ id: "r2", artist_user_id: "artist_a", amount_pence: 1000 }),
+    ]);
+
+    await settleProgrammeRent(db1, { asOf: new Date("2026-10-01T09:00:00.000Z") });
+    const firstOrderId = (scheduleTransferMock.mock.calls[0][0] as { orderId: string }).orderId;
+
+    scheduleTransferMock.mockClear();
+
+    // A later moment, same quarter (e.g. a retried cron invocation).
+    await settleProgrammeRent(db2, { asOf: new Date("2026-11-15T09:00:00.000Z") });
+    const secondOrderId = (scheduleTransferMock.mock.calls[0][0] as { orderId: string }).orderId;
+
+    expect(secondOrderId).toBe(firstOrderId);
+    expect(firstOrderId).toBe("programme-settlement:2026Q4:artist_a");
+  });
+
+  it("does not settle an accrual from the current, still-open quarter", async () => {
+    const { db, rows } = makeSettlementDb([
+      accrualRow({ id: "closed", artist_user_id: "artist_old", amount_pence: 3000, accrued_at: OLD_ACCRUAL_DATE }),
+      // Written the same day as the settlement run, inside Q4 — must wait
+      // for the Q1 2027 run before it is eligible.
+      accrualRow({
+        id: "open",
+        artist_user_id: "artist_new",
+        amount_pence: 4000,
+        accrued_at: "2026-10-01T05:00:00.000Z",
+      }),
+    ]);
+
+    const result = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+    expect(result).toEqual({ artistsPaid: 1, blocked: 0, totalPence: 3000 });
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientUserId: "artist_old" }),
+    );
+    expect(rows.find((r) => r.id === "open")?.settled_at).toBeNull();
+  });
+
+  it("skips an accrual whose artist has since been erased (artist_user_id NULL), without crashing or paying anyone the wrong amount", async () => {
+    const { db, rows } = makeSettlementDb([
+      accrualRow({ id: "live", artist_user_id: "artist_live", amount_pence: 1000 }),
+      accrualRow({ id: "erased", artist_user_id: null, amount_pence: 5000 }),
+    ]);
+
+    const result = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+    expect(result).toEqual({ artistsPaid: 1, blocked: 0, totalPence: 1000 });
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    // The orphaned row is neither paid nor stamped — it stays a fact on the
+    // record with nobody left to send it to.
+    expect(rows.find((r) => r.id === "erased")?.settled_at).toBeNull();
+  });
+
+  it("never calls Date.now() or a bare new Date() for the settlement timestamp — asOf is what gets stamped", async () => {
+    const { db, rows } = makeSettlementDb([
+      accrualRow({ id: "a1", artist_user_id: "artist_a", amount_pence: 1000 }),
+    ]);
+    const farFuture = new Date("2099-01-01T09:00:00.000Z");
+
+    await settleProgrammeRent(db, { asOf: farFuture });
+
+    expect(rows[0].settled_at).toBe(farFuture.toISOString());
   });
 });
