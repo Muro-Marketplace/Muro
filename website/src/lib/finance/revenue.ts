@@ -137,3 +137,75 @@ export function subscriptionMrrPence(countsByPlan: Record<string, number>): numb
     0,
   );
 }
+
+/**
+ * Statuses a curation_requests row passes through while it is a live,
+ * paying Wallplace Programme subscription. `in_progress` is set by
+ * handleCurationInvoicePaid (src/lib/curation/billing.ts) on every paid
+ * invoice, and is the state a healthy programme spends almost all its life
+ * in. `paid` is included alongside it because the general admin PATCH
+ * (src/app/api/admin/curation/route.ts) can set it on any row regardless of
+ * tier, and a manually-marked-paid programme is not different in kind from
+ * an in_progress one — the client has paid.
+ *
+ * Deliberately EXCLUDED, both a considered call rather than an oversight:
+ *
+ *   - past_due: invoice.payment_failed while Stripe still has retry attempts
+ *     left (billing.ts's handleCurationInvoiceFailed). Nothing has actually
+ *     been collected for the current cycle yet, so counting it would report
+ *     revenue that has not landed — the same "same word, different number"
+ *     failure this file's header describes for gross revenue, just for MRR
+ *     instead. It also matches the existing precedent one query away: the
+ *     admin financials route's artist-MRR count reads
+ *     `subscription_status IN ('active', 'trialing')` and likewise leaves
+ *     out an artist subscription's own past_due state. Keeping the same
+ *     exclusion rule here means "MRR" means one thing everywhere on that
+ *     page, not two.
+ *   - paused: invoice.payment_failed once Stripe has exhausted every retry
+ *     (next_payment_attempt === null). Nothing is even being attempted any
+ *     more — there is no live revenue here without a human re-engaging the
+ *     client, which makes it economically indistinguishable from churn
+ *     until someone acts on it, even though the row itself is not
+ *     `cancelled`.
+ *   - awaiting_quote / pending_payment: never paid in the first place.
+ *   - cancelled / refunded / shortlist_sent / completed: not a recurring
+ *     paying arrangement any more, or (the latter two) statuses that belong
+ *     to the one-off tiers' lifecycle, not a subscription's.
+ */
+const LIVE_PAYING_PROGRAMME_STATUSES = ["in_progress", "paid"] as const;
+
+interface ProgrammeSubscriptionRow {
+  quoted_amount_gbp: number | null;
+  billing_interval: "month" | "quarter" | null;
+}
+
+/**
+ * Programme MRR in pence: the monthly-equivalent sum of every live, paying
+ * Wallplace Programme subscription. Sibling to subscriptionMrrPence, kept
+ * separate rather than folded into one blended number, because the mix
+ * between the two is exactly what the business needs to watch (see the
+ * admin financials page, which surfaces both plus their total rather than
+ * one figure that hides which is actually growing).
+ *
+ * `quoted_amount_gbp` is the amount Stripe actually charges PER INVOICE —
+ * unit_amount in curation/[id]/checkout/route.ts — not pre-divided to a
+ * monthly figure, so a quarterly-billed row is divided by 3 here, mirroring
+ * monthlyEquivalentGbp() in admin/curation/quote/route.ts.
+ */
+export async function programmeMrrPence(db: SupabaseClient): Promise<number> {
+  const { data, error } = await db
+    .from("curation_requests")
+    .select("quoted_amount_gbp, billing_interval")
+    .eq("tier", "programme")
+    .in("status", LIVE_PAYING_PROGRAMME_STATUSES);
+  if (error) {
+    console.error("[finance] curation_requests programme query failed:", error.message);
+    throw new Error(`curation_requests programme query failed: ${error.message}`);
+  }
+  let pence = 0;
+  for (const row of (data ?? []) as ProgrammeSubscriptionRow[]) {
+    const invoicedPence = Math.round((row.quoted_amount_gbp ?? 0) * 100);
+    pence += row.billing_interval === "quarter" ? Math.round(invoicedPence / 3) : invoicedPence;
+  }
+  return pence;
+}
