@@ -89,10 +89,24 @@ const WHATS_INCLUDED = [
 // point, that the network is real. The images now run as unattributed
 // atmosphere with no caption; the real, checkable proof is the link
 // into /browse below, where every artist has a genuine portfolio.
+//
+// Nav-broadening plan: swapped the Unsplash stand-ins for Wallplace's
+// own commissioned photography (an installation in progress, a QR
+// scan, a working studio). Still no caption, same reasoning as above;
+// alt text describes each scene honestly instead.
 const PROOF_PLACEMENTS = [
-  "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=600&h=450&fit=crop&crop=center",
-  "https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=600&h=450&fit=crop&crop=center",
-  "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&h=450&fit=crop&crop=center",
+  {
+    src: "/images/programmes/programmes-installation.webp",
+    alt: "Two people hanging a framed artwork on a wall, checking it with a spirit level",
+  },
+  {
+    src: "/images/programmes/venues-qr-scan.webp",
+    alt: "A café visitor scanning a QR code label beside a framed photograph on the wall",
+  },
+  {
+    src: "/images/programmes/artists-studio.webp",
+    alt: "A painter's studio with brushes, paint and canvases stacked against the wall",
+  },
 ];
 
 const FAQ_ITEMS = [
@@ -209,9 +223,12 @@ export default function ProgrammesClient() {
           headline, so the opening line sells the offer, not the anchor. */}
       <section className="relative -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 overflow-hidden">
         <div className="absolute inset-0 -z-10">
+          {/* Nav-broadening plan: real Wallplace-commissioned photography
+              (a hotel lounge, the kind of site a programme is quoted
+              for) replaces the earlier Unsplash stand-in. */}
           <Image
-            src="https://images.unsplash.com/photo-1572947650440-e8a97ef053b2?w=1920&h=1080&fit=crop&crop=center"
-            alt="Original art displayed on a venue wall"
+            src="/images/programmes/programmes-hotel-lounge.webp"
+            alt="A hotel lounge with a large bare wall, ready for original art"
             fill
             className="object-cover"
             sizes="100vw"
@@ -381,11 +398,11 @@ export default function ProgrammesClient() {
                 commit to a programme.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {PROOF_PLACEMENTS.map((src) => (
-                  <div key={src} className="aspect-[4/3] rounded-sm overflow-hidden relative">
+                {PROOF_PLACEMENTS.map((p) => (
+                  <div key={p.src} className="aspect-[4/3] rounded-sm overflow-hidden relative">
                     <Image
-                      src={src}
-                      alt="Original art displayed in a venue"
+                      src={p.src}
+                      alt={p.alt}
                       fill
                       className="object-cover hover:scale-[1.03] transition-transform duration-500"
                       sizes="(max-width: 768px) 100vw, 33vw"
