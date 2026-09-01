@@ -59,7 +59,7 @@ const PLANS: Plan[] = [
     features: [
       "Unlimited active venue placements",
       `Up to ${WORKS_CAP.pro} works in your portfolio`,
-      "Priority inclusion in Wallplace Curated shortlists",
+      "Priority for programme placements, which pay monthly rent",
       "Premium profile with enhanced presentation",
       "Full analytics with venue breakdown and export",
       "Dedicated account support",

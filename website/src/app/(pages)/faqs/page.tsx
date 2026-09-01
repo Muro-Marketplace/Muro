@@ -2,6 +2,7 @@ import Button from "@/components/Button";
 import Link from "next/link";
 import type { Metadata } from "next";
 import FaqsClient, { type FaqEntry } from "./FaqsClient";
+import { gbp, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
 
 export const metadata: Metadata = {
   title: "FAQs",
@@ -98,6 +99,28 @@ const artistFaqs: FaqEntry[] = [
         <p>
           We send an email receipt for every transfer + a daily payout digest
           if you had multiple sales that day.
+        </p>
+      </>
+    ),
+  },
+  {
+    question: "How does programme rent work?",
+    answer: (
+      <>
+        <p>
+          Some venues pay Wallplace a monthly fee to have their walls handled
+          for them: curation, installation and rotation through the year. A
+          share of that fee goes to the artists whose work is hanging there,
+          usually around {gbp(PROGRAMME_PIECE_RENT_TARGET_GBP)} per piece per
+          month, and the piece stays for sale the whole time.
+        </p>
+        <p>
+          Rent builds up each time the venue&rsquo;s invoice is paid, and we
+          settle it to you quarterly through Stripe Connect rather than monthly,
+          because batching keeps the payment fees off your share. You need
+          payouts enabled to receive it. Programme placements are not
+          guaranteed; they depend on which venues are running a programme and
+          what suits their space.
         </p>
       </>
     ),

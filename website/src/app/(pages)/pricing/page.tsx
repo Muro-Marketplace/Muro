@@ -3,6 +3,7 @@ import Link from "next/link";
 import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
+import { gbp, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -98,6 +99,11 @@ const faqItems = [
     question: "What happens when I cancel?",
     answer:
       "You can cancel at any time. Your membership remains active until the end of the period you have paid for. We will arrange the return of any artwork currently on display with venues, and your profile will be removed from the platform. No cancellation fees.",
+  },
+  {
+    question: "Can a placement earn me money before it sells?",
+    answer:
+      "Yes, on a programme. Some venues pay Wallplace a monthly fee to have their walls handled for them, and a share of that fee goes to the artists whose work is hanging there, usually around £10 per piece per month. It accrues every time the venue's invoice is paid and is settled to you quarterly through Stripe, so you need payouts enabled to receive it. Programme placements are not guaranteed. They depend on which venues are paying for a programme and what suits their space, in the same way ordinary placements depend on venue demand.",
   },
   {
     question: "Are there any other fees?",
@@ -293,9 +299,18 @@ export default function PricingPage() {
               <p className="text-muted leading-relaxed mb-4">
                 Every plan pays the same 15% fee on sales. What Pro buys is
                 capacity and distribution: unlimited active placements at a
-                time, up to 50 works, and priority inclusion when venues pay
-                for a Wallplace Curated shortlist. Every extra wall is extra
-                scans, enquiries and sale chances.
+                time, up to 50 works, and priority for programme placements,
+                the ones that pay rent. Every extra wall is extra scans,
+                enquiries and sale chances.
+              </p>
+              <p className="text-muted leading-relaxed mb-4">
+                Some venues pay us a monthly fee to have their walls handled,
+                and a share of that goes to the artists hanging there, usually
+                around {gbp(PROGRAMME_PIECE_RENT_TARGET_GBP)} per piece per
+                month. Over a year that is{" "}
+                {gbp(PROGRAMME_PIECE_RENT_TARGET_GBP * 12)} for one piece,
+                which covers a Core membership outright. Programme placements
+                are not guaranteed; they depend on venue demand like any other.
               </p>
               <p className="text-muted leading-relaxed mb-6">
                 For artists producing enough work to hang in several venues at
