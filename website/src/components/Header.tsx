@@ -82,21 +82,21 @@ function notificationHref(n: Pick<HeaderNotification, "type" | "link">, portalBa
 // sent the link to, but unsurfaced from the nav. Also gated from
 // search via robots metadata in the page itself.
 //
-// Done For You (#curated-nav): the two paid, hand-it-to-us products
+// Manage My Walls (#curated-nav): the two paid, hand-it-to-us products
 // (Wallplace Curated's one-off shortlist and Wallplace Programmes'
 // ongoing service) now share one front door at /curated, so they get
-// one nav tab rather than none. Named "Done For You" rather than
+// one nav tab rather than none. Named "Manage My Walls" rather than
 // "Wallplace Curated" because the tab now leads to both products, and
 // it is the honest description either way: you don't do the work.
-// Placed right after For Your Space, same visitor (someone with walls
-// to fill), just choosing the paid route instead of browsing.
+// Placed right after Marketplace, so a stranger with walls sees the paid
+// route beside the free one. The owner reverted the earlier For Your Space
+// and For Artists additions, so the rest of this nav is theirs, unchanged.
 const publicNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
-  { label: "For Your Space", href: "/venues" },
-  { label: "Done For You", href: "/curated" },
-  { label: "For Artists", href: "/artists" },
+  { label: "Manage My Walls", href: "/curated" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
+  { label: "Spaces", href: "/spaces" },
 ];
 
 const loggedInNavLinks: NavLink[] = [

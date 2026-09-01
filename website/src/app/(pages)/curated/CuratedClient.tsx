@@ -350,26 +350,26 @@ export default function CuratedClient() {
           <div className="max-w-[1200px] mx-auto px-6 w-full">
             <div className="max-w-2xl">
               <p className="text-xs font-medium tracking-[0.25em] uppercase text-accent mb-5">
-                Done For You
+                Manage My Walls
               </p>
               <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl tracking-tight text-white leading-[1.05] mb-6">
                 You want art on your walls. We&rsquo;ll do the work.
               </h1>
               <p className="text-lg lg:text-xl text-white/65 leading-relaxed max-w-xl mb-10">
-                {`Two ways to get there. Wallplace Curated is a one-off shortlist you arrange yourself, from ${gbp(CURATION_TIERS.single_wall.priceGbp)}. Wallplace Programmes is an ongoing service that curates, installs and rotates art for you, from ${gbp(CURATION_TIERS.programme.priceGbp)} a month. Pick the one that fits.`}
+                {`Wallplace Programmes is the full service: we curate, install and rotate original art through the year, and every artist on your wall is paid rent for as long as their work is up. Quoted per site, from ${gbp(CURATION_TIERS.programme.priceGbp)} a month. If you would rather just have a shortlist picked and take it from there, Wallplace Curated is a one-off from ${gbp(CURATION_TIERS.single_wall.priceGbp)}.`}
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Link
-                  href="#plans"
+                  href="/programmes"
                   className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
                 >
-                  SEE CURATED PLANS
+                  SEE PROGRAMMES
                 </Link>
                 <Link
-                  href="/programmes"
+                  href="#plans"
                   className="inline-flex items-center justify-center w-full sm:w-auto sm:min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-white/10 text-white border border-white/30 rounded-sm hover:bg-white/15 transition-colors backdrop-blur-sm"
                 >
-                  SEE PROGRAMMES
+                  SEE CURATED PLANS
                 </Link>
               </div>
             </div>
@@ -409,7 +409,7 @@ export default function CuratedClient() {
       )}
 
       <div id="curated-content" className="bg-background">
-        {/* Two routes — the shared "Done For You" idea forks here into a
+        {/* Two routes — the shared "Manage My Walls" idea forks here into a
             one-off shortlist or an ongoing programme. Sits right after
             the hero, before either product's own detail, so a visitor
             self-selects before scrolling further. Each card carries one
@@ -420,15 +420,53 @@ export default function CuratedClient() {
             <AnimateIn>
               <div className="mb-12 max-w-2xl">
                 <h2 className="text-3xl md:text-4xl mb-3">
-                  Two ways to get it done
+                  The full service, or just the shortlist
                 </h2>
                 <p className="text-muted leading-relaxed">
-                  Same idea, different shape. Pick a one-off shortlist or
-                  an ongoing programme, whichever fits your walls and
-                  your budget.
+                  Most spaces want a programme: everything handled, all
+                  year. If you would rather pick from a shortlist and take
+                  it from there, Curated does that in one go.
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+                <div className="bg-surface border-2 border-accent rounded-sm overflow-hidden flex flex-col">
+                  <div className="aspect-[16/10] relative">
+                    <Image
+                      src="/images/programmes/programmes-rotation.webp"
+                      alt="Wrapped framed artworks propped against a wall, ready to be hung"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                    />
+                  </div>
+                  <div className="p-6 lg:p-8 flex flex-col flex-1">
+                    <p className="text-xs font-medium uppercase tracking-wider text-accent mb-2">
+                      Ongoing, most popular
+                    </p>
+                    <h3 className="font-serif text-2xl text-foreground mb-3">
+                      Wallplace Programmes
+                    </h3>
+                    <p className="text-sm text-foreground/85 leading-relaxed mb-4">
+                      A monthly programme that curates, installs and
+                      rotates art for you all year, with every artist
+                      paid rent.
+                    </p>
+                    <p className="text-xs text-muted mb-6">
+                      {`From ${gbp(CURATION_TIERS.programme.priceGbp)} a month, quoted per site.`}
+                    </p>
+                    <Link
+                      href="/programmes"
+                      className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
+                    >
+                      See Programmes
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="12 5 19 12 12 19" />
+                      </svg>
+                    </Link>
+                  </div>
+                </div>
+
                 <div className="bg-surface border border-border rounded-sm overflow-hidden flex flex-col">
                   <div className="aspect-[16/10] relative">
                     <Image
@@ -458,44 +496,6 @@ export default function CuratedClient() {
                       className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
                     >
                       See Curated plans
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                        <polyline points="12 5 19 12 12 19" />
-                      </svg>
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="bg-surface border border-border rounded-sm overflow-hidden flex flex-col">
-                  <div className="aspect-[16/10] relative">
-                    <Image
-                      src="/images/programmes/programmes-rotation.webp"
-                      alt="Wrapped framed artworks propped against a wall, ready to be hung"
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 50vw"
-                    />
-                  </div>
-                  <div className="p-6 lg:p-8 flex flex-col flex-1">
-                    <p className="text-xs font-medium uppercase tracking-wider text-accent mb-2">
-                      Ongoing
-                    </p>
-                    <h3 className="font-serif text-2xl text-foreground mb-3">
-                      Wallplace Programmes
-                    </h3>
-                    <p className="text-sm text-foreground/85 leading-relaxed mb-4">
-                      A monthly programme that curates, installs and
-                      rotates art for you all year, with every artist
-                      paid rent.
-                    </p>
-                    <p className="text-xs text-muted mb-6">
-                      {`From ${gbp(CURATION_TIERS.programme.priceGbp)} a month, quoted per site.`}
-                    </p>
-                    <Link
-                      href="/programmes"
-                      className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
-                    >
-                      See Programmes
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="5" y1="12" x2="19" y2="12" />
                         <polyline points="12 5 19 12 12 19" />

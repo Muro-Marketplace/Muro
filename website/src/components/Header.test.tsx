@@ -101,6 +101,28 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+describe("<Header /> public nav (nav-broadening plan)", () => {
+  it("adds Manage My Walls after Marketplace, pointing at /curated", () => {
+    useAuthMock.mockReturnValue({ user: null, userType: null, displayName: "", signOut, loading: false });
+    render(<Header />);
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    const labels = within(nav)
+      .getAllByRole("link")
+      .map((a) => a.textContent?.trim());
+    // The owner's original nav, plus one tab for the paid services. The
+    // earlier "For Your Space" / "For Artists" additions were reverted at
+    // their request; Spaces stays where it was.
+    expect(labels).toEqual([
+      "Marketplace",
+      "Manage My Walls",
+      "How It Works",
+      "Blog",
+      "Spaces",
+    ]);
+    expect(screen.getByRole("link", { name: "Manage My Walls" }).getAttribute("href")).toBe("/curated");
+  });
+});
+
 describe("<Header /> messages dropdown (A2, H7)", () => {
   it("does not render the messages dropdown for a customer", async () => {
     signedInAs("customer");

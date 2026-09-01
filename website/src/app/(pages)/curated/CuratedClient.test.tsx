@@ -151,7 +151,7 @@ describe("the brief prefills from the venue's profile (row 1924)", () => {
 // paid products (Wallplace Curated's one-off shortlist and Wallplace
 // Programmes' ongoing service), with real photography replacing the
 // old auth-page background.
-describe("the Done For You page presents both products (nav-broadening plan)", () => {
+describe("the Manage My Walls page presents both products (nav-broadening plan)", () => {
   beforeEach(() => {
     authState.value = { userType: null, loading: false, session: null };
   });
