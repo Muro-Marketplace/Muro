@@ -1260,6 +1260,9 @@ describe("PATCH /api/placements enforces the server-owned guard (Finding 2)", ()
    * `.select()` — a different chain shape than setupDb's single-`.eq()`
    * update, so it needs its own `.eq()` that works both awaited directly
    * (the role-flip) and further chained with `.select()` (the terms write).
+   * `.select()` is also called a second time for the F32/D26 current-terms
+   * fetch that feeds deriveArrangementType, via `.maybeSingle()` rather than
+   * `.single()`, so both must resolve to the same row.
    */
   function setupCounterDb(row: Row, trail: TrailMsg[] = []) {
     updates.length = 0;
@@ -1269,6 +1272,7 @@ describe("PATCH /api/placements enforces the server-owned guard (Finding 2)", ()
           select: () => ({
             eq: () => ({
               single: async () => ({ data: row, error: row ? null : { code: "PGRST116" } }),
+              maybeSingle: async () => ({ data: row, error: null }),
             }),
           }),
           update: (payload: Record<string, unknown>) => {
