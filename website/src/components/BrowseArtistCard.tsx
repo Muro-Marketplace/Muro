@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { disciplineLabel } from "@/data/categories";
 import SaveButton from "@/components/SaveButton";
 import DistanceBadge from "@/components/DistanceBadge";
+import SamplePill from "@/components/SamplePill";
 
 interface BrowseArtistCardProps {
   artist: Artist;
@@ -172,6 +173,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
           <DistanceBadge distance={distance} corner="top-right" />
           <h2 className="text-sm font-medium text-foreground leading-tight pr-16">
             {artist.name}
+            {artist.isSeedArtist && <SamplePill className="ml-1.5 align-middle" />}
           </h2>
           <p className="text-xs text-muted mt-0.5">
             {disciplineLabel(artist.primaryMedium, artist.discipline)} · {artist.location}
