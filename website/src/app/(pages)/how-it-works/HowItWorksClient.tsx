@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import VenueGuide from "@/components/marketing/VenueGuide";
@@ -55,18 +56,17 @@ const tabContent: Record<Audience, {
   },
 };
 
-export default function HowItWorksClient() {
-  const [audience, setAudience] = useState<Audience>("venue");
-  const active = tabContent[audience];
+function isAudience(value: string | null): value is Audience {
+  return value === "venue" || value === "artist" || value === "customer";
+}
 
+export default function HowItWorksClient() {
   // Deep links: /how-it-works?tab=artist opens that tab (the homepage's
-  // "Learn more" for artists lands here). Read on mount from the URL
-  // rather than useSearchParams, which would force this static page to
-  // render dynamically or need a Suspense boundary.
-  useEffect(() => {
-    const tab = new URLSearchParams(window.location.search).get("tab");
-    if (tab === "venue" || tab === "artist" || tab === "customer") setAudience(tab);
-  }, []);
+  // "Learn more" for artists lands here). useSearchParams needs a
+  // Suspense boundary above this component; page.tsx provides it.
+  const requested = useSearchParams().get("tab");
+  const [audience, setAudience] = useState<Audience>(isAudience(requested) ? requested : "venue");
+  const active = tabContent[audience];
 
   return (
     <div className="bg-background">

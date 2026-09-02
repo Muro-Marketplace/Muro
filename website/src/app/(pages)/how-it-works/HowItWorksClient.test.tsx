@@ -5,6 +5,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+const { search } = vi.hoisted(() => ({ search: { value: "" } }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(search.value),
+}));
 vi.mock("next/image", () => ({ default: () => null }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
@@ -17,7 +21,7 @@ import HowItWorksClient from "./HowItWorksClient";
 
 afterEach(() => {
   cleanup();
-  window.history.replaceState({}, "", "/how-it-works");
+  search.value = "";
 });
 
 describe("<HowItWorksClient /> deep links", () => {
@@ -28,14 +32,14 @@ describe("<HowItWorksClient /> deep links", () => {
   });
 
   it("opens the artists tab for ?tab=artist", async () => {
-    window.history.replaceState({}, "", "/how-it-works?tab=artist");
+    search.value = "?tab=artist";
     render(<HowItWorksClient />);
     expect(await screen.findByTestId("artist-guide")).toBeTruthy();
     expect(screen.queryByTestId("venue-guide")).toBeNull();
   });
 
   it("ignores an unknown tab value", async () => {
-    window.history.replaceState({}, "", "/how-it-works?tab=nonsense");
+    search.value = "?tab=nonsense";
     render(<HowItWorksClient />);
     expect(await screen.findByTestId("venue-guide")).toBeTruthy();
   });
