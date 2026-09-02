@@ -1,5 +1,6 @@
 import Link from "next/link";
 import NewsletterForm from "./NewsletterForm";
+import { COMPANY, isIncorporated } from "@/lib/company";
 
 const footerColumns = [
   {
@@ -116,6 +117,11 @@ export default function Footer() {
           <p className="text-xs text-muted">
             &copy; {new Date().getFullYear()} Wallplace. All rights reserved.
           </p>
+          {isIncorporated() && (
+            <p className="text-xs text-muted">
+              {COMPANY.legalName}, company number {COMPANY.number}. Registered office: {COMPANY.registeredOffice}.
+            </p>
+          )}
         </div>
       </div>
     </footer>

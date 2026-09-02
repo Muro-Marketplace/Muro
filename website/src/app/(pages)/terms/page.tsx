@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import LegalEntityNote from "@/components/LegalEntityNote";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
@@ -16,11 +17,9 @@ export default function TermsPage() {
             <h1 className="text-4xl lg:text-5xl mb-4">Terms of Service</h1>
             <p className="text-muted leading-relaxed mb-6">Last updated: April 2026</p>
 
-            <div className="bg-surface border border-border rounded-sm p-5 mb-16">
-              <p className="text-sm text-muted leading-relaxed">
-                <strong className="text-foreground">Note:</strong> Wallplace is the trading name of a business in the process of being incorporated as a limited company in England and Wales. References to &ldquo;Wallplace&rdquo; throughout this document refer to the business operating under this trading name. Once incorporated, this document will be updated to reflect the registered company name and number.
-              </p>
-            </div>
+            <LegalEntityNote>
+              References to &ldquo;Wallplace&rdquo; throughout this document refer to the business operating under this trading name.
+            </LegalEntityNote>
 
             <div className="space-y-10">
               <div id="about" className="scroll-mt-24">

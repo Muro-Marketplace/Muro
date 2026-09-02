@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { gbp, PROGRAMME_PIECE_RENT_MIN_GBP, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
+import LegalEntityNote from "@/components/LegalEntityNote";
 
 export const metadata: Metadata = {
   title: "Artist Agreement",
@@ -16,11 +17,7 @@ export default function ArtistAgreementPage() {
             <h1 className="text-4xl lg:text-5xl mb-4">Artist Agreement</h1>
             <p className="text-muted leading-relaxed mb-6">Last updated: September 2026</p>
 
-            <div className="bg-surface border border-border rounded-sm p-5 mb-16">
-              <p className="text-sm text-muted leading-relaxed">
-                <strong className="text-foreground">Note:</strong> Wallplace is the trading name of a business in the process of being incorporated as a limited company in England and Wales. Once incorporated, this document will be updated to reflect the registered company name and number.
-              </p>
-            </div>
+            <LegalEntityNote />
 
             <p className="text-muted leading-relaxed mb-10">
               This agreement supplements the <Link href="/terms" className="text-accent hover:underline">Platform Terms of Service</Link>. By accepting your place on the Platform, you agree to both this agreement and the Platform Terms.
