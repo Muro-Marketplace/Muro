@@ -38,6 +38,8 @@ const OTHER_SURFACES_WITHOUT_THE_OFFER = [
   "src/app/waitlist/page.tsx",
   "src/app/(pages)/artist-portal/page.tsx",
   "src/app/(pages)/artist-portal/billing/page.tsx",
+  "src/components/ArtworkRequestsList.tsx",
+  "src/components/PortalGuard.tsx",
 ];
 
 describe("first-month-free copy does not resurface on other surfaces", () => {

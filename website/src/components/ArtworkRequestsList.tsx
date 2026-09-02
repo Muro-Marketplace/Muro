@@ -110,7 +110,7 @@ export default function ArtworkRequestsList() {
       return (
         <EmptyState
           title="Open requests are for Wallplace artists"
-          hint="Sign in as an artist to browse what venues are looking for and respond directly. New here? Apply to join, accepted artists get their first month free."
+          hint="Sign in as an artist to browse what venues are looking for and respond directly. New here? Apply to join, free trial included."
           cta={{ label: "Sign in", href: "/login?next=/spaces?view=requests" }}
           secondaryCta={{ label: "Apply to join", href: "/apply" }}
         />

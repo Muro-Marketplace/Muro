@@ -331,7 +331,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
             </svg>
             <p className="text-xs sm:text-sm text-foreground flex-1 min-w-0">
               <span className="font-medium">You&rsquo;re approved.</span>{" "}
-              Pick a plan to go live on the marketplace and start sending placement requests. Your first month is free.
+              Pick a plan to go live on the marketplace and start sending placement requests. Every plan starts with a free trial.
             </p>
             <Link href="/artist-portal/billing" className="hidden sm:inline-flex shrink-0 text-xs font-medium text-accent underline hover:no-underline">
               Choose plan
