@@ -400,14 +400,14 @@ export default function ArtistGuide() {
       {/* Venue Demand */}
       <section className="py-16 lg:py-20 bg-accent/5 border-y border-accent/10">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Active Demand</p>
-          <h2 className="font-serif text-3xl md:text-4xl text-foreground mb-3">Venues are looking for art right now</h2>
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Venues</p>
+          <h2 className="font-serif text-3xl md:text-4xl text-foreground mb-3">See the venues on Wallplace</h2>
           <p className="text-muted max-w-lg mx-auto mb-8">
-            Real commercial spaces actively seeking artwork to display. Enter your postcode to see demand in your area.
+            Venues on Wallplace and the styles and arrangements each one is open to. Enter your postcode to see who is near you.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/spaces" className="inline-flex items-center justify-center min-w-[200px] px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
-              SEE VENUE DEMAND
+              SEE VENUES
             </Link>
             {/* Row A L163: this was a second differently-labelled button to
                 the SAME /spaces URL, so the pair read as two things and did

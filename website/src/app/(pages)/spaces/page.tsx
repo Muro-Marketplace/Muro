@@ -295,9 +295,9 @@ function SpacesPageContent() {
         </div>
         <div className="max-w-[1000px] mx-auto px-6 text-center relative z-10">
           <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">For Artists</p>
-          <h1 className="font-serif text-2xl sm:text-4xl lg:text-5xl text-white mb-4">Venues Looking for Art</h1>
+          <h1 className="font-serif text-2xl sm:text-4xl lg:text-5xl text-white mb-4">Venues on Wallplace</h1>
           <p className="text-base sm:text-lg text-white/50 max-w-lg mx-auto mb-8">
-            Real venues actively seeking artwork. Enter your postcode to see demand near you.
+            Venues and what each one is open to. Enter your postcode to see who is near you.
           </p>
 
           {/* Postcode search. The id is the target of /spaces#postcode, which

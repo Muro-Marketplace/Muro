@@ -376,16 +376,16 @@ export default function Home() {
             </div>
             <div className="max-w-[1000px] mx-auto px-6 lg:px-10 text-center relative z-10">
               <AnimateIn>
-              <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Active Demand</p>
+              <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Venues</p>
               <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white mb-4">
-                Venues are looking for art right now
+                See the venues on Wallplace
               </h2>
               <p className="text-lg text-white/50 max-w-lg mx-auto mb-10">
-                Cafés, restaurants, hotels, and offices actively seeking artwork to display. See what&rsquo;s available near you.
+                Caf&eacute;s, restaurants, hotels and offices, and what each one is open to. See who is near you.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <Link href="/spaces" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
-                  See Venue Demand
+                  See Venues
                 </Link>
                 <Link href="/apply" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
                   Apply to Join
