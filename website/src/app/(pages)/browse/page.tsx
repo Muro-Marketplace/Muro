@@ -460,7 +460,9 @@ function BrowsePortfoliosPageInner() {
     return () => window.removeEventListener("resize", compute);
   }, []);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [artists, setArtists] = useState<Artist[]>(isFlagOn("SEED_CATALOG") ? staticArtists : []);
+  const [artists, setArtists] = useState<Artist[]>(
+    isFlagOn("SEED_CATALOG") ? staticArtists.map((a) => ({ ...a, isSeedArtist: true })) : [],
+  );
   const [collections, setCollections] = useState<ArtistCollection[]>(isFlagOn("SEED_CATALOG") ? staticCollections : []);
   // Tracks whether live DB data has replaced the static seed (#1).
   // While false the marketplace still paints with the seed grid for

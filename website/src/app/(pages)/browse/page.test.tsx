@@ -304,3 +304,18 @@ describe("browse page — gallery Clear all keeps location filtering on (B4)", (
     expect(urls.every((u) => !u.includes("gorig=1"))).toBe(true);
   });
 });
+
+describe("browse page — seed artists carry the Sample pill from first paint (Finding 1)", () => {
+  it("shows the Sample pill on the seed grid when the artists fetch never resolves", async () => {
+    // Artists view (view=portfolios) renders the compact BrowseArtistCard
+    // grid, which reads artist.isSeedArtist. fetch is stubbed to reject in
+    // beforeEach above, so this stays on the static seed the whole test:
+    // the pill can only appear if the useState initialiser stamped
+    // isSeedArtist onto the imported @/data/artists rows itself.
+    currentParams = new URLSearchParams("view=portfolios");
+    render(<BrowsePortfoliosPage />);
+
+    const pills = await screen.findAllByText("Sample");
+    expect(pills.length).toBeGreaterThan(0);
+  });
+});
