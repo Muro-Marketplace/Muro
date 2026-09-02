@@ -307,7 +307,7 @@ export default function ArtistGuide() {
                   Wallplace Core
                 </p>
                 <p className="text-sm text-white/40">
-                  &pound;9.99/month. Venue placements + your own online store. First month free.
+                  &pound;9.99/month. Venue placements + your own online store. Free trial included.
                 </p>
               </div>
               <svg

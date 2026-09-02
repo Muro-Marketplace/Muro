@@ -161,7 +161,7 @@ export default function ArtistPricingCards({
                 )}
               </div>
               <p className="text-xs text-muted mb-1">{secondaryLine}</p>
-              <p className="text-sm text-muted mb-1">First month free</p>
+              <p className="text-sm text-muted mb-1">Free trial on every plan</p>
               <p className="text-sm font-medium text-foreground mb-6">{plan.fee}</p>
               <ul className="space-y-3 mb-8 flex-1">
                 {plan.features.map((feature) => (

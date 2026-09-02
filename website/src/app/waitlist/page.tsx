@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { FOUNDING_OFFER_SHORT } from "@/lib/pricing";
 
 type UserType = "artist" | "venue" | null;
 
@@ -348,8 +349,8 @@ function HowItWorks() {
                     icon={
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                     }
-                    title="First Month Free on All Plans"
-                    description="Plans start from £9.99/month. No commitments. Cancel any time."
+                    title={FOUNDING_OFFER_SHORT}
+                    description="Plans start from £9.99/month. No long-term contract, 30 days' notice to leave."
                   />
                   <DealCard
                     icon={

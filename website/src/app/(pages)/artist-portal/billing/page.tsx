@@ -478,7 +478,7 @@ export default function BillingPage() {
                 incomplete profiles are charged from day one, so they
                 must not be promised a free month here. */}
             {status === "none"
-              ? "All plans include a first month free. Annual plans save ~17%."
+              ? "Every plan starts with a free trial. Annual plans save ~17%."
               : "Billing starts as soon as you subscribe. Annual plans save ~17%."}
           </p>
         </div>

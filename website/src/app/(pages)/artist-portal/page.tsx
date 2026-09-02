@@ -319,7 +319,7 @@ export default function ArtistPortalPage() {
         <div className="mb-6 bg-accent/5 border border-accent/20 rounded-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-foreground">Choose a plan to unlock your full portal</p>
-            <p className="text-xs text-muted mt-0.5">All plans include a first month free.</p>
+            <p className="text-xs text-muted mt-0.5">Every plan starts with a free trial.</p>
           </div>
           <Button href="/artist-portal/billing" variant="accent" size="sm">Choose a Plan</Button>
         </div>
