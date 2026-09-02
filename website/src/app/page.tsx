@@ -208,6 +208,96 @@ export default function Home() {
       {/* ─── CONTENT SECTIONS ─── */}
       <div ref={contentRef} className="bg-background">
 
+          {/* ─── HOW IT WORKS ─── */}
+          <section className="py-20 lg:py-28 bg-foreground">
+            <div className="max-w-[1000px] mx-auto px-6 lg:px-10">
+              <AnimateIn>
+              <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white text-center mb-16">
+                How Wallplace works
+              </h2>
+              <div className="grid md:grid-cols-2 gap-16">
+                <div className="flex flex-col">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Venues</p>
+                  <div className="space-y-8 flex-1">
+                    <Step dark number="01" title="Browse &amp; Filter" description="Search curated artists by style, theme, and location. Free." />
+                    <Step dark number="02" title="Enquire" description="Contact artists directly. Discuss terms and fit." />
+                    <Step dark number="03" title="Arrange" description="Display for free with optional revenue share, pay a monthly loan fee for one piece, or have the whole space handled on a Programme." />
+                  </div>
+                  <div className="mt-10">
+                    <Link href="/signup/venue" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                      Register Your Venue
+                    </Link>
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Artists</p>
+                  <div className="space-y-8 flex-1">
+                    <Step dark number="01" title="Apply" description="Submit your portfolio. We respond within 5 business days." />
+                    <Step dark number="02" title="Get Accepted" description={`Pass our curation review. ${FOUNDING_OFFER_SHORT}.`} />
+                    <Step dark number="03" title="Get Discovered" description="Your profile goes live. Venues enquire directly." />
+                  </div>
+                  <div className="mt-10">
+                    <Link href="/apply" className="inline-flex items-center justify-center px-7 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
+                      Apply to Join
+                    </Link>
+                  </div>
+                </div>
+              </div>
+              </AnimateIn>
+            </div>
+          </section>
+
+          {/* ─── FOR ARTISTS ─── */}
+          <section className="py-12 lg:py-28">
+            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
+              <AnimateIn>
+              <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+                <div className={`order-2 lg:order-1 grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2 ${featured.length === 0 ? "hidden" : ""}`}>
+                  {featured.map((a) => (
+                    <Link key={a.slug} href={`/browse/${a.slug}`} className="aspect-[4/5] relative rounded-sm overflow-hidden group">
+                      <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="20vw" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                      <p className="absolute bottom-2 left-2 text-white text-xs font-medium">{a.name}</p>
+                    </Link>
+                  ))}
+                </div>
+
+                {/* Pinned to column 2 so the copy does not jump when the tile grid
+                    (hidden until the featured fetch lands, and hidden for good if the
+                    catalogue is empty) enters or leaves the grid. */}
+                <div className="order-1 lg:order-2 lg:col-start-2">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
+                    For Artists
+                  </p>
+                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6 leading-tight">
+                    Your art, in the spaces people love.
+                  </h2>
+                  <p className="text-lg text-muted leading-relaxed mb-8">
+                    Showcase, get discovered, and sell, all in one place.
+                    Your Wallplace profile is your portfolio, your storefront,
+                    and your route into the best commercial venues.
+                  </p>
+
+                  <ul className="space-y-3 mb-10">
+                    <BulletPoint text="Get displayed in cafés, restaurants, hotels, and offices" />
+                    <BulletPoint text="Sell directly online, every QR scan leads to your store" />
+                    <BulletPoint text="Flat 15% platform fee. No gallery taking 50%." />
+                  </ul>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <Link href="/apply" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                      Apply to Join
+                    </Link>
+                    <Link href="/artists" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                      LEARN MORE
+                    </Link>
+                  </div>
+                </div>
+              </div>
+              </AnimateIn>
+            </div>
+          </section>
+
           {/* ─── FOR VENUES ─── */}
           <section className="py-12 lg:py-28 bg-surface border-b border-border">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
@@ -346,95 +436,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* ─── FOR ARTISTS ─── */}
-          <section className="py-12 lg:py-28">
-            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
-              <AnimateIn>
-              <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                <div className={`order-2 lg:order-1 grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2 ${featured.length === 0 ? "hidden" : ""}`}>
-                  {featured.map((a) => (
-                    <Link key={a.slug} href={`/browse/${a.slug}`} className="aspect-[4/5] relative rounded-sm overflow-hidden group">
-                      <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="20vw" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                      <p className="absolute bottom-2 left-2 text-white text-xs font-medium">{a.name}</p>
-                    </Link>
-                  ))}
-                </div>
-
-                {/* Pinned to column 2 so the copy does not jump when the tile grid
-                    (hidden until the featured fetch lands, and hidden for good if the
-                    catalogue is empty) enters or leaves the grid. */}
-                <div className="order-1 lg:order-2 lg:col-start-2">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
-                    For Artists
-                  </p>
-                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6 leading-tight">
-                    Your art, in the spaces people love.
-                  </h2>
-                  <p className="text-lg text-muted leading-relaxed mb-8">
-                    Showcase, get discovered, and sell, all in one place.
-                    Your Wallplace profile is your portfolio, your storefront,
-                    and your route into the best commercial venues.
-                  </p>
-
-                  <ul className="space-y-3 mb-10">
-                    <BulletPoint text="Get displayed in cafés, restaurants, hotels, and offices" />
-                    <BulletPoint text="Sell directly online, every QR scan leads to your store" />
-                    <BulletPoint text="Flat 15% platform fee. No gallery taking 50%." />
-                  </ul>
-
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                    <Link href="/apply" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
-                      Apply to Join
-                    </Link>
-                    <Link href="/artists" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
-                      LEARN MORE
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              </AnimateIn>
-            </div>
-          </section>
-
-          {/* ─── HOW IT WORKS ─── */}
-          <section className="py-20 lg:py-28 bg-foreground">
-            <div className="max-w-[1000px] mx-auto px-6 lg:px-10">
-              <AnimateIn>
-              <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white text-center mb-16">
-                How Wallplace works
-              </h2>
-              <div className="grid md:grid-cols-2 gap-16">
-                <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Venues</p>
-                  <div className="space-y-8 flex-1">
-                    <Step dark number="01" title="Browse &amp; Filter" description="Search curated artists by style, theme, and location. Free." />
-                    <Step dark number="02" title="Enquire" description="Contact artists directly. Discuss terms and fit." />
-                    <Step dark number="03" title="Arrange" description="Display for free with optional revenue share, pay a monthly loan fee for one piece, or have the whole space handled on a Programme." />
-                  </div>
-                  <div className="mt-10">
-                    <Link href="/signup/venue" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
-                      Register Your Venue
-                    </Link>
-                  </div>
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Artists</p>
-                  <div className="space-y-8 flex-1">
-                    <Step dark number="01" title="Apply" description="Submit your portfolio. We respond within 5 business days." />
-                    <Step dark number="02" title="Get Accepted" description={`Pass our curation review. ${FOUNDING_OFFER_SHORT}.`} />
-                    <Step dark number="03" title="Get Discovered" description="Your profile goes live. Venues enquire directly." />
-                  </div>
-                  <div className="mt-10">
-                    <Link href="/apply" className="inline-flex items-center justify-center px-7 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
-                      Apply to Join
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              </AnimateIn>
-            </div>
-          </section>
 
           {/* Testimonials removed pre-launch (QA flag A8): the quotes were
               placeholder copy with invented names and sales outcomes, which
