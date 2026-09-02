@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 const options = [
   {
     label: "Artist",
-    description: "Showcase your work to venues and buyers across the UK. Get discovered, get placed, get paid.",
+    description: "Showcase your work to venues and buyers across London. Get discovered, get placed, get paid.",
     // Routes to /signup/artist (account first), which then forwards
     // into /apply once the user is signed in. The application page
     // itself is auth-gated, anyone hitting /apply directly while

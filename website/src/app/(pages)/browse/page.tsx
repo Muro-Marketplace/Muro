@@ -2898,7 +2898,7 @@ function BrowsePortfoliosPageInner() {
                 <p className="text-muted leading-relaxed mb-6">
                   We are always looking for talented artists to
                   join our curated roster. Apply today and get your work seen in
-                  venues across the UK.
+                  venues across London.
                 </p>
                 <Button href="/apply" variant="primary" size="md">
                   Apply to Join Wallplace

@@ -18,4 +18,26 @@ describe("public claims the site cannot evidence stay out", () => {
     expect(grepFiles("zz-no-such-needle-zz", ["src/lib"])).toEqual([]);
     expect(() => grepFiles("x", ["no-such-dir-zz"])).toThrow(/grep failed/);
   });
+
+  it("artist-facing pages do not say 'cancel any time' (the agreement needs 30 days' notice)", () => {
+    for (const p of [
+      "src/app/(pages)/pricing/page.tsx",
+      "src/app/(pages)/apply/page.tsx",
+      "src/app/(pages)/artists/page.tsx",
+      "src/components/ArtistPricingCards.tsx",
+      "src/components/marketing/ArtistGuide.tsx",
+      "src/app/(pages)/how-it-works/HowItWorksClient.tsx",
+      "src/components/ApplicationForm.tsx",
+    ]) {
+      expect(read(p), p).not.toMatch(/cancel any ?time/i);
+    }
+  });
+
+  it("no page claims reach 'across the UK'", () => {
+    expect(grepFiles("across the UK", ["src/app", "src/components"])).toEqual([]);
+  });
+
+  it("the buyer FAQ does not promise reviews or identity checks the platform lacks", () => {
+    expect(read("src/components/marketing/CustomerGuide.tsx")).not.toMatch(/and reviews|verify identity/i);
+  });
 });

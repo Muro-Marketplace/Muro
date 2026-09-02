@@ -98,7 +98,7 @@ const faqItems = [
   {
     question: "How do I know the artist is real?",
     answer:
-      "Every artist on Wallplace is reviewed by our curation team before going live. We verify identity, portfolio, and that the work is theirs. Profiles include past sales, venue placements, and reviews.",
+      "Every artist on Wallplace is reviewed by our curation team before going live. We review the portfolio and confirm the work is theirs. Profiles show the artist's work and where it has been placed.",
   },
   {
     question: "Can I sell the piece on later?",

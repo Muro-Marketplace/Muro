@@ -182,7 +182,7 @@ export default function ArtistPricingCards({
 
       {showSavingsCopy && (
         <p className="text-xs text-muted text-center mt-5">
-          Annual plans include two months free (save ~17%). Cancel anytime.
+          Annual plans include two months free (save ~17%). 30 days&rsquo; notice to leave.
         </p>
       )}
     </div>
