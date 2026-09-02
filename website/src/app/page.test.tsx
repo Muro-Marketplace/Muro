@@ -43,6 +43,7 @@ const fetchMock = vi.fn((url: string) => {
         artists: [
           { slug: "maya-chen", name: "Maya Chen", image: "https://example.test/maya.jpg" },
           { slug: "no-image", name: "No Image", image: "" },
+          { slug: "seed-one", name: "Seed One", image: "https://example.test/seed.jpg", isSeedArtist: true },
         ],
       }),
     });
@@ -92,6 +93,15 @@ describe("homepage featured artists (launch audit, blocker 1)", () => {
   it("does not import the seed catalogue at all", () => {
     const src = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8");
     expect(src).not.toMatch(/from "@\/data\/artists"/);
+  });
+
+  it("never shows a seed artist even when the browse endpoint returns one (Finding 5)", async () => {
+    render(<Home />);
+    await screen.findByRole("link", { name: /maya chen/i });
+    expect(screen.queryByRole("link", { name: /seed one/i })).toBeNull();
+    expect(
+      screen.queryAllByRole("link").some((l) => l.getAttribute("href") === "/browse/seed-one"),
+    ).toBe(false);
   });
 
   it("describes the hero image honestly", () => {

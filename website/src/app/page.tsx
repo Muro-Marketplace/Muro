@@ -36,6 +36,7 @@ interface FeaturedArtist {
   slug: string;
   name: string;
   image: string;
+  isSeedArtist?: boolean;
 }
 
 export default function Home() {
@@ -55,7 +56,7 @@ export default function Home() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { artists?: FeaturedArtist[] } | null) => {
         if (cancelled || !data || !Array.isArray(data.artists)) return;
-        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image).slice(0, 6));
+        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image && !a.isSeedArtist).slice(0, 6));
       })
       .catch(() => {
         /* No tiles is the honest fallback. */
