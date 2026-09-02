@@ -12,7 +12,7 @@ export const read = (p: string): string => readFileSync(join(process.cwd(), p), 
  */
 export function grepFiles(needle: string, dirs: string[]): string[] {
   try {
-    return execFileSync("grep", ["-rl", needle, ...dirs], { encoding: "utf8" })
+    return execFileSync("grep", ["-rl", needle, ...dirs], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
       .split("\n")
       .filter(Boolean);
   } catch (e) {
