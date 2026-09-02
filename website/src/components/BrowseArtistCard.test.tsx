@@ -51,6 +51,7 @@ const baseArtist = {
   venueTypesSuitedFor: [],
   coordinates: null,
   image: "",
+  subscriptionPlan: "core",
   works: [
     {
       id: "w1",
@@ -77,5 +78,19 @@ describe("<BrowseArtistCard />", () => {
     const artist = { ...baseArtist, isSeedArtist: false } as unknown as Artist;
     render(<BrowseArtistCard artist={artist} distance={null} />);
     expect(screen.queryByText("Sample")).toBeNull();
+  });
+});
+
+// Owner decision 2026-09-02: Featured is Pro only; Premium loses the chip
+// and its second-place weighting in the marketplace sort.
+describe("<BrowseArtistCard /> Featured chip", () => {
+  it("shows Featured for Pro only", () => {
+    const proArtist = { ...baseArtist, subscriptionPlan: "pro" } as unknown as Artist;
+    render(<BrowseArtistCard artist={proArtist} distance={null} />);
+    expect(screen.getByText("Featured")).toBeTruthy();
+    cleanup();
+    const premiumArtist = { ...baseArtist, subscriptionPlan: "premium" } as unknown as Artist;
+    render(<BrowseArtistCard artist={premiumArtist} distance={null} />);
+    expect(screen.queryByText("Featured")).toBeNull();
   });
 });

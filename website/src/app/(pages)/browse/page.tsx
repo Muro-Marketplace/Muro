@@ -13,6 +13,8 @@ import { slugify } from "@/lib/slugify";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { formatPriceRange } from "@/lib/format-currency";
 import { isFlagOn } from "@/lib/feature-flags";
+import { isArtworkOfTheWeek, isFeaturedArtistPlan } from "@/lib/tier-features";
+import { artistTierWeight, workFeaturedWeight } from "@/lib/marketplace-featured-sort";
 import { geocodePostcode } from "@/lib/geocode";
 import { useAuth } from "@/context/AuthContext";
 import { bandsForWork } from "@/components/browse/SizeBands";
@@ -973,14 +975,11 @@ function BrowsePortfoliosPageInner() {
         )
       )
         return false;
-      // Phase 2.1 B5: ?featured=1 narrows the grid to Pro + Premium
-      // (the artists wearing the Featured chip). Toggled via the URL
-      // so a shareable filter link works without UI plumbing.
-      if (
-        featuredFilter &&
-        artist.subscriptionPlan !== "pro" &&
-        artist.subscriptionPlan !== "premium"
-      ) {
+      // Phase 2.1 B5: ?featured=1 narrows the grid to the artists
+      // wearing the Featured chip. Toggled via the URL so a shareable
+      // filter link works without UI plumbing. Owner decision
+      // 2026-09-02: Featured is Pro only, Premium no longer qualifies.
+      if (featuredFilter && !isFeaturedArtistPlan(artist.subscriptionPlan)) {
         return false;
       }
       return true;
@@ -993,17 +992,11 @@ function BrowsePortfoliosPageInner() {
         return da - db;
       }
       // "featured": Pro-tier artists (the ones wearing the Featured chip)
-      // first, then Premium, then everyone else, with founding-artist
-      // status as the final tiebreaker. Previously sorted only by
-      // isFoundingArtist, which made the chip and the sort disagree.
-      const tierWeight = (plan?: string | null) => {
-        const p = (plan || "").toLowerCase();
-        if (p === "pro") return 0;
-        if (p === "premium") return 1;
-        return 2;
-      };
-      const wa = tierWeight(a.subscriptionPlan);
-      const wb = tierWeight(b.subscriptionPlan);
+      // first, everyone else equal, with founding-artist status as the
+      // tiebreaker. Owner decision 2026-09-02: Premium is no longer
+      // weighted second, it sorts alongside Core.
+      const wa = artistTierWeight(a.subscriptionPlan);
+      const wb = artistTierWeight(b.subscriptionPlan);
       if (wa !== wb) return wa - wb;
       if (a.isFoundingArtist && !b.isFoundingArtist) return -1;
       if (!a.isFoundingArtist && b.isFoundingArtist) return 1;
@@ -1024,6 +1017,10 @@ function BrowsePortfoliosPageInner() {
   );
 
   const filteredGalleryWorks = useMemo(() => {
+    // Computed once per recompute of this memo (not per card / per
+    // comparison) so a live Artwork of the Week boost doesn't flip
+    // mid-sort. See workFeaturedWeight in marketplace-featured-sort.
+    const now = new Date();
     const q = searchQuery.trim().toLowerCase();
     return allGalleryWorks.filter((work) => {
       // Free-text search, Plan F Task 4. Match on title / artist name /
@@ -1122,19 +1119,13 @@ function BrowsePortfoliosPageInner() {
         const db = b.artistCoordinates ? calcDistance(userCoords.lat, userCoords.lng, b.artistCoordinates.lat, b.artistCoordinates.lng) : Infinity;
         return da - db;
       }
-      // "featured": Pro-tier artists' works first, then Premium, then
-      // everyone else, with founding-artist status as the tiebreaker.
-      // Previously fell through to `return 0` which left the works in
-      // whatever order the underlying flatMap produced, i.e. no actual
-      // sort happened.
-      const tierWeight = (plan?: string | null) => {
-        const p = (plan || "").toLowerCase();
-        if (p === "pro") return 0;
-        if (p === "premium") return 1;
-        return 2;
-      };
-      const wa = tierWeight(a.artistSubscriptionPlan);
-      const wb = tierWeight(b.artistSubscriptionPlan);
+      // "featured": a live Artwork of the Week boost first, then
+      // Pro-tier artists' works, then everyone else, with
+      // founding-artist status as the tiebreaker. Owner decision
+      // 2026-09-02: Premium no longer sorts second on tier alone, it
+      // only leads via its own Artwork of the Week boost.
+      const wa = workFeaturedWeight(a, now);
+      const wb = workFeaturedWeight(b, now);
       if (wa !== wb) return wa - wb;
       if (a.artistIsFounding && !b.artistIsFounding) return -1;
       if (!a.artistIsFounding && b.artistIsFounding) return 1;
@@ -2445,6 +2436,9 @@ function BrowsePortfoliosPageInner() {
                   // Distribute row-major into N columns so the visual reading
                   // order matches the sort. Each column is a flex stack with
                   // no fixed row height, shorter cards don't leave whitespace.
+                  // `now` is computed once per render of this grid (not per
+                  // card) for the Artwork of the Week pill below.
+                  const now = new Date();
                   const visibleWorks = filteredGalleryWorks.slice(0, loadedWorks);
                   const masonryCols: typeof visibleWorks[] = Array.from({ length: galleryColCount }, () => []);
                   visibleWorks.forEach((w, i) => masonryCols[i % galleryColCount].push(w));
@@ -2493,6 +2487,11 @@ function BrowsePortfoliosPageInner() {
                             <div className="absolute top-3 left-3 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity duration-200">
                               <SaveButton type="work" itemId={work.id} size="sm" />
                             </div>
+                            {isArtworkOfTheWeek(work.featuredUntil, now) && (
+                              <span className="absolute top-3 left-12 z-10 inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium tracking-wide text-white shadow-sm pointer-events-none">
+                                Artwork of the week
+                              </span>
+                            )}
                             <div className="absolute top-3 right-3 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                               <Link
                                 href={quickLookHref}

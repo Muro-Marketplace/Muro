@@ -10,6 +10,7 @@ import { disciplineLabel } from "@/data/categories";
 import SaveButton from "@/components/SaveButton";
 import DistanceBadge from "@/components/DistanceBadge";
 import SamplePill from "@/components/SamplePill";
+import { isFeaturedArtistPlan } from "@/lib/tier-features";
 
 interface BrowseArtistCardProps {
   artist: Artist;
@@ -110,19 +111,12 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
             <SaveButton type="artist" itemId={artist.slug} size="sm" />
           </div>
 
-          {/* Featured chip for Premium + Pro artists (Phase 2.1 B5).
-              Pro keeps the warmer accent fill; Premium uses a softer
-              outline so the two tiers are still distinguishable on a
-              grid of cards without dropping the chip from Premium. */}
-          {(artist.subscriptionPlan === "pro" || artist.subscriptionPlan === "premium") && (
+          {/* Featured chip for Pro artists only (owner decision
+              2026-09-02). Premium no longer gets the chip or the
+              second-place weighting in the marketplace sort. */}
+          {isFeaturedArtistPlan(artist.subscriptionPlan) && (
             <div className="absolute top-2 left-2 z-10 pointer-events-none">
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide shadow-sm ${
-                  artist.subscriptionPlan === "pro"
-                    ? "bg-accent/95 text-white"
-                    : "bg-white/95 text-accent border border-accent/40"
-                }`}
-              >
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide shadow-sm bg-accent/95 text-white">
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
