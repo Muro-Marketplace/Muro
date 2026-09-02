@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { signupDestination } from "@/lib/signup-destination";
 import { isFlagOn } from "@/lib/feature-flags";
 import { safeRedirect } from "@/lib/safe-redirect";
+import { TERMS_VERSION } from "@/lib/terms-version";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
 import Turnstile from "@/components/Turnstile";
@@ -90,7 +91,7 @@ export default function CustomerSignUpPage() {
         body: JSON.stringify({
           userEmail: email,
           userType: "customer",
-          termsVersion: "v1.0-2026-04",
+          termsVersion: TERMS_VERSION,
           termsType: "platform_tos",
         }),
       }).catch(() => {});

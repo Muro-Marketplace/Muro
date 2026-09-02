@@ -23,11 +23,11 @@ import { triggerWelcomeIfNeeded } from "@/lib/email/welcome";
 import { verifyOAuthState } from "@/lib/oauth-state";
 import { isSignupRole, type SignupRole } from "@/lib/auth-roles";
 import { getClientIp, UNKNOWN_IP } from "@/lib/client-ip";
+import { TERMS_VERSION } from "@/lib/terms-version";
 
-// H15: the terms version/type the email/password signup pages send to
+// H15: the terms type the email/password signup pages send to
 // /api/terms/accept. Keep in lockstep with signup/{artist,customer,venue}
 // and ApplicationForm.
-const TERMS_VERSION = "v1.0-2026-04";
 const TERMS_TYPE = "platform_tos";
 
 // E35d: there was a local `ALLOWED_ROLES = ["artist","customer","venue"]` here,

@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { signupDestination } from "@/lib/signup-destination";
 import { slugify } from "@/lib/slugify";
 import { safeRedirect } from "@/lib/safe-redirect";
+import { TERMS_VERSION } from "@/lib/terms-version";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import Dropdown from "@/components/Dropdown";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
@@ -193,7 +194,7 @@ export default function RegisterVenuePage() {
       const termsPayload = {
         userEmail: form.email,
         userType: "venue",
-        termsVersion: "v1.0-2026-04",
+        termsVersion: TERMS_VERSION,
       };
       fetch("/api/terms/accept", {
         method: "POST",

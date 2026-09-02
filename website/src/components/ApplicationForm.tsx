@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { foundingOfferLine } from "@/lib/pricing";
+import { TERMS_VERSION } from "@/lib/terms-version";
 
 const primaryMediums = [
   "Oil Painting",
@@ -298,7 +299,7 @@ export default function ApplicationForm() {
       const termsPayload = {
         userEmail: form.email,
         userType: "artist",
-        termsVersion: "v1.0-2026-04",
+        termsVersion: TERMS_VERSION,
       };
       fetch("/api/terms/accept", {
         method: "POST",

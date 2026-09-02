@@ -38,6 +38,7 @@ vi.mock("@/lib/email/welcome", () => ({ triggerWelcomeIfNeeded: welcomeMock }));
 
 import { POST } from "./route";
 import { signOAuthState } from "@/lib/oauth-state";
+import { TERMS_VERSION } from "@/lib/terms-version";
 
 const SCHEMA: Record<string, string[]> = JSON.parse(
   readFileSync(
@@ -200,7 +201,7 @@ describe("POST /api/auth/oauth-finalize records terms acceptance (H15)", () => {
       user_id: "user-1",
       user_email: "someone@example.com",
       user_type: "artist",
-      terms_version: "v1.0-2026-04",
+      terms_version: TERMS_VERSION,
       terms_type: "platform_tos",
     });
     expect(typeof termsRows[0].accepted_at).toBe("string");

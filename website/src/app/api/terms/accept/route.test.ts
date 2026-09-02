@@ -12,6 +12,7 @@
 // are pre-signup.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { TERMS_VERSION } from "@/lib/terms-version";
 
 const { authMock, insertMock, rateLimitMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
@@ -42,7 +43,7 @@ function req(body: unknown, auth = false) {
 const VALID = {
   userEmail: "someone@example.com",
   userType: "artist",
-  termsVersion: "v1.0-2026-04",
+  termsVersion: TERMS_VERSION,
   termsType: "platform_tos",
 };
 
