@@ -98,4 +98,10 @@ describe("homepage featured artists (launch audit, blocker 1)", () => {
     expect(screen.queryByLabelText("Gallery interior")).toBeNull();
     expect(screen.getByLabelText("Close-up of textured paint strokes on canvas")).toBeTruthy();
   });
+
+  it("keeps the copy pinned to the second column so it cannot jump when tiles arrive", () => {
+    const { container } = render(<Home />);
+    const copy = container.querySelector(".order-1.lg\\:order-2");
+    expect(copy?.className).toContain("lg:col-start-2");
+  });
 });

@@ -316,7 +316,10 @@ export default function Home() {
                   ))}
                 </div>
 
-                <div className="order-1 lg:order-2">
+                {/* Pinned to column 2 so the copy does not jump when the tile grid
+                    (hidden until the featured fetch lands, and hidden for good if the
+                    catalogue is empty) enters or leaves the grid. */}
+                <div className="order-1 lg:order-2 lg:col-start-2">
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
                     For Artists
                   </p>
