@@ -96,7 +96,6 @@ export default function RegisterVenuePage() {
   const [error, setError] = useState("");
   const [agreedToTos, setAgreedToTos] = useState(false);
   const [agreedToVenueTerms, setAgreedToVenueTerms] = useState(false);
-  const [acknowledgedInsurance, setAcknowledgedInsurance] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   // Read ?next= so a deep-link funnel survives the email-verification hop.
@@ -443,19 +442,9 @@ export default function RegisterVenuePage() {
                   onChange={setAgreedToVenueTerms}
                   required
                 />
-                <label className="flex items-start gap-3 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={acknowledgedInsurance}
-                    onChange={(e) => setAcknowledgedInsurance(e.target.checked)}
-                    required
-                    aria-required="true"
-                    className="mt-0.5 w-4 h-4 rounded-sm border border-border bg-background checked:bg-accent checked:border-accent focus:outline-none cursor-pointer shrink-0"
-                  />
-                  <span className="text-sm text-foreground">
-                    I confirm that my venue holds appropriate public liability insurance and I understand that the venue is liable for damage to artwork caused by negligence.
-                  </span>
-                </label>
+                <p className="text-xs text-muted">
+                  The agreement covers care of artwork and your insurance position. You confirm cover for each piece when a placement is recorded, not now.
+                </p>
               </div>
 
               <div className="pt-2">
@@ -466,7 +455,7 @@ export default function RegisterVenuePage() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={submitting || !agreedToTos || !agreedToVenueTerms || !acknowledgedInsurance || !turnstileToken}
+                  disabled={submitting || !agreedToTos || !agreedToVenueTerms || !turnstileToken}
                   className="px-8 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? "Registering..." : "Register Your Venue"}

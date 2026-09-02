@@ -129,7 +129,6 @@ async function fillAndSubmitVenueForm() {
   fireEvent.change(screen.getByRole("combobox", { name: /approximate wall space/i }), { target: { value: "1 to 3 walls (small café / studio)" } });
   fireEvent.click(screen.getByTestId("terms-platform_tos"));
   fireEvent.click(screen.getByTestId("terms-venue_agreement"));
-  fireEvent.click(screen.getByRole("checkbox", { name: /public liability insurance/i }));
   fireEvent.submit(screen.getByRole("button", { name: /register your venue/i }));
 }
 
@@ -169,5 +168,12 @@ describe("RegisterVenuePage — emailRedirectTo next param", () => {
     const opts = mockSignUp.mock.calls[0][0].options;
     expect(opts.emailRedirectTo).toContain("next=%2Fvenue-portal");
     expect(opts.emailRedirectTo).not.toContain("evil");
+  });
+});
+
+describe("venue sign-up asks nothing about insurance (launch audit, section 05)", () => {
+  it("has no insurance declaration; the agreement and the placement record carry it", () => {
+    render(<RegisterVenuePage />);
+    expect(screen.queryByRole("checkbox", { name: /public liability insurance/i })).toBeNull();
   });
 });
