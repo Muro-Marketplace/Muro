@@ -6,6 +6,7 @@ import Link from "next/link";
 import VenueGuide from "@/components/marketing/VenueGuide";
 import ArtistGuide from "@/components/marketing/ArtistGuide";
 import CustomerGuide from "@/components/marketing/CustomerGuide";
+import { CURATION_TIERS, gbp } from "@/lib/curation-tiers";
 
 type Audience = "venue" | "artist" | "customer";
 
@@ -29,7 +30,7 @@ const tabContent: Record<Audience, {
       { number: "03", title: "Arrange", description: "Display work for free with a share of sales from the wall, pay a monthly fee to keep a piece on display, or purchase outright for your permanent collection." },
     ],
     cta: { href: "/signup/venue", label: "Register your venue" },
-    secondary: { href: "/curated", label: "Or explore Curated, a managed selection from £49" },
+    secondary: { href: "/programmes", label: `Or have your walls handled for you: Programmes from ${gbp(CURATION_TIERS.programme.priceGbp)} a month` },
   },
   artist: {
     lede: "Apply to join Wallplace's curated roster. Every application is reviewed personally. Accepted artists get their first month free, then choose any tier.",

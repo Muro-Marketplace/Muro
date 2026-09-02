@@ -10,6 +10,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PROGRAMME_LADDER } from "@/lib/curation-tiers";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
@@ -103,5 +104,17 @@ describe("homepage featured artists (launch audit, blocker 1)", () => {
     const { container } = render(<Home />);
     const copy = container.querySelector(".order-1.lg\\:order-2");
     expect(copy?.className).toContain("lg:col-start-2");
+  });
+});
+
+describe("homepage sells Programmes (launch audit, section 02)", () => {
+  it("has a Programmes section with the price ladder and a link to /programmes", () => {
+    render(<Home />);
+    expect(screen.getAllByText(/Wallplace Programmes/).length).toBeGreaterThan(0);
+    const link = screen.getAllByRole("link", { name: /^see programmes$/i })[0];
+    expect(link.getAttribute("href")).toBe("/programmes");
+    for (const rung of PROGRAMME_LADDER) {
+      expect(screen.getByText(`${rung.pieces} pieces`)).toBeTruthy();
+    }
   });
 });

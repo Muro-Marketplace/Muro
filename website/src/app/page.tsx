@@ -10,6 +10,7 @@ import FeedbackBubble from "@/components/FeedbackBubble";
 import ArtistCarousel from "@/components/ArtistCarousel";
 import AnimateIn from "@/components/AnimateIn";
 import { useAuth } from "@/context/AuthContext";
+import { CURATION_TIERS, PROGRAMME_LADDER, gbp } from "@/lib/curation-tiers";
 
 // Row A L123. The trust bar used to floor the STATIC seed
 // (`data/artists.ts`, `data/venues.ts`) into "confident estimate" buckets and
@@ -249,7 +250,7 @@ export default function Home() {
                       </span>
                       <div>
                         <p className="text-base font-medium text-foreground leading-snug">Paid Loan</p>
-                        <p className="text-sm text-muted leading-relaxed mt-0.5">Pay the artist a monthly fee to display the work on your wall.</p>
+                        <p className="text-sm text-muted leading-relaxed mt-0.5">Pay one artist a monthly fee to keep one piece on your wall.</p>
                       </div>
                     </li>
                     <li className="flex gap-4 px-5 py-4">
@@ -272,9 +273,9 @@ export default function Home() {
                     </Link>
                   </div>
                   <p className="mt-5 text-sm text-muted">
-                    Want a shortlist picked for you?{" "}
-                    <Link href="/curated" className="text-accent hover:underline font-medium">
-                      Professional curation services also available &rarr;
+                    Want it handled for you?{" "}
+                    <Link href="/programmes" className="text-accent hover:underline font-medium">
+                      See Wallplace Programmes &rarr;
                     </Link>
                   </p>
                 </div>
@@ -295,6 +296,52 @@ export default function Home() {
                   <div className="col-span-3 row-span-2 relative rounded-sm overflow-hidden">
                     <Image src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop" alt="Mountain landscape at night" fill className="object-cover" sizes="25vw" />
                   </div>
+                </div>
+              </div>
+              </AnimateIn>
+            </div>
+          </section>
+
+          {/* ─── PROGRAMMES ─── */}
+          <section className="py-16 lg:py-24 bg-surface border-y border-border">
+            <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
+              <AnimateIn>
+              <div className="grid lg:grid-cols-12 gap-10 lg:gap-16 items-center">
+                <div className="lg:col-span-7">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Wallplace Programmes</p>
+                  <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6 leading-tight">
+                    Walls handled for you, from {gbp(CURATION_TIERS.programme.priceGbp)} a month.
+                  </h2>
+                  <p className="text-lg text-muted leading-relaxed mb-8">
+                    For offices, hotels and restaurants that want the art dealt with.
+                    We curate, install and rotate original work through the year,
+                    and every artist on your walls is paid rent out of your fee.
+                    Quoted per site, twelve-month term.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                    <Link href="/programmes" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                      See Programmes
+                    </Link>
+                    <Link href="/curated" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-foreground hover:text-white transition-colors">
+                      One-off shortlist from {gbp(CURATION_TIERS.single_wall.priceGbp)}
+                    </Link>
+                  </div>
+                </div>
+                <div className="lg:col-span-5">
+                  <ul className="bg-background rounded-md divide-y divide-border/60">
+                    {PROGRAMME_LADDER.map((rung) => (
+                      <li key={rung.pieces} className="flex items-baseline justify-between px-5 py-4">
+                        <span className="text-sm text-foreground">{rung.pieces} pieces</span>
+                        <span className="font-serif text-lg text-foreground">
+                          {gbp(rung.monthlyGbp)}
+                          <span className="text-xs text-muted font-sans"> a month</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted mt-3">
+                    A guide to how pricing scales. Every site is quoted individually. Prices exclusive of VAT.
+                  </p>
                 </div>
               </div>
               </AnimateIn>
@@ -365,7 +412,7 @@ export default function Home() {
                   <div className="space-y-8 flex-1">
                     <Step dark number="01" title="Browse &amp; Filter" description="Search curated artists by style, theme, and location. Free." />
                     <Step dark number="02" title="Enquire" description="Contact artists directly. Discuss terms and fit." />
-                    <Step dark number="03" title="Arrange" description="Display art for free with optional revenue share, or purchase outright." />
+                    <Step dark number="03" title="Arrange" description="Display for free with optional revenue share, pay a monthly loan fee for one piece, or have the whole space handled on a Programme." />
                   </div>
                   <div className="mt-10">
                     <Link href="/signup/venue" className="inline-flex items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">

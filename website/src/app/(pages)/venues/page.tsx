@@ -51,11 +51,11 @@ export default function VenuesPage() {
                 </Link>
               </div>
               <p className="mt-6 text-sm text-white/60">
-                Prefer a curator to pick for you?{" "}
-                <Link href="/curated" className="text-white underline underline-offset-2 hover:text-white/80">
-                  Try Wallplace Curated
+                Want your walls handled for you?{" "}
+                <Link href="/programmes" className="text-white underline underline-offset-2 hover:text-white/80">
+                  See Wallplace Programmes
                 </Link>
-                , from {gbp(CURATION_TIERS.single_wall.priceGbp)}.
+                , from {gbp(CURATION_TIERS.programme.priceGbp)} a month.
               </p>
             </div>
           </div>

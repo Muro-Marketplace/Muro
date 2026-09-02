@@ -3,7 +3,7 @@ import Link from "next/link";
 import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
-import { gbp, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
+import { gbp, CURATION_TIERS, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -141,8 +141,8 @@ export default function PricingPage() {
             <aside className="mt-8 border border-border rounded-sm p-4 bg-surface">
               <p className="text-sm text-foreground">
                 <strong>Are you a venue?</strong> Browsing and enquiring is free. See{" "}
-                <Link href="/venues" className="underline">how it works for venues</Link> or{" "}
-                <Link href="/curated" className="underline">explore Curated</Link> for managed selection from £49.
+                <Link href="/venues" className="underline">how it works for venues</Link>, or have your walls handled for you with{" "}
+                <Link href="/programmes" className="underline">Wallplace Programmes</Link> from {gbp(CURATION_TIERS.programme.priceGbp)} a month.
               </p>
             </aside>
           </div>

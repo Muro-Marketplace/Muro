@@ -23,8 +23,10 @@ const generalFaqs: FaqEntry[] = [
         <p>
           Wallplace earns through artist membership plans (from £9.99/month),
           a flat 15% platform fee on artwork sales, and optional paid services
-          for venues such as Wallplace Curated. When a piece sells, the artist
-          keeps the majority. Displaying art is always free for venues.
+          for venues: Wallplace Programmes (walls handled for you on a
+          monthly fee) and Wallplace Curated (a one-off shortlist). When a
+          piece sells, the artist keeps the majority. Displaying art is
+          always free for venues.
         </p>
         <p>
           Full breakdown on our <Link href="/pricing">pricing page</Link>.
@@ -202,7 +204,7 @@ const venueFaqs: FaqEntry[] = [
           are arranged directly between you and the artist. Venues never pay
           a platform fee and never pay to display. Wallplace earns from
           artist memberships, a fee on sales, and optional services venues
-          can choose, such as Wallplace Curated.
+          can choose, such as Wallplace Programmes.
         </p>
         <p>
           Full terms in the <Link href="/venue-agreement">venue agreement</Link>.
