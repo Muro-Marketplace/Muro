@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import FaqsClient, { type FaqEntry } from "./FaqsClient";
 import { gbp, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
+import { foundingOfferLine } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "FAQs",
@@ -48,7 +49,7 @@ const artistFaqs: FaqEntry[] = [
       <>
         <p>
           It is free to apply. Once accepted, membership starts from
-          £9.99/month (Core plan) with your first month free. Higher tiers
+          £9.99/month (Core plan). {foundingOfferLine()} Higher tiers
           (Premium at £24.99/month, Pro at £49.99/month) offer lower platform
           fees on sales and more visibility.
         </p>

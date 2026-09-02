@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import ApplicationGate from "@/components/ApplicationGate";
+import { FOUNDING_OFFER_SHORT, foundingOfferLine } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "Apply to join",
-  description:
-    "Apply to join Wallplace, the curated platform connecting artists with independent venues. First month free for all accepted artists.",
+  description: `Apply to join Wallplace, the curated platform connecting artists with independent venues. ${FOUNDING_OFFER_SHORT}.`,
 };
 
 export default function ApplyPage() {
@@ -46,10 +46,10 @@ export default function ApplyPage() {
             </div>
             <div className="flex-1">
               <p className="text-foreground font-medium">
-                First month free on all plans.
+                {FOUNDING_OFFER_SHORT}.
               </p>
               <p className="text-muted text-sm mt-1">
-                No commitment, cancel any time.
+                {foundingOfferLine()} No long-term contract, 30 days&rsquo; notice to leave.
               </p>
             </div>
           </div>

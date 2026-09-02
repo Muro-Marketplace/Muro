@@ -6,6 +6,7 @@ import TermsCheckbox from "@/components/TermsCheckbox";
 import { useAuth } from "@/context/AuthContext";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
+import { foundingOfferLine } from "@/lib/pricing";
 
 const primaryMediums = [
   "Oil Painting",
@@ -877,7 +878,7 @@ export default function ApplicationForm() {
           Choose Your Plan
         </h3>
         <p className="text-xs text-muted mb-5">
-          First month free on all plans. You can change your plan at any time after joining.
+          {foundingOfferLine()} You can change your plan at any time after joining.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {planOptions.map((plan) => (

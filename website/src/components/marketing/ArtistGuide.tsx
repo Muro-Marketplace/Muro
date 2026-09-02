@@ -8,6 +8,7 @@ import Link from "next/link";
 import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
 import AnimateIn from "@/components/AnimateIn";
+import { FOUNDING_OFFER_SHORT, foundingOfferLine } from "@/lib/pricing";
 
 const valueBlocks = [
   {
@@ -243,16 +244,16 @@ export default function ArtistGuide() {
               </p>
             </div>
 
-            {/* First Month Free Banner */}
+            {/* Founding Artist Offer, derived from src/lib/pricing.ts */}
             <div className="border-2 border-accent rounded-sm p-6 md:p-8 mb-10 bg-accent/5 text-center">
               <p className="text-sm font-medium text-accent uppercase tracking-wider mb-2">
                 Founding Artist Offer
               </p>
-              <p className="text-lg md:text-xl font-serif">
-                First month free on all plans.
+              <p className="text-2xl md:text-3xl font-serif text-accent">
+                {FOUNDING_OFFER_SHORT}
               </p>
-              <p className="mt-2 text-2xl md:text-3xl font-serif text-accent">
-                Apply to join, first month free.
+              <p className="mt-2 text-muted">
+                {foundingOfferLine()} Places are confirmed when your application is accepted.
               </p>
             </div>
 
@@ -432,7 +433,7 @@ export default function ArtistGuide() {
             </Link>
           </div>
           <p className="mt-6 text-sm text-white/40">
-            First month free. Membership from &pound;9.99/month.
+            {FOUNDING_OFFER_SHORT}. Membership from &pound;9.99/month.
           </p>
           <p className="mt-2 text-[11px] text-white/40">
             Applications reviewed within 5 business days.

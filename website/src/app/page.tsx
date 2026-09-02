@@ -11,6 +11,7 @@ import ArtistCarousel from "@/components/ArtistCarousel";
 import AnimateIn from "@/components/AnimateIn";
 import { useAuth } from "@/context/AuthContext";
 import { CURATION_TIERS, PROGRAMME_LADDER, gbp } from "@/lib/curation-tiers";
+import { FOUNDING_OFFER_SHORT } from "@/lib/pricing";
 
 // Row A L123. The trust bar used to floor the STATIC seed
 // (`data/artists.ts`, `data/venues.ts`) into "confident estimate" buckets and
@@ -424,7 +425,7 @@ export default function Home() {
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Artists</p>
                   <div className="space-y-8 flex-1">
                     <Step dark number="01" title="Apply" description="Submit your portfolio. We respond within 5 business days." />
-                    <Step dark number="02" title="Get Accepted" description="Pass our curation review. First month free." />
+                    <Step dark number="02" title="Get Accepted" description={`Pass our curation review. ${FOUNDING_OFFER_SHORT}.`} />
                     <Step dark number="03" title="Get Discovered" description="Your profile goes live. Venues enquire directly." />
                   </div>
                   <div className="mt-10">
@@ -492,7 +493,7 @@ export default function Home() {
                 <div className="bg-surface border border-border rounded-sm p-5 sm:p-8 text-center flex flex-col">
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Artists</p>
                   <h3 className="font-serif text-xl mb-3">Get discovered by venues</h3>
-                  <p className="text-sm text-muted mb-6 flex-1">First month free. From &pound;9.99/month.</p>
+                  <p className="text-sm text-muted mb-6 flex-1">{FOUNDING_OFFER_SHORT}. From &pound;9.99/month.</p>
                   <Link href="/apply" className="inline-flex items-center justify-center w-full px-4 py-3.5 bg-foreground text-white text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-foreground/90 transition-colors whitespace-nowrap">
                     Apply to Join
                   </Link>

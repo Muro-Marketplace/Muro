@@ -7,6 +7,7 @@ import VenueGuide from "@/components/marketing/VenueGuide";
 import ArtistGuide from "@/components/marketing/ArtistGuide";
 import CustomerGuide from "@/components/marketing/CustomerGuide";
 import { CURATION_TIERS, gbp } from "@/lib/curation-tiers";
+import { FOUNDING_OFFER_SHORT, foundingOfferLine } from "@/lib/pricing";
 
 type Audience = "venue" | "artist" | "customer";
 
@@ -33,13 +34,13 @@ const tabContent: Record<Audience, {
     secondary: { href: "/programmes", label: `Or have your walls handled for you: Programmes from ${gbp(CURATION_TIERS.programme.priceGbp)} a month` },
   },
   artist: {
-    lede: "Apply to join Wallplace's curated roster. Every application is reviewed personally. Accepted artists get their first month free, then choose any tier.",
+    lede: `Apply to join Wallplace's curated roster. Every application is reviewed personally. ${foundingOfferLine()}`,
     steps: [
       { number: "01", title: "Apply", description: "Submit your portfolio. We review every application personally and respond within 5 business days." },
-      { number: "02", title: "Get Accepted", description: "Pass curation review and your profile goes live. First month free on any plan." },
+      { number: "02", title: "Get Accepted", description: `Pass curation review and your profile goes live. ${FOUNDING_OFFER_SHORT}.` },
       { number: "03", title: "Display & Sell", description: "Venues enquire directly. Display work in their spaces, sell originals through your QR-coded display, or sell prints from your storefront." },
     ],
-    cta: { href: "/apply", label: "Apply to join, first month free if accepted" },
+    cta: { href: "/apply", label: "Apply to join" },
     secondary: { href: "/pricing", label: "See pricing" },
   },
   customer: {

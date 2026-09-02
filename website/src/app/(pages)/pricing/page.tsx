@@ -4,11 +4,11 @@ import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
 import { gbp, CURATION_TIERS, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
+import { FOUNDING_OFFER_SHORT, foundingOfferLine } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "Pricing",
-  description:
-    "Transparent pricing for artists on Wallplace. First month free. Choose Core, Premium, or Pro, all with access to our curated venue network.",
+  description: `Transparent pricing for artists on Wallplace. ${FOUNDING_OFFER_SHORT}. Choose Core, Premium, or Pro, all with access to our curated venue network.`,
 };
 
 const comparisonRows = [
@@ -159,15 +159,15 @@ export default function PricingPage() {
                   Get Started
                 </p>
                 <p className="text-foreground font-medium text-lg">
-                  First month free on all plans
+                  {FOUNDING_OFFER_SHORT}
                 </p>
                 <p className="text-muted text-sm mt-1">
-                  No commitment, cancel any time.
+                  {foundingOfferLine()} No long-term contract, 30 days&rsquo; notice to leave.
                 </p>
               </div>
               <div className="shrink-0">
                 <Button href="/apply" size="md">
-                  Apply to join, first month free if accepted
+                  Apply to join
                 </Button>
                 <p className="text-[11px] text-muted mt-2">
                   Applications reviewed within 5 business days.
@@ -354,10 +354,10 @@ export default function PricingPage() {
             Ready to apply?
           </h2>
           <p className="text-muted leading-relaxed mb-8 max-w-lg mx-auto">
-            First month free on all plans. No commitment, cancel any time.
+            {foundingOfferLine()} No long-term contract, 30 days&rsquo; notice to leave.
           </p>
           <Button href="/apply" size="lg">
-            Apply to join, first month free if accepted
+            Apply to join
           </Button>
           <p className="text-[11px] text-muted mt-3">
             Applications reviewed within 5 business days.

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Button from "@/components/Button";
 import ScrollButton from "@/components/ScrollButton";
 import ArtistGuide from "@/components/marketing/ArtistGuide";
+import { FOUNDING_OFFER_SHORT } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "For Artists",
@@ -63,9 +64,9 @@ export default function ArtistsPage() {
           </div>
           <div className="border-t border-white/10 bg-black/50 backdrop-blur-sm">
             <div className="max-w-[1200px] mx-auto px-6 py-3.5 flex items-center justify-center gap-3 text-xs text-white/40 tracking-wider uppercase">
-              <span>1 month free trial</span>
+              <span>{FOUNDING_OFFER_SHORT}</span>
               <span className="w-1 h-1 rounded-full bg-white/30" />
-              <span>Cancel anytime</span>
+              <span>30 days&rsquo; notice to leave</span>
               <span className="w-1 h-1 rounded-full bg-white/30" />
               <span>From £9.99/mo</span>
             </div>

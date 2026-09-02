@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
+import { FOUNDING_OFFER_SHORT } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "Sign up as an artist",
-  description:
-    "Apply to join Wallplace's curated artist roster. First month free if accepted.",
+  description: `Apply to join Wallplace's curated artist roster. ${FOUNDING_OFFER_SHORT}.`,
 };
 
 export default function SignupArtistLayout({

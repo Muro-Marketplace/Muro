@@ -7,6 +7,9 @@ import {
   activePlacementCapForProfile,
   PAID_LOAN_MIN_GBP,
   FOUNDING_ARTIST_LIMIT,
+  FOUNDING_TRIAL_MONTHS,
+  FOUNDING_OFFER_SHORT,
+  foundingOfferLine,
 } from "./pricing";
 
 describe("pricing source of truth", () => {
@@ -42,5 +45,18 @@ describe("pricing source of truth", () => {
   it("floors paid loans at £15 and caps founding artists at 20", () => {
     expect(PAID_LOAN_MIN_GBP).toBe(15);
     expect(FOUNDING_ARTIST_LIMIT).toBe(20);
+  });
+});
+
+describe("founding offer copy derives from the constants", () => {
+  it("is a whole number of months", () => {
+    expect(Number.isInteger(FOUNDING_TRIAL_MONTHS)).toBe(true);
+    expect(FOUNDING_TRIAL_MONTHS).toBe(6);
+  });
+
+  it("names the cohort size and the trial length", () => {
+    expect(FOUNDING_OFFER_SHORT).toBe("First 20 artists: 6 months free");
+    expect(foundingOfferLine()).toContain("first 20 artists");
+    expect(foundingOfferLine()).toContain("6 months free");
   });
 });

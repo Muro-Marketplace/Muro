@@ -70,4 +70,20 @@ export const MAX_VENUE_SHARE_PERCENT = 50;
 // is_founding_artist flag is actually managed against this limit.
 export const FOUNDING_ARTIST_LIMIT = 20;
 export const FOUNDING_TRIAL_DAYS = 180;
+
+/** Founding trial length in whole months, for copy. 180 days is six months. */
+export const FOUNDING_TRIAL_MONTHS = FOUNDING_TRIAL_DAYS / 30;
+
+/**
+ * The founding-artist offer, in one place. The flyer says "First 20 artists:
+ * 6 months free"; the site said "first month free" everywhere. Every
+ * artist-facing page renders one of these so the numbers cannot drift from
+ * the constants the admin cap and the trial length are built on.
+ */
+export const FOUNDING_OFFER_SHORT = `First ${FOUNDING_ARTIST_LIMIT} artists: ${FOUNDING_TRIAL_MONTHS} months free`;
+
+export function foundingOfferLine(): string {
+  return `The first ${FOUNDING_ARTIST_LIMIT} artists accepted get ${FOUNDING_TRIAL_MONTHS} months free. After that, every plan starts with a month free.`;
+}
+
 export const STANDARD_TRIAL_DAYS = 30;
