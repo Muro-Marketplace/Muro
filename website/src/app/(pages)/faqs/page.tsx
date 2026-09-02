@@ -197,8 +197,26 @@ const artistFaqs: FaqEntry[] = [
   },
   {
     question: "Is my artwork protected from theft?",
-    answer:
-      "Every image on Wallplace is served at reduced resolution with compressed quality, good enough for browsing, not enough for reproduction. Right-click saving is disabled, and images cannot be dragged or selected. The original high-resolution file never leaves your hands, we only display a web-optimised version. Our Terms of Service prohibit unauthorised reproduction, and every sale is tracked and attributed to you as the creator.",
+    answer: (
+      <>
+        <p>
+          Online: Every image on Wallplace is served at reduced resolution
+          with compressed quality, good enough for browsing, not enough for
+          reproduction. Right-click saving is disabled, and images cannot be
+          dragged or selected. The original high-resolution file never
+          leaves your hands, we only display a web-optimised version. Our
+          Terms of Service prohibit unauthorised reproduction, and every sale
+          is tracked and attributed to you as the creator.
+        </p>
+        <p>
+          In a venue: if a piece goes missing, the venue is liable under the
+          Venue Partnership Agreement where it failed to take reasonable care,
+          and we help you pursue it through{" "}
+          <Link href="/complaints">our complaints process</Link>. Insure the
+          work for its full value while it is on display.
+        </p>
+      </>
+    ),
   },
 ];
 
@@ -272,6 +290,12 @@ const venueFaqs: FaqEntry[] = [
           heavier pieces or fragile works on request, message{" "}
           <a href="mailto:hello@wallplace.co.uk">hello@wallplace.co.uk</a>{" "}
           and we&rsquo;ll set it up.
+        </p>
+        <p>
+          On a Wallplace Programme, installation is included and arranged by
+          us. We appoint the installer and we are your point of contact if
+          anything goes wrong on the day; the installer&rsquo;s insurance
+          details are available on request before the visit.
         </p>
       </>
     ),

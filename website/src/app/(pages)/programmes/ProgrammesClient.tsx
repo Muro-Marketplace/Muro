@@ -130,6 +130,18 @@ const FAQ_ITEMS = [
     question: "Can staff buy what's on the wall?",
     answer: "Yes. Every piece carries a QR card. Scan it and staff or guests can buy the work directly, the same as anywhere else on Wallplace.",
   },
+  {
+    question: "Who installs, and what if something gets damaged?",
+    answer: "We arrange installation and appoint the installer, so we are your point of contact on the day and afterwards. The installer's insurance details are available on request before the visit.",
+  },
+  {
+    question: "How long from quote to art on the walls?",
+    answer: "Usually three to four weeks from accepting a quote: a site visit, a shortlist for you to approve, then a single installation day.",
+  },
+  {
+    question: "What happens at the end of the term?",
+    answer: "After the first twelve months the programme rolls on month to month. Give 30 days' notice and we collect the work at the next visit and leave the walls as we found them.",
+  },
 ];
 
 const SECTORS = ["Office", "Hotel", "Restaurant", "Co-working", "Retail", "Other"];
