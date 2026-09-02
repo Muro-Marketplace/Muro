@@ -43,7 +43,7 @@ const publicMarketplaceTabs = [
 ];
 
 // Venue variant of the marketplace tabs: drops "Spaces" (not useful for a
-// venue browsing) and adds Wallplace Curated + Blog so the venue's own
+// venue browsing) and adds Manage My Walls + Blog so the venue's own
 // nav shape stays consistent with the non-marketplace pages.
 const venueMarketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
@@ -113,7 +113,7 @@ const loggedInNavLinks: NavLink[] = [
 ];
 
 // Venues don't need the "Spaces" (venues browsing venues) link, they
-// already know what they've got. Surface Wallplace Curated and Blog
+// already know what they've got. Surface Manage My Walls and Blog
 // instead so the top nav matches how venues actually use the site.
 const venueNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
@@ -123,7 +123,7 @@ const venueNavLinks: NavLink[] = [
 
 const moreLinks = [
   { label: "Programmes", href: "/programmes" },
-  { label: "Wallplace Curated", href: "/curated" },
+  { label: "Manage My Walls", href: "/curated" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Blog", href: "/blog" },
   { label: "About", href: "/about" },

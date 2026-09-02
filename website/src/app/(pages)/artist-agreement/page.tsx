@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { gbp, PROGRAMME_PIECE_RENT_MIN_GBP, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
-import { FOUNDING_ARTIST_LIMIT, FOUNDING_TRIAL_MONTHS } from "@/lib/pricing";
+import { FOUNDING_ARTIST_LIMIT, FOUNDING_TRIAL_MONTHS, STANDARD_TRIAL_DAYS } from "@/lib/pricing";
 import LegalEntityNote from "@/components/LegalEntityNote";
 
 export const metadata: Metadata = {
@@ -43,7 +43,7 @@ export default function ArtistAgreementPage() {
                     <li><strong className="text-foreground">Premium:</strong> &pound;24.99/month, 15% platform fee on sales, up to 5 active placements</li>
                     <li><strong className="text-foreground">Pro:</strong> &pound;49.99/month, 15% platform fee on sales, unlimited active placements</li>
                   </ul>
-                  <p>Every plan starts with a free trial. The standard trial is one month; the first {FOUNDING_ARTIST_LIMIT} artists accepted receive {FOUNDING_TRIAL_MONTHS} months. The trial length is confirmed when your application is accepted.</p>
+                  <p>Every plan starts with a free trial for new members. The standard trial is {Math.round(STANDARD_TRIAL_DAYS / 30)} month; the first {FOUNDING_ARTIST_LIMIT} artists accepted receive {FOUNDING_TRIAL_MONTHS} months. The trial length is confirmed when your application is accepted.</p>
                   <p>Membership is billed monthly via Stripe. Upgrades are prorated. Downgrades take effect at the next billing period. Wallplace may change pricing with 30 days&rsquo; notice. Existing subscriptions are honoured until the next renewal after the notice period.</p>
                   <p>All prices and fees are exclusive of VAT. If Wallplace becomes VAT registered, VAT will be added at the prevailing rate.</p>
                 </div>

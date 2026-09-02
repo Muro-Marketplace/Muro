@@ -34,7 +34,7 @@ describe("public claims the site cannot evidence stay out", () => {
   });
 
   it("no page claims reach 'across the UK'", () => {
-    expect(grepFiles("across the UK", ["src/app", "src/components"])).toEqual([]);
+    expect(grepFiles("across the UK", ["src/app", "src/components", "src/emails"])).toEqual([]);
   });
 
   it("the buyer FAQ does not promise reviews or identity checks the platform lacks", () => {

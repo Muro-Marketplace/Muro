@@ -20,7 +20,7 @@ describe("the founding-artist offer is on every artist-facing page", () => {
     it(`${p} renders it from pricing.ts and drops the blanket claim`, () => {
       const src = readFileSync(join(process.cwd(), p), "utf8");
       expect(src).toMatch(/FOUNDING_OFFER_SHORT|foundingOfferLine\(\)/);
-      expect(src).not.toMatch(/first month free/i);
+      expect(src).not.toMatch(/first month (is )?free/i);
     });
   }
 });
@@ -46,7 +46,7 @@ describe("first-month-free copy does not resurface on other surfaces", () => {
   for (const p of OTHER_SURFACES_WITHOUT_THE_OFFER) {
     it(`${p} drops the blanket claim`, () => {
       const src = readFileSync(join(process.cwd(), p), "utf8");
-      expect(src).not.toMatch(/first month free/i);
+      expect(src).not.toMatch(/first month (is )?free/i);
     });
   }
 });

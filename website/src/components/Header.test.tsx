@@ -123,6 +123,32 @@ describe("<Header /> public nav (nav-broadening plan)", () => {
   });
 });
 
+describe("<Header /> venue nav labels (Manage My Walls)", () => {
+  it("lists Marketplace, Manage My Walls, Blog for a signed-in venue", async () => {
+    signedInAs("venue");
+    render(<Header />);
+    await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    const labels = within(nav)
+      .getAllByRole("link")
+      .map((a) => a.textContent?.trim());
+    expect(labels).toEqual(["Marketplace", "Manage My Walls", "Blog"]);
+  });
+
+  it("shows Manage My Walls, not Wallplace Curated, in the venue marketplace tabs", async () => {
+    pathname = "/browse";
+    signedInAs("venue");
+    render(<Header />);
+    await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
+    const nav = screen.getByRole("navigation", { name: "Main navigation" });
+    const labels = within(nav)
+      .getAllByRole("link")
+      .map((a) => a.textContent?.trim());
+    expect(labels).toContain("Manage My Walls");
+    expect(labels).not.toContain("Wallplace Curated");
+  });
+});
+
 describe("<Header /> messages dropdown (A2, H7)", () => {
   it("does not render the messages dropdown for a customer", async () => {
     signedInAs("customer");

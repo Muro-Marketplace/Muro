@@ -15,7 +15,7 @@ export default function TermsPage() {
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-3xl">
             <h1 className="text-4xl lg:text-5xl mb-4">Terms of Service</h1>
-            <p className="text-muted leading-relaxed mb-6">Last updated: April 2026</p>
+            <p className="text-muted leading-relaxed mb-6">Last updated: September 2026</p>
 
             <LegalEntityNote>
               References to &ldquo;Wallplace&rdquo; throughout this document refer to the business operating under this trading name.
