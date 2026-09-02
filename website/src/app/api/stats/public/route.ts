@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const revalidate = 300; // Cache for 5 minutes
@@ -12,6 +12,12 @@ export async function GET(request: Request) {
   const limited = await checkRateLimit(request, 60, 60000);
   if (limited) return limited;
   try {
+    // Launch audit, blocker 3. The anon client has no SELECT on
+    // artist_profiles or venue_profiles in production, so this returned
+    // zeros. The service-role client reads the same tables; the approved
+    // filter below is what keeps the number honest, not RLS.
+    const supabase = getSupabaseAdmin();
+
     // Row A L123. This counted every artist_profiles row, including pending
     // and rejected ones, which is not what a visitor can browse. The public
     // marketplace filters on review_status = 'approved' (and so does the anon
