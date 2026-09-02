@@ -17,6 +17,7 @@ import { mergeBulkPricing, copySizesPricing } from "./bulk-pricing";
 import { worksToPost } from "./changed-works";
 import { partitionBulkAddDrafts } from "./bulk-add-validation";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
+import { canFeatureArtwork, isArtworkOfTheWeek } from "@/lib/tier-features";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
 import { WORKS_CAP } from "@/lib/pricing";
@@ -1898,6 +1899,30 @@ export default function PortfolioPage() {
     handleDeleteWork(index);
   }
 
+  // Owner decision 2026-09-02: Premium and Pro artists can push one artwork
+  // to the top of the marketplace gallery for seven days. The rule lives in
+  // canFeatureArtwork/isArtworkOfTheWeek (src/lib/tier-features.ts) so the
+  // API, the marketplace sort and this portal control cannot drift.
+  const canFeature = canFeatureArtwork(artist?.subscriptionPlan);
+
+  async function featureWork(index: number) {
+    const w = works[index];
+    if (!w || !canFeature) return;
+    // mutate(), not authFetch: authFetch resolves on a non-2xx rather than
+    // throwing, so a plan_required/boost_live/404 refusal would otherwise
+    // hit the success branch. See E43 / the no-authfetch-mutation rule.
+    try {
+      const { featuredUntil } = await mutate<{ featuredUntil: string }>(
+        `/api/artist-works/${encodeURIComponent(w.id)}/feature`,
+        { method: "POST" },
+      );
+      setWorks((prev) => prev.map((x, i) => (i === index ? { ...x, featuredUntil } : x)));
+      showToast("Featured at the top of the gallery for seven days");
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Could not feature this work", { variant: "error" });
+    }
+  }
+
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
 
   return (
@@ -3196,6 +3221,12 @@ export default function PortfolioPage() {
                       <Image src={work.image} alt={work.title} fill className="object-cover" sizes="(max-width: 768px) 50vw, 33vw" />
                     </div>
 
+                    {isArtworkOfTheWeek(work.featuredUntil, new Date()) && (
+                      <span className="absolute top-2 left-2 z-10 inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white">
+                        Featured until {new Date(work.featuredUntil as string).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </span>
+                    )}
+
                     {/* Checkbox in top-left when select mode is on. */}
                     {selectMode && (
                       <div
@@ -3240,6 +3271,20 @@ export default function PortfolioPage() {
                           className="text-xs font-medium bg-white text-foreground px-4 py-1.5 rounded-sm hover:bg-background transition-colors"
                         >
                           Edit
+                        </button>
+                        <button
+                          onClick={() => featureWork(index)}
+                          disabled={!canFeature || isArtworkOfTheWeek(work.featuredUntil, new Date())}
+                          title={
+                            !canFeature
+                              ? "Artwork of the Week is included with Premium and Pro"
+                              : isArtworkOfTheWeek(work.featuredUntil, new Date())
+                                ? "Already featured"
+                                : "Put this work at the top of the gallery for seven days"
+                          }
+                          className="text-xs font-medium bg-blue-600 text-white px-4 py-1.5 rounded-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Feature for a week
                         </button>
                         <button
                           onClick={() => duplicateFrom(index)}

@@ -10,7 +10,7 @@ import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/re
 const { mutateMock, showToastMock, artistState } = vi.hoisted(() => ({
   mutateMock: vi.fn(),
   showToastMock: vi.fn(),
-  artistState: { works: [] as unknown[] },
+  artistState: { works: [] as unknown[], subscriptionPlan: undefined as string | undefined },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -29,7 +29,10 @@ vi.mock("@/context/ConfirmContext", () => ({ useConfirm: () => ({ confirm: vi.fn
 vi.mock("@/lib/upload", () => ({ uploadImage: vi.fn(async () => "https://cdn/x.png") }));
 vi.mock("@/components/ArtistPortalLayout", () => ({ default: ({ children }: { children: unknown }) => children }));
 vi.mock("@/hooks/useCurrentArtist", () => ({
-  useCurrentArtist: () => ({ artist: { slug: "alice", name: "Alice", works: artistState.works }, loading: false }),
+  useCurrentArtist: () => ({
+    artist: { slug: "alice", name: "Alice", works: artistState.works, subscriptionPlan: artistState.subscriptionPlan },
+    loading: false,
+  }),
 }));
 
 import PortfolioPage from "./page";
@@ -55,6 +58,7 @@ beforeEach(() => {
   mutateMock.mockReset();
   showToastMock.mockReset();
   artistState.works = [];
+  artistState.subscriptionPlan = undefined;
   vi.stubGlobal("Image", FakeImage);
 });
 
@@ -368,5 +372,63 @@ describe("bulk portfolio actions report the truth (D23)", () => {
       expect(showToastMock.mock.calls.some((c) => String(c[0]) === "Marked 1 work as sold")).toBe(true),
     );
     expect(errorToastFired()).toBe(false);
+  });
+});
+
+// Owner decision 2026-09-02: Premium and Pro artists can push one artwork to
+// the top of the marketplace gallery for seven days. The POST goes through
+// mutate() (not authFetch), matching the rest of this file: mutate() throws
+// ApiError on a non-2xx instead of resolving into a silent false-success (the
+// exact defect the wallplace/no-authfetch-mutation rule guards against).
+describe("Artwork of the Week control (owner decision 2 September)", () => {
+  it("offers Feature for a week to a Premium artist and posts to the feature endpoint", async () => {
+    artistState.subscriptionPlan = "premium";
+    artistState.works = [WORK];
+    mutateMock.mockResolvedValue({ featuredUntil: "2026-09-09T12:00:00.000Z" });
+    render(<PortfolioPage />);
+
+    fireEvent.mouseOver(await screen.findByText(WORK.title));
+    fireEvent.click(screen.getByRole("button", { name: /feature for a week/i }));
+
+    await waitFor(() =>
+      expect(mutateMock).toHaveBeenCalledWith(
+        `/api/artist-works/${WORK.id}/feature`,
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+    expect(await screen.findByText(/featured until/i)).toBeTruthy();
+  });
+
+  it("tells a Core artist it is a Premium and Pro perk", async () => {
+    artistState.subscriptionPlan = "core";
+    artistState.works = [WORK];
+    render(<PortfolioPage />);
+
+    fireEvent.mouseOver(await screen.findByText(WORK.title));
+    const btn = screen.getByRole("button", { name: /feature for a week/i });
+
+    expect(btn.getAttribute("title")).toMatch(/premium and pro/i);
+    expect(btn.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("shows the server's error text when the feature endpoint refuses", async () => {
+    artistState.subscriptionPlan = "premium";
+    artistState.works = [WORK];
+    mutateMock.mockRejectedValue(
+      new ApiError(409, "You already have an Artwork of the Week running.", "boost_live", {}),
+    );
+    render(<PortfolioPage />);
+
+    fireEvent.mouseOver(await screen.findByText(WORK.title));
+    fireEvent.click(screen.getByRole("button", { name: /feature for a week/i }));
+
+    await waitFor(() =>
+      expect(showToastMock).toHaveBeenCalledWith(
+        "You already have an Artwork of the Week running.",
+        expect.objectContaining({ variant: "error" }),
+      ),
+    );
+    // A refused boost must not mark the work as featured.
+    expect(screen.queryByText(/featured until/i)).toBeNull();
   });
 });
