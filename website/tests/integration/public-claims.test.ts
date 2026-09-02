@@ -47,4 +47,10 @@ describe("public claims the site cannot evidence stay out", () => {
     expect((cards.match(/Artwork of the Week/g) || []).length).toBe(2);
     expect(cards).toMatch(/Featured artist: your profile leads the marketplace/);
   });
+
+  it("venue photo captions name a type, never an invented place", () => {
+    expect(read("src/components/marketing/VenueGuide.tsx")).not.toMatch(
+      /caption: "[^"]*, (Peckham|Bermondsey|Hackney|Margate|Shoreditch|Camberwell|Islington|Deptford)"/,
+    );
+  });
 });

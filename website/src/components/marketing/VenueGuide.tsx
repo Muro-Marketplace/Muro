@@ -78,15 +78,15 @@ const freeBenefits = [
 
 const venuePhotos = [
   {
-    caption: "Independent cafe, Peckham",
+    caption: "Independent café",
     image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&h=450&fit=crop&crop=center",
   },
   {
-    caption: "Wine bar, Bermondsey",
+    caption: "Wine bar",
     image: "https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=600&h=450&fit=crop&crop=center",
   },
   {
-    caption: "Brunch spot, Hackney",
+    caption: "Brunch spot",
     image: "https://images.unsplash.com/photo-1559329007-40df8a9345d8?w=600&h=450&fit=crop&crop=center",
   },
 ];
@@ -271,7 +271,7 @@ export default function VenueGuide() {
 
       {/* Image Break */}
       <section className="relative h-64 lg:h-80 overflow-hidden">
-        <Image src="https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=1920&h=400&fit=crop&crop=center" alt="Wine bar with art" fill className="object-cover" />
+        <Image src="https://images.unsplash.com/photo-1525610553991-2bede1a236e2?w=1920&h=400&fit=crop&crop=center" alt="" fill className="object-cover" />
         <div className="absolute inset-0 bg-black/40" />
         <div className="relative h-full flex items-center justify-center text-center px-6">
           <div>
