@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { grepFiles } from "./public-claims.test";
+import { grepFiles } from "./claims-helpers";
 
 // Launch audit, section 02. Programmes is the product the business needs to
 // sell, and the prose kept naming Curated as the example paid option.
