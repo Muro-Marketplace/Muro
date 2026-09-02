@@ -3,7 +3,7 @@ import Link from "next/link";
 import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
-import { gbp, CURATION_TIERS, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
+import { gbp, CURATION_TIERS, PROGRAMME_PIECE_RENT_TARGET_GBP, PROGRAMME_PIECE_STINT_MONTHS } from "@/lib/curation-tiers";
 import { FOUNDING_OFFER_SHORT, foundingOfferLine } from "@/lib/pricing";
 
 export const metadata: Metadata = {
@@ -114,7 +114,7 @@ const faqItems = [
   {
     question: "Can a placement earn me money before it sells?",
     answer:
-      `Yes, on a programme. Some venues pay Wallplace a monthly fee to have their walls handled for them, and a share of that fee goes to the artists whose work is hanging there, usually around ${gbp(PROGRAMME_PIECE_RENT_TARGET_GBP)} per piece per month. Over a year that is ${gbp(PROGRAMME_PIECE_RENT_TARGET_GBP * 12)} for a single piece, which covers a Core membership outright. It accrues every time the venue's invoice is paid and is settled to you quarterly through Stripe, so you need payouts enabled to receive it. Programme placements are not guaranteed. They depend on which venues are paying for a programme and what suits their space, in the same way ordinary placements depend on venue demand.`,
+      `Yes, on a programme. Some venues pay Wallplace a monthly fee to have their walls handled for them, and a share of that fee goes to the artists whose work is hanging there, usually around ${gbp(PROGRAMME_PIECE_RENT_TARGET_GBP)} per piece per month. A piece hangs for about ${PROGRAMME_PIECE_STINT_MONTHS} months before the standard rotation, so one placement is worth around ${gbp(PROGRAMME_PIECE_RENT_TARGET_GBP * PROGRAMME_PIECE_STINT_MONTHS)}, and rent stops when the piece comes down or sells. Rent is settled quarterly through Stripe Connect. Programme placements are not guaranteed.`,
   },
   {
     question: "Are there any other fees?",
@@ -318,9 +318,12 @@ export default function PricingPage() {
                 Some venues pay us a monthly fee to have their walls handled,
                 and a share of that goes to the artists hanging there, usually
                 around {gbp(PROGRAMME_PIECE_RENT_TARGET_GBP)} per piece per
-                month. Over a year that is{" "}
-                {gbp(PROGRAMME_PIECE_RENT_TARGET_GBP * 12)} for one piece,
-                which covers a Core membership outright. Programme placements
+                month. A piece on a standard programme hangs for about{" "}
+                {PROGRAMME_PIECE_STINT_MONTHS} months before rotation, so one
+                placement is worth around{" "}
+                {gbp(PROGRAMME_PIECE_RENT_TARGET_GBP * PROGRAMME_PIECE_STINT_MONTHS)},
+                and two placements across a year cover a Core membership. Rent
+                stops when a piece comes down or sells. Programme placements
                 are not guaranteed; they depend on venue demand like any other.
               </p>
               <p className="text-muted leading-relaxed mb-6">

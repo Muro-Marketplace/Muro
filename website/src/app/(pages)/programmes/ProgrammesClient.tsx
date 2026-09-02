@@ -7,7 +7,7 @@ import Image from "next/image";
 import Accordion from "@/components/Accordion";
 import AnimateIn from "@/components/AnimateIn";
 import ScrollButton from "@/components/ScrollButton";
-import { CURATION_TIERS, PROGRAMME_LADDER, gbp } from "@/lib/curation-tiers";
+import { CURATION_TIERS, PROGRAMME_LADDER, PROGRAMME_RENT_SHARE_TARGET, gbp } from "@/lib/curation-tiers";
 
 // Wallplace Programmes plan, Task 3. This is the dedicated demand surface
 // for the recurring, quoted `programme` tier: offices, hotels, restaurants,
@@ -348,6 +348,10 @@ export default function ProgrammesClient() {
               <p className="text-xs text-muted mt-2 max-w-xl">
                 Prices are exclusive of VAT. If Wallplace becomes VAT registered, VAT will be
                 added at the prevailing rate.
+              </p>
+              <p className="text-xs text-muted mt-2 max-w-xl">
+                Around {Math.round(PROGRAMME_RENT_SHARE_TARGET * 100)}% of your fee is paid to the
+                artists on your walls as rent.
               </p>
             </AnimateIn>
           </div>

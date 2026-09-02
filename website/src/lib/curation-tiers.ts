@@ -114,6 +114,18 @@ export const PROGRAMME_PIECE_RENT_TARGET_GBP = 10;
  */
 export const PROGRAMME_RENT_SHARE_MAX = 0.7;
 
+/**
+ * Operating target for the artist rent pool as a share of a site's
+ * monthly-equivalent fee. PROGRAMME_RENT_SHARE_MAX (70%) is the mis-quote
+ * guard; this is where a normal quote lands, and it is the figure the
+ * public pages state so nobody has to reverse-engineer it from the ladder.
+ */
+export const PROGRAMME_RENT_SHARE_TARGET = 0.4;
+
+/** Standard rotation cadence, twice a year, so a piece hangs about six months. */
+export const PROGRAMME_STANDARD_ROTATIONS_PER_YEAR = 2;
+export const PROGRAMME_PIECE_STINT_MONTHS = 12 / PROGRAMME_STANDARD_ROTATIONS_PER_YEAR;
+
 /** Guidance uplift for quarterly (vs biannual) rotation, set at quote time. */
 export const PROGRAMME_QUARTERLY_ROTATION_UPLIFT_GBP = 40;
 

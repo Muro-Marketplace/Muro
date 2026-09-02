@@ -8,7 +8,10 @@ import {
   PROGRAMME_LADDER,
   PROGRAMME_PIECE_RENT_MIN_GBP,
   PROGRAMME_PIECE_RENT_TARGET_GBP,
+  PROGRAMME_PIECE_STINT_MONTHS,
   PROGRAMME_RENT_SHARE_MAX,
+  PROGRAMME_RENT_SHARE_TARGET,
+  PROGRAMME_STANDARD_ROTATIONS_PER_YEAR,
   PROGRAMME_FOUNDING_SITE_LIMIT,
 } from "./curation-tiers";
 
@@ -108,5 +111,20 @@ describe("programme tier", () => {
   // quote route's founding-cohort guard is built against.
   it("caps the founding cohort at 5 sites", () => {
     expect(PROGRAMME_FOUNDING_SITE_LIMIT).toBe(5);
+  });
+});
+
+describe("programme rent copy constants", () => {
+  it("states a rent-share target below the pool guard that the ladder actually lands on", () => {
+    expect(PROGRAMME_RENT_SHARE_TARGET).toBeLessThan(PROGRAMME_RENT_SHARE_MAX);
+    for (const rung of PROGRAMME_LADDER) {
+      const share = (rung.pieces * PROGRAMME_PIECE_RENT_TARGET_GBP) / rung.monthlyGbp;
+      expect(Math.abs(share - PROGRAMME_RENT_SHARE_TARGET)).toBeLessThan(0.06);
+    }
+  });
+
+  it("a standard stint is six months, from two rotations a year", () => {
+    expect(PROGRAMME_STANDARD_ROTATIONS_PER_YEAR).toBe(2);
+    expect(PROGRAMME_PIECE_STINT_MONTHS).toBe(6);
   });
 });

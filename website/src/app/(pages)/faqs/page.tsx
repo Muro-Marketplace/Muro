@@ -2,7 +2,7 @@ import Button from "@/components/Button";
 import Link from "next/link";
 import type { Metadata } from "next";
 import FaqsClient, { type FaqEntry } from "./FaqsClient";
-import { gbp, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
+import { gbp, PROGRAMME_PIECE_RENT_TARGET_GBP, PROGRAMME_PIECE_STINT_MONTHS, PROGRAMME_RENT_SHARE_TARGET } from "@/lib/curation-tiers";
 import { foundingOfferLine } from "@/lib/pricing";
 
 export const metadata: Metadata = {
@@ -122,6 +122,14 @@ const artistFaqs: FaqEntry[] = [
           payouts enabled to receive it. Programme placements are not
           guaranteed; they depend on which venues are running a programme and
           what suits their space.
+        </p>
+        <p>
+          A piece usually hangs for about {PROGRAMME_PIECE_STINT_MONTHS} months
+          before the standard rotation, and rent stops when it comes down or
+          sells. Across a site, artist rent is typically around{" "}
+          {Math.round(PROGRAMME_RENT_SHARE_TARGET * 100)}% of what the venue
+          pays; the rest covers curation, installation, rotation and
+          Wallplace&rsquo;s margin.
         </p>
       </>
     ),

@@ -53,4 +53,11 @@ describe("public claims the site cannot evidence stay out", () => {
       /caption: "[^"]*, (Peckham|Bermondsey|Hackney|Margate|Shoreditch|Camberwell|Islington|Deptford)"/,
     );
   });
+
+  it("artist rent copy uses the stint length, not twelve months on one wall", () => {
+    const pricing = read("src/app/(pages)/pricing/page.tsx");
+    expect(pricing).not.toMatch(/PROGRAMME_PIECE_RENT_TARGET_GBP \* 12/);
+    expect(pricing).toMatch(/PROGRAMME_PIECE_STINT_MONTHS/);
+    expect(read("src/app/(pages)/artist-agreement/page.tsx")).toMatch(/9A\. Programme Rent/);
+  });
 });

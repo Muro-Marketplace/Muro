@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { gbp, PROGRAMME_PIECE_RENT_MIN_GBP, PROGRAMME_PIECE_RENT_TARGET_GBP } from "@/lib/curation-tiers";
 
 export const metadata: Metadata = {
   title: "Artist Agreement",
@@ -13,7 +14,7 @@ export default function ArtistAgreementPage() {
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-3xl">
             <h1 className="text-4xl lg:text-5xl mb-4">Artist Agreement</h1>
-            <p className="text-muted leading-relaxed mb-6">Last updated: April 2026</p>
+            <p className="text-muted leading-relaxed mb-6">Last updated: September 2026</p>
 
             <div className="bg-surface border border-border rounded-sm p-5 mb-16">
               <p className="text-sm text-muted leading-relaxed">
@@ -143,6 +144,17 @@ export default function ArtistAgreementPage() {
                   <p>You may agree a Revenue Share with a venue, where the venue receives a percentage of the sale price of artwork sold from their premises. The percentage is agreed directly between you and the venue.</p>
                   <p>Revenue Share payments are processed via Stripe Connect. The venue&rsquo;s share is calculated on the sale price of the artwork; the platform fee is calculated on the same sale price. Both are deducted from your proceeds.</p>
                   <p><strong className="text-foreground">Example:</strong> &pound;500 sale, 15% platform fee, 10% venue share. Platform fee = &pound;75. Venue share = &pound;50. You receive &pound;375.</p>
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-2xl mb-4">9A. Programme Rent</h2>
+                <div className="space-y-3 text-muted leading-relaxed">
+                  <p>Some venues pay Wallplace a recurring fee for a managed programme (a &ldquo;Programme&rdquo;), under which Wallplace curates, installs and rotates artwork on the venue&rsquo;s walls. Where your artwork is placed under a Programme, you are paid rent for each month it hangs there, funded from the venue&rsquo;s fee.</p>
+                  <p>The rent for each piece is set when the placement is agreed and shown on the placement record. It is typically around {gbp(PROGRAMME_PIECE_RENT_TARGET_GBP)} per piece per month and never less than {gbp(PROGRAMME_PIECE_RENT_MIN_GBP)}.</p>
+                  <p>Rent accrues each time the venue&rsquo;s Programme invoice is paid, for the pieces on the wall in that billing period, and is settled to you quarterly through Stripe Connect. You must have payouts enabled to receive it. Rent stops when a piece is taken down at a rotation, when it sells, or when the venue&rsquo;s Programme ends or lapses.</p>
+                  <p>If a Programme invoice is refunded or disputed, rent accrued for that invoice but not yet paid to you is cancelled. Rent already paid to you is not reclaimed automatically; Wallplace will contact you if a refund affects a period you have already been paid for.</p>
+                  <p>Programme placements are allocated by Wallplace&rsquo;s curators to suit each venue. They are not guaranteed, and a piece may be rotated off a wall at Wallplace&rsquo;s discretion. Sales of Programme pieces are handled under sections 3 and 10 as normal.</p>
                 </div>
               </div>
 
