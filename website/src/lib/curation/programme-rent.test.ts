@@ -64,7 +64,12 @@ vi.mock("@/lib/stripe-connect", () => ({
   recordBlockedLeg: recordBlockedLegMock,
 }));
 
-import { accrueProgrammeRent, settleProgrammeRent, quarterKeyFor } from "./programme-rent";
+import {
+  accrueProgrammeRent,
+  settleProgrammeRent,
+  quarterKeyFor,
+  voidProgrammeAccrualsForInvoice,
+} from "./programme-rent";
 
 interface FakePlacement {
   id: string;
@@ -572,6 +577,237 @@ describe("accrueProgrammeRent — Finding 1: a mid-loop error must not cost its 
   });
 });
 
+// Task 8: refund/dispute clawback.
+//
+// voidProgrammeAccrualsForInvoice is called from the charge.refunded and
+// charge.dispute.created webhook handlers once they have resolved a Stripe
+// invoice id for a charge/dispute that has no matching `orders` row — i.e.
+// is a Wallplace Programme invoice, not a one-off marketplace order. Before
+// this, a programme refund reversed nothing: the venue got their money back
+// and the artists kept, or went on to receive, rent for the refunded period.
+//
+// Two-tier response: an unsettled accrual (money not yet paid out) is
+// stamped voided_at/voided_reason so settleProgrammeRent's own
+// `voided_at IS NULL` filter (see that describe block below) never pays it.
+// An already-settled accrual (money already sent to the artist via Stripe
+// Connect) is left completely untouched — no automatic clawback — but
+// counted, so the admin alert can say exactly how much is unrecoverable
+// without a human conversation.
+describe("voidProgrammeAccrualsForInvoice", () => {
+  interface FakeAccrualForVoid {
+    id: string;
+    curation_request_id: string;
+    stripe_invoice_id: string;
+    amount_pence: number;
+    settled_at: string | null;
+    voided_at: string | null;
+    voided_reason: string | null;
+  }
+
+  function accrualForVoid(overrides: Partial<FakeAccrualForVoid> & { id: string }): FakeAccrualForVoid {
+    return {
+      curation_request_id: "cr_prog_1",
+      stripe_invoice_id: "in_refunded",
+      amount_pence: 1000,
+      settled_at: null,
+      voided_at: null,
+      voided_reason: null,
+      ...overrides,
+    };
+  }
+
+  /**
+   * A programme_rent_accruals fake supporting exactly what
+   * voidProgrammeAccrualsForInvoice needs: select().eq("stripe_invoice_id", x)
+   * and update({...}).in("id", [...]). The update MUTATES the underlying rows
+   * array in place, matching makeSettlementDb's own pattern above, so calling
+   * this function twice against the SAME `rows` reference reproduces a real
+   * Stripe webhook redelivery: the second call's SELECT sees whatever the
+   * first call's UPDATE actually wrote.
+   */
+  function makeVoidDb(
+    rows: FakeAccrualForVoid[],
+    options: { selectError?: { message: string }; updateError?: { message: string } } = {},
+  ) {
+    const updateCalls: Array<{ ids: string[]; payload: Record<string, unknown> }> = [];
+    const db = {
+      from(table: string) {
+        if (table !== "programme_rent_accruals") throw new Error(`unexpected table ${table}`);
+        return {
+          select: () => ({
+            eq: (col: "stripe_invoice_id", val: string) => ({
+              then(
+                onFulfilled: (v: { data: FakeAccrualForVoid[] | null; error: { message: string } | null }) => unknown,
+                onRejected?: (e: unknown) => unknown,
+              ) {
+                const result = options.selectError
+                  ? { data: null, error: options.selectError }
+                  : { data: rows.filter((r) => r[col] === val), error: null };
+                return Promise.resolve(result).then(onFulfilled, onRejected);
+              },
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => ({
+            in: (col: "id", ids: string[]) => {
+              updateCalls.push({ ids, payload });
+              if (options.updateError) return Promise.resolve({ error: options.updateError });
+              for (const row of rows) {
+                if (col === "id" && ids.includes(row.id)) Object.assign(row, payload);
+              }
+              return Promise.resolve({ error: null });
+            },
+          }),
+        };
+      },
+    } as unknown as SupabaseClient;
+    return { db, rows, updateCalls };
+  }
+
+  it("voids every unsettled accrual on the invoice and reports their total", async () => {
+    const { db, rows } = makeVoidDb([
+      accrualForVoid({ id: "r1", amount_pence: 1000 }),
+      accrualForVoid({ id: "r2", amount_pence: 800 }),
+    ]);
+
+    const result = await voidProgrammeAccrualsForInvoice(db, {
+      invoiceId: "in_refunded",
+      reason: "charge.refunded ch_1",
+    });
+
+    expect(result).toEqual({ voided: 2, voidedPence: 1800, alreadySettled: 0, alreadySettledPence: 0 });
+    for (const row of rows) {
+      expect(row.voided_at).toEqual(expect.any(String));
+      expect(row.voided_at).not.toBeNull();
+    }
+    expect(rows.every((r) => r.settled_at === null)).toBe(true);
+  });
+
+  it("stamps voided_reason with exactly the caller's reason", async () => {
+    const { db, rows } = makeVoidDb([accrualForVoid({ id: "r1" })]);
+
+    await voidProgrammeAccrualsForInvoice(db, { invoiceId: "in_refunded", reason: "charge.refunded ch_abc123" });
+
+    expect(rows[0].voided_reason).toBe("charge.refunded ch_abc123");
+  });
+
+  it("leaves an already-settled accrual completely untouched, but counts it and alerts", async () => {
+    const { db, rows } = makeVoidDb([
+      accrualForVoid({ id: "r1", settled_at: "2026-08-01T09:00:00.000Z", amount_pence: 1200 }),
+    ]);
+
+    const result = await voidProgrammeAccrualsForInvoice(db, {
+      invoiceId: "in_refunded",
+      reason: "charge.refunded ch_2",
+    });
+
+    expect(result).toEqual({ voided: 0, voidedPence: 0, alreadySettled: 1, alreadySettledPence: 1200 });
+    // Untouched: still settled exactly as before, never voided.
+    expect(rows[0].settled_at).toBe("2026-08-01T09:00:00.000Z");
+    expect(rows[0].voided_at).toBeNull();
+
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    const alert = lastAlert();
+    expect(alert?.idempotencyKey).toBe("programme_rent_void:in_refunded");
+    const fieldValues = (alert?.fields ?? []).map((f) => `${f.label}: ${f.value}`).join(" | ");
+    expect(fieldValues).toContain("in_refunded");
+    expect(fieldValues).toContain("cr_prog_1");
+    // The critical figure: how much is unrecoverable without a conversation.
+    expect((alert?.summary ?? "") + fieldValues).toMatch(/already.*paid|1200|12\.00/i);
+  });
+
+  it("a mixed invoice voids the unsettled rows and separately counts the settled ones, in one alert", async () => {
+    const { db, rows } = makeVoidDb([
+      accrualForVoid({ id: "unsettled_1", amount_pence: 1000 }),
+      accrualForVoid({ id: "unsettled_2", amount_pence: 500 }),
+      accrualForVoid({ id: "settled_1", settled_at: "2026-08-01T09:00:00.000Z", amount_pence: 2000 }),
+    ]);
+
+    const result = await voidProgrammeAccrualsForInvoice(db, {
+      invoiceId: "in_refunded",
+      reason: "charge.refunded ch_mixed",
+    });
+
+    expect(result).toEqual({ voided: 2, voidedPence: 1500, alreadySettled: 1, alreadySettledPence: 2000 });
+    expect(rows.find((r) => r.id === "unsettled_1")?.voided_at).not.toBeNull();
+    expect(rows.find((r) => r.id === "unsettled_2")?.voided_at).not.toBeNull();
+    expect(rows.find((r) => r.id === "settled_1")?.voided_at).toBeNull();
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a redelivered refund is a no-op: nothing more is voided and the admin is not re-alerted", async () => {
+    const { db, rows } = makeVoidDb([
+      accrualForVoid({ id: "r1", amount_pence: 1000 }),
+      accrualForVoid({ id: "r2", settled_at: "2026-08-01T09:00:00.000Z", amount_pence: 500 }),
+    ]);
+    const input = { invoiceId: "in_refunded", reason: "charge.refunded ch_redeliver" };
+
+    const first = await voidProgrammeAccrualsForInvoice(db, input);
+    expect(first).toEqual({ voided: 1, voidedPence: 1000, alreadySettled: 1, alreadySettledPence: 500 });
+
+    // sendEmail's own idempotency key is what actually stops a second email
+    // (see send.ts); at this layer we assert the function calls sendAdminAlert
+    // with the SAME key again — a genuine no-op, not a second distinct alert
+    // — and that it does not attempt to re-void or re-sum r1.
+    const second = await voidProgrammeAccrualsForInvoice(db, input);
+    expect(second).toEqual({ voided: 0, voidedPence: 0, alreadySettled: 1, alreadySettledPence: 500 });
+
+    // r1 was voided by the FIRST call and stays voided — the second call must
+    // not have touched it again (nothing left to stamp).
+    expect(rows.find((r) => r.id === "r1")?.voided_at).toEqual(expect.any(String));
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(2);
+    expect(sendAdminAlertMock.mock.calls[0][0].idempotencyKey).toBe("programme_rent_void:in_refunded");
+    expect(sendAdminAlertMock.mock.calls[1][0].idempotencyKey).toBe("programme_rent_void:in_refunded");
+  });
+
+  it("a refund whose invoice has no programme accruals returns all zeros and alerts nobody", async () => {
+    const { db } = makeVoidDb([accrualForVoid({ id: "other", stripe_invoice_id: "in_unrelated" })]);
+
+    const result = await voidProgrammeAccrualsForInvoice(db, {
+      invoiceId: "in_no_accruals",
+      reason: "charge.refunded ch_3",
+    });
+
+    expect(result).toEqual({ voided: 0, voidedPence: 0, alreadySettled: 0, alreadySettledPence: 0 });
+    expect(sendAdminAlertMock).not.toHaveBeenCalled();
+  });
+
+  it("never throws when the lookup fails, returning zeros instead", async () => {
+    const { db } = makeVoidDb([], { selectError: { message: "connection reset" } });
+
+    await expect(
+      voidProgrammeAccrualsForInvoice(db, { invoiceId: "in_x", reason: "charge.refunded ch_4" }),
+    ).resolves.toEqual({ voided: 0, voidedPence: 0, alreadySettled: 0, alreadySettledPence: 0 });
+  });
+
+  it("never throws when the void UPDATE itself fails, and still alerts", async () => {
+    const { db, rows } = makeVoidDb(
+      [accrualForVoid({ id: "r1", amount_pence: 1000 })],
+      { updateError: { message: "connection reset" } },
+    );
+
+    const result = await voidProgrammeAccrualsForInvoice(db, {
+      invoiceId: "in_refunded",
+      reason: "charge.refunded ch_5",
+    });
+
+    // The stamp did not land, so this must not claim the money is protected.
+    expect(result).toEqual({ voided: 0, voidedPence: 0, alreadySettled: 0, alreadySettledPence: 0 });
+    expect(rows[0].voided_at).toBeNull();
+    // A human still needs to know the refund landed on a programme invoice,
+    // even though the automatic protection failed.
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("an admin-alert failure does not propagate, and the counts are still returned", async () => {
+    const { db } = makeVoidDb([accrualForVoid({ id: "r1", amount_pence: 1000 })]);
+    sendAdminAlertMock.mockRejectedValueOnce(new Error("resend down"));
+
+    await expect(
+      voidProgrammeAccrualsForInvoice(db, { invoiceId: "in_refunded", reason: "charge.refunded ch_6" }),
+    ).resolves.toEqual({ voided: 1, voidedPence: 1000, alreadySettled: 0, alreadySettledPence: 0 });
+  });
+});
+
 // Task 7: quarterly rent settlement.
 //
 // settleProgrammeRent sums each artist's unsettled accruals and pays them in
@@ -598,6 +834,7 @@ describe("settleProgrammeRent", () => {
     accrued_at: string;
     settled_at: string | null;
     settled_transfer_order_id: string | null;
+    voided_at: string | null;
   }
 
   /** Safely inside Q3 2026 — before the Q4 cutoff every test below uses by default. */
@@ -612,6 +849,7 @@ describe("settleProgrammeRent", () => {
       accrued_at: OLD_ACCRUAL_DATE,
       settled_at: null,
       settled_transfer_order_id: null,
+      voided_at: null,
       ...overrides,
     };
   }
@@ -867,6 +1105,34 @@ describe("settleProgrammeRent", () => {
     // The orphaned row is neither paid nor stamped — it stays a fact on the
     // record with nobody left to send it to.
     expect(rows.find((r) => r.id === "erased")?.settled_at).toBeNull();
+  });
+
+  // Task 8: a refund/dispute must be able to stop a payout that just hasn't
+  // run yet. voidProgrammeAccrualsForInvoice (see the describe block above)
+  // stamps voided_at on the accrual; this is the other half of that
+  // contract — the row must never be picked up here, however long it then
+  // sits unsettled, or voiding would have been cosmetic.
+  it("never pays out an accrual that has been voided (refund/dispute clawback), even though it is still unsettled", async () => {
+    const { db, rows } = makeSettlementDb([
+      accrualRow({ id: "clean", artist_user_id: "artist_a", amount_pence: 1000 }),
+      accrualRow({
+        id: "voided",
+        artist_user_id: "artist_a",
+        amount_pence: 5000,
+        voided_at: "2026-09-01T10:00:00.000Z",
+      }),
+    ]);
+
+    const result = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+    // Only the clean row's 1000, never the voided row's 5000.
+    expect(result).toEqual({ artistsPaid: 1, blocked: 0, totalPence: 1000 });
+    expect(scheduleTransferMock).toHaveBeenCalledTimes(1);
+    expect(scheduleTransferMock).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 1000 }));
+    // The voided row is left exactly as it was — not settled, still voided.
+    const voidedRow = rows.find((r) => r.id === "voided");
+    expect(voidedRow?.settled_at).toBeNull();
+    expect(voidedRow?.voided_at).toBe("2026-09-01T10:00:00.000Z");
   });
 
   it("never calls Date.now() or a bare new Date() for the settlement timestamp — asOf is what gets stamped", async () => {

@@ -270,6 +270,194 @@ export async function accrueProgrammeRent(
   };
 }
 
+// ── Task 8: refund/dispute clawback ───────────────────────────────────────
+//
+// Money-loss gap: nothing reversed accrueProgrammeRent's rows when the
+// venue's payment came back. src/app/api/webhooks/stripe/route.ts's
+// charge.refunded (and charge.dispute.created) handlers resolve an `orders`
+// row by stripe_payment_intent_id and bail out with no_matching_order when
+// there isn't one — which is EVERY programme refund, because programmes live
+// in curation_requests, never orders. The venue got its money back in full
+// while the artists kept, or went on to receive, rent for the refunded
+// period, and nothing recorded that this had happened, let alone recovered
+// it. voidProgrammeAccrualsForInvoice is the reversal accrueProgrammeRent
+// never had a counterpart for.
+//
+// Two-tier response, by whether the money has actually moved yet:
+//
+//   - settled_at IS NULL (unsettled): this rent has been recorded as owed
+//     but settleProgrammeRent has not yet paid it out. Voiding it here is
+//     purely a flag flip — no Stripe call, nothing to reverse — and it is
+//     enough: migration 132's voided_at/voided_reason are checked by
+//     settleProgrammeRent's own selection (voided_at IS NULL) below, so a
+//     voided row is simply never picked up for payout. This is the loss
+//     PREVENTED.
+//
+//   - settled_at IS NOT NULL (already settled): the artist has already been
+//     paid this rent via Stripe Connect. This function does not attempt any
+//     reversal — clawing back a real, already-completed transfer needs a
+//     human decision (contact the artist, decide whether recovery is even
+//     wanted), not an automatic one, and this codebase has no reversal
+//     primitive for a Connect transfer originating outside an order
+//     (compare the webhook's own charge.refunded/dispute.closed handlers,
+//     whose stripe.transfers.createReversal only exists for order legs).
+//     These rows are left completely untouched — not voided, not re-summed
+//     — and are counted so the alert below can say exactly how much is
+//     unrecoverable without that conversation.
+//
+// Idempotency: no app-level pre-check, matching accrueProgrammeRent's own
+// discipline. A row already voided (voided_at IS NOT NULL) is excluded from
+// the "to void" set by the same in-memory partition that finds candidates,
+// so a Stripe webhook redelivery for the same invoice re-runs this function,
+// finds nothing left to stamp, and re-derives the identical alreadySettled
+// total it found last time — a genuine no-op on the DB. The admin alert's
+// own idempotencyKey (derived from invoiceId alone, not the event id) means
+// a redelivery does not re-alert either, via sendEmail's own dedupe (see
+// send.ts) — this function does not need to remember it already ran.
+//
+// Never throws: the caller is a webhook handler whose job is to acknowledge
+// Stripe's delivery, not to 500 and trigger a retry storm over a table this
+// function does not even need to reach in order for the rest of that
+// handler's own refund logic (the order-refund path) to keep working.
+
+export interface VoidProgrammeAccrualsForInvoiceInput {
+  /** Stripe invoice id. Matches programme_rent_accruals.stripe_invoice_id. */
+  invoiceId: string;
+  /**
+   * Recorded on every newly-voided row's voided_reason — e.g. the Stripe
+   * charge or dispute id that triggered this call, so a later reader of the
+   * row can trace back to the event without cross-referencing Stripe.
+   */
+  reason: string;
+}
+
+export interface VoidProgrammeAccrualsForInvoiceResult {
+  /** Rows newly voided by this call (settled_at IS NULL, voided_at was NULL). */
+  voided: number;
+  /** Sum of amount_pence across `voided`. The loss this call prevented. */
+  voidedPence: number;
+  /**
+   * Rows found already settled (settled_at IS NOT NULL). Never touched — see
+   * the module header for why. Recomputed fresh on every call, so a
+   * redelivery reports the same total again rather than zero.
+   */
+  alreadySettled: number;
+  /**
+   * Sum of amount_pence across `alreadySettled`. Already paid to artists;
+   * unrecoverable without a human conversation.
+   */
+  alreadySettledPence: number;
+}
+
+interface AccrualForVoidRow {
+  id: string;
+  curation_request_id: string;
+  amount_pence: number;
+  settled_at: string | null;
+  voided_at: string | null;
+}
+
+const ZERO_VOID_RESULT: VoidProgrammeAccrualsForInvoiceResult = {
+  voided: 0,
+  voidedPence: 0,
+  alreadySettled: 0,
+  alreadySettledPence: 0,
+};
+
+export async function voidProgrammeAccrualsForInvoice(
+  db: SupabaseClient,
+  input: VoidProgrammeAccrualsForInvoiceInput,
+): Promise<VoidProgrammeAccrualsForInvoiceResult> {
+  const { invoiceId, reason } = input;
+
+  const { data, error } = await db
+    .from("programme_rent_accruals")
+    .select("id, curation_request_id, amount_pence, settled_at, voided_at")
+    .eq("stripe_invoice_id", invoiceId);
+
+  if (error) {
+    // Never throw — the caller is a webhook. Logged loudly so this doesn't
+    // vanish: a refund that fails to even look up its own accruals is
+    // exactly the kind of silent gap this function exists to close.
+    console.error("[programme-rent] failed to load accruals to void", { invoiceId, error });
+    return ZERO_VOID_RESULT;
+  }
+
+  const rows = (data ?? []) as AccrualForVoidRow[];
+  if (rows.length === 0) return ZERO_VOID_RESULT;
+
+  const toVoid = rows.filter((r) => r.settled_at === null && r.voided_at === null);
+  const alreadySettledRows = rows.filter((r) => r.settled_at !== null);
+
+  let voided = 0;
+  let voidedPence = 0;
+  if (toVoid.length > 0) {
+    const { error: updateError } = await db
+      .from("programme_rent_accruals")
+      .update({
+        voided_at: new Date().toISOString(),
+        voided_reason: reason,
+      })
+      .in("id", toVoid.map((r) => r.id));
+
+    if (updateError) {
+      // Found rows that needed voiding but the stamp did not land — report 0
+      // voided rather than claim a protection that may not have happened.
+      // Still falls through to the alert below so a human is told
+      // regardless of which branch this ends up in.
+      console.error("[programme-rent] failed to void accruals", { invoiceId, updateError });
+    } else {
+      voided = toVoid.length;
+      voidedPence = toVoid.reduce((sum, r) => sum + r.amount_pence, 0);
+    }
+  }
+
+  const alreadySettled = alreadySettledRows.length;
+  const alreadySettledPence = alreadySettledRows.reduce((sum, r) => sum + r.amount_pence, 0);
+
+  // Independent try/catch, matching accrueProgrammeRent's own alert calls: an
+  // alert-delivery failure must not turn into a thrown exception from a
+  // function whose contract here is to return, not throw.
+  try {
+    const curationRequestId = rows[0].curation_request_id;
+    const voidedGbp = (voidedPence / 100).toFixed(2);
+    const alreadySettledGbp = (alreadySettledPence / 100).toFixed(2);
+    await sendAdminAlert({
+      idempotencyKey: `programme_rent_void:${invoiceId}`,
+      subject:
+        alreadySettled > 0
+          ? `Programme refund: £${alreadySettledGbp} already paid to artists is unrecoverable (invoice ${invoiceId})`
+          : `Programme refund: £${voidedGbp} in artist rent voided (invoice ${invoiceId})`,
+      summary:
+        `Curation request ${curationRequestId}'s invoice ${invoiceId} was refunded or disputed. ` +
+        (voided > 0
+          ? `${voided} accrual${voided === 1 ? "" : "s"} totalling £${voidedGbp} had not yet been paid out ` +
+            `and ${voided === 1 ? "has" : "have"} been voided, so no artist will be paid ${voided === 1 ? "it" : "them"}. `
+          : "None had gone unpaid, so there was nothing to void. ") +
+        (alreadySettled > 0
+          ? `${alreadySettled} accrual${alreadySettled === 1 ? "" : "s"} totalling £${alreadySettledGbp} had ` +
+            `ALREADY been paid out to the artist via Stripe Connect before this refund arrived. That money was ` +
+            `NOT automatically clawed back and needs a human conversation with the artist if recovery is wanted.`
+          : "Nothing had already been paid out."),
+      fields: [
+        { label: "Invoice", value: invoiceId },
+        { label: "Curation request", value: curationRequestId },
+        { label: "Voided (prevented)", value: `£${voidedGbp} across ${voided} accrual${voided === 1 ? "" : "s"}` },
+        {
+          label: "Already paid out (unrecoverable automatically)",
+          value: `£${alreadySettledGbp} across ${alreadySettled} accrual${alreadySettled === 1 ? "" : "s"}`,
+        },
+      ],
+      actionPath: "/admin/curation",
+      actionLabel: "View in admin",
+    });
+  } catch (err) {
+    console.error("[programme-rent] refund-void admin alert failed", { invoiceId, err });
+  }
+
+  return { voided, voidedPence, alreadySettled, alreadySettledPence };
+}
+
 // ── Task 7: quarterly rent settlement ─────────────────────────────────────
 //
 // accrueProgrammeRent (above) records WHO is owed WHAT on every paid
@@ -386,6 +574,13 @@ export async function settleProgrammeRent(
     .from("programme_rent_accruals")
     .select("id, artist_user_id, amount_pence")
     .is("settled_at", null)
+    // Task 8 (migration 132): a row voidProgrammeAccrualsForInvoice stamped
+    // after a refund or dispute must never be paid, however long it sits
+    // unsettled — the venue already got that money back. This is the other
+    // half of that function's contract: voiding is a no-op by itself unless
+    // the payout side actually honours it, and this is the only place
+    // programme rent is ever paid out.
+    .is("voided_at", null)
     .lt("accrued_at", cutoffIso);
 
   if (error) {

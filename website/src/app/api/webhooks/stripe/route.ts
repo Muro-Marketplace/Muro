@@ -50,6 +50,7 @@ import {
   handleCurationInvoiceFailed,
   handleCurationSubscriptionDeleted,
 } from "@/lib/curation/billing";
+import { voidProgrammeAccrualsForInvoice } from "@/lib/curation/programme-rent";
 import { sendOrderConfirmations, type OrderEmailItem } from "@/lib/orders/confirmations";
 import { orderIdFromSession, classifyOrderIdConflict } from "@/lib/orders/order-id";
 import { missingStripePriceEnvs } from "@/env";
@@ -2326,6 +2327,23 @@ async function handleWebhookEvent(
 
       const { error: stErr } = await db.from("orders").update({ status: "disputed" }).eq("id", order.id);
       if (stErr) console.error("[webhook] dispute status write failed:", stErr);
+    } else if (paymentIntentId) {
+      // Money-loss gap (programme rent): no matching `orders` row means this
+      // is not a one-off marketplace purchase. It may be a Wallplace
+      // Programme invoice instead — those live in curation_requests, never
+      // orders, so the branch above never sees them. A dispute is at least
+      // as urgent as a refund: resolve the Stripe invoice this payment
+      // intent paid (see resolveInvoiceIdForPaymentIntent's own comment for
+      // why that needs a live lookup) and void any not-yet-settled artist
+      // rent before it is paid out from under a chargeback that may claw the
+      // venue's money back regardless of what this platform does.
+      const invoiceId = await resolveInvoiceIdForPaymentIntent(paymentIntentId);
+      if (invoiceId) {
+        await voidProgrammeAccrualsForInvoice(db, {
+          invoiceId,
+          reason: `charge.dispute.created ${dispute.id}`,
+        });
+      }
     }
 
     const dueBy = dispute.evidence_details?.due_by
@@ -2433,6 +2451,23 @@ async function handleWebhookEvent(
       : { data: null };
 
     if (!order || order.status === "refunded") {
+      // Money-loss gap (programme rent): a refund with no matching `orders`
+      // row used to do nothing at all. It may be a Wallplace Programme
+      // invoice refund instead of an unrecognised order — programmes live in
+      // curation_requests, never orders, so this branch is EVERY programme
+      // refund. Only attempted when `!order`: an order that WAS found is, by
+      // construction, a one-off marketplace charge, never an invoice
+      // payment, so there is nothing for this to find and no reason to pay
+      // for the extra Stripe lookup on the already_refunded replay path.
+      if (!order && paymentIntentId) {
+        const invoiceId = await resolveInvoiceIdForPaymentIntent(paymentIntentId);
+        if (invoiceId) {
+          await voidProgrammeAccrualsForInvoice(db, {
+            invoiceId,
+            reason: `charge.refunded ${charge.id}`,
+          });
+        }
+      }
       return NextResponse.json({ received: true, ignored: order ? "already_refunded" : "no_matching_order" });
     }
 
@@ -2830,5 +2865,42 @@ async function scheduleOrderLegs(
       actionPath: "/admin/financials",
       actionLabel: "Open financials",
     }).catch(() => {});
+  }
+}
+
+/**
+ * Money-loss gap (programme rent), used by the charge.refunded and
+ * charge.dispute.created handlers above to find a Wallplace Programme's
+ * Stripe invoice from a charge/dispute that has no matching `orders` row.
+ *
+ * A charge no longer carries a direct `invoice` reference: Stripe removed
+ * `invoice` from both `Charge` and `PaymentIntent` in API version
+ * 2025-03-31.basil (node_modules/stripe/CHANGELOG.md, stripe-node 18.0.0),
+ * and this codebase is pinned well past that (src/lib/stripe.ts,
+ * STRIPE_API_VERSION). The replacement Stripe itself ships for this exact
+ * link is the `invoice_payments` resource: an invoice can in principle have
+ * more than one payment attempt, so the payment -> invoice direction is now
+ * a lookup, not a field. `payment.type: "payment_intent"` is correct for
+ * every programme invoice this codebase creates (Stripe Billing invoices are
+ * always paid through a PaymentIntent); the resource's own docs note the
+ * `charge` variant only surfaces when a charge has NO payment intent at all,
+ * which cannot be filtered by this list endpoint and does not occur here.
+ *
+ * Never throws: a lookup failure must not stop the rest of the refund or
+ * dispute handler, which has its own, unrelated job (the order-refund path)
+ * to get on with regardless of whether this resolves anything.
+ */
+async function resolveInvoiceIdForPaymentIntent(paymentIntentId: string): Promise<string | null> {
+  try {
+    const payments = await stripe.invoicePayments.list({
+      payment: { type: "payment_intent", payment_intent: paymentIntentId },
+      limit: 1,
+    });
+    const payment = payments.data[0];
+    if (!payment) return null;
+    return typeof payment.invoice === "string" ? payment.invoice : payment.invoice.id;
+  } catch (err) {
+    console.error("[webhook] failed to resolve invoice for payment intent", { paymentIntentId, err });
+    return null;
   }
 }

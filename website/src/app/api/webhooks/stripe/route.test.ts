@@ -18,6 +18,9 @@ const {
   resolveArtistNamesBulkMock,
   receiptPropsMock,
   rpcMock,
+  invoicePaymentsListMock,
+  transfersCreateReversalMock,
+  voidProgrammeAccrualsForInvoiceMock,
 } = vi.hoisted(() => ({
   constructEventMock: vi.fn(),
   fromMock: vi.fn(),
@@ -40,6 +43,27 @@ const {
   receiptPropsMock: vi.fn(() => null),
   rpcMock: vi.fn(
     async (): Promise<{ data: unknown; error: { message: string } | null }> => ({ data: null, error: null }),
+  ),
+  // Task 8 (refund/dispute clawback): the invoice_payments list call
+  // resolveInvoiceIdForPaymentIntent (route.ts) makes to go from a charge's
+  // payment_intent back to the Stripe invoice it paid — see that function's
+  // own comment for why a direct `charge.invoice` field no longer exists.
+  // Default: no invoice found, matching a plain marketplace order (which
+  // never has an invoice at all).
+  invoicePaymentsListMock: vi.fn(async (_params: unknown) => ({ data: [] as Array<{ invoice: string | { id: string } }> })),
+  transfersCreateReversalMock: vi.fn(async () => ({ id: "trr_default" })),
+  // The money-math and alerting this wraps is unit-tested exhaustively in
+  // src/lib/curation/programme-rent.test.ts; here we only assert the webhook
+  // WIRES it correctly (right invoice id, right timing, doesn't fire on an
+  // ordinary order refund) — the same split D21 already uses for
+  // handleCurationInvoicePaid and friends.
+  voidProgrammeAccrualsForInvoiceMock: vi.fn(
+    async (_db: unknown, _input: { invoiceId: string; reason: string }) => ({
+      voided: 0,
+      voidedPence: 0,
+      alreadySettled: 0,
+      alreadySettledPence: 0,
+    }),
   ),
 }));
 
@@ -81,7 +105,18 @@ vi.mock("@/lib/stripe", () => ({
     webhooks: { constructEvent: constructEventMock },
     subscriptions: { retrieve: subscriptionsRetrieveMock },
     customers: { update: customersUpdateMock },
+    invoicePayments: { list: invoicePaymentsListMock },
+    transfers: { createReversal: transfersCreateReversalMock },
   },
+}));
+
+// Task 8 (refund/dispute clawback): the money-math and alerting behind this
+// function are unit-tested in src/lib/curation/programme-rent.test.ts. Mocked
+// here so route.test.ts stays focused on whether the webhook wires it
+// correctly, matching how handleCurationInvoicePaid and friends are mocked
+// below (D21).
+vi.mock("@/lib/curation/programme-rent", () => ({
+  voidProgrammeAccrualsForInvoice: voidProgrammeAccrualsForInvoiceMock,
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
@@ -399,6 +434,17 @@ beforeEach(() => {
   curationInvoiceFailedMock.mockClear();
   curationSubDeletedMock.mockClear();
   notifyAdminCurationPaidMock.mockClear();
+  invoicePaymentsListMock.mockReset();
+  invoicePaymentsListMock.mockResolvedValue({ data: [] });
+  transfersCreateReversalMock.mockReset();
+  transfersCreateReversalMock.mockResolvedValue({ id: "trr_default" });
+  voidProgrammeAccrualsForInvoiceMock.mockReset();
+  voidProgrammeAccrualsForInvoiceMock.mockResolvedValue({
+    voided: 0,
+    voidedPence: 0,
+    alreadySettled: 0,
+    alreadySettledPence: 0,
+  });
 });
 
 describe("Stripe webhook — venue revenue split", () => {
@@ -2769,5 +2815,302 @@ describe("Stripe webhook — D21 curation reconcile wiring", () => {
     await expect(second.json()).resolves.toMatchObject({ duplicate: true });
     // The reconciler must not run again for the redelivered event.
     expect(curationInvoicePaidMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Task 8: programme refund/dispute rent clawback ───────────────────────
+//
+// Money-loss gap: charge.refunded and charge.dispute.created resolve an
+// `orders` row by stripe_payment_intent_id and, historically, did nothing
+// else when there wasn't one. That is EVERY Wallplace Programme refund or
+// dispute, because programmes live in curation_requests, never orders. The
+// venue got their money back in full while the artists kept, or went on to
+// receive, rent for the refunded period.
+//
+// voidProgrammeAccrualsForInvoice's own correctness (which rows get voided,
+// the alert content, idempotency) is exhaustively unit-tested in
+// src/lib/curation/programme-rent.test.ts and is MOCKED here (matching D21's
+// own split for handleCurationInvoicePaid). What these tests pin is the
+// webhook's wiring: the invoice id is resolved and the void call happens
+// before the early return for a charge with no matching order, and — just as
+// important — an ordinary marketplace order refund/dispute (which DOES have
+// a matching order) never even attempts the extra Stripe lookup, so the
+// existing order-refund/dispute behaviour is provably untouched.
+describe("Stripe webhook — programme refund/dispute rent clawback (Task 8)", () => {
+  interface FakeOrderRow {
+    id: string;
+    status: string;
+    buyer_email?: string | null;
+    artist_slug?: string | null;
+    items?: unknown;
+    delivered_at?: string | null;
+  }
+
+  interface FakeTransferLeg {
+    id: string;
+    order_id: string;
+    status: string;
+    stripe_transfer_id: string | null;
+  }
+
+  /**
+   * A minimal orders + stripe_transfers fake covering exactly the query
+   * shapes the charge.refunded and charge.dispute.created handlers use. The
+   * `legs` array is mutated in place by the fake's `update` implementations,
+   * the same "real mutation, not a remembered call" discipline
+   * makeSettlementDb uses in programme-rent.test.ts, so assertions can read
+   * a leg's post-update state rather than just trusting the call happened.
+   */
+  function setupRefundDisputeDb(opts: { order?: FakeOrderRow | null; legs?: FakeTransferLeg[] } = {}) {
+    const order = opts.order ?? null;
+    const legs = opts.legs ?? [];
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
+      if (table === "orders") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: order, error: null }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => ({
+            eq: async (_col: string, val: string) => {
+              if (order && val === order.id) Object.assign(order, payload);
+              return { error: null };
+            },
+          }),
+        };
+      }
+      if (table === "stripe_transfers") {
+        return {
+          update: (payload: Record<string, unknown>) => ({
+            eq: (col: string, val: string) => {
+              if (col === "id") {
+                const leg = legs.find((l) => l.id === val);
+                if (leg) Object.assign(leg, payload);
+                return Promise.resolve({ error: null });
+              }
+              // col === "order_id": the two-step .eq("order_id", x).in("status", [...])
+              // cancel/hold call.
+              return {
+                in: async (_c: string, statuses: string[]) => {
+                  for (const leg of legs) {
+                    if (leg.order_id === val && statuses.includes(leg.status)) Object.assign(leg, payload);
+                  }
+                  return { error: null };
+                },
+              };
+            },
+          }),
+          select: () => ({
+            eq: (_col1: string, val: string) => ({
+              eq: async (_col2: string, status: string) => ({
+                data: legs.filter((l) => l.order_id === val && l.status === status),
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: null, error: null }),
+            single: async () => ({ data: null, error: null }),
+          }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+    });
+
+    return { order, legs };
+  }
+
+  function fireRefund(overrides: Partial<{ id: string; payment_intent: string | null; refunded: boolean; amount_refunded: number }> = {}) {
+    constructEventMock.mockReturnValue({
+      id: "evt_refund_1",
+      type: "charge.refunded",
+      data: {
+        object: {
+          id: overrides.id ?? "ch_1",
+          payment_intent: overrides.payment_intent === undefined ? "pi_1" : overrides.payment_intent,
+          refunded: overrides.refunded ?? true,
+          amount_refunded: overrides.amount_refunded ?? 5000,
+        },
+      },
+    });
+    return POST(buildRequest());
+  }
+
+  function fireDispute(overrides: Partial<{ id: string; payment_intent: string | null; amount: number; reason: string }> = {}) {
+    constructEventMock.mockReturnValue({
+      id: "evt_dispute_1",
+      type: "charge.dispute.created",
+      data: {
+        object: {
+          id: overrides.id ?? "dp_1",
+          payment_intent: overrides.payment_intent === undefined ? "pi_1" : overrides.payment_intent,
+          amount: overrides.amount ?? 5000,
+          reason: overrides.reason ?? "fraudulent",
+          evidence_details: { due_by: null },
+        },
+      },
+    });
+    return POST(buildRequest());
+  }
+
+  describe("charge.refunded", () => {
+    it("with no matching order, resolves the invoice and voids programme rent before returning no_matching_order", async () => {
+      setupRefundDisputeDb({ order: null });
+      invoicePaymentsListMock.mockResolvedValue({ data: [{ invoice: "in_prog_1" }] });
+
+      const res = await fireRefund({ id: "ch_prog_1", payment_intent: "pi_prog_1" });
+
+      expect(invoicePaymentsListMock).toHaveBeenCalledWith(
+        expect.objectContaining({ payment: { type: "payment_intent", payment_intent: "pi_prog_1" } }),
+      );
+      expect(voidProgrammeAccrualsForInvoiceMock).toHaveBeenCalledTimes(1);
+      expect(voidProgrammeAccrualsForInvoiceMock).toHaveBeenCalledWith(
+        expect.anything(),
+        { invoiceId: "in_prog_1", reason: "charge.refunded ch_prog_1" },
+      );
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({ ignored: "no_matching_order" });
+    });
+
+    it("with no matching order and no resolvable invoice (a genuine stranger charge), voids nothing", async () => {
+      setupRefundDisputeDb({ order: null });
+      invoicePaymentsListMock.mockResolvedValue({ data: [] });
+
+      const res = await fireRefund({ payment_intent: "pi_unknown" });
+
+      expect(voidProgrammeAccrualsForInvoiceMock).not.toHaveBeenCalled();
+      await expect(res.json()).resolves.toMatchObject({ ignored: "no_matching_order" });
+    });
+
+    it("a Stripe error resolving the invoice does not crash the handler, and still falls through to no_matching_order", async () => {
+      setupRefundDisputeDb({ order: null });
+      invoicePaymentsListMock.mockRejectedValue(new Error("stripe unavailable"));
+
+      const res = await fireRefund({ payment_intent: "pi_x" });
+
+      expect(res.status).toBe(200);
+      expect(voidProgrammeAccrualsForInvoiceMock).not.toHaveBeenCalled();
+      await expect(res.json()).resolves.toMatchObject({ ignored: "no_matching_order" });
+    });
+
+    it("with an order already marked refunded (redelivery), never attempts programme resolution", async () => {
+      setupRefundDisputeDb({ order: { id: "ord_1", status: "refunded", buyer_email: "b@x.com", items: [] } });
+
+      const res = await fireRefund({ payment_intent: "pi_1" });
+
+      // `order` is truthy here, so the `!order` guard must keep this branch
+      // from ever running — an already-refunded ORDER is not a programme.
+      expect(invoicePaymentsListMock).not.toHaveBeenCalled();
+      expect(voidProgrammeAccrualsForInvoiceMock).not.toHaveBeenCalled();
+      await expect(res.json()).resolves.toMatchObject({ ignored: "already_refunded" });
+    });
+
+    it("with a matching (not-yet-refunded) order, never touches programme resolution, and the existing full-refund reconciliation still runs exactly as before", async () => {
+      const { order, legs } = setupRefundDisputeDb({
+        order: { id: "ord_2", status: "confirmed", buyer_email: "buyer@example.com", items: [{ workId: "w1", qty: 1 }] },
+        legs: [
+          { id: "leg_pending", order_id: "ord_2", status: "pending", stripe_transfer_id: null },
+          { id: "leg_paid", order_id: "ord_2", status: "paid", stripe_transfer_id: "tr_paid_1" },
+        ],
+      });
+
+      const res = await fireRefund({ id: "ch_2", payment_intent: "pi_1", refunded: true });
+
+      // The pin: this is a real order, so the new programme-lookup code must
+      // never run at all — zero extra Stripe calls, zero behaviour change.
+      expect(invoicePaymentsListMock).not.toHaveBeenCalled();
+      expect(voidProgrammeAccrualsForInvoiceMock).not.toHaveBeenCalled();
+
+      // And the EXISTING full-refund reconciliation still does exactly what
+      // it always did: pending leg cancelled, paid leg reversed via Stripe
+      // and marked reversed, stock restocked, order marked refunded, buyer
+      // emailed, admin alerted.
+      expect(legs.find((l) => l.id === "leg_pending")?.status).toBe("cancelled");
+      expect(transfersCreateReversalMock).toHaveBeenCalledWith(
+        "tr_paid_1",
+        {},
+        expect.objectContaining({ idempotencyKey: "dashrefund:ch_2:reversal:leg_paid" }),
+      );
+      expect(legs.find((l) => l.id === "leg_paid")?.status).toBe("reversed");
+      expect(rpcMock).toHaveBeenCalledWith("restock_work", { p_work_id: "w1", p_qty: 1 });
+      expect(order?.status).toBe("refunded");
+      expect(sendEmailMock).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: "refund:ord_2:dashboard", to: "buyer@example.com" }),
+      );
+      expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: "dashboard_refund:ch_2" }),
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("a PARTIAL refund on a matching order alerts without reconciling, and never touches programme resolution", async () => {
+      setupRefundDisputeDb({
+        order: { id: "ord_3", status: "confirmed", buyer_email: "buyer@example.com", items: [] },
+      });
+
+      const res = await fireRefund({ id: "ch_3", payment_intent: "pi_1", refunded: false, amount_refunded: 1500 });
+
+      expect(invoicePaymentsListMock).not.toHaveBeenCalled();
+      expect(voidProgrammeAccrualsForInvoiceMock).not.toHaveBeenCalled();
+      expect(transfersCreateReversalMock).not.toHaveBeenCalled();
+      expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: "dashboard_partial_refund:ch_3:1500" }),
+      );
+      await expect(res.json()).resolves.toMatchObject({ partial: true });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe("charge.dispute.created", () => {
+    it("with no matching order, resolves the invoice and voids programme rent, and the existing dispute alert still fires", async () => {
+      setupRefundDisputeDb({ order: null });
+      invoicePaymentsListMock.mockResolvedValue({ data: [{ invoice: "in_prog_2" }] });
+
+      const res = await fireDispute({ id: "dp_prog_1", payment_intent: "pi_prog_2" });
+
+      expect(voidProgrammeAccrualsForInvoiceMock).toHaveBeenCalledWith(
+        expect.anything(),
+        { invoiceId: "in_prog_2", reason: "charge.dispute.created dp_prog_1" },
+      );
+      // The pre-existing chargeback-opened alert is unaffected by the new branch.
+      expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: "chargeback_opened:dp_prog_1" }),
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it("with no payment_intent at all, does not attempt invoice resolution", async () => {
+      setupRefundDisputeDb({ order: null });
+
+      await fireDispute({ payment_intent: null });
+
+      expect(invoicePaymentsListMock).not.toHaveBeenCalled();
+      expect(voidProgrammeAccrualsForInvoiceMock).not.toHaveBeenCalled();
+    });
+
+    it("with a matching order, never touches programme resolution, and the existing hold-legs behaviour still runs exactly as before", async () => {
+      const { legs } = setupRefundDisputeDb({
+        order: { id: "ord_4", status: "confirmed", buyer_email: "buyer@example.com", artist_slug: "alice" },
+        legs: [{ id: "leg_pending", order_id: "ord_4", status: "pending", stripe_transfer_id: null }],
+      });
+
+      const res = await fireDispute({ id: "dp_2", payment_intent: "pi_1" });
+
+      expect(invoicePaymentsListMock).not.toHaveBeenCalled();
+      expect(voidProgrammeAccrualsForInvoiceMock).not.toHaveBeenCalled();
+      // Existing behaviour: the not-yet-paid leg is held.
+      expect(legs.find((l) => l.id === "leg_pending")?.status).toBe("blocked");
+      expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: "chargeback_opened:dp_2" }),
+      );
+      expect(res.status).toBe(200);
+    });
   });
 });
