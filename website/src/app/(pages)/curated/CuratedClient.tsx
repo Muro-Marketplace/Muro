@@ -52,30 +52,26 @@ const HOW_IT_WORKS = [
   },
 ];
 
-/* Where curators place art — illustrative venue-type strip.
- * Previously three Unsplash stock photos captioned with invented
- * places ("Boutique hotel, Margate" and so on); one of those exact
- * photo IDs was captioned as a different invented place on /venues,
- * which is precisely the drift a sceptical visitor notices. Now real
- * Wallplace-commissioned photography, captioned with the venue TYPE
- * only (no place name, no business name), which stays true wherever
- * the photo is used, matches the honest "kind of spaces" framing
- * below, and cannot repeat that mistake. */
+/* Where curators place art: illustrative venue-type strip.
+ * Stock photography (owner instruction, 2 September 2026: the commissioned
+ * set did not work here), captioned with the venue TYPE only. No place
+ * name and no business name, so the caption stays true wherever the photo
+ * is reused and cannot drift into an invented location. */
 const VENUE_PLACEMENTS = [
   {
     caption: "Café",
-    alt: "An empty café with a long bare wall, ready for art",
-    image: "/images/programmes/venues-cafe-before.webp",
+    alt: "A café counter with an espresso machine, shelves and a brick wall",
+    image: "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=900&h=675&fit=crop&crop=center",
   },
   {
     caption: "Hotel",
-    alt: "A hotel lounge with armchairs and a large bare wall",
-    image: "/images/programmes/programmes-hotel-lounge.webp",
+    alt: "A hotel bedroom with warm wood, a low bed and a panelled wall above it",
+    image: "https://images.unsplash.com/photo-1611892440504-42a792e24d32?w=900&h=675&fit=crop&crop=center",
   },
   {
     caption: "Office",
-    alt: "An office reception with a large bare wall behind the desk",
-    image: "/images/programmes/programmes-office-reception.webp",
+    alt: "A modern office corridor with a long plain wall and glass meeting rooms",
+    image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&h=675&fit=crop&crop=center",
   },
 ];
 
@@ -555,7 +551,7 @@ export default function CuratedClient() {
                   comes from PROGRAMME_LADDER, the same source /programmes
                   renders, so a repricing changes one array and both pages
                   follow. */}
-              <div className="mb-14">
+              <div className="mb-16 rounded-md border border-accent/30 bg-accent/5 p-6 md:p-8">
                 <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
                   <h3 className="font-serif text-2xl text-foreground">
                     Programmes
@@ -605,7 +601,7 @@ export default function CuratedClient() {
 
               {/* One-off group, second: the smaller commitment for someone who
                   only wants the shortlist. */}
-              <div className="mb-12">
+              <div className="mb-12 pt-12 border-t border-border">
                 <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
                   <h3 className="font-serif text-2xl text-foreground">
                     One-off curation
