@@ -96,8 +96,6 @@ beforeEach(() => {
   usageInsertMock.mockReset();
 
   process.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1 = "1";
-  delete process.env.DEMO_ARTIST_USER_ID;
-  delete process.env.DEMO_VENUE_USER_ID;
 
   resolveTierMock.mockResolvedValue("artist_premium");
   getTierLimitsMock.mockReturnValue({

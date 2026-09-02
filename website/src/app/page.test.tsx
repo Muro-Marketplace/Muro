@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 //
 // A5. `/` sits outside the (pages) route group and renders its own shell, so
-// it never got the skip link, demo banner and feedback bubble that
-// (pages)/layout.tsx gives every other page. The busiest page on the site was
-// the only one a keyboard user could not skip the nav on, and a signed-in
-// demo visitor saw no demo banner there.
+// it never got the skip link and feedback bubble that (pages)/layout.tsx
+// gives every other page. The busiest page on the site was the only one a
+// keyboard user could not skip the nav on.
 
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -32,7 +31,6 @@ vi.mock("@/components/ArtistCarousel", () => ({ default: () => <div>carousel</di
 vi.mock("@/components/AnimateIn", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
-vi.mock("@/components/DemoBanner", () => ({ default: () => <div data-testid="demo-banner" /> }));
 vi.mock("@/components/FeedbackBubble", () => ({ default: () => <div data-testid="feedback-bubble" /> }));
 
 const fetchMock = vi.fn((url: string) => {
@@ -68,9 +66,8 @@ describe("homepage shell parity with (pages)/layout (A5)", () => {
     expect(main).not.toBeNull();
   });
 
-  it("mounts the demo banner and the feedback bubble", () => {
+  it("mounts the feedback bubble", () => {
     render(<Home />);
-    expect(screen.getByTestId("demo-banner")).toBeTruthy();
     expect(screen.getByTestId("feedback-bubble")).toBeTruthy();
   });
 

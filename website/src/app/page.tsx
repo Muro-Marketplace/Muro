@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import DemoBanner from "@/components/DemoBanner";
 import FeedbackBubble from "@/components/FeedbackBubble";
 import ArtistCarousel from "@/components/ArtistCarousel";
 import AnimateIn from "@/components/AnimateIn";
@@ -91,11 +90,9 @@ export default function Home() {
   return (
     <div className="relative">
       {/* A5: `/` lives outside the (pages) group and so renders its own shell.
-          It was missing the three things that layout provides everywhere
-          else: the skip link, the demo banner and the feedback bubble. The
-          busiest page on the site was the only one a keyboard user could not
-          skip the nav on, and a signed-in demo visitor got no banner telling
-          them they were in demo mode. */}
+          It was missing two things that layout provides everywhere else:
+          the skip link and the feedback bubble. The busiest page on the
+          site was the only one a keyboard user could not skip the nav on. */}
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[200] focus:px-4 focus:py-2 focus:bg-accent focus:text-white focus:rounded-sm focus:text-sm"
@@ -107,7 +104,6 @@ export default function Home() {
           of the site so the logged-in nav (Marketplace / Spaces / More)
           and message / notification indicators are always available. */}
       <Header />
-      <DemoBanner />
 
       <main id="main-content">
       {/* ─── HERO ─── full screen with transparent nav.

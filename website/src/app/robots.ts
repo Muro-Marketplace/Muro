@@ -20,7 +20,6 @@ export default function robots(): MetadataRoute.Robots {
           "/placements/",
           "/email-preview/",
           "/dev/",
-          "/demo/",
           "/auth/",
           "/check-your-inbox/",
         ],

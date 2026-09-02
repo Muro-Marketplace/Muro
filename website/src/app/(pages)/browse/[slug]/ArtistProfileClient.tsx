@@ -711,8 +711,8 @@ export default function ArtistProfileClient({
                     card just to see what the artwork was. Pulling the
                     label down here keeps the hover overlay for the
                     quick-view + buy buttons but gives every visitor
-                    the basic context up front. Mirrors how the other
-                    demo artist pages already render their grid. */}
+                    the basic context up front. Mirrors how other artist
+                    pages already render their grid. */}
                 <div className="px-1 pt-2 pb-1">
                   <p className="text-sm font-medium text-foreground line-clamp-1">
                     {work.title}

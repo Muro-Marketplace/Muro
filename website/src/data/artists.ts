@@ -138,11 +138,6 @@ export interface Artist {
   /** Premium+ QR label theme id from lib/profile-themes.ts. NULL/absent
    *  → default classic label. Ignored for Core tier at render time. */
   labelTheme?: string;
-  /** Phase 2.1 P1: when true, the public profile renders a "Demo
-   *  profile" banner in place of the Message + Buy Now CTAs. Maya Chen
-   *  carries this flag so the homepage tour lands on a profile that
-   *  doesn't accept real orders or messages. */
-  isDemo?: boolean;
   /** Phase 2.5 B4: seed-catalog artists stay visible on /browse
    *  regardless of subscription_status. Set true on every entry in
    *  this file by default at the merge boundary in merged-data.ts;
@@ -156,11 +151,10 @@ export interface Artist {
 
 export const artists: Artist[] = [
   // K8 / owner decision 3 (2026-08-28): the static "maya-chen" seed entry and its
-  // six works are DELETED. The demo DB account (formerly slug `maya-chen-demo`,
-  // renamed to `maya-chen` in the same change) is the one Maya Chen now: 8 real
-  // works, approved, subscription active, mutations sandboxed by demo-guard.
-  // Two personas with one name was K8's finding, and the static one is the copy
-  // that had to go because the DB one is what /api/demo/login signs into.
+  // six works are DELETED. It duplicated a real DB-backed artist (renamed from
+  // `maya-chen-demo` to `maya-chen` in the same change): 8 real works, approved,
+  // subscription active. Two personas with one name was K8's finding, and the
+  // static one was the copy that had to go.
   {
     slug: "james-okafor",
     name: "James Okafor",

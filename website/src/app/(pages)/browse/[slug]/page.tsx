@@ -1,5 +1,4 @@
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
-import { DEMO_ARTIST_SLUG } from "@/data/demo";
 import Link from "next/link";
 import Image from "next/image";
 import { headers } from "next/headers";
@@ -15,7 +14,6 @@ import SaveButton from "@/components/SaveButton";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import SamplePill from "@/components/SamplePill";
 import { PlacementButton, PlacementCTASection } from "@/components/PlacementCTA";
-import DemoProfileBanner from "@/components/DemoProfileBanner";
 import ArtistProfileClient from "./ArtistProfileClient";
 import { getArtistBySlug } from "@/lib/db/merged-data";
 import { trackEvent, extractTrackingContext, generateVisitorId } from "@/lib/analytics";
@@ -145,10 +143,8 @@ function SellsPill({ label, yes }: { label: string; yes: boolean }) {
 
 export default async function ArtistProfilePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
   const artist = await getArtistBySlug(slug);
@@ -156,18 +152,6 @@ export default async function ArtistProfilePage({
   if (!artist) {
     notFound();
   }
-
-  // Phase 2.1 P1: demo banner activates for the configured demo artist, for
-  // seed data carrying the isDemo flag, or with ?demo=1 (manual preview / tour
-  // links). Owner decision 3 deleted the static Maya Chen seed (the flag's old
-  // carrier) and made the DB demo account the one Maya Chen, so the slug match
-  // is what keeps the banner on the demo profile.
-  const sp = (await searchParams) ?? {};
-  const demoFlag = sp.demo === "1" || sp.demo === "true";
-  const isDemoProfile =
-    slug === DEMO_ARTIST_SLUG ||
-    Boolean((artist as { isDemo?: boolean }).isDemo ?? false) ||
-    demoFlag;
 
   // Track profile view (fire-and-forget, non-blocking)
   const headersList = await headers();
@@ -332,24 +316,20 @@ export default async function ArtistProfilePage({
             {/* Mobile CTAs, side-by-side, half-width each. Both
                 stretch to fill their column so neither dominates. */}
             <div className="mb-6">
-              {isDemoProfile ? (
-                <DemoProfileBanner compact />
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <MessageArtistButton
-                    artistSlug={artist.slug}
-                    artistName={artist.name}
-                    variant="accent"
-                    size="md"
-                    fullWidth
-                  />
-                  <PlacementButton
-                    artistSlug={artist.slug}
-                    artistName={artist.name}
-                    fullWidth
-                  />
-                </div>
-              )}
+              <div className="grid grid-cols-2 gap-2">
+                <MessageArtistButton
+                  artistSlug={artist.slug}
+                  artistName={artist.name}
+                  variant="accent"
+                  size="md"
+                  fullWidth
+                />
+                <PlacementButton
+                  artistSlug={artist.slug}
+                  artistName={artist.name}
+                  fullWidth
+                />
+              </div>
             </div>
 
             {/* Metadata, compact stacked rows under the CTAs. The
@@ -440,24 +420,20 @@ export default async function ArtistProfilePage({
                   pill. Both stretch to the column width for visual
                   weight. */}
               <div className="max-w-[220px] pt-1">
-                {isDemoProfile ? (
-                  <DemoProfileBanner compact />
-                ) : (
-                  <div className="flex flex-col gap-2.5">
-                    <MessageArtistButton
-                      artistSlug={artist.slug}
-                      artistName={artist.name}
-                      variant="accent"
-                      size="md"
-                      fullWidth
-                    />
-                    <PlacementButton
-                      artistSlug={artist.slug}
-                      artistName={artist.name}
-                      fullWidth
-                    />
-                  </div>
-                )}
+                <div className="flex flex-col gap-2.5">
+                  <MessageArtistButton
+                    artistSlug={artist.slug}
+                    artistName={artist.name}
+                    variant="accent"
+                    size="md"
+                    fullWidth
+                  />
+                  <PlacementButton
+                    artistSlug={artist.slug}
+                    artistName={artist.name}
+                    fullWidth
+                  />
+                </div>
               </div>
               {/* @instagram moved into the centre column, alongside
                   discipline + location, to keep the left column from
@@ -628,30 +604,23 @@ export default async function ArtistProfilePage({
           here; getCollectionsByArtistSlug() goes to Supabase. */}
       <CollectionsSection artistSlug={artist.slug} artistName={artist.name} />
 
-      {/* CTA Block, hidden for artists viewing other artists. On demo
-          profiles the Message + Buy/Placement CTAs are replaced with
-          the DemoProfileBanner so a tour visitor doesn't trigger a
-          real-world action. */}
+      {/* CTA Block, hidden for artists viewing other artists. */}
       <PlacementCTASection>
         <section className="py-20 lg:py-24 border-t border-border">
           <div className="max-w-[1200px] mx-auto px-6">
-            {isDemoProfile ? (
-              <DemoProfileBanner />
-            ) : (
-              <div className="max-w-2xl mx-auto text-center">
-                <h2 className="text-3xl lg:text-4xl mb-4">
-                  Interested in {artist.name}&rsquo;s work?
-                </h2>
-                <p className="text-muted leading-relaxed mb-8 text-lg">
-                  Get in touch to discuss pricing, availability, and how this artist&rsquo;s work could transform your venue.
-                </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                  <PlacementButton artistSlug={artist.slug} artistName={artist.name} variant="primary" size="lg" />
-                  <MessageArtistButton artistSlug={artist.slug} artistName={artist.name} variant="accent" size="lg" />
-                  <Button href="/browse" variant="secondary" size="lg">Browse More Artists</Button>
-                </div>
+            <div className="max-w-2xl mx-auto text-center">
+              <h2 className="text-3xl lg:text-4xl mb-4">
+                Interested in {artist.name}&rsquo;s work?
+              </h2>
+              <p className="text-muted leading-relaxed mb-8 text-lg">
+                Get in touch to discuss pricing, availability, and how this artist&rsquo;s work could transform your venue.
+              </p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <PlacementButton artistSlug={artist.slug} artistName={artist.name} variant="primary" size="lg" />
+                <MessageArtistButton artistSlug={artist.slug} artistName={artist.name} variant="accent" size="lg" />
+                <Button href="/browse" variant="secondary" size="lg">Browse More Artists</Button>
               </div>
-            )}
+            </div>
           </div>
         </section>
       </PlacementCTASection>

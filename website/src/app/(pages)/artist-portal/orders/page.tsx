@@ -239,7 +239,7 @@ function ArtistOrdersContent() {
     }
 
     if (!created) {
-      // Demo-guard style 200 with no row: nothing was created, nothing to process.
+      // 200 with no row created: nothing to process.
       setShowIssueRefund(false);
       setIssueRefundReason("");
       setIssueRefundAmount("");

@@ -18,7 +18,6 @@ describe("robots()", () => {
       "/placements/",
       "/email-preview/",
       "/dev/",
-      "/demo/",
       "/auth/",
       "/check-your-inbox/",
     ]) {
