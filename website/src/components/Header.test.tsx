@@ -114,8 +114,8 @@ describe("<Header /> public nav (nav-broadening plan)", () => {
     // their request; Spaces stays where it was.
     expect(labels).toEqual([
       "Marketplace",
-      "Manage My Walls",
       "How It Works",
+      "Manage My Walls",
       "Blog",
       "Spaces",
     ]);

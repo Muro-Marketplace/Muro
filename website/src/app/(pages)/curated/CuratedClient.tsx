@@ -16,10 +16,9 @@ import {
   type CuratedTier,
   type CuratedTierKey,
 } from "@/lib/curated-tiers";
-import { CURATION_TIERS, gbp } from "@/lib/curation-tiers";
+import { CURATION_TIERS, PROGRAMME_LADDER, gbp } from "@/lib/curation-tiers";
 
 const ONE_OFF_TIERS = CURATED_TIERS.filter((t) => t.group === "one_off");
-const MANAGED_TIERS = CURATED_TIERS.filter((t) => t.group === "managed");
 
 const VENUE_TYPES = [
   "Café",
@@ -356,7 +355,7 @@ export default function CuratedClient() {
                 You want art on your walls. We&rsquo;ll do the work.
               </h1>
               <p className="text-lg lg:text-xl text-white/65 leading-relaxed max-w-xl mb-10">
-                {`Wallplace Programmes is the full service: we curate, install and rotate original art through the year, and every artist on your wall is paid rent for as long as their work is up. Quoted per site, from ${gbp(CURATION_TIERS.programme.priceGbp)} a month. If you would rather just have a shortlist picked and take it from there, Wallplace Curated is a one-off from ${gbp(CURATION_TIERS.single_wall.priceGbp)}.`}
+                {`We curate, install and rotate original art all year, and pay rent to every artist on your wall. From ${gbp(CURATION_TIERS.programme.priceGbp)} a month per site. Or take just the shortlist: Curated, one-off from ${gbp(CURATION_TIERS.single_wall.priceGbp)}.`}
               </p>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Link
@@ -512,26 +511,26 @@ export default function CuratedClient() {
             10s. Retitled to name Wallplace Curated specifically now
             that Programmes is introduced above it, since Programmes
             has its own how-it-works on its dedicated page. */}
-        <section id="how" className="py-20 lg:py-28">
+        <section id="how" className="py-20 lg:py-28 bg-foreground text-white">
           <div className="max-w-[1200px] mx-auto px-6">
             <AnimateIn>
-              <h2 className="text-3xl md:text-4xl mb-12">How Wallplace Curated works</h2>
+              <h2 className="text-3xl md:text-4xl mb-12 text-white">How Wallplace Curated works</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
                 {HOW_IT_WORKS.map((step) => (
                   <div key={step.n}>
                     <span className="text-accent text-sm font-medium tracking-wider">
                       {step.n}
                     </span>
-                    <h3 className="text-xl mt-2 mb-3 text-foreground">
+                    <h3 className="text-xl mt-2 mb-3 text-white">
                       {step.title}
                     </h3>
-                    <p className="text-muted text-sm leading-relaxed">
+                    <p className="text-white/70 text-sm leading-relaxed">
                       {step.body}
                     </p>
                   </div>
                 ))}
               </div>
-              <p className="mt-10 text-sm text-muted italic">
+              <p className="mt-10 text-sm text-white/60 italic">
                 Typical turnaround: 5 business days from brief to shortlist.
               </p>
             </AnimateIn>
@@ -550,7 +549,62 @@ export default function CuratedClient() {
                 </p>
               </div>
 
-              {/* One-off group */}
+              {/* Programmes first: it is the product we are selling. It used
+                  to sit below the one-off tiers as a single card stranded in
+                  a two-column grid, which read as an afterthought. The ladder
+                  comes from PROGRAMME_LADDER, the same source /programmes
+                  renders, so a repricing changes one array and both pages
+                  follow. */}
+              <div className="mb-14">
+                <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+                  <h3 className="font-serif text-2xl text-foreground">
+                    Programmes
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Ongoing rotation, quoted per site.
+                  </p>
+                </div>
+                <p className="text-sm text-muted leading-relaxed mb-5 max-w-2xl">
+                  Original art on your walls all year: curated, installed,
+                  labelled with a QR card, and rotated through the year, with
+                  rent paid to every artist on the wall. Pricing scales with
+                  the number of pieces.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-5">
+                  {PROGRAMME_LADDER.map((rung) => (
+                    <div
+                      key={rung.pieces}
+                      className="bg-background border border-border rounded-sm p-6 text-center"
+                    >
+                      <p className="font-serif text-4xl text-foreground">{rung.pieces}</p>
+                      <p className="text-xs text-muted uppercase tracking-wider mt-1 mb-4">
+                        {rung.pieces === 1 ? "piece" : "pieces"}
+                      </p>
+                      <p className="text-xl font-medium text-accent">{gbp(rung.monthlyGbp)}</p>
+                      <p className="text-xs text-muted mt-0.5">a month</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-baseline justify-between gap-4 flex-wrap mt-5">
+                  <p className="text-xs text-muted max-w-xl">
+                    A guide to how pricing scales. Your site gets its own quote
+                    and may land between rungs. Twelve month term, then rolling.
+                  </p>
+                  <Link
+                    href="/programmes"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:text-accent-hover transition-colors"
+                  >
+                    See Programmes and request a quote
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  </Link>
+                </div>
+              </div>
+
+              {/* One-off group, second: the smaller commitment for someone who
+                  only wants the shortlist. */}
               <div className="mb-12">
                 <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
                   <h3 className="font-serif text-2xl text-foreground">
@@ -567,35 +621,6 @@ export default function CuratedClient() {
                       tier={t}
                       selected={selectedTier === t.key}
                       onSelect={() => setSelectedTier(t.key)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Managed group: currently just the one quoted Programmes
-                  card. Task 3 (Wallplace Programmes plan) built the
-                  dedicated /programmes surface; this card is the /curated
-                  summary entry point into it, so it links out to
-                  /programmes instead of selecting the tier inline like the
-                  one-off cards above (the generic brief form below has
-                  nowhere to collect a programme's site count, piece
-                  estimate, sector or rotation preference). */}
-              <div className="mb-14">
-                <div className="flex items-baseline justify-between mb-5 flex-wrap gap-2">
-                  <h3 className="font-serif text-2xl text-foreground">
-                    Programmes
-                  </h3>
-                  <p className="text-xs text-muted">
-                    Ongoing rotation, quoted per site.
-                  </p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
-                  {MANAGED_TIERS.map((t) => (
-                    <TierCard
-                      key={t.key}
-                      tier={t}
-                      selected={selectedTier === t.key}
-                      href={t.key === "programme" ? "/programmes" : undefined}
                     />
                   ))}
                 </div>

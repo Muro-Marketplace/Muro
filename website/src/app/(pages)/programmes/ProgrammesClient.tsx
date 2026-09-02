@@ -320,7 +320,7 @@ export default function ProgrammesClient() {
                 <span className="text-xs font-medium text-accent uppercase tracking-wider">
                   Size guide
                 </span>
-                <h2 className="text-3xl md:text-4xl mt-2 mb-3">Pick the scale, not the plan</h2>
+                <h2 className="text-3xl md:text-4xl mt-2 mb-3">What a site costs</h2>
                 <p className="text-muted leading-relaxed">
                   Every site is quoted individually. This is the shape pricing usually takes,
                   from a single feature wall to a fully dressed venue.
@@ -424,19 +424,9 @@ export default function ProgrammesClient() {
           </div>
         </section>
 
-        {/* FAQ */}
-        <section className="py-20 lg:py-28 bg-surface">
-          <div className="max-w-[1200px] mx-auto px-6">
-            <div className="max-w-2xl mx-auto">
-              <h2 className="text-3xl md:text-4xl mb-10 text-center">Common questions</h2>
-              <Accordion items={FAQ_ITEMS} />
-            </div>
-          </div>
-        </section>
-
         {/* Enquire, the Task 2 intake. Fixed to tier "programme"; nothing
             to pick, so no plan-selection UI like /curated needs. */}
-        <section id="enquire" className="py-20 lg:py-28">
+        <section id="enquire" className="py-20 lg:py-28 bg-surface">
           <div className="max-w-[800px] mx-auto px-6">
             <div className="bg-surface border border-border rounded-sm p-6 sm:p-8">
               <h2 className="font-serif text-2xl text-foreground mb-1">Tell us about your site</h2>
@@ -595,6 +585,16 @@ export default function ProgrammesClient() {
         </section>
 
         {/* Final CTA */}
+        {/* FAQ */}
+        <section className="py-20 lg:py-28">
+          <div className="max-w-[1200px] mx-auto px-6">
+            <div className="max-w-2xl mx-auto">
+              <h2 className="text-3xl md:text-4xl mb-10 text-center">Common questions</h2>
+              <Accordion items={FAQ_ITEMS} />
+            </div>
+          </div>
+        </section>
+
         <section className="py-20 lg:py-28 bg-foreground">
           <div className="max-w-[1200px] mx-auto px-6 text-center">
             <h2 className="text-3xl md:text-4xl lg:text-5xl mb-4 max-w-2xl mx-auto text-white">

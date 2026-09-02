@@ -25,12 +25,20 @@ const marketplaceTabs = [
 // Public (logged-out) variant: keeps How It Works + Blog inline on the
 // marketplace so discovery links stay reachable without needing the
 // More dropdown.
+//
+// Manage My Walls is here too. Without it, a logged-out visitor who
+// clicked into /browse or /spaces lost the only route to the paid
+// products from the nav entirely, and had to go back to a marketing
+// page or dig through the footer to find them again. Someone browsing
+// art for their space is exactly the person that offer is for, so it
+// has to survive the switch into the marketplace tab set.
 const publicMarketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
   { label: "Spaces", href: "/spaces", match: (p: string) => p === "/spaces" },
   { label: "How It Works", href: "/how-it-works", match: (p: string) => p === "/how-it-works" },
+  { label: "Manage My Walls", href: "/curated", match: (p: string) => p === "/curated" },
   { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
 ];
 
@@ -93,8 +101,8 @@ function notificationHref(n: Pick<HeaderNotification, "type" | "link">, portalBa
 // and For Artists additions, so the rest of this nav is theirs, unchanged.
 const publicNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
-  { label: "Manage My Walls", href: "/curated" },
   { label: "How It Works", href: "/how-it-works" },
+  { label: "Manage My Walls", href: "/curated" },
   { label: "Blog", href: "/blog" },
   { label: "Spaces", href: "/spaces" },
 ];
