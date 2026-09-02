@@ -63,13 +63,15 @@ const PUBLIC_ROUTES = {
   "src/app/api/walls/[id]/route.ts":
     "Ownership enforced by the shared resolveAndAuthorize() helper in the same file. " +
     "TODO: migrate to an assert* helper in @/lib/authz and remove this entry.",
-  // Task 3 (Artwork of the Week, migration 133 / artist_works.featured_until).
+  // Task 3 (Artwork of the Week, migration 133 / artist_works.featured_until;
+  // migration 134 / feature_artist_work()).
   "src/app/api/artist-works/[id]/feature/route.ts":
     "Authorises by self-scoped on artist_id: getArtistProfileByUserId resolves the " +
-    "caller's own artist_profiles row from their session, and every read and the " +
-    "update itself are scoped with .eq(\"artist_id\", result.profile.id), so the " +
-    "service-role client can only ever list or write the caller's own artist_works " +
-    "rows. The same pattern the ratchet in authz-import-ratchet.test.ts describes " +
+    "caller's own artist_profiles row from their session, and that id is passed as " +
+    "p_artist_id into feature_artist_work() (migration 134), which matches it inside " +
+    "the function, both for the live-boost check and for the UPDATE, so the " +
+    "service-role client can only ever read or write the caller's own artist_works " +
+    "row. The same pattern the ratchet in authz-import-ratchet.test.ts describes " +
     "as real authorisation, just not routed through the shared @/lib/authz helpers.",
 };
 
