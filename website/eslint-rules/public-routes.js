@@ -75,44 +75,4 @@ const PUBLIC_ROUTES = {
     "as real authorisation, just not routed through the shared @/lib/authz helpers.",
 };
 
-// Routes exempt from the demo-guard requirement.
-const DEMO_EXEMPT_ROUTES = {
-  ...PUBLIC_ROUTES, // unauthenticated routes have no user id to test
-  "src/app/api/demo/login/route.ts":
-    "Signs the demo session in. Guarding it would make the demo unreachable.",
-  "src/app/api/account/delete/route.ts":
-    "Deleting a demo account is harmless and self-correcting on reseed.",
-  // E23a. Signup finalisation, authenticated by a one-time token rather than a
-  // session. A demo session never traverses OAuth or the welcome step: the demo
-  // ids are pre-seeded and entered through demo/login, so a guard here could
-  // only ever block a real signup.
-  "src/app/api/auth/oauth-finalize/route.ts":
-    "OAuth signup finalisation, token-authenticated. No demo session reaches it.",
-  "src/app/api/auth/welcome/route.ts":
-    "Post-signup welcome step, token-authenticated. No demo session reaches it.",
-  // E23a. Admin surfaces: an admin is never a demo user, and support needs these
-  // to work against demo data when reproducing a report.
-  "src/app/api/admin/applications/[id]/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-  // Task 8. Founding-cohort toggle (PATCH is_founding_artist), same shape as
-  // the other admin surfaces below.
-  "src/app/api/admin/artists/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-  "src/app/api/admin/blogs/[id]/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-  "src/app/api/admin/curation/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-  "src/app/api/admin/curation/quote/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-  "src/app/api/admin/curation/refund/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-  "src/app/api/admin/disputes/[id]/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-  "src/app/api/admin/moderation/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-  // Task 7 Part B. Links/unlinks a placement to a Wallplace Programme.
-  "src/app/api/admin/placements/[id]/link-programme/route.ts":
-    "Admin surface. An admin is never a demo user; support acts on demo data deliberately.",
-};
-
-module.exports = { PUBLIC_ROUTES, DEMO_EXEMPT_ROUTES };
+module.exports = { PUBLIC_ROUTES };

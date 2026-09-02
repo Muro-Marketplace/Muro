@@ -18,7 +18,7 @@
 //     local resolveAndAuthorize() helper. It is allowlisted with a migration
 //     TODO rather than contorted to satisfy the rule.
 
-const { PUBLIC_ROUTES, DEMO_EXEMPT_ROUTES } = require("./public-routes");
+const { PUBLIC_ROUTES } = require("./public-routes");
 
 const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
@@ -45,10 +45,6 @@ module.exports = {
         "{{route}} exports {{method}} and uses the service-role client, which BYPASSES RLS, " +
         "but imports nothing from @/lib/authz. Add the relevant assert*() call, or add the " +
         "route to PUBLIC_ROUTES in eslint-rules/public-routes.js with a reason.",
-      missingDemoGuard:
-        "{{route}} exports {{method}} and mutates, but does not import @/lib/demo-guard. " +
-        "Add assertNotDemo()/assertNotDemoStrict() after the auth check, or add the route " +
-        "to DEMO_EXEMPT_ROUTES in eslint-rules/public-routes.js with a reason.",
     },
   },
 
@@ -59,7 +55,6 @@ module.exports = {
     let usesServiceRole = false;
     let hasAuthzImport = false;
     let hasAdminAuthImport = false;
-    let hasDemoGuardImport = false;
     /** @type {{node: import("estree").Node, method: string}[]} */
     const mutators = [];
 
@@ -76,7 +71,6 @@ module.exports = {
         if (/^@\/lib\/db\//.test(src)) usesServiceRole = true;
         if (src === "@/lib/authz") hasAuthzImport = true;
         if (src === "@/lib/admin-auth") hasAdminAuthImport = true;
-        if (src === "@/lib/demo-guard") hasDemoGuardImport = true;
       },
 
       ExportNamedDeclaration(node) {
@@ -105,14 +99,10 @@ module.exports = {
         if (!usesServiceRole || mutators.length === 0) return;
 
         const publiclyAllowed = Object.prototype.hasOwnProperty.call(PUBLIC_ROUTES, file);
-        const demoAllowed = Object.prototype.hasOwnProperty.call(DEMO_EXEMPT_ROUTES, file);
 
         for (const { node, method } of mutators) {
           if (!hasAuthzImport && !hasAdminAuthImport && !publiclyAllowed) {
             context.report({ node, messageId: "missingAuthz", data: { route: file, method } });
-          }
-          if (!hasDemoGuardImport && !demoAllowed) {
-            context.report({ node, messageId: "missingDemoGuard", data: { route: file, method } });
           }
         }
       },

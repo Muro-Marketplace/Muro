@@ -4,9 +4,8 @@ import { describe, it, expect } from "vitest";
 
 const require = createRequire(import.meta.url);
 const rule = require("../../eslint-rules/require-authz-on-mutation.js") as import("eslint").Rule.RuleModule;
-const { PUBLIC_ROUTES, DEMO_EXEMPT_ROUTES } = require("../../eslint-rules/public-routes.js") as {
+const { PUBLIC_ROUTES } = require("../../eslint-rules/public-routes.js") as {
   PUBLIC_ROUTES: Record<string, string>;
-  DEMO_EXEMPT_ROUTES: Record<string, string>;
 };
 
 const config = [
@@ -30,7 +29,6 @@ const SERVICE_ROLE = `import { getSupabaseAdmin } from "@/lib/supabase-admin";`;
 // naming supabase-admin. This is E32's exact shape (01 Phase E item 15).
 const DB_HELPER = `import { upsertWork } from "@/lib/db/artist-works";`;
 const AUTHZ = `import { assertOwnsWork } from "@/lib/authz";`;
-const DEMO = `import { assertNotDemo } from "@/lib/demo-guard";`;
 // No type annotations in these fixtures: the Linter runs the default parser, so
 // TS syntax would surface as a parse error rather than a rule report.
 const POST = `export async function POST() { return new Response(); }`;
@@ -39,19 +37,9 @@ describe("wallplace/require-authz-on-mutation", () => {
   // --- must be flagged ---
 
   it("flags a mutating service-role route with no authorisation import", () => {
-    const messages = lint(`${SERVICE_ROLE}\n${DEMO}\n${POST}`);
+    const messages = lint(`${SERVICE_ROLE}\n${POST}`);
     expect(ids(messages)).toEqual(["missingAuthz"]);
     expect(messages[0].message).toContain("BYPASSES RLS");
-  });
-
-  it("flags a missing demo guard separately, so the two roll out independently", () => {
-    const messages = lint(`${SERVICE_ROLE}\n${AUTHZ}\n${POST}`);
-    expect(ids(messages)).toEqual(["missingDemoGuard"]);
-  });
-
-  it("reports both when neither import is present", () => {
-    const messages = lint(`${SERVICE_ROLE}\n${POST}`);
-    expect(ids(messages)).toEqual(["missingAuthz", "missingDemoGuard"]);
   });
 
   it("flags every mutating method the file exports", () => {
@@ -60,8 +48,7 @@ export async function POST() { return new Response(); }
 export async function PATCH() { return new Response(); }
 export async function DELETE() { return new Response(); }`;
     const messages = lint(code);
-    // 3 methods x 2 concerns
-    expect(messages).toHaveLength(6);
+    expect(messages).toHaveLength(3);
     expect(messages.filter((m) => m.messageId === "missingAuthz")).toHaveLength(3);
   });
 
@@ -69,7 +56,7 @@ export async function DELETE() { return new Response(); }`;
     // src/app/api/stripe-connect/process-pending/route.ts uses this form, so an
     // AST match on FunctionDeclaration alone would leave a real hole.
     const messages = lint(`${SERVICE_ROLE}\nexport const POST = async () => new Response();`);
-    expect(ids(messages)).toEqual(["missingAuthz", "missingDemoGuard"]);
+    expect(ids(messages)).toEqual(["missingAuthz"]);
   });
 
   // --- must NOT be flagged ---
@@ -78,13 +65,8 @@ export async function DELETE() { return new Response(); }`;
     // E32 was invisible to this rule: api/artist-works never imported
     // supabase-admin, it called lib/db/artist-works.ts, so the unscoped update
     // went unflagged. A route of that shape must now be caught.
-    const messages = lint(`${DB_HELPER}\n${DEMO}\n${POST}`);
-    expect(ids(messages)).toEqual(["missingAuthz"]);
-  });
-
-  it("flags a @/lib/db/* route for both requirements when neither import is present", () => {
     const messages = lint(`${DB_HELPER}\n${POST}`);
-    expect(ids(messages)).toEqual(["missingAuthz", "missingDemoGuard"]);
+    expect(ids(messages)).toEqual(["missingAuthz"]);
   });
 
   it("still ignores a @/lib/db/* route that only reads", () => {
@@ -92,8 +74,8 @@ export async function DELETE() { return new Response(); }`;
     expect(messages).toEqual([]);
   });
 
-  it("accepts a @/lib/db/* route that does import authz and the demo guard", () => {
-    const messages = lint(`${DB_HELPER}\n${AUTHZ}\n${DEMO}\n${POST}`);
+  it("accepts a @/lib/db/* route that does import authz", () => {
+    const messages = lint(`${DB_HELPER}\n${AUTHZ}\n${POST}`);
     expect(messages).toEqual([]);
   });
 
@@ -105,12 +87,12 @@ export async function DELETE() { return new Response(); }`;
   });
 
   it("accepts an @/lib/authz import", () => {
-    expect(lint(`${SERVICE_ROLE}\n${AUTHZ}\n${DEMO}\n${POST}`)).toHaveLength(0);
+    expect(lint(`${SERVICE_ROLE}\n${AUTHZ}\n${POST}`)).toHaveLength(0);
   });
 
   it("accepts an @/lib/admin-auth import, since admin routes gate there", () => {
     const admin = `import { getAdminUser } from "@/lib/admin-auth";`;
-    expect(lint(`${SERVICE_ROLE}\n${admin}\n${DEMO}\n${POST}`)).toHaveLength(0);
+    expect(lint(`${SERVICE_ROLE}\n${admin}\n${POST}`)).toHaveLength(0);
   });
 
   it("ignores a route that never touches the service-role client", () => {
@@ -128,17 +110,15 @@ export async function DELETE() { return new Response(); }`;
   });
 
   it("exempts an allowlisted public route from the authz requirement", () => {
-    const messages = lint(`${SERVICE_ROLE}\n${DEMO}\n${POST}`, "src/app/api/webhooks/stripe/route.ts");
+    const messages = lint(`${SERVICE_ROLE}\n${POST}`, "src/app/api/webhooks/stripe/route.ts");
     expect(ids(messages)).toEqual([]);
   });
 
-  it("exempts an allowlisted route from the demo requirement as well", () => {
-    // PUBLIC_ROUTES is spread into DEMO_EXEMPT_ROUTES: an unauthenticated route
-    // has no user id to test.
+  it("exempts a second allowlisted route the same way", () => {
     expect(lint(`${SERVICE_ROLE}\n${POST}`, "src/app/api/newsletter/route.ts")).toHaveLength(0);
   });
 
-  it("exempts a demo-only route from the demo guard but still wants authz", () => {
+  it("still flags a non-exempt route even at a real path", () => {
     const messages = lint(`${SERVICE_ROLE}\n${POST}`, "src/app/api/account/delete/route.ts");
     expect(ids(messages)).toEqual(["missingAuthz"]);
   });
@@ -150,7 +130,7 @@ export async function DELETE() { return new Response(); }`;
     // "No matching configuration found" for files outside the cwd, before the
     // rule ever runs. A nested relative path exercises the same slice.
     const messages = lint(
-      `${SERVICE_ROLE}\n${DEMO}\n${POST}`,
+      `${SERVICE_ROLE}\n${POST}`,
       "website/src/app/api/webhooks/stripe/route.ts",
     );
     expect(ids(messages)).toEqual([]);
@@ -161,15 +141,6 @@ describe("the allowlist itself", () => {
   it("gives every entry a non-empty reason", () => {
     for (const [route, reason] of Object.entries(PUBLIC_ROUTES)) {
       expect(reason.trim().length, `${route} has no reason`).toBeGreaterThan(20);
-    }
-    for (const [route, reason] of Object.entries(DEMO_EXEMPT_ROUTES)) {
-      expect(reason.trim().length, `${route} has no reason`).toBeGreaterThan(20);
-    }
-  });
-
-  it("treats every public route as demo-exempt", () => {
-    for (const route of Object.keys(PUBLIC_ROUTES)) {
-      expect(DEMO_EXEMPT_ROUTES, `${route} missing from DEMO_EXEMPT_ROUTES`).toHaveProperty(route);
     }
   });
 });

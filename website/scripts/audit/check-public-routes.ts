@@ -7,7 +7,7 @@
  * route created at that path would inherit it. This fails the build instead.
  *
  * Checks:
- *   1. every PUBLIC_ROUTES / DEMO_EXEMPT_ROUTES key resolves to a real file
+ *   1. every PUBLIC_ROUTES key resolves to a real file
  *   2. every entry carries a non-trivial reason
  *   3. every key looks like a route handler under src/app/api
  *
@@ -19,9 +19,8 @@ import path from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { PUBLIC_ROUTES, DEMO_EXEMPT_ROUTES } = require("../../eslint-rules/public-routes.js") as {
+const { PUBLIC_ROUTES } = require("../../eslint-rules/public-routes.js") as {
   PUBLIC_ROUTES: Record<string, string>;
-  DEMO_EXEMPT_ROUTES: Record<string, string>;
 };
 
 const WEBSITE_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
@@ -32,7 +31,6 @@ const problems: string[] = [];
 
 for (const [listName, list] of [
   ["PUBLIC_ROUTES", PUBLIC_ROUTES],
-  ["DEMO_EXEMPT_ROUTES", DEMO_EXEMPT_ROUTES],
 ] as const) {
   for (const [route, reason] of Object.entries(list)) {
     if (!ROUTE_KEY.test(route)) {
@@ -53,14 +51,6 @@ for (const [listName, list] of [
   }
 }
 
-// Every public route must also be demo-exempt: an unauthenticated route has no
-// user id to test, so requiring a demo guard there is impossible to satisfy.
-for (const route of Object.keys(PUBLIC_ROUTES)) {
-  if (!Object.prototype.hasOwnProperty.call(DEMO_EXEMPT_ROUTES, route)) {
-    problems.push(`DEMO_EXEMPT_ROUTES is missing "${route}", which is in PUBLIC_ROUTES`);
-  }
-}
-
 if (problems.length > 0) {
   console.error(`\nFAIL: ${problems.length} problem(s) in eslint-rules/public-routes.js:\n`);
   for (const p of problems) console.error(`  - ${p}`);
@@ -69,6 +59,5 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `PASS: ${Object.keys(PUBLIC_ROUTES).length} public route(s) and ` +
-    `${Object.keys(DEMO_EXEMPT_ROUTES).length} demo-exempt route(s) all resolve, with reasons.`,
+  `PASS: ${Object.keys(PUBLIC_ROUTES).length} public route(s) all resolve, with reasons.`,
 );

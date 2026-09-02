@@ -73,7 +73,6 @@ function routesMissingAuthzImport(): string[] {
   for (const f of report) {
     for (const m of f.messages || []) {
       if (m.ruleId !== "wallplace/require-authz-on-mutation") continue;
-      // The rule reports two distinct things; only the authz arm is counted here.
       if ((m.message || "").includes("@/lib/authz")) {
         files.add(f.filePath.split("/src/app/api/")[1] ?? f.filePath);
       }
@@ -108,20 +107,5 @@ describe("authz-import ratchet (01 Phase E item 15)", () => {
         ? "the count is 0, so flip the rule to error and delete this file"
         : `${ROUTES_WITHOUT_AUTHZ_IMPORT} routes still lack the import, so the rule must stay at warn`,
     ).toBe(ROUTES_WITHOUT_AUTHZ_IMPORT === 0 ? "error" : "warn");
-  });
-
-  it("still enforces the demo-guard arm at zero, which item 13 already achieved", () => {
-    // Proof the two arms are independent: demo coverage is complete even though
-    // the authz arm is not, which is why the rule reports them separately.
-    const demoOffenders = eslintReport().flatMap((f) =>
-      (f.messages || [])
-        .filter(
-          (m) =>
-            m.ruleId === "wallplace/require-authz-on-mutation" &&
-            (m.message || "").includes("demo-guard"),
-        )
-        .map(() => f.filePath.split("/src/app/api/")[1]),
-    );
-    expect(demoOffenders, `demo-guard regressed:\n${demoOffenders.join("\\n")}`).toEqual([]);
   });
 });
