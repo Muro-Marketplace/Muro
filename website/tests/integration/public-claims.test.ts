@@ -46,6 +46,9 @@ describe("public claims the site cannot evidence stay out", () => {
     expect(cards).not.toMatch(/Featured artist profile and badge/);
     expect((cards.match(/Artwork of the Week/g) || []).length).toBe(2);
     expect(cards).toMatch(/Featured artist: your profile leads the marketplace/);
+    // Owner decision 2026-09-02: the weekly venue digest now delivers this,
+    // Pro ranked first, so both tiers that get it must say so.
+    expect((cards.match(/Priority visibility in venue recommendations/g) || []).length).toBe(2);
   });
 
   it("the billing upgrade panel and application form sell the same tier perks (Finding 4)", () => {

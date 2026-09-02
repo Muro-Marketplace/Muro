@@ -92,7 +92,7 @@ const planOptions = [
     name: "Premium",
     price: "£24.99",
     fee: "15% platform fee",
-    description: "5 active placements, up to 20 works, Artwork of the Week, full analytics.",
+    description: "5 active placements, up to 20 works, Artwork of the Week, priority in venue recommendations, full analytics.",
     popular: true as const,
   },
   {
@@ -100,7 +100,7 @@ const planOptions = [
     name: "Pro",
     price: "£49.99",
     fee: "15% platform fee",
-    description: "Unlimited placements, up to 50 works, Curated priority, Featured artist, Artwork of the Week, dedicated support.",
+    description: "Unlimited placements, up to 50 works, Curated priority, Featured artist, Artwork of the Week, priority in venue recommendations, dedicated support.",
   },
 ];
 

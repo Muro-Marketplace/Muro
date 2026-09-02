@@ -63,6 +63,7 @@ const PLANS: Plan[] = [
       `Up to ${WORKS_CAP.pro} works in your portfolio`,
       "Priority for programme placements, which pay monthly rent",
       "Featured artist: your profile leads the marketplace",
+      "Priority visibility in venue recommendations",
       "Artwork of the Week: put one work at the top of the gallery for seven days",
       `Approach ${OUTREACH_WEEKLY_LIMIT.pro} new venues a week`,
       "Full analytics with venue breakdown and export",

@@ -33,3 +33,16 @@ export function isArtworkOfTheWeek(featuredUntil: string | null | undefined, now
 export function featuredUntilFrom(now: Date): Date {
   return new Date(now.getTime() + ARTWORK_OF_THE_WEEK_DAYS * 24 * 60 * 60 * 1000);
 }
+
+/** Premium and Pro are recommended to venues ahead of Core (owner decision 2026-09-02). */
+export function hasVenueRecommendationPriority(plan?: string | null): boolean {
+  return canFeatureArtwork(plan);
+}
+
+/** Pro first, then Premium, then everyone else, for the weekly venue digest. */
+export function recommendationTierWeight(plan?: string | null): 0 | 1 | 2 {
+  const p = norm(plan);
+  if (p === "pro") return 0;
+  if (p === "premium") return 1;
+  return 2;
+}

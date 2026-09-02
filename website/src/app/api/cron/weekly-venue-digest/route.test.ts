@@ -42,6 +42,24 @@ function req(): Request {
 
 const VENUE_ROW = { user_id: "u-venue", name: "The Curzon", slug: "the-curzon", created_at: "2026-01-01T00:00:00Z" };
 
+// Real artist_profiles columns only (tests/integration/schema-columns.json):
+// there is no "image" column, so the fixture (and the route) use profile_image.
+const PRO_ARTIST_ROW = {
+  id: "ap-pro", slug: "pro-artist", name: "Priya Sharma", profile_image: "https://example.com/priya.jpg",
+  review_status: "approved", subscription_status: "active", subscription_plan: "pro",
+  created_at: "2026-01-01T00:00:00Z", primary_medium: "Sculpture", location: "Peckham, London",
+};
+const PREMIUM_ARTIST_ROW = {
+  id: "ap-premium", slug: "premium-artist", name: "James Okafor", profile_image: null,
+  review_status: "approved", subscription_status: "trialing", subscription_plan: "premium",
+  created_at: "2026-02-01T00:00:00Z", primary_medium: "Painting", location: "Bermondsey, London",
+};
+const CORE_ARTIST_ROW = {
+  id: "ap-core", slug: "core-artist", name: "Maya Chen", profile_image: null,
+  review_status: "approved", subscription_status: "active", subscription_plan: "core",
+  created_at: "2026-03-01T00:00:00Z", primary_medium: "Photography", location: "Hackney, London",
+};
+
 function builder(table: string, respond: () => unknown) {
   const node: Record<string, unknown> = {};
   const self = () => node;
@@ -52,12 +70,13 @@ function builder(table: string, respond: () => unknown) {
   return node;
 }
 
-function setupDb() {
+function setupDb(artistRows: unknown[] = []) {
   fromMock.mockImplementation((table: string) =>
     builder(table, () => {
       if (table === "venue_profiles") return { data: [VENUE_ROW] };
       if (table === "analytics_events") return { count: 41, error: null };
       if (table === "placements") return { count: 2, error: null };
+      if (table === "artist_profiles") return { data: artistRows };
       throw new Error(`unexpected table ${table}`);
     }),
   );
@@ -106,5 +125,23 @@ describe("GET /api/cron/weekly-venue-digest (H24)", () => {
     setupDb();
     await GET(req());
     expect(sendEmailMock.mock.calls[0][0].idempotencyKey).toMatch(/^venue_weekly_digest:u-venue:/);
+  });
+});
+
+// Owner decision 2026-09-02: the Premium pricing card promises "Priority
+// visibility in venue recommendations". This is what delivers it.
+describe("GET /api/cron/weekly-venue-digest — suggested artists", () => {
+  it("suggests Pro before Premium before Core, capped at three", async () => {
+    setupDb([CORE_ARTIST_ROW, PREMIUM_ARTIST_ROW, PRO_ARTIST_ROW]);
+    await GET(req());
+    const suggested = digestProps[0].suggestedArtists as Array<{ slug: string }>;
+    expect(suggested[0].slug).toBe("pro-artist");
+    expect(suggested.length).toBeLessThanOrEqual(3);
+  });
+
+  it("passes no suggestedArtists when no artist is approved and subscribed", async () => {
+    setupDb([{ ...CORE_ARTIST_ROW, review_status: "pending" }]);
+    await GET(req());
+    expect(digestProps[0]).not.toHaveProperty("suggestedArtists");
   });
 });
