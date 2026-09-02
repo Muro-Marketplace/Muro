@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import VenueGuide from "@/components/marketing/VenueGuide";
@@ -59,6 +59,15 @@ export default function HowItWorksClient() {
   const [audience, setAudience] = useState<Audience>("venue");
   const active = tabContent[audience];
 
+  // Deep links: /how-it-works?tab=artist opens that tab (the homepage's
+  // "Learn more" for artists lands here). Read on mount from the URL
+  // rather than useSearchParams, which would force this static page to
+  // render dynamically or need a Suspense boundary.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab === "venue" || tab === "artist" || tab === "customer") setAudience(tab);
+  }, []);
+
   return (
     <div className="bg-background">
       {/* Hero, dark art-related background with a heavy gradient so the
@@ -69,16 +78,15 @@ export default function HowItWorksClient() {
           underneath it (and shows immediately, even before the image
           finishes loading or if it fails entirely). */}
       <section className="relative isolate -mt-14 lg:-mt-16 min-h-screen flex flex-col pt-28 lg:pt-32 pb-24 text-white bg-foreground">
-        {/* The hero is min-h-screen so it grows when the selected
+        {/* The hero is min-h-screen and grows when the selected
             audience's copy runs longer (artist and customer tabs both
-            push past venue's). If the background image fills that
-            growing section, `object-cover` scales it up to keep
-            covering — so the artwork visibly zooms in the moment a
-            taller tab is selected. Pin the image container to exactly
-            100vh (h-screen) so the crop is identical for every tab;
-            any overflow below sits on the section's bg-foreground
-            base, which fades out the bottom gradient cleanly. */}
-        <div className="absolute inset-x-0 top-0 -z-10 h-screen overflow-hidden">
+            push past venue's). The image container used to be pinned
+            to 100vh so the crop never changed between tabs, but that
+            left a bare dark band under the copy on the taller tabs
+            (owner-reported 2 September). The image now fills the
+            whole section; object-cover re-crops slightly when a taller
+            tab is selected, which is the lesser cost. */}
+        <div className="absolute inset-0 -z-10 overflow-hidden">
           <Image
             src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=1080&fit=crop&crop=center"
             alt="Curated gallery interior with framed artwork"

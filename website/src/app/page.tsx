@@ -243,7 +243,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Buyers</p>
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Customers</p>
                   <div className="space-y-9 flex-1">
                     <Step dark number="01" title="Browse" description="Explore original work from independent artists, online or on a wall near you." />
                     <Step dark number="02" title="Buy" description="Scan the QR card beside the piece, or buy from the artist&rsquo;s page. Originals and prints." />
@@ -301,7 +301,7 @@ export default function Home() {
                     <Link href="/apply" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
                       Apply to Join
                     </Link>
-                    <Link href="/artists" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
+                    <Link href="/how-it-works?tab=artist" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 border border-border text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-background transition-colors">
                       LEARN MORE
                     </Link>
                   </div>
