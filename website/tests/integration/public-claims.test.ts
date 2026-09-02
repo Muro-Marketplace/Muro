@@ -40,4 +40,11 @@ describe("public claims the site cannot evidence stay out", () => {
   it("the buyer FAQ does not promise reviews or identity checks the platform lacks", () => {
     expect(read("src/components/marketing/CustomerGuide.tsx")).not.toMatch(/and reviews|verify identity/i);
   });
+
+  it("the pricing cards match the tier perks (Pro is Featured; Premium and Pro get Artwork of the Week)", () => {
+    const cards = read("src/components/ArtistPricingCards.tsx");
+    expect(cards).not.toMatch(/Featured artist profile and badge/);
+    expect((cards.match(/Artwork of the Week/g) || []).length).toBe(2);
+    expect(cards).toMatch(/Featured artist: your profile leads the marketplace/);
+  });
 });

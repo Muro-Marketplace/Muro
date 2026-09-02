@@ -45,7 +45,7 @@ const PLANS: Plan[] = [
     features: [
       `Up to ${ACTIVE_PLACEMENT_CAP.premium} active venue placements at a time`,
       `Up to ${WORKS_CAP.premium} works in your portfolio`,
-      "Featured artist profile and badge",
+      "Artwork of the Week: put one work at the top of the gallery for seven days",
       "Priority visibility in venue recommendations",
       `Approach ${OUTREACH_WEEKLY_LIMIT.premium} new venues a week`,
       "Full analytics, views, enquiries, conversion",
@@ -62,7 +62,8 @@ const PLANS: Plan[] = [
       "Unlimited active venue placements",
       `Up to ${WORKS_CAP.pro} works in your portfolio`,
       "Priority for programme placements, which pay monthly rent",
-      "Premium profile with enhanced presentation",
+      "Featured artist: your profile leads the marketplace",
+      "Artwork of the Week: put one work at the top of the gallery for seven days",
       `Approach ${OUTREACH_WEEKLY_LIMIT.pro} new venues a week`,
       "Full analytics with venue breakdown and export",
       "Dedicated account support",
