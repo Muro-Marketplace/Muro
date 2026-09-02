@@ -431,4 +431,29 @@ describe("Artwork of the Week control (owner decision 2 September)", () => {
     // A refused boost must not mark the work as featured.
     expect(screen.queryByText(/featured until/i)).toBeNull();
   });
+
+  it("badges the correct work when feature request resolves after a reorder", async () => {
+    const secondWork = { ...WORK, id: "w2", title: "Second Work" };
+    artistState.subscriptionPlan = "premium";
+    artistState.works = [WORK, secondWork];
+    mutateMock.mockResolvedValue({ featuredUntil: "2026-09-09T12:00:00.000Z" });
+    render(<PortfolioPage />);
+
+    // Click "Feature for a week" on the FIRST work (index 0).
+    fireEvent.mouseOver(await screen.findByText(WORK.title));
+    fireEvent.click(screen.getByRole("button", { name: /feature for a week/i }));
+
+    // Wait for the badge to appear (proof of the id-keyed write-back).
+    const badge = await screen.findByText(/featured until/i);
+    expect(badge).toBeTruthy();
+
+    // Verify the badge appears only once (not duplicated on both works).
+    expect(screen.getAllByText(/featured until/i)).toHaveLength(1);
+
+    // Verify the badge is inside the first work's card by finding the work
+    // title, getting its closest ancestor card, and checking for the badge within.
+    const firstWorkTitle = await screen.findByText(WORK.title);
+    const cardElement = firstWorkTitle.closest("div")?.parentElement?.parentElement;
+    expect(cardElement?.textContent || "").toContain("Featured until");
+  });
 });

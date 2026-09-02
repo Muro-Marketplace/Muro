@@ -1916,7 +1916,7 @@ export default function PortfolioPage() {
         `/api/artist-works/${encodeURIComponent(w.id)}/feature`,
         { method: "POST" },
       );
-      setWorks((prev) => prev.map((x, i) => (i === index ? { ...x, featuredUntil } : x)));
+      setWorks((prev) => prev.map((x) => (x.id === w.id ? { ...x, featuredUntil } : x)));
       showToast("Featured at the top of the gallery for seven days");
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : "Could not feature this work", { variant: "error" });
@@ -3222,7 +3222,7 @@ export default function PortfolioPage() {
                     </div>
 
                     {isArtworkOfTheWeek(work.featuredUntil, new Date()) && (
-                      <span className="absolute top-2 left-2 z-10 inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white">
+                      <span className="absolute top-2 right-2 z-10 inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white">
                         Featured until {new Date(work.featuredUntil as string).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                       </span>
                     )}
