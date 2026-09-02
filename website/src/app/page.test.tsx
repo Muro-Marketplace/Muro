@@ -8,6 +8,8 @@
 
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
@@ -31,6 +33,22 @@ vi.mock("@/components/AnimateIn", () => ({
 }));
 vi.mock("@/components/DemoBanner", () => ({ default: () => <div data-testid="demo-banner" /> }));
 vi.mock("@/components/FeedbackBubble", () => ({ default: () => <div data-testid="feedback-bubble" /> }));
+
+const fetchMock = vi.fn((url: string) => {
+  if (String(url).startsWith("/api/browse-artists")) {
+    return Promise.resolve({
+      ok: true,
+      json: async () => ({
+        artists: [
+          { slug: "maya-chen", name: "Maya Chen", image: "https://example.test/maya.jpg" },
+          { slug: "no-image", name: "No Image", image: "" },
+        ],
+      }),
+    });
+  }
+  return Promise.resolve({ ok: false, json: async () => null });
+});
+vi.stubGlobal("fetch", fetchMock);
 
 import Home from "./page";
 
@@ -58,5 +76,26 @@ describe("homepage shell parity with (pages)/layout (A5)", () => {
     const { container } = render(<Home />);
     const main = container.querySelector("main#main-content");
     expect(main?.querySelector("footer")).toBeNull();
+  });
+});
+
+describe("homepage featured artists (launch audit, blocker 1)", () => {
+  it("renders real artists from the browse endpoint, never the seed file", async () => {
+    render(<Home />);
+    const tile = await screen.findByRole("link", { name: /maya chen/i });
+    expect(tile.getAttribute("href")).toBe("/browse/maya-chen");
+    expect(screen.queryByRole("link", { name: /no image/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /james okafor/i })).toBeNull();
+  });
+
+  it("does not import the seed catalogue at all", () => {
+    const src = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8");
+    expect(src).not.toMatch(/from "@\/data\/artists"/);
+  });
+
+  it("describes the hero image honestly", () => {
+    render(<Home />);
+    expect(screen.queryByLabelText("Gallery interior")).toBeNull();
+    expect(screen.getByLabelText("Close-up of textured paint strokes on canvas")).toBeTruthy();
   });
 });

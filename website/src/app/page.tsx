@@ -9,10 +9,7 @@ import DemoBanner from "@/components/DemoBanner";
 import FeedbackBubble from "@/components/FeedbackBubble";
 import ArtistCarousel from "@/components/ArtistCarousel";
 import AnimateIn from "@/components/AnimateIn";
-import { artists } from "@/data/artists";
 import { useAuth } from "@/context/AuthContext";
-
-const featuredArtists = artists.slice(0, 6);
 
 // Row A L123. The trust bar used to floor the STATIC seed
 // (`data/artists.ts`, `data/venues.ts`) into "confident estimate" buckets and
@@ -33,10 +30,38 @@ interface PublicStats {
   total_venues: number;
 }
 
+interface FeaturedArtist {
+  slug: string;
+  name: string;
+  image: string;
+}
+
 export default function Home() {
   const contentRef = useRef<HTMLDivElement>(null);
   const { user, userType } = useAuth();
   const [stats, setStats] = useState<PublicStats | null>(null);
+  const [featured, setFeatured] = useState<FeaturedArtist[]>([]);
+
+  // Launch audit, blocker 1. This grid used to render six seed artists from
+  // src/data/artists.ts: fictional people linking to fictional portfolios.
+  // It now shows the first six real, approved artists from the endpoint
+  // /browse uses. Empty until the fetch lands, and empty if the catalogue
+  // is: no tile is better than a made-up one.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/browse-artists")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { artists?: FeaturedArtist[] } | null) => {
+        if (cancelled || !data || !Array.isArray(data.artists)) return;
+        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image).slice(0, 6));
+      })
+      .catch(() => {
+        /* No tiles is the honest fallback. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,7 +119,7 @@ export default function Home() {
         <div className="absolute inset-0 -z-10">
           <Image
             src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=1080&fit=crop&crop=center"
-            alt="Gallery interior"
+            alt="Close-up of textured paint strokes on canvas"
             fill
             className="object-cover"
             priority
@@ -281,8 +306,8 @@ export default function Home() {
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
               <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                <div className="order-2 lg:order-1 grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2">
-                  {artists.slice(0, 6).map((a) => (
+                <div className={`order-2 lg:order-1 grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2 ${featured.length === 0 ? "hidden" : ""}`}>
+                  {featured.map((a) => (
                     <Link key={a.slug} href={`/browse/${a.slug}`} className="aspect-[4/5] relative rounded-sm overflow-hidden group">
                       <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="20vw" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
