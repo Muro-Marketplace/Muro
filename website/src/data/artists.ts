@@ -67,6 +67,8 @@ export interface ArtistWork {
    *  marketplace can offer a "Recently listed" sort (#5). Optional
    *  because static seed data and legacy rows pre-date the column. */
   createdAt?: string;
+  /** Artwork of the Week: ISO timestamp; boosted while in the future. */
+  featuredUntil?: string;
   /** Denormalised display name of the venue currently hosting this
    *  work, kept in sync by the placements PATCH handler. Migration 038. */
   placed_at_venue?: string | null;

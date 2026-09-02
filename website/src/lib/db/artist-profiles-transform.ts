@@ -86,6 +86,9 @@ export interface DbArtistWork {
   /** Postgres `timestamptz`, ISO string from PostgREST. Powers the
    *  marketplace "Recently listed" sort (#5). */
   created_at?: string;
+  /** Migration 133: Artwork of the Week. ISO timestamptz; the work is
+   *  boosted while this is in the future. */
+  featured_until?: string | null;
   /** Migration 038: denormalised venue display name and active placement
    *  pointer. Kept in sync by the placements PATCH handler. */
   placed_at_venue?: string | null;
@@ -218,6 +221,7 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
       quantityAvailable: w.quantity_available ?? undefined,
       frameOptions: Array.isArray(w.frame_options) ? w.frame_options : [],
       createdAt: w.created_at ?? undefined,
+      featuredUntil: w.featured_until ?? undefined,
       placed_at_venue: w.placed_at_venue ?? null,
       currentPlacement: w.current_placement ?? null,
       current_placement_id: w.current_placement_id ?? null,

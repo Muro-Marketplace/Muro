@@ -10,7 +10,7 @@
   "admin_users": ["user_id", "created_at", "created_by", "note"],
   "commissions": ["id", "request_id", "artist_user_id", "artist_slug", "buyer_user_id", "buyer_type", "title", "description", "amount_pence", "currency", "timeline", "deposit_pence", "status", "conversation_id", "paid_at", "paid_order_id", "delivered_at", "created_at", "updated_at"],
   "saved_items": ["id", "user_id", "item_type", "item_id", "created_at"],
-  "artist_works": ["artist_id", "available", "available_in_store", "color", "created_at", "current_placement_id", "description", "dimensions", "frame_options", "id", "image", "images", "in_store_price", "medium", "mockups", "orientation", "placed_at_venue", "price_band", "pricing", "quantity_available", "shipping_price", "sort_order", "title"],
+  "artist_works": ["artist_id", "available", "available_in_store", "color", "created_at", "current_placement_id", "description", "dimensions", "frame_options", "id", "image", "images", "in_store_price", "medium", "mockups", "orientation", "placed_at_venue", "price_band", "pricing", "quantity_available", "shipping_price", "sort_order", "title", "featured_until"],
   "email_events": ["id", "idempotency_key", "user_id", "to_email", "template", "stream", "subject", "status", "provider_message_id", "provider", "error", "metadata", "created_at", "sent_at", "opened_at", "clicked_at", "bounced_at", "complained_at"],
   "order_events": ["id", "order_id", "event_type", "actor_user_id", "metadata", "idempotency_key", "created_at"],
   "wall_layouts": ["id", "wall_id", "user_id", "name", "items", "layout_hash", "last_render_id", "created_at", "updated_at"],

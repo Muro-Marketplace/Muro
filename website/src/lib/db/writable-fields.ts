@@ -240,6 +240,7 @@ export const ARTIST_WORK_SERVER_OWNED = Object.freeze([
   "placed_at_venue", // denormalised by the placements PATCH handler
   "current_placement_id", // same
   "mockups", // written by the visualizer API
+  "featured_until", // Artwork of the Week, written only by /api/artist-works/[id]/feature
 ] as const);
 
 /**
