@@ -36,7 +36,8 @@ export type FeatureFlag =
   | "WALL_VISUALIZER_V1"
   | "OAUTH_GOOGLE_APPLE"
   | "GATING_V1"
-  | "BLOGS_V1";
+  | "BLOGS_V1"
+  | "SEED_CATALOG";
 
 interface FlagDef {
   envKey: string;
@@ -90,6 +91,19 @@ export const FLAGS: Record<FeatureFlag, FlagDef> = {
       "review queue. On in dev for build-time QA; off in prod until the " +
       "first admin sweep is wired.",
   },
+  SEED_CATALOG: {
+    envKey: "NEXT_PUBLIC_FLAG_SEED_CATALOG",
+    devDefault: true,
+    prodDefault: true,
+    description:
+      "Launch audit: the 41 seed artists in src/data/artists.ts and the 21 " +
+      "seed venues in src/data/venues.ts are fictional. Owner decision D1 " +
+      "(2026-09-02) keeps them visible in production for now, as labelled " +
+      "sample listings with no Verified badge, purchase, enquiry or " +
+      "placement request. Set NEXT_PUBLIC_FLAG_SEED_CATALOG=0 in Vercel to " +
+      "remove them from the marketplace, sitemap, homepage and venue demand " +
+      "tracker in one go.",
+  },
 };
 
 /**
@@ -113,6 +127,7 @@ export const CLIENT_ENV: Record<string, string | undefined> = {
   NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE: process.env.NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE,
   NEXT_PUBLIC_FLAG_GATING_V1: process.env.NEXT_PUBLIC_FLAG_GATING_V1,
   NEXT_PUBLIC_FLAG_BLOGS_V1: process.env.NEXT_PUBLIC_FLAG_BLOGS_V1,
+  NEXT_PUBLIC_FLAG_SEED_CATALOG: process.env.NEXT_PUBLIC_FLAG_SEED_CATALOG,
 };
 
 function readBoolEnv(key: string): boolean | null {

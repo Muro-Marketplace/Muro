@@ -312,3 +312,32 @@ describe("C4: every flag has a static CLIENT_ENV read", () => {
     });
   });
 });
+
+describe("SEED_CATALOG (launch audit, blocker 1)", () => {
+  const SNAPSHOT = { ...process.env };
+  afterEach(() => {
+    process.env = { ...SNAPSHOT };
+  });
+
+  it("is on in production by default (decision D1, 2 September 2026)", () => {
+    delete process.env.NEXT_PUBLIC_FLAG_SEED_CATALOG;
+    setNodeEnv("production");
+    expect(isFlagOn("SEED_CATALOG")).toBe(true);
+  });
+
+  it("env=0 hides the seed everywhere", () => {
+    process.env.NEXT_PUBLIC_FLAG_SEED_CATALOG = "0";
+    setNodeEnv("production");
+    expect(isFlagOn("SEED_CATALOG")).toBe(false);
+  });
+
+  it("is on in development by default", () => {
+    delete process.env.NEXT_PUBLIC_FLAG_SEED_CATALOG;
+    setNodeEnv("development");
+    expect(isFlagOn("SEED_CATALOG")).toBe(true);
+  });
+
+  it("is inlined for the client bundle", () => {
+    expect(Object.keys(CLIENT_ENV)).toContain(FLAGS.SEED_CATALOG.envKey);
+  });
+});

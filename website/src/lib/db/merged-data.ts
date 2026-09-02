@@ -22,13 +22,15 @@ export async function getAllArtists(): Promise<Artist[]> {
   // Plan F #12: hand-curated seed artists are verified by definition,
   // dbProfileToArtist sets isVerified for DB rows, so we backfill it
   // here for the static slice.
-  const staticOnly = staticArtists
-    .filter((a) => !dbSlugs.has(a.slug))
-    .map((a) => ({
-      ...a,
-      isVerified: a.isVerified ?? true,
-      isSeedArtist: true,
-    }));
+  // Launch audit, blocker 1, scoped by the owner on 2 September. The seed
+  // catalogue is fictional. It surfaces only while SEED_CATALOG is on (on
+  // everywhere for now under decision D1; NEXT_PUBLIC_FLAG_SEED_CATALOG=0
+  // hides it). isSeedArtist drives the Sample pill; nothing else changes.
+  const staticOnly = isFlagOn("SEED_CATALOG")
+    ? staticArtists
+        .filter((a) => !dbSlugs.has(a.slug))
+        .map((a) => ({ ...a, isVerified: a.isVerified ?? true, isSeedArtist: true }))
+    : [];
 
   const merged = [...dbArtists, ...staticOnly];
 
@@ -43,17 +45,16 @@ export async function getAllArtists(): Promise<Artist[]> {
 }
 
 /**
- * Get a single artist by slug, database first, then static fallback.
+ * Get a single artist by slug, database first, then static fallback
+ * (static only while SEED_CATALOG is on, and marked isSeedArtist).
  */
 export async function getArtistBySlug(slug: string): Promise<Artist | null> {
-  // Try database first
   const dbResult = await getArtistProfileBySlug(slug);
   if (dbResult) {
     return dbProfileToArtist(dbResult.profile, dbResult.works);
   }
-
-  // Fall back to static data — same isVerified backfill as getAllArtists.
+  if (!isFlagOn("SEED_CATALOG")) return null;
   const staticArtist = staticArtists.find((a) => a.slug === slug);
   if (!staticArtist) return null;
-  return { ...staticArtist, isVerified: staticArtist.isVerified ?? true };
+  return { ...staticArtist, isVerified: staticArtist.isVerified ?? true, isSeedArtist: true };
 }

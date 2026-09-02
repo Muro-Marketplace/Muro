@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { artists } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { isFlagOn } from "@/lib/feature-flags";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
 
@@ -44,22 +45,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: path === "/" ? 1 : 0.6,
   }));
 
-  // Seed artist + artwork pages from static data
+  // Seed artist + artwork pages from static data, only while the seed
+  // catalogue is switched on (NEXT_PUBLIC_FLAG_SEED_CATALOG=0 hides it).
   const seedEntries: MetadataRoute.Sitemap = [];
-  for (const artist of artists) {
-    seedEntries.push({
-      url: `${SITE_URL}/browse/${artist.slug}`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    });
-    for (const work of artist.works) {
+  if (isFlagOn("SEED_CATALOG")) {
+    for (const artist of artists) {
       seedEntries.push({
-        url: `${SITE_URL}/browse/${artist.slug}/${slugify(work.title)}`,
+        url: `${SITE_URL}/browse/${artist.slug}`,
         lastModified: now,
         changeFrequency: "weekly",
-        priority: 0.5,
+        priority: 0.7,
       });
+      for (const work of artist.works) {
+        seedEntries.push({
+          url: `${SITE_URL}/browse/${artist.slug}/${slugify(work.title)}`,
+          lastModified: now,
+          changeFrequency: "weekly",
+          priority: 0.5,
+        });
+      }
     }
   }
 

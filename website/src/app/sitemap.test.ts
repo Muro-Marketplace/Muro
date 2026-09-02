@@ -8,21 +8,21 @@
 // The sitemap function calls Supabase, so we mock getSupabaseAdmin to avoid
 // any real network calls and to keep the test fully offline.
 
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 
 // Mock the Supabase admin client used inside sitemap.ts. Routed through a mutable
 // fromMock so individual tests can supply table-specific data (row 19 #9).
-const { fromMock } = vi.hoisted(() => ({ fromMock: vi.fn() }));
+const { fromMock, seedArtists } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
+  seedArtists: [] as Array<{ slug: string; works: Array<{ title: string }> }>,
+}));
 
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: fromMock }),
 }));
 
-// Mock the static artist seed data so the test doesn't depend on the full
-// artists array and remains fast.
-vi.mock("@/data/artists", () => ({
-  artists: [],
-}));
+// Live array so individual tests can add a seed artist (launch audit).
+vi.mock("@/data/artists", () => ({ artists: seedArtists }));
 
 // Mock slugify with the same lowercase/hyphen behaviour the real one applies to
 // these fixtures (exercised by the row 19 #9 lastmod test).
@@ -109,5 +109,28 @@ describe("sitemap (fix 6.2)", () => {
     // was rejected and this artwork URL never made it into the sitemap.
     expect(work).toBeDefined();
     expect(work?.lastModified).toEqual(new Date("2026-01-01T00:00:00.000Z"));
+  });
+});
+
+describe("sitemap seed gating (launch audit, blocker 1)", () => {
+  const SNAPSHOT = { ...process.env };
+  afterEach(() => {
+    process.env = { ...SNAPSHOT };
+    seedArtists.length = 0;
+  });
+
+  it("omits seed artist URLs when the flag is off", async () => {
+    seedArtists.push({ slug: "seed-one", works: [{ title: "Study One" }] });
+    process.env.NEXT_PUBLIC_FLAG_SEED_CATALOG = "0";
+    const urls = (await sitemap()).map((e) => e.url);
+    expect(urls).not.toContain(`${SITE_URL}/browse/seed-one`);
+    expect(urls).not.toContain(`${SITE_URL}/browse/seed-one/study-one`);
+  });
+
+  it("includes them by default", async () => {
+    seedArtists.push({ slug: "seed-one", works: [{ title: "Study One" }] });
+    delete process.env.NEXT_PUBLIC_FLAG_SEED_CATALOG;
+    const urls = (await sitemap()).map((e) => e.url);
+    expect(urls).toContain(`${SITE_URL}/browse/seed-one`);
   });
 });

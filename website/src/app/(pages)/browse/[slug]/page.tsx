@@ -21,9 +21,11 @@ import { trackEvent, extractTrackingContext, generateVisitorId } from "@/lib/ana
 import type { Metadata } from "next";
 import { artistTotals } from "@/lib/analytics/artist-totals";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { isFlagOn } from "@/lib/feature-flags";
 
 // Static params for seed artists, database artists use dynamic fallback
 export async function generateStaticParams() {
+  if (!isFlagOn("SEED_CATALOG")) return [];
   return artists.map((artist) => ({
     slug: artist.slug,
   }));

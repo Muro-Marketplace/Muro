@@ -12,6 +12,7 @@ import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, resolveDiscipline,
 import { slugify } from "@/lib/slugify";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { formatPriceRange } from "@/lib/format-currency";
+import { isFlagOn } from "@/lib/feature-flags";
 import { geocodePostcode } from "@/lib/geocode";
 import { useAuth } from "@/context/AuthContext";
 import { bandsForWork } from "@/components/browse/SizeBands";
@@ -456,8 +457,8 @@ function BrowsePortfoliosPageInner() {
     return () => window.removeEventListener("resize", compute);
   }, []);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [artists, setArtists] = useState<Artist[]>(staticArtists);
-  const [collections, setCollections] = useState<ArtistCollection[]>(staticCollections);
+  const [artists, setArtists] = useState<Artist[]>(isFlagOn("SEED_CATALOG") ? staticArtists : []);
+  const [collections, setCollections] = useState<ArtistCollection[]>(isFlagOn("SEED_CATALOG") ? staticCollections : []);
   // Tracks whether live DB data has replaced the static seed (#1).
   // While false the marketplace still paints with the seed grid for
   // instant first paint, but result counts are suppressed so the
@@ -560,7 +561,8 @@ function BrowsePortfoliosPageInner() {
     const a = fetch("/api/browse-artists")
       .then((res) => res.json())
       .then((data) => {
-        if (data.artists?.length) setArtists(data.artists);
+        // An empty live list must replace the seed paint, not lose to it.
+        if (Array.isArray(data.artists)) setArtists(data.artists);
       })
       .catch(() => { /* keep static data */ });
     const c = fetch("/api/browse-collections")

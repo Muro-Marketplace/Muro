@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getOptionalUser } from "@/lib/api-auth";
 import { resolveSubscription } from "@/lib/subscriptions";
 import { canSeeVenueIdentity, redactDemandVenue } from "@/lib/venue-visibility";
+import { isFlagOn } from "@/lib/feature-flags";
 
 // Varies by viewer: venue identity (name, description, images, display
 // needs) is paywalled, so the response can't be a single cached payload.
@@ -47,7 +48,13 @@ export async function GET(request: Request) {
 
     // Merge: DB venues override static by slug
     const dbSlugs = new Set((dbVenues || []).map((v) => v.slug as string));
-    const staticOnly = staticVenues.filter((v) => !dbSlugs.has(v.slug));
+    // Launch audit, blocker 2. The seed venues are fictional and only
+    // surface while SEED_CATALOG is on (NEXT_PUBLIC_FLAG_SEED_CATALOG=0
+    // hides them). The venue sections on / and /artists point here, so
+    // this is what they promise.
+    const staticOnly = isFlagOn("SEED_CATALOG")
+      ? staticVenues.filter((v) => !dbSlugs.has(v.slug))
+      : [];
 
     const allVenues = [
       ...(dbVenues || []).map((v) => ({

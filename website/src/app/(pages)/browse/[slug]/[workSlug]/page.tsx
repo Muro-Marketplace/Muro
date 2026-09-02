@@ -8,9 +8,11 @@ import ArtworkPageClient from "./ArtworkPageClient";
 import ArtworkImageViewer from "@/components/ArtworkImageViewer";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import type { Metadata } from "next";
+import { isFlagOn } from "@/lib/feature-flags";
 
 // Static params for seed artists, database artists use dynamic fallback
 export async function generateStaticParams() {
+  if (!isFlagOn("SEED_CATALOG")) return [];
   return artists.flatMap((artist) =>
     artist.works.map((work) => ({
       slug: artist.slug,
