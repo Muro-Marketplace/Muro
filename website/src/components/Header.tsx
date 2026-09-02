@@ -36,10 +36,10 @@ const publicMarketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Spaces", href: "/spaces", match: (p: string) => p === "/spaces" },
   { label: "How It Works", href: "/how-it-works", match: (p: string) => p === "/how-it-works" },
   { label: "Manage My Walls", href: "/curated", match: (p: string) => p === "/curated" },
   { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
+  { label: "Spaces", href: "/spaces", match: (p: string) => p === "/spaces" },
 ];
 
 // Venue variant of the marketplace tabs: drops "Spaces" (not useful for a
@@ -938,7 +938,7 @@ export default function Header() {
                 venue nav. */}
             <nav className="flex flex-col gap-4">
               {isMarketplaceArea ? (
-                (userType === "venue" ? venueMarketplaceTabs : marketplaceTabs).map((tab) => (
+                (userType === "venue" ? venueMarketplaceTabs : !user ? publicMarketplaceTabs : marketplaceTabs).map((tab) => (
                   <Link
                     key={tab.href}
                     href={tab.href}

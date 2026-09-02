@@ -50,7 +50,7 @@
   "blog_featured_artworks": ["blog_id", "artwork_id", "position"],
   "newsletter_subscribers": ["id", "email", "source", "subscribed_at", "unsubscribed_at", "confirm_token", "confirmed_at"],
   "feature_request_upvotes": ["request_id", "user_id", "created_at"],
-  "programme_rent_accruals": ["id", "curation_request_id", "placement_id", "artist_user_id", "stripe_invoice_id", "period_months", "amount_pence", "accrued_at", "settled_transfer_order_id", "settled_at"],
+  "programme_rent_accruals": ["id", "curation_request_id", "placement_id", "artist_user_id", "stripe_invoice_id", "period_months", "amount_pence", "accrued_at", "settled_transfer_order_id", "settled_at", "voided_at", "voided_reason"],
   "artwork_request_responses": ["id", "request_id", "artist_user_id", "artist_slug", "response_type", "message", "work_ids", "proposed_offer_amount_pence", "proposed_commission_amount_pence", "proposed_commission_timeline", "linked_offer_id", "linked_placement_id", "linked_commission_id", "status", "created_at", "updated_at", "metadata", "proposed_monthly_fee_pence", "proposed_qr_enabled", "proposed_revenue_share_percent"],
   "visualizer_quota_overrides": ["user_id", "daily_extra", "monthly_extra", "expires_at", "reason", "granted_by", "created_at"],
   "placement_recurring_billings": ["id", "placement_id", "stripe_subscription_id", "stripe_customer_id", "payer_user_id", "payee_user_id", "monthly_amount_pence", "status", "current_period_start", "current_period_end", "created_at", "updated_at", "cancel_at_period_end"],

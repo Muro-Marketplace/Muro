@@ -135,28 +135,6 @@ export default function Home() {
                   {user ? portalLabel : "Sign Up"}
                 </Link>
               </div>
-
-              {/* Demo-account funnel, secondary, low-pressure invitation
-                  for visitors who'd rather see the platform first. On
-                  desktop the line is absolutely positioned below the
-                  centered hero group so it never pushes the WALLPLACE
-                  logo + CTAs upward; on mobile it stays in normal flow
-                  where the user has dialled in the spacing already.
-                  Hidden once a user is logged in (#31), they're past
-                  the "just looking" stage and the banner just adds
-                  noise. */}
-              {!user && (
-                <p className="mt-7 sm:mt-6 sm:absolute sm:left-0 sm:right-0 sm:top-full text-sm text-white/60">
-                  Just looking? Browse{" "}
-                  <Link
-                    href="/demo"
-                    className="text-white/90 hover:text-white underline underline-offset-4 decoration-white/30 hover:decoration-white transition-colors font-medium"
-                  >
-                    a demo artist or venue account
-                  </Link>
-                  .
-                </p>
-              )}
             </div>
           </div>
         </div>
