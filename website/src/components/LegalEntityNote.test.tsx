@@ -43,4 +43,20 @@ describe("<LegalEntityNote />", () => {
     expect(screen.getByText(/in the process of being incorporated/)).toBeTruthy();
     expect(screen.getByText(/Extra clause for one page only\./)).toBeTruthy();
   });
+
+  it("renders children between the pre-incorporation sentences in the correct order", () => {
+    const childText = 'References to "Wallplace" throughout this document refer to the business operating under this trading name.';
+    const { container } = render(<LegalEntityNote>{childText}</LegalEntityNote>);
+    const text = container.textContent || "";
+    const englandIndex = text.indexOf("Wales.");
+    const referencesIndex = text.indexOf('References to');
+    const onceIndex = text.indexOf("Once incorporated");
+    expect(englandIndex).toBeGreaterThan(-1);
+    expect(referencesIndex).toBeGreaterThan(-1);
+    expect(onceIndex).toBeGreaterThan(-1);
+    expect(englandIndex).toBeLessThan(referencesIndex);
+    expect(referencesIndex).toBeLessThan(onceIndex);
+    expect(text).toContain("Wales. References to");
+    expect(text).toContain("trading name. Once incorporated");
+  });
 });

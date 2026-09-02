@@ -17,13 +17,13 @@ export default function LegalEntityNote({ children }: { children?: React.ReactNo
         {isIncorporated() ? (
           <>
             <strong className="text-foreground">{COMPANY.tradingName}</strong> is the trading name of {COMPANY.legalName}, a company registered in England and Wales (company number {COMPANY.number}), registered office {COMPANY.registeredOffice}.
+            {children ? <> {children}</> : null}
           </>
         ) : (
           <>
-            <strong className="text-foreground">Note:</strong> Wallplace is the trading name of a business in the process of being incorporated as a limited company in England and Wales. Once incorporated, this document will be updated to reflect the registered company name and number.
+            <strong className="text-foreground">Note:</strong> Wallplace is the trading name of a business in the process of being incorporated as a limited company in England and Wales.{children ? <> {children}</> : null} Once incorporated, this document will be updated to reflect the registered company name and number.
           </>
         )}
-        {children ? <> {children}</> : null}
       </p>
     </div>
   );

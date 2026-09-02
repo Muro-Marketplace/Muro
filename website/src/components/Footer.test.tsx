@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import { vi } from "vitest";
 
 // Stub next/link so it renders an <a> in jsdom.
 vi.mock("next/link", () => ({
@@ -15,9 +14,22 @@ vi.mock("./NewsletterForm", () => ({
   default: () => <div data-testid="newsletter-form" />,
 }));
 
+const { company } = vi.hoisted(() => ({
+  company: { tradingName: "Wallplace", legalName: "", number: "", registeredOffice: "" },
+}));
+vi.mock("@/lib/company", () => ({
+  COMPANY: company,
+  isIncorporated: () => company.number.trim().length > 0,
+}));
+
 import Footer from "./Footer";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  company.legalName = "";
+  company.number = "";
+  company.registeredOffice = "";
+});
 
 describe("<Footer />", () => {
   it("renders without crashing", () => {
@@ -53,5 +65,21 @@ describe("<Footer />", () => {
       (a) => a.getAttribute("href") === "/spaces",
     );
     expect(spacesLinks).toHaveLength(1);
+  });
+
+  it("does not render company details while unincorporated", () => {
+    const { container } = render(<Footer />);
+    expect(container.textContent).not.toContain("company number");
+  });
+
+  it("renders the company legal name, number, and registered office once incorporated", () => {
+    company.legalName = "Wallplace Ltd";
+    company.number = "12345678";
+    company.registeredOffice = "1 Example Street, London";
+    const { container } = render(<Footer />);
+    const text = container.textContent || "";
+    expect(text).toContain("Wallplace Ltd");
+    expect(text).toContain("company number 12345678");
+    expect(text).toContain("1 Example Street, London");
   });
 });
