@@ -108,6 +108,15 @@ describe("POST /api/artist-works/[id]/feature", () => {
     expect((await call("w9")).status).toBe(404);
   });
 
+  it("fails closed on an outcome the route doesn't recognise", async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: [{ outcome: "weird", live_work_id: null, live_until: null }],
+      error: null,
+    });
+    const res = await call("w1");
+    expect(res.status).toBe(500);
+  });
+
   it("calls feature_artist_work with the artist id, work id and a seven-day boost window", async () => {
     await call("w1");
     expect(rpcMock).toHaveBeenCalledWith("feature_artist_work", {

@@ -67,6 +67,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { status: 409 },
     );
   }
+  if (row.outcome !== "featured") {
+    return NextResponse.json({ error: "Could not feature this work" }, { status: 500 });
+  }
 
   return NextResponse.json({ featuredUntil });
 }

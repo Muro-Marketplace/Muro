@@ -3,12 +3,14 @@ import { COMPANY, isIncorporated } from "@/lib/company";
 /**
  * The identity block at the top of each agreement and the terms page.
  *
- * `children`, if given, is appended after the standard note as one more
- * sentence in the same paragraph. It exists for the terms page, which
- * carries an extra sentence ("References to Wallplace throughout this
- * document refer to the business operating under this trading name.") that
- * the artist and venue agreements don't; that sentence is page-specific, so
- * it stays out of the shared identity copy rather than living inside it.
+ * `children`, if given, renders as one more sentence in the same paragraph:
+ * between the two pre-incorporation sentences before the company is
+ * registered, and after the registered details once it is. It exists for
+ * the terms page, which carries an extra sentence ("References to
+ * Wallplace throughout this document refer to the business operating
+ * under this trading name.") that the artist and venue agreements don't;
+ * that sentence is page-specific, so it stays out of the shared identity
+ * copy rather than living inside it.
  */
 export default function LegalEntityNote({ children }: { children?: React.ReactNode }) {
   return (

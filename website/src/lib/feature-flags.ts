@@ -98,11 +98,11 @@ export const FLAGS: Record<FeatureFlag, FlagDef> = {
     description:
       "Launch audit: the 41 seed artists in src/data/artists.ts and the 21 " +
       "seed venues in src/data/venues.ts are fictional. Owner decision D1 " +
-      "(2026-09-02) keeps them visible in production for now, as labelled " +
-      "sample listings with no Verified badge, purchase, enquiry or " +
-      "placement request. Set NEXT_PUBLIC_FLAG_SEED_CATALOG=0 in Vercel to " +
-      "remove them from the marketplace, sitemap, homepage and venue demand " +
-      "tracker in one go.",
+      "(2026-09-02) keeps them visible in production exactly as they are, " +
+      "labelled with a blue Sample pill rather than restricted in any way. " +
+      "Set NEXT_PUBLIC_FLAG_SEED_CATALOG=0 in Vercel to remove them from " +
+      "the marketplace, sitemap, homepage and venue demand tracker in one " +
+      "go.",
   },
 };
 

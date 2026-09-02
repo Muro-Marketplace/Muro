@@ -15,7 +15,7 @@ export function ArtistOnboardingGraduation({ firstName, dashboardUrl, discoverVe
   return (
     <EmailShell stream="notify" persona="artist" category="recommendations" preview="You're live on Wallplace, here's what happens next">
       <H1>You&rsquo;re live, {firstName}</H1>
-      <P>Your profile is visible to venues across the UK. From here, placements happen two ways:</P>
+      <P>Your profile is visible to venues across London. From here, placements happen two ways:</P>
       <P>
         <strong>Venues reach out to you</strong>, you&rsquo;ll get an email when a new request arrives.
         <br />

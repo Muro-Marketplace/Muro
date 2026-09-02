@@ -49,7 +49,7 @@ const venueMarketplaceTabs = [
   { label: "Galleries",  href: "/browse",                 match: (p: string, v: string) => p === "/browse" && v !== "portfolios" && v !== "collections" },
   { label: "Portfolios", href: "/browse?view=portfolios", match: (p: string, v: string) => p === "/browse" && v === "portfolios" },
   { label: "Collections", href: "/browse?view=collections", match: (p: string, v: string) => p === "/browse" && v === "collections" },
-  { label: "Wallplace Curated", href: "/curated", match: (p: string) => p === "/curated" },
+  { label: "Manage My Walls", href: "/curated", match: (p: string) => p === "/curated" },
   { label: "Blog", href: "/blog", match: (p: string) => p.startsWith("/blog") },
 ];
 
@@ -117,7 +117,7 @@ const loggedInNavLinks: NavLink[] = [
 // instead so the top nav matches how venues actually use the site.
 const venueNavLinks: NavLink[] = [
   { label: "Marketplace", href: "/browse" },
-  { label: "Wallplace Curated", href: "/curated" },
+  { label: "Manage My Walls", href: "/curated" },
   { label: "Blog", href: "/blog" },
 ];
 
