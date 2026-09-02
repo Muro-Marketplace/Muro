@@ -10,7 +10,6 @@ import { stripe } from "@/lib/stripe";
 import { COUNTRIES } from "@/lib/iso-countries";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { platformFeePercentForArtist } from "@/lib/platform-fee";
 import { canReceivePayout } from "@/lib/payouts/capability";
 import { isWorkSold } from "@/lib/work-stock";
@@ -37,11 +36,6 @@ interface OfferRow {
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
-  // claimed it was wired. This handler reaches real people (real emails, real
-  // money, or content on a public page), so it takes the STRICT 403 variant.
-  const demoBlocked = assertNotDemoStrict(auth.user!.id);
-  if (demoBlocked) return demoBlocked;
 
   const { id } = await context.params;
   const db = getSupabaseAdmin();

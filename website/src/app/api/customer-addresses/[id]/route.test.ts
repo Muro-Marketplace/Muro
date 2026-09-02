@@ -20,7 +20,6 @@ const { fromMock, getAuthMock } = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getAuthMock }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: () => null }));
 
 import { DELETE } from "./route";
 

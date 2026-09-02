@@ -20,7 +20,6 @@ const { fromMock, authMock } = vi.hoisted(() => ({ fromMock: vi.fn(), authMock: 
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: vi.fn(() => null) }));
 vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
 

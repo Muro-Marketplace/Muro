@@ -10,7 +10,6 @@ import { verifyQrAttribution } from "@/lib/qr-attribution-token";
 import { saveCartSession } from "@/lib/cart-sessions";
 import { canReceivePayout } from "@/lib/payouts/capability";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 // Fulfilment methods. Earlier revisions also handled "digital", but the
@@ -222,12 +221,6 @@ export async function POST(request: Request) {
       const auth = await getAuthenticatedUser(request);
       if (auth.user) {
         buyerUserId = auth.user.id;
-        // E23a. Guarded only inside the authenticated branch, because guest
-        // checkout is supported and an anonymous caller has no id to test. A
-        // demo session reaching Stripe would take real money, so this is the
-        // strict variant.
-        const demoBlocked = assertNotDemoStrict(auth.user.id);
-        if (demoBlocked) return demoBlocked;
         const db = getSupabaseAdmin();
         const { data: artistProfile } = await db
           .from("artist_profiles")

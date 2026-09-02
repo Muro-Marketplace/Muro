@@ -11,7 +11,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { createNotification } from "@/lib/notifications";
 import { orFilter } from "@/lib/db/safe-filter";
 import { defaultOfferExpiry } from "@/lib/offers/expiry";
@@ -202,11 +201,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: the demo guard existed but had ZERO call sites, while two doc comments
-  // claimed it was wired. This handler reaches real people (real emails, real
-  // money, or content on a public page), so it takes the STRICT 403 variant.
-  const demoBlocked = assertNotDemoStrict(auth.user!.id);
-  if (demoBlocked) return demoBlocked;
 
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { FOUNDING_TRIAL_DAYS, STANDARD_TRIAL_DAYS } from "@/lib/pricing";
 
@@ -17,11 +16,6 @@ const PRICE_MAP: Record<string, string | undefined> = {
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   try {
     const body = await request.json();

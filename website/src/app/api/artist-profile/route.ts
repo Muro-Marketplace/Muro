@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { handleAuthzError } from "@/lib/authz";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { getArtistProfileByUserId, upsertArtistProfile } from "@/lib/db/artist-profiles";
 import { getWorksByArtistProfileId } from "@/lib/db/artist-works";
 import { geocodePostcode } from "@/lib/geocode";
@@ -37,11 +36,6 @@ const UK_POSTCODE_RE =
 export async function PUT(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   try {
     const body = await request.json();
@@ -150,11 +144,6 @@ export async function PUT(request: Request) {
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   try {
     const body = await request.json();

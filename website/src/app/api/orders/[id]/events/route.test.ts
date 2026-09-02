@@ -14,7 +14,6 @@ const { fromMock, authMock, verifyTokenMock } = vi.hoisted(() => ({
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/order-tracking-token", () => ({ verifyOrderToken: verifyTokenMock }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: () => null }));
 
 import { GET } from "./route";
 

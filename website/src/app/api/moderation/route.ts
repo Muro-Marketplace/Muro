@@ -13,7 +13,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { withRateLimit, getIP } from "@/lib/rate-limit";
 import {
   parsePayload,
@@ -98,10 +97,6 @@ export async function POST(request: Request) {
 
   const auth = await getAuthenticatedUser(request);
   const submittedByUserId = auth.user?.id ?? null;
-  // E23a: soft demo guard. Unauthenticated reports are allowed, so this fires
-  // only for a real demo session.
-  const demoResp = assertNotDemo(submittedByUserId);
-  if (demoResp) return demoResp;
   const submittedByEmail =
     (parsed.data as { contact_email?: string }).contact_email ||
     auth.user?.email ||

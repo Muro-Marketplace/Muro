@@ -78,7 +78,6 @@ function makeDb() {
 }
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: () => null }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => makeDb() }));
 vi.mock("@/lib/feature-flags", () => ({ isFlagOn: isFlagOnMock }));
 vi.mock("@/lib/subscriptions", () => ({ isSubscribed: isSubscribedMock }));

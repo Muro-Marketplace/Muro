@@ -18,7 +18,6 @@ import { z } from "zod";
 import { getAdminUser } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { recordAdminAction } from "@/lib/admin-audit";
-import { assertNotDemoStrict } from "@/lib/demo-guard";
 import { sendEmail } from "@/lib/email/send";
 import { FOUNDING_ARTIST_LIMIT } from "@/lib/pricing";
 import { OperationalAccountRestricted } from "@/emails/templates/legal/OperationalAccountRestricted";
@@ -84,12 +83,6 @@ interface ArtistRow {
 export async function PATCH(request: Request) {
   const auth = await getAdminUser(request);
   if (auth.error) return auth.error;
-  // The mutation ratchet (01 Phase E item 15) wants every service-role write
-  // behind the demo guard. Strict rather than soft: this endpoint hides a
-  // profile from the marketplace, so a silent 200 that changed nothing would be
-  // the worst answer. Dormant unless a demo user id is also an admin.
-  const demo = assertNotDemoStrict(auth.user?.id);
-  if (demo) return demo;
 
   const body = await request.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);

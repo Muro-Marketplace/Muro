@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp, UNKNOWN_IP } from "@/lib/client-ip";
@@ -37,8 +36,6 @@ export async function POST(request: Request) {
     }
 
     const { user } = await getAuthenticatedUser(request);
-    const demoResp = assertNotDemo(user?.id ?? null);
-    if (demoResp) return demoResp;
 
     // Server-derived when we have a token. The body's userEmail is only used on
     // the pre-signup path, where there is no token to derive anything from.

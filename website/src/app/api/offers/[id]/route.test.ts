@@ -13,7 +13,6 @@ const { fromMock, authMock } = vi.hoisted(() => ({
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: () => null }));
 vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
 
 import { PATCH } from "./route";

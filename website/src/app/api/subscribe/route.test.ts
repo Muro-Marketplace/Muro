@@ -19,7 +19,6 @@ const { getAuthMock, fromMock, sessionsCreate, subsList, customersCreate } = vi.
 });
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getAuthMock }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: () => null }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
 vi.mock("@/lib/stripe", () => ({
   stripe: {

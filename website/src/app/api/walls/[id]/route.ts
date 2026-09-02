@@ -15,7 +15,6 @@
 import { NextResponse } from "next/server";
 import { isFlagOn } from "@/lib/feature-flags";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { updateWallSchema } from "@/lib/visualizer/validations";
 import {
@@ -91,10 +90,6 @@ export async function GET(request: Request, ctx: RouteContext) {
 export async function PATCH(request: Request, ctx: RouteContext) {
   const r = await resolveAndAuthorize(request, ctx);
   if (r.errResponse) return r.errResponse;
-  // E23a: soft demo guard, on the id resolveAndAuthorize already established.
-  // Reads stay open, so GET is deliberately not guarded.
-  const demoResp = assertNotDemo(r.userId);
-  if (demoResp) return demoResp;
 
   let body: unknown;
   try {
@@ -127,10 +122,6 @@ export async function PATCH(request: Request, ctx: RouteContext) {
 export async function DELETE(request: Request, ctx: RouteContext) {
   const r = await resolveAndAuthorize(request, ctx);
   if (r.errResponse) return r.errResponse;
-  // E23a: soft demo guard, on the id resolveAndAuthorize already established.
-  // Reads stay open, so GET is deliberately not guarded.
-  const demoResp = assertNotDemo(r.userId);
-  if (demoResp) return demoResp;
 
   const ok = await deleteWall(r.wall!.id);
   if (!ok) {

@@ -2,7 +2,6 @@
 //
 // Coverage focuses on the boundaries:
 //   - unauth → 401 (delegated to auth helper)
-//   - demo session → soft 200 + {demo:true} with zero writes (C15)
 //   - missing or wrong confirm string → 400
 //   - happy path: every TABLES_USER_ID row gets a delete().eq(), orders and
 //     refund_requests are RETAINED and anonymised (C14a/C14b), then
@@ -32,8 +31,6 @@ vi.mock("@/lib/supabase-admin", () => ({
   }),
 }));
 
-// demo-guard is deliberately NOT mocked: the C15 tests below drive the real
-// guard through its env-var switch.
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getAuthMock }));
 
 import { POST } from "./route";
@@ -129,20 +126,10 @@ function req(token = "Bearer valid", body: unknown = { confirm: "DELETE MY ACCOU
   });
 }
 
-let savedDemoArtist: string | undefined;
-let savedDemoVenue: string | undefined;
-
 beforeEach(() => {
   mockDeleteUser.mockReset();
   fromMock.mockReset();
   getAuthMock.mockReset();
-
-  // The demo guard reads these at call time; make sure ambient env can't
-  // flip a test either way.
-  savedDemoArtist = process.env.DEMO_ARTIST_USER_ID;
-  savedDemoVenue = process.env.DEMO_VENUE_USER_ID;
-  delete process.env.DEMO_ARTIST_USER_ID;
-  delete process.env.DEMO_VENUE_USER_ID;
 
   getAuthMock.mockImplementation(async (r: Request) => {
     const auth = r.headers.get("authorization");
@@ -154,10 +141,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (savedDemoArtist === undefined) delete process.env.DEMO_ARTIST_USER_ID;
-  else process.env.DEMO_ARTIST_USER_ID = savedDemoArtist;
-  if (savedDemoVenue === undefined) delete process.env.DEMO_VENUE_USER_ID;
-  else process.env.DEMO_VENUE_USER_ID = savedDemoVenue;
   vi.restoreAllMocks();
 });
 
@@ -374,40 +357,6 @@ describe("POST /api/account/delete refuses to half-erase (C14c)", () => {
     const res = await POST(req("Bearer valid"));
     expect(res.status).toBe(500);
     expect((await res.json()).error).toMatch(/contact support|could not/i);
-  });
-});
-
-describe("POST /api/account/delete demo guard (C15)", () => {
-  it("soft-blocks a demo artist session with 200 + demo:true and zero writes", async () => {
-    process.env.DEMO_ARTIST_USER_ID = "u1";
-
-    const res = await POST(req("Bearer valid"));
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.demo).toBe(true);
-    expect(fromMock).not.toHaveBeenCalled();
-    expect(mockDeleteUser).not.toHaveBeenCalled();
-  });
-
-  it("soft-blocks a demo venue session too", async () => {
-    process.env.DEMO_VENUE_USER_ID = "u1";
-
-    const res = await POST(req("Bearer valid"));
-
-    expect((await res.json()).demo).toBe(true);
-    expect(mockDeleteUser).not.toHaveBeenCalled();
-  });
-
-  it("does not block a real user when demo ids are configured", async () => {
-    process.env.DEMO_ARTIST_USER_ID = "u-demo-artist";
-    process.env.DEMO_VENUE_USER_ID = "u-demo-venue";
-
-    const res = await POST(req("Bearer valid"));
-
-    expect(res.status).toBe(200);
-    expect((await res.json()).demo).toBeUndefined();
-    expect(mockDeleteUser).toHaveBeenCalledWith("u1");
   });
 });
 

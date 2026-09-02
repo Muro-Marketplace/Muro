@@ -13,7 +13,6 @@ vi.mock("@/lib/api-auth", () => ({
   getAuthenticatedUser: vi.fn(async () => ({ user: { id: "u-buyer", email: "b@x.com" }, error: null })),
 }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => null) }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: vi.fn(() => null) }));
 vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true, skipped: false })) }));
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn(async () => ({ ok: true })) }));
 

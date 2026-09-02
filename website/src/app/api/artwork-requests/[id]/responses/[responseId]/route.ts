@@ -13,7 +13,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { createNotification } from "@/lib/notifications";
 import { placementCapDecision } from "@/app/api/placements/placement-cap";
 import { isFlagOn } from "@/lib/feature-flags";
@@ -186,11 +185,6 @@ export async function PATCH(
 ) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   const { id: requestId, responseId } = await context.params;
   const body = await request.json().catch(() => null);

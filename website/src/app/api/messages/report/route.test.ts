@@ -16,7 +16,6 @@ const { fromMock, getAuthMock } = vi.hoisted(() => ({ fromMock: vi.fn(), getAuth
 
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getAuthMock }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: () => null }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => null) }));
 
 import { POST } from "./route";

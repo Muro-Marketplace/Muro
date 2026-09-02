@@ -7,12 +7,11 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { sessionsCreateMock, fromMock, getUserMock, assertNotDemoMock, canAcceptMock } = vi.hoisted(
+const { sessionsCreateMock, fromMock, getUserMock, canAcceptMock } = vi.hoisted(
   () => ({
     sessionsCreateMock: vi.fn(async () => ({ id: "cs_1", url: "https://stripe.example/pay" })),
     fromMock: vi.fn(),
     getUserMock: vi.fn(),
-    assertNotDemoMock: vi.fn(() => null),
     canAcceptMock: vi.fn(async (): Promise<{ ok: boolean; reason?: string }> => ({ ok: true })),
   }),
 );
@@ -22,7 +21,6 @@ vi.mock("@/lib/stripe", () => ({
 }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getUserMock }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: assertNotDemoMock }));
 vi.mock("@/lib/payouts/capability", () => ({ canReceivePayout: canAcceptMock }));
 
 import { POST } from "./route";
@@ -105,7 +103,6 @@ beforeEach(() => {
   };
   fromMock.mockReset();
   sessionsCreateMock.mockClear();
-  assertNotDemoMock.mockReturnValue(null);
   canAcceptMock.mockReset();
   canAcceptMock.mockResolvedValue({ ok: true });
   getUserMock.mockReset();
@@ -226,14 +223,6 @@ describe("POST /api/placements/[id]/payment/setup existing guards still hold", (
   it("400s a placement with no monthly fee", async () => {
     state.placement = { ...PLACEMENT, monthly_fee_gbp: 0 };
     expect((await post()).status).toBe(400);
-  });
-
-  it("returns the demo response without touching Stripe", async () => {
-    assertNotDemoMock.mockReturnValue(
-      Response.json({ demo: true }) as unknown as ReturnType<typeof assertNotDemoMock>,
-    );
-    await post();
-    expect(sessionsCreateMock).not.toHaveBeenCalled();
   });
 });
 

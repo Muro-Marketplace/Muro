@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { sendAdminAlert } from "@/lib/email/admin-alert";
 import { sendEmail } from "@/lib/email/send";
 import { ArtistRefundRequested } from "@/emails/templates/orders/ArtistRefundRequested";
@@ -36,11 +35,6 @@ export async function POST(request: Request) {
   } else {
     const auth = await getAuthenticatedUser(request);
     if (auth.error) return auth.error;
-    // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-    // unwinding optimistic state. The helper had zero call sites while two doc
-    // comments claimed it was enforced.
-    const demoResp = assertNotDemo(auth.user!.id);
-    if (demoResp) return demoResp;
     userId = auth.user!.id;
     userEmail = (auth.user!.email || "").toLowerCase();
   }

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { assertOrderParty, assertPlacementParty, handleAuthzError } from "@/lib/authz";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email/send";
@@ -98,9 +97,6 @@ export async function POST(request: Request) {
 
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   let body: unknown = {};
   try {

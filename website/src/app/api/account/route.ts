@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 
 // DELETE /api/account
 // Soft-delete: anonymise profile rows, scrub optional PII, then delete the
@@ -13,11 +12,6 @@ import { assertNotDemo } from "@/lib/demo-guard";
 export async function DELETE(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   let body: { confirm?: string } = {};
   try { body = await request.json(); } catch { /* empty body is fine */ }

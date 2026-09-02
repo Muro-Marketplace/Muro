@@ -8,7 +8,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -53,10 +52,6 @@ export async function POST(request: Request) {
   // otherwise we just record the email.
   const auth = await getAuthenticatedUser(request);
   const userId = auth.error ? null : auth.user?.id || null;
-  // E23a: soft demo guard. Anonymous posting is allowed here, so this only
-  // fires when there IS a session and it belongs to a demo account.
-  const demoResp = assertNotDemo(userId);
-  if (demoResp) return demoResp;
 
   const db = getSupabaseAdmin();
   const { data, error } = await db

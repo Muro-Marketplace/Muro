@@ -31,7 +31,6 @@ vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: fromMock, auth: { admin: { deleteUser: deleteUserMock } } }),
 }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: getAuthMock }));
-vi.mock("@/lib/demo-guard", () => ({ assertNotDemo: () => null }));
 
 import { DELETE } from "./route";
 

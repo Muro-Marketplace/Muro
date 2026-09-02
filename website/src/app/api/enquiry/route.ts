@@ -6,7 +6,6 @@ import { sendMessageUnreadEmail } from "@/lib/email/notifications";
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 // Enquiries are messages from the public TO AN ARTIST (the enquiry form
@@ -78,10 +77,6 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a idiom: soft demo guard on portal mutations. 200 + {demo:true} so
-  // the portal can toast without unwinding optimistic state.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   const artist = await requireArtistSlugForUser(auth.user!.id);
   if (artist.error) return artist.error;

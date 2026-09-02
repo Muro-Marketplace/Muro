@@ -50,7 +50,6 @@
 
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 const CONFIRM_STRING = "DELETE MY ACCOUNT";
@@ -121,12 +120,6 @@ const TABLES_USER_ID: Array<{ table: string; col: string }> = [
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // C15: the soft demo guard every sibling mutation has. The public demo
-  // funnel signs any visitor into a shared demo account; without this,
-  // "Try the demo" handed out the power to hard-delete it. 200 + {demo:true}
-  // so the portal can toast without unwinding optimistic state.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   // request.json() returns null (not an exception) when the body is
   // literal JSON `null`, so we must defensively guard against `body`

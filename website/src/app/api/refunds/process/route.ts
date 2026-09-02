@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { sendEmail } from "@/lib/email/send";
@@ -17,11 +16,6 @@ const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   // A malformed JSON body is the ONLY thing that should ever produce a 400 here.
   // Parse it in isolation so a genuine downstream failure can't be misreported

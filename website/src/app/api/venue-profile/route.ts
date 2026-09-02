@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { handleAuthzError } from "@/lib/authz";
-import { assertNotDemo } from "@/lib/demo-guard";
 import { getVenueProfileByUserId, upsertVenueProfile } from "@/lib/db/venue-profiles";
 import { pickWritable, VENUE_PROFILE_WRITABLE } from "@/lib/db/writable-fields";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -21,11 +20,6 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   try {
     const body = await request.json();
@@ -73,11 +67,6 @@ export async function PUT(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   const body = await request.json().catch(() => ({}));
 
@@ -258,11 +247,6 @@ async function findVenueRegistration(
 export async function POST(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
-  // E23a: soft demo guard. 200 + {demo:true} so the portal can toast without
-  // unwinding optimistic state. The helper had zero call sites while two doc
-  // comments claimed it was enforced.
-  const demoResp = assertNotDemo(auth.user!.id);
-  if (demoResp) return demoResp;
 
   try {
     const body = await request.json();
