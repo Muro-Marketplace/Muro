@@ -48,6 +48,17 @@ describe("public claims the site cannot evidence stay out", () => {
     expect(cards).toMatch(/Featured artist: your profile leads the marketplace/);
   });
 
+  it("the billing upgrade panel and application form sell the same tier perks (Finding 4)", () => {
+    for (const p of [
+      "src/app/(pages)/artist-portal/billing/page.tsx",
+      "src/components/ApplicationForm.tsx",
+    ]) {
+      const src = read(p);
+      expect(src, p).not.toMatch(/featured profile/i);
+      expect(src, p).toMatch(/Artwork of the Week/);
+    }
+  });
+
   it("venue photo captions name a type, never an invented place", () => {
     expect(read("src/components/marketing/VenueGuide.tsx")).not.toMatch(
       /caption: "[^"]*, (Peckham|Bermondsey|Hackney|Margate|Shoreditch|Camberwell|Islington|Deptford)"/,
