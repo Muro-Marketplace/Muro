@@ -109,6 +109,19 @@ const PROOF_PLACEMENTS = [
   },
 ];
 
+/**
+ * The first real installation (owner action A5). Null until the owner
+ * supplies the photo (public/images/programmes/case-study-1.webp), a venue
+ * name they have permission to use, and a quote with attribution. Nothing
+ * renders until all four exist.
+ */
+export const CASE_STUDY: {
+  image: string;
+  venue: string;
+  quote: string;
+  attribution: string;
+} | null = null;
+
 const FAQ_ITEMS = [
   {
     question: "What's the term?",
@@ -396,6 +409,32 @@ export default function ProgrammesClient() {
             </AnimateIn>
           </div>
         </section>
+
+        {CASE_STUDY && (
+          <section className="py-20 lg:py-28 bg-surface">
+            <div className="max-w-[1200px] mx-auto px-6">
+              <AnimateIn>
+                <div className="grid lg:grid-cols-2 gap-10 items-center">
+                  <div className="aspect-[4/3] rounded-sm overflow-hidden relative">
+                    <Image
+                      src={CASE_STUDY.image}
+                      alt={`Artwork installed at ${CASE_STUDY.venue}`}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-xs font-medium text-accent uppercase tracking-wider">On the wall</span>
+                    <h2 className="text-3xl md:text-4xl mt-2 mb-6">{CASE_STUDY.venue}</h2>
+                    <blockquote className="text-lg text-foreground leading-relaxed">&ldquo;{CASE_STUDY.quote}&rdquo;</blockquote>
+                    <p className="mt-4 text-sm text-muted">{CASE_STUDY.attribution}</p>
+                  </div>
+                </div>
+              </AnimateIn>
+            </div>
+          </section>
+        )}
 
         {/* Proof: every artist has a real, checkable portfolio. The
             images below are unattributed atmosphere, not claims about
