@@ -3174,6 +3174,7 @@ export default function PortfolioPage() {
                 return (
                   <div
                     key={work.id}
+                    data-testid={`work-card-${work.id}`}
                     // Drag-to-reorder is disabled in select mode so a
                     // click on a card reads cleanly as a selection
                     // toggle, not a drag start.

@@ -5,7 +5,7 @@
 // confirmed write and a failure keeps the form open with the real error.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const { mutateMock, showToastMock, artistState } = vi.hoisted(() => ({
   mutateMock: vi.fn(),
@@ -432,28 +432,60 @@ describe("Artwork of the Week control (owner decision 2 September)", () => {
     expect(screen.queryByText(/featured until/i)).toBeNull();
   });
 
-  it("badges the correct work when feature request resolves after a reorder", async () => {
+  it("badges the work that was clicked when the feature call resolves after a reorder", async () => {
     const secondWork = { ...WORK, id: "w2", title: "Second Work" };
     artistState.subscriptionPlan = "premium";
     artistState.works = [WORK, secondWork];
-    mutateMock.mockResolvedValue({ featuredUntil: "2026-09-09T12:00:00.000Z" });
+
+    // Hold the feature call open so a reorder can land while it is still in
+    // flight. reorderWorks() also goes through mutate() (it POSTs each work
+    // whose sort_order changed), so the mock has to tell the two endpoints
+    // apart by URL rather than resolving everything through one value.
+    let resolveFeature!: (value: { featuredUntil: string }) => void;
+    const featurePromise = new Promise<{ featuredUntil: string }>((resolve) => {
+      resolveFeature = resolve;
+    });
+    mutateMock.mockImplementation((url: string) =>
+      url.includes("/feature") ? featurePromise : Promise.resolve({}),
+    );
     render(<PortfolioPage />);
 
     // Click "Feature for a week" on the FIRST work (index 0).
     fireEvent.mouseOver(await screen.findByText(WORK.title));
     fireEvent.click(screen.getByRole("button", { name: /feature for a week/i }));
 
-    // Wait for the badge to appear (proof of the id-keyed write-back).
-    const badge = await screen.findByText(/featured until/i);
-    expect(badge).toBeTruthy();
+    await waitFor(() =>
+      expect(mutateMock).toHaveBeenCalledWith(
+        `/api/artist-works/${WORK.id}/feature`,
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
 
-    // Verify the badge appears only once (not duplicated on both works).
-    expect(screen.getAllByText(/featured until/i)).toHaveLength(1);
+    // While that request is still pending, drag the second card above the
+    // first: the same drag-and-drop the "Drag cards to reorder" hint above
+    // the grid describes, driven through the card's own onDragStart/onDrop
+    // handlers rather than calling reorderWorks() directly, so this exercises
+    // what a user can actually do.
+    const dataTransfer = { effectAllowed: "", dropEffect: "", setData: vi.fn(), getData: vi.fn() };
+    fireEvent.dragStart(screen.getByTestId(`work-card-${secondWork.id}`), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId(`work-card-${WORK.id}`), { dataTransfer });
+    fireEvent.drop(screen.getByTestId(`work-card-${WORK.id}`), { dataTransfer });
 
-    // Verify the badge is inside the first work's card by finding the work
-    // title, getting its closest ancestor card, and checking for the badge within.
-    const firstWorkTitle = await screen.findByText(WORK.title);
-    const cardElement = firstWorkTitle.closest("div")?.parentElement?.parentElement;
-    expect(cardElement?.textContent || "").toContain("Featured until");
+    // Confirm the reorder actually took hold before the feature call
+    // resolves: the clicked work is no longer first.
+    const cardOrder = screen.getAllByTestId(/^work-card-/).map((card) => card.getAttribute("data-testid"));
+    expect(cardOrder).toEqual([`work-card-${secondWork.id}`, `work-card-${WORK.id}`]);
+
+    // Now let the feature call resolve.
+    resolveFeature({ featuredUntil: "2026-09-09T12:00:00.000Z" });
+
+    await waitFor(() => expect(screen.getAllByText(/featured until/i)).toHaveLength(1));
+
+    // The badge must follow the work that was actually clicked, not
+    // whichever work now sits at the index that was captured at click time.
+    expect(within(screen.getByTestId(`work-card-${WORK.id}`)).getByText(/featured until/i)).toBeTruthy();
+    expect(
+      within(screen.getByTestId(`work-card-${secondWork.id}`)).queryByText(/featured until/i),
+    ).toBeNull();
   });
 });
