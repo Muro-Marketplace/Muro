@@ -186,6 +186,7 @@ export default async function ArtworkPage({
                 shipsInternationally={artist.shipsInternationally}
                 internationalShippingPrice={artist.internationalShippingPrice}
                 viewsThisWeek={viewsThisWeek}
+                isSample={Boolean(artist.isSeedArtist)}
               />
             </div>
           </div>

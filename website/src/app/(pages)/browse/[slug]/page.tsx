@@ -13,6 +13,7 @@ import CollectionCard from "@/components/CollectionCard";
 import MessageArtistButton from "@/components/MessageArtistButton";
 import SaveButton from "@/components/SaveButton";
 import VerifiedBadge from "@/components/VerifiedBadge";
+import SamplePill from "@/components/SamplePill";
 import { PlacementButton, PlacementCTASection } from "@/components/PlacementCTA";
 import DemoProfileBanner from "@/components/DemoProfileBanner";
 import ArtistProfileClient from "./ArtistProfileClient";
@@ -281,6 +282,7 @@ export default async function ArtistProfilePage({
                   {artist.isVerified && (
                     <VerifiedBadge className="self-center" />
                   )}
+                  {artist.isSeedArtist && <SamplePill className="self-center" />}
                 </div>
                 <p className="text-muted text-sm">{artist.location}</p>
                 {artist.instagram && (

@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { bandsForWork } from "@/components/browse/SizeBands";
 import Button from "@/components/Button";
 import BrowseArtistCard from "@/components/BrowseArtistCard";
+import SamplePill from "@/components/SamplePill";
 import CollectionCard from "@/components/CollectionCard";
 import SubscriptionUpsellBanner from "@/components/SubscriptionUpsellBanner";
 import ArtworkThumb from "@/components/ArtworkThumb";
@@ -1866,6 +1867,7 @@ function BrowsePortfoliosPageInner() {
                             <h3 className="text-sm font-medium text-foreground group-hover:text-accent transition-colors duration-150 leading-tight mb-1">
                               {artist.name}
                             </h3>
+                            {artist.isSeedArtist && <SamplePill className="mb-2" />}
                           </Link>
                           <p className="text-xs text-muted mb-2">
                             {disciplineLabel(artist.primaryMedium, artist.discipline)} &middot; {artist.location}
@@ -2539,6 +2541,7 @@ function BrowsePortfoliosPageInner() {
                               >
                                 {work.artistName}
                               </Link>
+                              {work.artistIsSeed && <SamplePill className="ml-1.5 align-middle" />}
                               {" · "}
                               {work.medium}
                             </p>

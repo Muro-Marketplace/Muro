@@ -33,6 +33,8 @@ export interface GalleryWork {
   artistSubscriptionPlan?: string;
   /** Founding-artist flag, secondary tiebreaker for Featured sort. */
   artistIsFounding?: boolean;
+  /** Seed (sample) artist; drives the Sample pill on marketplace cards. */
+  artistIsSeed?: boolean;
   /** ISO timestamp from `artist_works.created_at`. Powers the
    *  "Recently listed" sort on the marketplace (#5). */
   createdAt?: string;
@@ -73,6 +75,7 @@ export function artistsToGalleryWorks(allArtists: Artist[]): GalleryWork[] {
       openToOutrightPurchase: artist.openToOutrightPurchase,
       artistSubscriptionPlan: artist.subscriptionPlan,
       artistIsFounding: artist.isFoundingArtist,
+      artistIsSeed: artist.isSeedArtist,
       createdAt: work.createdAt,
     }))
   );

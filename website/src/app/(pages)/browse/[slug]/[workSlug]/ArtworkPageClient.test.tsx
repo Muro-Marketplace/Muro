@@ -157,3 +157,20 @@ describe("buying off the wall never shows a pixel size (owner-reported 2026-08-3
     expect(line.size).toBe("Original");
   });
 });
+
+describe("sample pill (owner instruction, 2 September)", () => {
+  it("shows a Sample pill beside a seed artist's name and changes nothing else", () => {
+    render(
+      <ArtworkPageClient work={workWithPerSizeShipping()} artistName="Seed Artist" artistSlug="seed-artist" isSample />,
+    );
+    expect(screen.getByText("Sample")).toBeTruthy();
+    expect(screen.getByText(/Size & Price/i)).toBeTruthy();
+  });
+
+  it("shows no pill for a real artist", () => {
+    render(
+      <ArtworkPageClient work={workWithPerSizeShipping()} artistName="Alice Rivers" artistSlug="alice-rivers" />,
+    );
+    expect(screen.queryByText("Sample")).toBeNull();
+  });
+});

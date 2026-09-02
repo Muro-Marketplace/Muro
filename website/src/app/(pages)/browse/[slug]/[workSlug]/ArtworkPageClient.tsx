@@ -7,6 +7,7 @@ import type { ArtistWork } from "@/data/artists";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import SaveButton from "@/components/SaveButton";
+import SamplePill from "@/components/SamplePill";
 import { useToast } from "@/context/ToastContext";
 import WallVisualiser from "@/components/WallVisualiser";
 import CustomerWallSheet from "@/components/visualizer/CustomerWallSheet";
@@ -33,6 +34,8 @@ interface ArtworkPageClientProps {
    *  days, computed in the parent server component. Hidden when 0
    *  so brand-new works don't show "0 views this week". */
   viewsThisWeek?: number;
+  /** Seed (sample) artist's work: shows the Sample pill beside the name. Changes nothing else. */
+  isSample?: boolean;
 }
 
 export default function ArtworkPageClient({
@@ -42,6 +45,7 @@ export default function ArtworkPageClient({
   shipsInternationally,
   internationalShippingPrice,
   viewsThisWeek,
+  isSample = false,
 }: ArtworkPageClientProps) {
   const router = useRouter();
   const { addItem } = useCart();
@@ -175,6 +179,7 @@ export default function ArtworkPageClient({
         <Link href={`/browse/${artistSlug}`} className="hover:text-accent hover:underline transition-colors">
           {artistName}
         </Link>
+        {isSample && <SamplePill className="ml-2 normal-case tracking-normal" />}
       </p>
 
       {/* Title */}
