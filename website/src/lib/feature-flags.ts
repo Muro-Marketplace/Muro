@@ -99,7 +99,7 @@ export const FLAGS: Record<FeatureFlag, FlagDef> = {
       "Launch audit: the 41 seed artists in src/data/artists.ts and the 21 " +
       "seed venues in src/data/venues.ts are fictional. Owner decision D1 " +
       "(2026-09-02) keeps them visible in production on the marketplace and " +
-      "their own pages, labelled with a blue Sample pill. " +
+      "their own pages, labelled with a grey Sample pill. " +
       "Set NEXT_PUBLIC_FLAG_SEED_CATALOG=0 in Vercel to remove them from " +
       "the marketplace, artist pages, sitemap and venue demand tracker (the " +
       "homepage featured grid never shows a seed) in one go.",

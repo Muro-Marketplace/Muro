@@ -6,10 +6,10 @@ import SamplePill from "./SamplePill";
 afterEach(() => cleanup());
 
 describe("<SamplePill />", () => {
-  it("reads Sample, in blue, with an explanation on hover", () => {
+  it("reads Sample, in grey, with an explanation on hover", () => {
     render(<SamplePill />);
     const pill = screen.getByText("Sample");
-    expect(pill.className).toContain("bg-blue-600");
+    expect(pill.className).toContain("bg-neutral-500");
     expect(pill.getAttribute("title")).toMatch(/sample profile/i);
   });
 });
