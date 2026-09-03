@@ -253,7 +253,7 @@ export default function ArtistGuide() {
                 {FOUNDING_OFFER_SHORT}
               </p>
               <p className="mt-2 text-muted">
-                {foundingOfferLine()} Places are confirmed when your application is accepted.
+                {foundingOfferLine()}{" "}Places are confirmed when your application is accepted.
               </p>
             </div>
 

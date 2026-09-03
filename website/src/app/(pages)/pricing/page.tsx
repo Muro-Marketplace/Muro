@@ -162,7 +162,7 @@ export default function PricingPage() {
                   {FOUNDING_OFFER_SHORT}
                 </p>
                 <p className="text-muted text-sm mt-1">
-                  {foundingOfferLine()} No long-term contract, 30 days&rsquo; notice to leave.
+                  {foundingOfferLine()}{" "}No long-term contract, 30 days&rsquo; notice to leave.
                 </p>
               </div>
               <div className="shrink-0">
@@ -357,7 +357,7 @@ export default function PricingPage() {
             Ready to apply?
           </h2>
           <p className="text-muted leading-relaxed mb-8 max-w-lg mx-auto">
-            {foundingOfferLine()} No long-term contract, 30 days&rsquo; notice to leave.
+            {foundingOfferLine()}{" "}No long-term contract, 30 days&rsquo; notice to leave.
           </p>
           <Button href="/apply" size="lg">
             Apply to join

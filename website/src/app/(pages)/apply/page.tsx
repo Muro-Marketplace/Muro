@@ -49,7 +49,7 @@ export default function ApplyPage() {
                 {FOUNDING_OFFER_SHORT}.
               </p>
               <p className="text-muted text-sm mt-1">
-                {foundingOfferLine()} No long-term contract, 30 days&rsquo; notice to leave.
+                {foundingOfferLine()}{" "}No long-term contract, 30 days&rsquo; notice to leave.
               </p>
             </div>
           </div>
