@@ -21,6 +21,7 @@ import { canFeatureArtwork, isArtworkOfTheWeek } from "@/lib/tier-features";
 import Combobox from "@/components/Combobox";
 import { WORK_MEDIUM_OPTIONS } from "@/data/work-medium-options";
 import { WORKS_CAP } from "@/lib/pricing";
+import FrameOptionsEditor from "@/components/portfolio/FrameOptionsEditor";
 
 interface SizeEntry {
   label: string;
@@ -2898,165 +2899,12 @@ export default function PortfolioPage() {
             </div>
 
             {/* Frame options */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Frame options (optional)</label>
-              <p className="text-xs text-muted mb-3">Offer framed variants. The default uplift is added on top of the size price; below each frame, optionally set per-size £ overrides, leave a size blank to use the auto-scaled default.</p>
-              <div className="space-y-3">
-                {form.frameOptions.map((f, i) => (
-                  <div key={i} className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    {/* Frame preview / upload trigger with hover-remove on top-right */}
-                    <div className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0">
-                      <label className="absolute inset-0 border border-dashed border-border rounded-sm flex items-center justify-center overflow-hidden bg-surface cursor-pointer hover:border-accent/60 transition-colors" title={f.imageUrl ? "Replace image" : "Add image"}>
-                        {f.imageUrl ? (
-                          <Image src={f.imageUrl} alt={f.label || "Frame preview"} fill sizes="56px" className="object-cover" />
-                        ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                            <circle cx="9" cy="9" r="1.5" />
-                            <path d="m21 15-5-5L5 21" />
-                          </svg>
-                        )}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            try {
-                              const url = await uploadImage(file, "artworks");
-                              setForm((p) => {
-                                const next = [...p.frameOptions];
-                                next[i] = { ...next[i], imageUrl: url };
-                                return { ...p, frameOptions: next };
-                              });
-                            } catch {
-                              setFormError("Frame image upload failed.");
-                            } finally {
-                              e.target.value = "";
-                            }
-                          }}
-                        />
-                      </label>
-                      {f.imageUrl && (
-                        <button
-                          type="button"
-                          onClick={() => setForm((p) => {
-                            const next = [...p.frameOptions];
-                            next[i] = { ...next[i], imageUrl: undefined };
-                            return { ...p, frameOptions: next };
-                          })}
-                          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-foreground text-background flex items-center justify-center text-[9px] hover:bg-red-500 transition-colors"
-                          aria-label="Remove frame image"
-                          title="Remove frame image"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                    {/* Label + price + delete, single row on one line */}
-                    <input
-                      type="text"
-                      value={f.label}
-                      onChange={(e) => setForm((p) => {
-                        const next = [...p.frameOptions];
-                        next[i] = { ...next[i], label: e.target.value };
-                        return { ...p, frameOptions: next };
-                      })}
-                      placeholder="e.g. Black oak frame"
-                      maxLength={80}
-                      className="min-w-0 flex-1 bg-background border border-border rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-accent/60"
-                    />
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-sm text-muted">+£</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={f.priceUplift}
-                        onChange={(e) => setForm((p) => {
-                          const next = [...p.frameOptions];
-                          next[i] = { ...next[i], priceUplift: e.target.value };
-                          return { ...p, frameOptions: next };
-                        })}
-                        placeholder="0"
-                        className="w-16 sm:w-20 bg-background border border-border rounded-sm px-2 py-2 text-sm focus:outline-none focus:border-accent/60"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setForm((p) => ({ ...p, frameOptions: p.frameOptions.filter((_, j) => j !== i) }))}
-                      className="shrink-0 w-8 h-8 flex items-center justify-center text-muted hover:text-red-500 transition-colors"
-                      aria-label="Remove frame option"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M3 3l8 8M11 3L3 11" /></svg>
-                    </button>
-                  </div>
-                  {/* Per-size £ overrides, only show when at least
-                      two sizes are defined for this work. Leaving a
-                      cell blank uses the default uplift (auto-scaled
-                      by perimeter). */}
-                  {(() => {
-                    const sizesWithLabels = form.sizes.filter(
-                      (s) => s.label.trim().length > 0,
-                    );
-                    if (sizesWithLabels.length < 2) return null;
-                    return (
-                      <div className="ml-14 sm:ml-16 pl-3 border-l-2 border-border/50 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                        <span className="text-[10px] uppercase tracking-wider text-muted shrink-0">
-                          Per-size £
-                        </span>
-                        {sizesWithLabels.map((s) => (
-                          <div
-                            key={s.label}
-                            className="flex items-center gap-1"
-                            title={`Override the default uplift for ${s.label}. Leave blank to use the auto-scaled value.`}
-                          >
-                            <span className="text-[11px] text-muted/80 max-w-[80px] truncate">
-                              {s.label}
-                            </span>
-                            <span className="text-[11px] text-muted">+£</span>
-                            <input
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={f.pricesBySize?.[s.label] ?? ""}
-                              onChange={(e) =>
-                                setForm((p) => {
-                                  const next = [...p.frameOptions];
-                                  const fr = { ...next[i] };
-                                  const pbs = { ...(fr.pricesBySize || {}) };
-                                  if (e.target.value === "") {
-                                    delete pbs[s.label];
-                                  } else {
-                                    pbs[s.label] = e.target.value;
-                                  }
-                                  fr.pricesBySize =
-                                    Object.keys(pbs).length > 0 ? pbs : undefined;
-                                  next[i] = fr;
-                                  return { ...p, frameOptions: next };
-                                })
-                              }
-                              placeholder="auto"
-                              className="w-14 bg-background border border-border rounded-sm px-1.5 py-1 text-xs focus:outline-none focus:border-accent/60"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setForm((p) => ({ ...p, frameOptions: [...p.frameOptions, { label: "", priceUplift: "" }] }))}
-                  className="text-xs text-accent hover:text-accent-hover transition-colors"
-                >
-                  + Add frame option
-                </button>
-              </div>
-            </div>
+            <FrameOptionsEditor
+              frameOptions={form.frameOptions}
+              onChange={(next) => setForm((p) => ({ ...p, frameOptions: next }))}
+              sizes={form.sizes}
+              onUploadError={() => setFormError("Frame image upload failed.")}
+            />
 
             {/* Error message */}
             {formError && (
