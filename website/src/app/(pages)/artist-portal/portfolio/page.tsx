@@ -3226,7 +3226,7 @@ export default function PortfolioPage() {
                     </div>
 
                     {isArtworkOfTheWeek(work.featuredUntil, new Date()) && (
-                      <span className="absolute top-2 right-2 z-10 inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium text-white">
+                      <span className="absolute top-2 right-2 z-10 inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-white">
                         Featured until {new Date(work.featuredUntil as string).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                       </span>
                     )}
@@ -3286,7 +3286,7 @@ export default function PortfolioPage() {
                                 ? "Already featured"
                                 : "Put this work at the top of the gallery for seven days"
                           }
-                          className="text-xs font-medium bg-blue-600 text-white px-4 py-1.5 rounded-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-xs font-medium bg-accent text-white px-4 py-1.5 rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Feature for a week
                         </button>

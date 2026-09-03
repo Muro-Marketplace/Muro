@@ -2490,7 +2490,7 @@ function BrowsePortfoliosPageInner() {
                               <SaveButton type="work" itemId={work.id} size="sm" />
                             </div>
                             {isArtworkOfTheWeek(work.featuredUntil, now) && (
-                              <span className="absolute top-3 left-12 z-10 inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-medium tracking-wide text-white shadow-sm pointer-events-none">
+                              <span className="absolute top-3 left-12 z-10 inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium tracking-wide text-white shadow-sm pointer-events-none">
                                 Artwork of the week
                               </span>
                             )}
