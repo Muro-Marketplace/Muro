@@ -228,7 +228,12 @@ export default function Header() {
       : publicNavLinks
     ).map((l) => l.href),
   );
-  const filteredMoreLinks = moreLinks.filter((l) => !primaryNavHrefs.has(l.href));
+  // Manage My Walls and Programmes are venue products; a signed-in artist
+  // has no use for either in their nav (owner instruction, 2 September).
+  const venueProductHrefs = new Set(["/curated", "/programmes"]);
+  const filteredMoreLinks = moreLinks.filter(
+    (l) => !primaryNavHrefs.has(l.href) && !(userType === "artist" && venueProductHrefs.has(l.href)),
+  );
 
   // Fetch unread message count when logged in. Customers are skipped:
   // the messages API rejects accounts without an artist or venue

@@ -257,3 +257,22 @@ describe("<Header /> mobile notifications (C19)", () => {
     expect(await screen.findByText("No new notifications")).toBeTruthy();
   });
 });
+
+describe("<Header /> More menu hides the venue products from artists", () => {
+  it("shows neither Manage My Walls nor Programmes to a signed-in artist", async () => {
+    signedInAs("artist");
+    render(<Header />);
+    await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.queryByRole("link", { name: "Manage My Walls" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Programmes" })).toBeNull();
+  });
+
+  it("still offers Programmes to a signed-in venue", async () => {
+    signedInAs("venue");
+    render(<Header />);
+    await waitFor(() => expect(authFetchMock).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(screen.getByRole("link", { name: "Programmes" })).toBeTruthy();
+  });
+});
