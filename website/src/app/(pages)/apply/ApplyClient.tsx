@@ -91,6 +91,7 @@ export default function ApplyClient() {
               </p>
               <ul className="mt-3 space-y-1.5 text-sm text-muted list-disc pl-4">
                 <li>Every application is reviewed personally.</li>
+                <li>Start your profile as soon as you have applied: a complete profile with your work uploaded improves your chances.</li>
                 <li>Acceptance means your work is judged ready for commercial spaces.</li>
                 <li>We are selective: venues trust us because every artist meets a consistent standard of quality, professionalism and commercial viability.</li>
               </ul>

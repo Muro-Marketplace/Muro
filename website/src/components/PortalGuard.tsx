@@ -282,7 +282,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
             </svg>
             <p className="text-xs sm:text-sm text-amber-900 flex-1 min-w-0">
               <span className="font-medium">Your application is under review.</span>{" "}
-              Your profile goes live as soon as we&rsquo;ve approved it. In the meantime, you can keep building it out.
+              A finished profile with your work uploaded strengthens your application, so keep building it while we review. It goes live as soon as we approve you.
             </p>
             <Link href="/artist-portal/profile" className="hidden sm:inline-flex shrink-0 text-xs font-medium text-amber-900 underline hover:no-underline">
               Build profile
