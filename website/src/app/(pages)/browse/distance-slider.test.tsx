@@ -44,6 +44,7 @@ function Slider({ value, onCommit }: { value: number; onCommit: (n: number) => v
   // The draft stays until the parent renders the committed value, so the
   // thumb never snaps back to the old distance for a frame.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (draft != null && value === draft) setDraft(null);
   }, [value, draft]);
   return (

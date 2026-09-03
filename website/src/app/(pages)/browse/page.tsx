@@ -238,6 +238,9 @@ function DistanceSliderControl({
   // caught up, so the slider briefly showed the old distance. The draft now
   // stays until the committed value is what the parent renders.
   useEffect(() => {
+    // Syncing local draft state with a prop is the one case this rule cannot
+    // express otherwise; the update is conditional and settles in one pass.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (draft != null && value === draft) setDraft(null);
   }, [value, draft]);
 
