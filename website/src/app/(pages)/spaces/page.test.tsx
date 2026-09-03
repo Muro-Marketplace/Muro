@@ -52,6 +52,13 @@ vi.mock("@/components/OutreachAllowance", () => ({
   useOutreachAllowance: useOutreachAllowanceMock,
 }));
 
+const { currentArtistState } = vi.hoisted(() => ({
+  currentArtistState: { artist: null as null | { isVerified: boolean } },
+}));
+vi.mock("@/hooks/useCurrentArtist", () => ({
+  useCurrentArtist: () => ({ artist: currentArtistState.artist, loading: false, profileId: null, refetch: vi.fn() }),
+}));
+
 import SpacesPage from "./page";
 
 const VENUE = {
@@ -143,5 +150,27 @@ describe("/spaces venue card messaging (A15)", () => {
     expect(dest.startsWith("/artist-portal/messages?")).toBe(true);
     expect(dest).toContain(`artist=${VENUE.slug}`);
     expect(dest).toContain("artistName=The%20Copper%20Kettle");
+  });
+});
+
+describe("an artist under review is told so, not sold a subscription (owner instruction, 2 September)", () => {
+  afterEach(() => {
+    currentArtistState.artist = null;
+  });
+
+  it("explains that venue names unlock on approval and points at the profile, not pricing", async () => {
+    currentArtistState.artist = { isVerified: false };
+    signedInAs("artist", null);
+    render(<SpacesPage />);
+    expect(await screen.findByText(/Venue names are shown once your application is approved/)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /view plans/i })).toBeNull();
+    expect(screen.queryByText(/Subscribe to see venue name/)).toBeNull();
+  });
+
+  it("still asks an approved but unsubscribed artist to subscribe", async () => {
+    currentArtistState.artist = { isVerified: true };
+    signedInAs("artist", null);
+    render(<SpacesPage />);
+    expect(await screen.findByText(/Subscribe to see full venue details/)).toBeTruthy();
   });
 });
