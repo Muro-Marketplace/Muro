@@ -37,4 +37,14 @@ describe("<ShowroomViewer />", () => {
     render(<ShowroomViewer artistName="Maya Chen" artistSlug="maya-chen" walls={[WALLS[2]]} />);
     expect(screen.getByText(/showroom is empty/)).toBeTruthy();
   });
+
+  it("fills the screen on a phone without the Fullscreen API, with a way out", () => {
+    render(<ShowroomViewer artistName="Maya Chen" artistSlug="maya-chen" walls={WALLS} />);
+    fireEvent.click(screen.getByRole("button", { name: "Fullscreen" }));
+    const exits = screen.getAllByRole("button", { name: "Exit fullscreen" });
+    expect(exits.length).toBeGreaterThan(0);
+    expect(document.querySelector(".wp-fake-fullscreen")).not.toBeNull();
+    fireEvent.click(exits[0]);
+    expect(document.querySelector(".wp-fake-fullscreen")).toBeNull();
+  });
 });

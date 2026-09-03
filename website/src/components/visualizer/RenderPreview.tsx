@@ -24,9 +24,9 @@
  * placement request inside this modal (ProposalSendPanel).
  */
 
-import { useEffect, useState, useRef } from "react";
+import {useEffect, useState} from "react";
 import ProposalSendPanel, { type ProposalSendPanelProps } from "./ProposalSendPanel";
-import { toggleFullscreen } from "@/lib/ui/fullscreen";
+import { useFullscreenBox } from "@/lib/ui/fullscreen";
 
 export type SaveToWallStatus = "idle" | "saving" | "saved" | "error";
 
@@ -110,7 +110,7 @@ export default function RenderPreview({
     setPickedWorkId(initial);
   }, [saveToArtwork, open]);
 
-  const imageBoxRef = useRef<HTMLDivElement>(null);
+  const [fullscreenRef, fullscreen] = useFullscreenBox<HTMLDivElement>();
 
   if (!open || !imageUrl) return null;
 
@@ -143,8 +143,8 @@ export default function RenderPreview({
             None of this stops a screenshot, this is a friction
             layer, not DRM. */}
         <div
-          ref={imageBoxRef}
-          className="wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-2xl relative select-none"
+          ref={fullscreenRef}
+          className={`wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-2xl relative select-none ${fullscreen.boxClassName}`}
           onContextMenu={venueViewer ? (e) => e.preventDefault() : undefined}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -155,6 +155,15 @@ export default function RenderPreview({
             draggable={venueViewer ? false : undefined}
             onContextMenu={venueViewer ? (e) => e.preventDefault() : undefined}
           />
+          {fullscreen.fake && (
+            <button
+              type="button"
+              onClick={fullscreen.exit}
+              className="absolute top-3 right-3 z-10 px-4 py-2 min-h-11 rounded-full bg-white/90 text-stone-900 text-sm font-medium shadow"
+            >
+              Exit fullscreen
+            </button>
+          )}
           {venueViewer && (
             <div
               className="absolute inset-0 pointer-events-auto"
@@ -294,10 +303,10 @@ export default function RenderPreview({
             )}
             <button
               type="button"
-              onClick={() => void toggleFullscreen(imageBoxRef.current)}
-              className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
+              onClick={() => void fullscreen.toggle()}
+              className="px-3 py-1.5 min-h-11 rounded-full bg-white/10 text-xs hover:bg-white/15"
             >
-              Fullscreen
+              {fullscreen.active ? "Exit fullscreen" : "Fullscreen"}
             </button>
             <button
               type="button"

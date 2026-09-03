@@ -38,7 +38,7 @@ export default function Home() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { artists?: FeaturedArtist[] } | null) => {
         if (cancelled || !data || !Array.isArray(data.artists)) return;
-        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image).slice(0, 12));
+        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image).slice(0, 6));
       })
       .catch(() => {
         /* No tiles is the honest fallback. */
@@ -178,7 +178,7 @@ export default function Home() {
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
               <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                <div className={`order-2 lg:order-1 grid grid-cols-3 sm:grid-cols-4 gap-1.5 sm:gap-2 ${featured.length === 0 ? "hidden" : ""}`}>
+                <div className={`order-2 lg:order-1 grid grid-cols-3 gap-1.5 sm:gap-2 ${featured.length === 0 ? "hidden" : ""}`}>
                   {featured.map((a) => (
                     <Link key={a.slug} href={`/browse/${a.slug}`} className="aspect-[4/5] relative rounded-sm overflow-hidden group">
                       <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="(max-width: 640px) 33vw, 12vw" />

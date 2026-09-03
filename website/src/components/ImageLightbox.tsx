@@ -3,8 +3,8 @@
  * Full-size viewer for a saved wall picture: drag to move around it, pinch
  * or scroll to zoom, a Fullscreen button, Esc or the backdrop to close.
  */
-import { useEffect, useRef } from "react";
-import { toggleFullscreen } from "@/lib/ui/fullscreen";
+import { useEffect } from "react";
+import { useFullscreenBox } from "@/lib/ui/fullscreen";
 import PanZoomImage from "./PanZoomImage";
 
 interface Props {
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export default function ImageLightbox({ open, onClose, src, alt, title, subtitle }: Props) {
-  const boxRef = useRef<HTMLDivElement>(null);
+  const [fullscreenRef, fullscreen] = useFullscreenBox<HTMLDivElement>();
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +44,16 @@ export default function ImageLightbox({ open, onClose, src, alt, title, subtitle
     >
       <div className="min-h-full grid place-items-center" onClick={onClose}>
         <div className="w-full max-w-6xl flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-          <div ref={boxRef} className="wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-2xl">
+          <div ref={fullscreenRef} className={`wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-2xl relative ${fullscreen.boxClassName}`}>
+            {fullscreen.fake && (
+              <button
+                type="button"
+                onClick={fullscreen.exit}
+                className="absolute top-3 right-3 z-10 px-4 py-2 min-h-11 rounded-full bg-white/90 text-stone-900 text-sm font-medium shadow"
+              >
+                Exit fullscreen
+              </button>
+            )}
             <PanZoomImage src={src} alt={alt} heightClassName="h-[78vh]" />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 px-2 text-white">
@@ -55,10 +64,10 @@ export default function ImageLightbox({ open, onClose, src, alt, title, subtitle
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => void toggleFullscreen(boxRef.current)}
-                className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
+                onClick={() => void fullscreen.toggle()}
+                className="px-3 py-1.5 min-h-11 rounded-full bg-white/10 text-xs hover:bg-white/15"
               >
-                Fullscreen
+                {fullscreen.active ? "Exit fullscreen" : "Fullscreen"}
               </button>
               <button
                 type="button"

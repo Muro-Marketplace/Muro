@@ -4,10 +4,10 @@
  * a visitor can move around in (drag, pinch, scroll) and take fullscreen.
  * Nothing here is saved; it is a view of pictures the artist already kept.
  */
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import PanZoomImage from "@/components/PanZoomImage";
-import { toggleFullscreen } from "@/lib/ui/fullscreen";
+import { useFullscreenBox } from "@/lib/ui/fullscreen";
 import { safeHexBackground } from "@/lib/hex-color";
 import type { PublicShowroomWall } from "@/lib/artists/showroom";
 
@@ -27,7 +27,7 @@ export default function ShowroomViewer({ artistName, artistSlug, walls, initialW
   const [activeId, setActiveId] = useState<string>(
     () => withPictures.find((w) => w.id === initialWallId)?.id ?? withPictures[0]?.id ?? "",
   );
-  const boxRef = useRef<HTMLDivElement>(null);
+  const [fullscreenRef, fullscreen] = useFullscreenBox<HTMLDivElement>();
   const active = withPictures.find((w) => w.id === activeId) ?? null;
   const backHref = `/browse/${encodeURIComponent(artistSlug)}`;
 
@@ -53,13 +53,22 @@ export default function ShowroomViewer({ artistName, artistSlug, walls, initialW
         </div>
         <button
           type="button"
-          onClick={() => void toggleFullscreen(boxRef.current)}
+          onClick={() => void fullscreen.toggle()}
           className="px-4 py-2 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90"
         >
-          Fullscreen
+          {fullscreen.active ? "Exit fullscreen" : "Fullscreen"}
         </button>
       </div>
-      <div ref={boxRef} className="wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-lg">
+      <div ref={fullscreenRef} className={`wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-lg relative ${fullscreen.boxClassName}`}>
+        {fullscreen.fake && (
+          <button
+            type="button"
+            onClick={fullscreen.exit}
+            className="absolute top-3 right-3 z-10 px-4 py-2 min-h-11 rounded-full bg-white/90 text-stone-900 text-sm font-medium shadow"
+          >
+            Exit fullscreen
+          </button>
+        )}
         <PanZoomImage key={active.id} src={pictureFor(active) as string} alt={`${active.name}, ${active.width_cm} by ${active.height_cm} cm`} heightClassName="h-[72vh]" />
       </div>
       {withPictures.length > 1 && (

@@ -20,8 +20,10 @@ import { test, expect, type Page } from "@playwright/test";
 const MIN_TOUCH_PX = 44;
 
 /** Interactive selector covering native buttons, role-buttons, and link-buttons. */
+// The dev server injects its own dev-tools badge (a 32 px button in a
+// shadow root). It never ships, so a local run must not trip on it.
 const TAP_TARGET_SELECTOR =
-  'button, a[role="button"], [role="button"]';
+  'button:not([data-nextjs-dev-tools-button]), a[role="button"], [role="button"]:not([data-nextjs-dev-tools-button])';
 
 /**
  * Assert every visible tap-target on `page` is at least 44 × 44 px.

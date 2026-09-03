@@ -2481,7 +2481,16 @@ function BrowsePortfoliosPageInner() {
                             </a>
                             {/* Badges stack at the top-left; the save heart lives
                                 top-right so it never covers them. */}
-                            <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-1.5 pointer-events-none">
+                            {/* Artwork of the week takes the top row; it stops short of
+                                the heart's column so the two never meet, with a shorter
+                                label on narrow cards. Sold and Sample sit beneath it. */}
+                            <div className="absolute top-3 left-3 right-14 z-10 flex flex-col items-start gap-1.5 pointer-events-none">
+                              {isArtworkOfTheWeek(work.featuredUntil, now) && (
+                                <span className="inline-flex max-w-full items-center rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium tracking-wide text-white shadow-sm whitespace-nowrap">
+                                  <span className="sm:hidden">Art of the week</span>
+                                  <span className="hidden sm:inline">Artwork of the week</span>
+                                </span>
+                              )}
                               {!work.available && (
                                 <span className="px-2 py-0.5 bg-black/70 text-white text-[10px] rounded-sm backdrop-blur-sm">
                                   Sold
@@ -2489,11 +2498,6 @@ function BrowsePortfoliosPageInner() {
                               )}
                               {work.artistIsSeed && !(!work.available) && (
                                 <SamplePill className="shadow-sm" />
-                              )}
-                              {isArtworkOfTheWeek(work.featuredUntil, now) && (
-                                <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium tracking-wide text-white shadow-sm">
-                                  Artwork of the week
-                                </span>
                               )}
                             </div>
                             {/* Hover action buttons */}
@@ -2544,7 +2548,9 @@ function BrowsePortfoliosPageInner() {
                                 {work.title}
                               </h3>
                             </a>
-                            <p className="text-[11px] text-muted mt-0.5">
+                            {/* Two lines reserved here as well, so a work with no
+                                medium is not a shorter card than its neighbours. */}
+                            <p className="text-[11px] text-muted mt-0.5 min-h-[2.1rem] line-clamp-2">
                               <Link
                                 href={`/browse/${work.artistSlug}`}
                                 onClick={(e) => e.stopPropagation()}
@@ -2552,8 +2558,7 @@ function BrowsePortfoliosPageInner() {
                               >
                                 {work.artistName}
                               </Link>
-                              {" · "}
-                              {work.medium}
+                              {work.medium ? ` · ${work.medium}` : ""}
                             </p>
                             <p className="text-[11px] text-foreground/80 mt-1 font-medium">
                               {formatPriceRange(work.pricing) || work.priceBand}
