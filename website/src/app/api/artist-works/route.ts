@@ -212,7 +212,7 @@ export async function POST(request: Request) {
     const membership = await isSubscribed(auth.user!.id);
     if (reviewStatus === "pending" || !membership?.active) {
       warnings.push(
-        "Saved. A complete profile strengthens your application. Your works appear on the marketplace once you are approved and your membership is active.",
+        "Saved. Your works appear on the marketplace once your application is approved and your membership is active.",
       );
     }
 
