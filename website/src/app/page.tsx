@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import FeedbackBubble from "@/components/FeedbackBubble";
 import ArtistCarousel from "@/components/ArtistCarousel";
 import AnimateIn from "@/components/AnimateIn";
+import SamplePill from "@/components/SamplePill";
 import { useAuth } from "@/context/AuthContext";
 import { CURATION_TIERS, PROGRAMME_LADDER, gbp } from "@/lib/curation-tiers";
 import { FOUNDING_OFFER_SHORT } from "@/lib/pricing";
@@ -44,18 +45,19 @@ export default function Home() {
   const [stats, setStats] = useState<PublicStats | null>(null);
   const [featured, setFeatured] = useState<FeaturedArtist[]>([]);
 
-  // Launch audit, blocker 1. This grid used to render six seed artists from
-  // src/data/artists.ts: fictional people linking to fictional portfolios.
-  // It now shows the first twelve real, approved artists from the endpoint
-  // /browse uses. Empty until the fetch lands, and empty if the catalogue
-  // is: no tile is better than a made-up one.
+  // Launch audit, blocker 1, revised 2 September (owner: "more artist
+  // photos"). The grid reads the endpoint /browse uses, which lists real
+  // approved artists before the seed. Production has only a couple of real
+  // artists with a profile photo, so seed artists fill the remaining tiles,
+  // each carrying the Sample pill so nothing here passes a fictional artist
+  // off as real. Empty until the fetch lands; hidden if there is nothing.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/browse-artists")
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { artists?: FeaturedArtist[] } | null) => {
         if (cancelled || !data || !Array.isArray(data.artists)) return;
-        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image && !a.isSeedArtist).slice(0, 12));
+        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image).slice(0, 12));
       })
       .catch(() => {
         /* No tiles is the honest fallback. */
@@ -270,6 +272,7 @@ export default function Home() {
                     <Link key={a.slug} href={`/browse/${a.slug}`} className="aspect-[4/5] relative rounded-sm overflow-hidden group">
                       <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="(max-width: 640px) 33vw, 12vw" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                      {a.isSeedArtist && <SamplePill className="absolute top-1.5 left-1.5" />}
                       <p className="absolute bottom-2 left-2 text-white text-xs font-medium">{a.name}</p>
                     </Link>
                   ))}

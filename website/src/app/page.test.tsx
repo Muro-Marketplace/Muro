@@ -6,7 +6,7 @@
 // keyboard user could not skip the nav on.
 
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PROGRAMME_LADDER } from "@/lib/curation-tiers";
@@ -92,13 +92,15 @@ describe("homepage featured artists (launch audit, blocker 1)", () => {
     expect(src).not.toMatch(/from "@\/data\/artists"/);
   });
 
-  it("never shows a seed artist even when the browse endpoint returns one (Finding 5)", async () => {
+  it("fills with seed artists after the real ones, each wearing the Sample pill", async () => {
     render(<Home />);
-    await screen.findByRole("link", { name: /maya chen/i });
-    expect(screen.queryByRole("link", { name: /seed one/i })).toBeNull();
-    expect(
-      screen.queryAllByRole("link").some((l) => l.getAttribute("href") === "/browse/seed-one"),
-    ).toBe(false);
+    const real = await screen.findByRole("link", { name: /maya chen/i });
+    const seed = await screen.findByRole("link", { name: /seed one/i });
+    expect(seed.getAttribute("href")).toBe("/browse/seed-one");
+    expect(within(seed).getByText("Sample")).toBeTruthy();
+    expect(within(real).queryByText("Sample")).toBeNull();
+    const links = screen.getAllByRole("link").filter((l) => (l.getAttribute("href") || "").startsWith("/browse/"));
+    expect(links.indexOf(real)).toBeLessThan(links.indexOf(seed));
   });
 
   it("describes the hero image honestly", () => {
