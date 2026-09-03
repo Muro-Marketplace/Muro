@@ -101,7 +101,7 @@ const comparisonData = [
     gallery: "You handle it",
     marketplace: "You handle it",
     instagram: "You handle it",
-    wallplace: "You handle it (add-on packages available)",
+    wallplace: "You handle it",
   },
   {
     category: "Cost",

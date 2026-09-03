@@ -147,14 +147,13 @@ export default function ArtistSignUpPage() {
         <div className="absolute inset-0 bg-black/55" />
       </div>
 
-      <div className="w-full max-w-md px-6 py-16">
+      <div className="w-full max-w-lg px-6 py-16">
         <div className="text-center mb-8">
           <h1 className="text-3xl lg:text-4xl font-serif mb-2 text-white">
             Apply to join as an artist
           </h1>
-          <p className="text-white/50 text-sm">
-            Create your account and the application form is your next
-            stop
+          <p className="text-white/50 text-sm sm:whitespace-nowrap">
+            Create your account and the application form is your next stop
           </p>
           <p className="text-accent text-sm font-medium mt-3">{FOUNDING_OFFER_SHORT}</p>
         </div>
