@@ -285,6 +285,20 @@ import OperationalDisputeResolved from "./templates/legal/OperationalDisputeReso
 //      subscription_card_expiring   (WS4.5: customer.source.expiring, the
 //                                    pre-dunning warning)
 //
+//    The 2026-09-04 email audit wired four more that were listed below as
+//    dormant, so they have moved out of lists 4 and 5:
+//      account_data_export_ready    (GET /api/account/export, the receipt for
+//                                    a subject-access export)
+//      account_deletion_requested   (POST /api/account/delete, on the retained
+//                                    path where support finishes by hand)
+//      account_deletion_confirmed   (POST /api/account/delete, once the auth
+//                                    user is actually gone)
+//      account_invite               (registered for render coverage only:
+//                                    Supabase sends it from the dashboard
+//                                    template, so email:audit still lists it
+//                                    as having no send path in this codebase,
+//                                    which is correct)
+//
 // 2. SUPABASE GOTRUE OWNS THE FLOW today. These sends happen, but outside
 //    the pipeline: no email_events row, no idempotency, no health-check
 //    visibility. Kept as the documented replacement targets for when auth
@@ -302,7 +316,10 @@ import OperationalDisputeResolved from "./templates/legal/OperationalDisputeReso
 //    does not exist yet. Wire when the feature ships, not before:
 //      account_two_factor_enabled / _disabled (no 2FA),
 //      account_team_invite / _accepted (no teams),
-//      account_data_export_ready (no export feature),
+//      account_suspicious_login (no producer: Supabase emits no such event,
+//        and the webhook branch that claimed to handle one was dead code,
+//        removed 2026-09-04 with src/app/api/webhooks/supabase/route.ts. The
+//        template stays as the target for a real new-device signal),
 //      customer_browse_nudge, customer_follow_artist_nudge (not in the
 //        nudge cron), placement_midway_checkin, message_hourly_digest,
 //      artist_first_qr_scan, artist_qr_scan_milestone (no trigger),
@@ -325,17 +342,24 @@ import OperationalDisputeResolved from "./templates/legal/OperationalDisputeReso
 // 5. DORMANT PENDING AN OWNER DECISION, flagged by R4.11 as money or legal
 //    surface gaps that need product work beyond an email call, and not yet
 //    scheduled in the hardening plan:
-//      account_password_changed (GoTrue sends nothing; needs a hook),
-//      account_deletion_requested, account_deletion_confirmed (deletion
-//        flow currently sends no mail),
+//      account_password_changed (GoTrue owns password changes and sends
+//        nothing; there is no producer in this app, so it needs an auth hook
+//        rather than a send site),
 //      legal_terms_update, legal_privacy_update (no ToS-change mechanism),
 //      artist_tax_document_ready (no generator),
-//      operational_platform_incident, operational_policy_violation_warning,
-//      operational_account_restricted, operational_account_restored
-//        (moderation has no email surface),
-//      venue_revenue_share_statement (no statement generator or cron),
+//      operational_platform_incident, operational_policy_violation_warning
+//        (moderation has no email surface for these two),
+//      venue_revenue_share_statement (no statement generator or cron; the
+//        programme rent statement added 2026-09-04 is a different template,
+//        artist_programme_rent_statement, and is wired),
 //      placement_ending_soon (cron exists, deliberately gated off: no
 //        end-date column; D60)
+//
+//    Corrected 2026-09-04: operational_account_restricted and
+//    operational_account_restored were listed here as dormant "moderation has
+//    no email surface". They have been sent since G8 by PATCH
+//    /api/admin/artists (notifyArtist), which is exactly that surface, and
+//    email:audit has not listed either as unwired for some time.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
