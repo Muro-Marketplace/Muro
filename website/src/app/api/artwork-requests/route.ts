@@ -8,8 +8,109 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { sendEmail } from "@/lib/email/send";
+import { afterResponse } from "@/lib/after-response";
+import { ArtistBriefInvitation } from "@/emails/templates/artwork-requests/ArtistBriefInvitation";
 
 export const runtime = "nodejs";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+
+/** Matches the space the invitation template's quote block is designed for. */
+const EXCERPT_CHARS = 280;
+
+function excerpt(text: string): string {
+  const t = (text ?? "").trim();
+  return t.length > EXCERPT_CHARS ? `${t.slice(0, EXCERPT_CHARS - 3)}…` : t;
+}
+
+const INTENT_LABEL: Record<string, string> = {
+  purchase: "Purchase",
+  commission: "Commission",
+  display: "QR-enabled display",
+  loan: "Loan",
+};
+
+const TIMESCALE_LABEL: Record<string, string> = {
+  asap: "As soon as possible",
+  weeks: "Within a few weeks",
+  months: "Within a few months",
+  flexible: "Flexible",
+};
+
+function budgetLabel(minPence: number | null, maxPence: number | null): string | undefined {
+  const gbp = (p: number) => `£${Math.round(p / 100).toLocaleString("en-GB")}`;
+  if (minPence != null && maxPence != null) return `${gbp(minPence)} to ${gbp(maxPence)}`;
+  if (maxPence != null) return `Up to ${gbp(maxPence)}`;
+  if (minPence != null) return `From ${gbp(minPence)}`;
+  return undefined;
+}
+
+interface BriefForInvitation {
+  id: string;
+  title: string;
+  description: string;
+  intent: string[];
+  budgetMinPence: number | null;
+  budgetMaxPence: number | null;
+  timescale: string | null;
+}
+
+/**
+ * "You've been invited to respond to a brief", to each artist on the invite
+ * list and ONLY them. A semi-public brief with no invitees is discoverable
+ * from the artist portal and emails nobody: this is an invitation, not a
+ * broadcast. One key per brief and artist, so a retried POST cannot double
+ * up, and each send is guarded on its own so one dead address does not
+ * stop the rest of the list.
+ */
+async function emailInvitedArtists(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  brief: BriefForInvitation,
+  venueName: string,
+  slugs: string[],
+): Promise<void> {
+  const { data: artists, error } = await db
+    .from("artist_profiles")
+    .select("user_id, slug, name")
+    .in("slug", slugs);
+  if (error) {
+    console.warn("[artwork-requests] invited artist lookup failed:", error.message);
+    return;
+  }
+  for (const artist of (artists || []) as Array<{ user_id: string | null; slug: string; name: string | null }>) {
+    if (!artist.user_id) continue;
+    try {
+      const { data: { user } } = await db.auth.admin.getUserById(artist.user_id);
+      if (!user?.email) continue;
+      const firstName =
+        (user.user_metadata?.first_name as string | undefined) ||
+        (artist.name || "").split(" ")[0] ||
+        "there";
+      await sendEmail({
+        idempotencyKey: `artwork_request_invite:${brief.id}:${artist.user_id}`,
+        template: "artist_brief_invitation",
+        category: "placements",
+        to: user.email,
+        subject: `${venueName} would like you to respond to a brief`,
+        userId: artist.user_id,
+        react: ArtistBriefInvitation({
+          firstName,
+          venueName,
+          requestTitle: brief.title,
+          briefExcerpt: excerpt(brief.description),
+          requestUrl: `${SITE}/artist-portal/artwork-requests/${encodeURIComponent(brief.id)}`,
+          intentLabel: brief.intent.map((i) => INTENT_LABEL[i] ?? i).join(", ") || undefined,
+          budgetLabel: budgetLabel(brief.budgetMinPence, brief.budgetMaxPence),
+          timescaleLabel: brief.timescale ? TIMESCALE_LABEL[brief.timescale] ?? brief.timescale : undefined,
+        }),
+        metadata: { requestId: brief.id, artistSlug: artist.slug },
+      });
+    } catch (err) {
+      console.warn(`[artwork-requests] invitation email to ${artist.slug} skipped:`, err);
+    }
+  }
+}
 
 const createSchema = z.object({
   // Lower title min so a "Test" submission doesn't 400 — venues
@@ -233,9 +334,9 @@ export async function POST(request: Request) {
   // Venue-only: must have a venue profile to post artwork demand.
   const { data: venue } = await db
     .from("venue_profiles")
-    .select("user_id, slug")
+    .select("user_id, slug, name")
     .eq("user_id", auth.user!.id)
-    .maybeSingle();
+    .maybeSingle<{ user_id: string; slug: string | null; name: string | null }>();
   if (!venue) {
     return NextResponse.json(
       { error: "venue_only", message: "Only venues can post artwork requests." },
@@ -271,6 +372,27 @@ export async function POST(request: Request) {
   if (error) {
     console.error("[artwork-requests POST]", error);
     return NextResponse.json({ error: "Could not save request" }, { status: 500 });
+  }
+
+  // Email the artists the venue named, and only them. Deferred past the
+  // response the way the placement receipt is: a venue may name up to fifty
+  // artists and none of those sends should hold up their "request posted"
+  // confirmation. See emailInvitedArtists for the no-broadcast rule.
+  const invitedSlugs = Array.from(
+    new Set(parsed.data.invitedArtistSlugs.map((slug) => slug.trim()).filter(Boolean)),
+  );
+  if (invitedSlugs.length > 0) {
+    const brief: BriefForInvitation = {
+      id,
+      title: parsed.data.title.trim(),
+      description: parsed.data.description.trim(),
+      intent: parsed.data.intent,
+      budgetMinPence: parsed.data.budgetMinPence ?? null,
+      budgetMaxPence: parsed.data.budgetMaxPence ?? null,
+      timescale: parsed.data.timescale || null,
+    };
+    const venueName = venue.name?.trim() || "A venue";
+    afterResponse(() => emailInvitedArtists(db, brief, venueName, invitedSlugs));
   }
 
   return NextResponse.json({ success: true, id });

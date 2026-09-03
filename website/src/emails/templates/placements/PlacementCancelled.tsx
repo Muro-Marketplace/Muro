@@ -7,6 +7,10 @@
 // arrangement (for paid loans, a monthly liability), so it now rides
 // orders_and_payouts, the critical always-send category; sendEmail()
 // enforces it via TEMPLATE_CATEGORY_OVERRIDES.
+//
+// Also sent to the CANCELLER, with `selfCancelled`, as their own
+// confirmation. They used to get a bell and no email at all, on a placement
+// that may carry the monthly payment they have just stopped.
 
 import { EmailShell, H1, P, Button, Badge } from "@/emails/_components";
 import type { EmailPersona } from "@/emails/types/emailTypes";
@@ -31,6 +35,14 @@ export interface PlacementCancelledProps {
    * at all.
    */
   monthlyFeeGbp?: number | null;
+  /**
+   * True when the recipient is the party who cancelled. "X cancelled the
+   * placement" reads wrongly to the person who did it, so the copy switches
+   * to the second person and names the other party instead.
+   */
+  selfCancelled?: boolean;
+  /** The other party's display name, used by the self-cancelled copy. */
+  counterpartyName?: string;
 }
 
 export function PlacementCancelled({
@@ -40,23 +52,38 @@ export function PlacementCancelled({
   placementUrl,
   nextStepUrl,
   monthlyFeeGbp,
+  selfCancelled = false,
+  counterpartyName,
 }: PlacementCancelledProps) {
   const isArtist = recipientPersona === "artist";
   const nextLabel = isArtist ? "Discover more venues" : "Browse artists";
+  const other = counterpartyName || (isArtist ? "the venue" : "the artist");
+  const headline = selfCancelled
+    ? "You cancelled the placement"
+    : `${cancelledByName} cancelled the placement`;
   return (
     <EmailShell
       stream="tx"
       persona={recipientPersona}
       category="orders_and_payouts"
-      preview={`${cancelledByName} cancelled the placement`}
+      preview={headline}
     >
       <H1>
         <Badge tone="danger">Cancelled</Badge>{" "}
-        <span style={{ marginLeft: 6 }}>{cancelledByName} cancelled the placement</span>
+        <span style={{ marginLeft: 6 }}>{headline}</span>
       </H1>
       <P>
-        Hi {firstName}, {cancelledByName} has cancelled this placement. The placement is
-        now closed on both sides.
+        {selfCancelled ? (
+          <>
+            Hi {firstName}, you cancelled the placement with {other}. It is now closed on both
+            sides, and {other} has been told.
+          </>
+        ) : (
+          <>
+            Hi {firstName}, {cancelledByName} has cancelled this placement. The placement is now
+            closed on both sides.
+          </>
+        )}
       </P>
       {typeof monthlyFeeGbp === "number" && monthlyFeeGbp > 0 && (
         <P>

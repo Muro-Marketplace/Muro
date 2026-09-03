@@ -249,3 +249,26 @@ describe("the rejection reason reaches the author's own page (3.2)", () => {
     expect(blogWrite?.[1]).toMatchObject({ rejection_reason: null });
   });
 });
+
+// Email audit 2026-09-03, item 6. Both decisions went out as `placements` with
+// a user id, so the "Placement updates" toggle, vacation mode or the ten-a-day
+// cap could drop the only message carrying the decision. And the published
+// link pointed at /journal/<slug>, which does not exist; the post lives at
+// /blog/<slug>.
+describe("blog decisions go out as security-class notices, linking where the post lives (item 6)", () => {
+  it("approve: category security, link to /blog/<slug>", async () => {
+    const res = await PATCH(req("PATCH", { action: "approve" }), params);
+    expect(res.status).toBe(200);
+
+    const sent = sendEmailMock.mock.calls[0][0];
+    expect(sent.category).toBe("security");
+    const html = await render(sent.react);
+    expect(html).toContain("https://wallplace.co.uk/blog/painting-for-small-rooms");
+    expect(html).not.toContain("/journal/");
+  });
+
+  it("reject: category security", async () => {
+    await PATCH(req("PATCH", { action: "reject", reason: "Needs an edit." }), params);
+    expect(sendEmailMock.mock.calls[0][0].category).toBe("security");
+  });
+});

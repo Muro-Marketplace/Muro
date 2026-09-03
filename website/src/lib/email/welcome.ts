@@ -6,8 +6,21 @@
 //   - For customers (no profile row): sendEmail's idempotency_key on
 //     `welcome:${userId}` is the only dedupe.
 //
+// Callers: /api/auth/welcome (every SIGNED_IN, from AuthContext), /api/apply
+// (once the artist bridge row exists) and /api/venue-profile (once the venue
+// row exists). The last two matter because the sign-in trigger usually fires
+// BEFORE the profile row is created, answers "no profile yet" below, and the
+// client never retries it for that user.
+//
 // triggerWelcomeIfNeeded() is the only entry point. It's safe to call
 // every login, short-circuits on the first sent send.
+//
+// Category: `recommendations`, the category all three welcome templates
+// declare. These sends used to pass `tips`, so the preference the preview
+// library showed next to each template ("Recommendations") was not the one the
+// pipeline honoured ("Tips"), and the sends rode the news stream with the
+// 2/168h tips throttle instead of the notify stream the templates were built
+// for. The template is the contract; the send site follows it.
 //
 // Why split out from /api/auth/oauth-finalize: we want this to fire for
 // both OAuth and email/password signups (the latter via a separate hook),
@@ -111,7 +124,7 @@ async function sendArtistWelcome(
     // not split. Same change at the customer and venue sends below, at
     // offers/route.ts and at webhooks/supabase.
     template: "artist_welcome_checklist",
-    category: "tips",
+    category: "recommendations",
     to: email,
     subject: "Welcome to Wallplace, let's get your first placement",
     react: ArtistWelcomeChecklist({
@@ -187,7 +200,7 @@ async function sendCustomerWelcome(
   const result = await sendEmail({
     idempotencyKey: `welcome:${userId}`,
     template: "customer_welcome",
-    category: "tips",
+    category: "recommendations",
     to: email,
     subject: "Welcome to Wallplace",
     react: CustomerWelcome({
@@ -230,7 +243,7 @@ async function sendVenueWelcome(
   const result = await sendEmail({
     idempotencyKey: `welcome:${userId}`,
     template: "venue_welcome_checklist",
-    category: "tips",
+    category: "recommendations",
     to: email,
     subject: "Welcome to Wallplace, find your first artwork",
     react: VenueWelcomeChecklist({
@@ -239,7 +252,6 @@ async function sendVenueWelcome(
       spaceUrl: `${SITE_URL}/venue-portal/profile`,
       uploadPhotosUrl: `${SITE_URL}/venue-portal/profile`,
       artPreferencesUrl: `${SITE_URL}/venue-portal/profile`,
-      inviteTeamUrl: `${SITE_URL}/venue-portal/team`,
       completedSteps: 0,
       remainingSteps: [
         { label: "Add photos of your space", done: false, url: `${SITE_URL}/venue-portal/profile` },

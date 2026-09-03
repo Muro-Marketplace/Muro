@@ -96,6 +96,10 @@ const nextConfig: NextConfig = {
       // listing; keep the old path working with a permanent redirect so
       // bookmarks + indexed links still land in the right place.
       { source: "/spaces-looking-for-art", destination: "/spaces", permanent: true },
+      // Every transactional email has linked "/support" for help, but the
+      // help page is /contact (owner audit, 3 September 2026). The redirect
+      // keeps the links in emails already sent working as well.
+      { source: "/support", destination: "/contact", permanent: true },
       // QR Labels lives at /venue-portal/labels in the codebase, but
       // the sidebar label reads "QR Labels" so users (and anyone who
       // bookmarks from the page title) reasonably guess the URL

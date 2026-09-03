@@ -12,13 +12,31 @@
 //   - customer_profiles, customer_addresses and email_preferences are
 //     included, keyed to the caller's user_id.
 //   - Everything is keyed to the token's user, never to anything client-sent.
+//   - Email audit 2026-09-04: producing an export emails the account's own
+//     address, so a subject-access request leaves a record and the real owner
+//     hears about it if somebody else exported their data.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getAuthenticatedUserMock, queries } = vi.hoisted(() => ({
+const { getAuthenticatedUserMock, queries, sendEmailMock } = vi.hoisted(() => ({
   getAuthenticatedUserMock: vi.fn(),
   queries: [] as { table: string; column: string; value: string }[],
+  sendEmailMock: vi.fn(async (_input: {
+    idempotencyKey: string;
+    template: string;
+    category: string;
+    to: string;
+    subject: string;
+    userId?: string;
+    react: unknown;
+    metadata?: Record<string, unknown>;
+  }) => ({ ok: true as const, skipped: false as const, messageId: "m-1" })),
 }));
+
+// Mocked so the receipt does not run the real pipeline against the fake below:
+// sendEmail does its own email_events lookups, which would land in `queries`
+// and make "every query is scoped to the caller" fail on an idempotency key.
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 
 vi.mock("@/lib/api-auth", () => ({
   getAuthenticatedUser: (...args: unknown[]) => getAuthenticatedUserMock(...args),
@@ -58,9 +76,10 @@ function req(method: "GET" | "POST" = "GET"): Request {
 
 beforeEach(() => {
   queries.length = 0;
+  sendEmailMock.mockClear();
   getAuthenticatedUserMock.mockReset();
   getAuthenticatedUserMock.mockResolvedValue({
-    user: { id: "user-1", email: "finlay@example.com" },
+    user: { id: "user-1", email: "finlay@example.com", user_metadata: { display_name: "Finlay Coles" } },
     error: null,
   });
 });
@@ -124,6 +143,47 @@ describe("GET /api/account/export", () => {
     for (const q of queries) {
       expect(["user-1", "finlay@example.com", "profile-1"]).toContain(q.value);
     }
+  });
+});
+
+describe("GET /api/account/export emails a receipt", () => {
+  it("sends account_data_export_ready to the account's own address", async () => {
+    // Fail-before: the template existed and nothing sent it, so an export left
+    // no trace anyone could see.
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const sent = sendEmailMock.mock.calls[0][0];
+    expect(sent.template).toBe("account_data_export_ready");
+    expect(sent.to).toBe("finlay@example.com");
+    expect(sent.category).toBe("security");
+    expect(sent.userId).toBe("user-1");
+  });
+
+  it("keys the send on the user id plus the export timestamp, so a later export sends again", async () => {
+    await GET(req());
+    const body = await (await GET(req())).json();
+    const keys = sendEmailMock.mock.calls.map((c) => c[0].idempotencyKey);
+    expect(keys[0]).toMatch(/^account_data_export_ready:user-1:\d{4}-\d{2}-\d{2}T/);
+    // The key carries the same instant the payload reports, so the receipt and
+    // the dump can be tied together after the fact.
+    expect(keys[1]).toBe(`account_data_export_ready:user-1:${body.exportedAt}`);
+  });
+
+  it("still serves the dump when the receipt fails", async () => {
+    sendEmailMock.mockRejectedValueOnce(new Error("resend down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    expect((await res.json()).user.id).toBe("user-1");
+    errSpy.mockRestore();
+  });
+
+  it("sends nothing when the account has no address", async () => {
+    getAuthenticatedUserMock.mockResolvedValue({ user: { id: "user-1", email: "" }, error: null });
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });
 

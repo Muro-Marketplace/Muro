@@ -22,20 +22,28 @@ export async function POST(request: Request) {
 
     const { name, email, userType, phone, venueName, venueLocation } = parsed.data;
 
-    const { error } = await supabase.from("waitlist_signups").insert({
-      name,
-      email,
-      user_type: userType,
-      // Migration 129. The form asks for these three and they were discarded
-      // at the validation boundary, so a venue's own name and location, the
-      // only things that make this list workable, were thrown away every time.
-      // `|| null` rather than "" so a blank field reads as "not given" instead
-      // of as an empty answer.
-      phone: phone || null,
-      venue_name: venueName || null,
-      venue_location: venueLocation || null,
-      created_at: new Date().toISOString(),
-    });
+    // The inserted row's id keys the confirmation below. Email audit
+    // 2026-09-03 (fix 5): it was keyed on the bare address, so anyone removed
+    // from the list and signing up again was silently swallowed by the
+    // idempotency guard for ever. One signup, one key.
+    const { data: inserted, error } = await supabase
+      .from("waitlist_signups")
+      .insert({
+        name,
+        email,
+        user_type: userType,
+        // Migration 129. The form asks for these three and they were discarded
+        // at the validation boundary, so a venue's own name and location, the
+        // only things that make this list workable, were thrown away every time.
+        // `|| null` rather than "" so a blank field reads as "not given" instead
+        // of as an empty answer.
+        phone: phone || null,
+        venue_name: venueName || null,
+        venue_location: venueLocation || null,
+        created_at: new Date().toISOString(),
+      })
+      .select("id")
+      .maybeSingle<{ id: string }>();
 
     // E36d. A duplicate used to answer 409 "This email is already on the
     // waitlist", making a public unauthenticated form an account-existence
@@ -56,9 +64,10 @@ export async function POST(request: Request) {
     // measurably slower than the duplicate one, so identical status codes would
     // still have leaked through latency.
     if (!alreadyOnList) {
+      const signupRef = inserted?.id ?? `t${Date.now()}`;
       afterResponse(() =>
         sendEmail({
-          idempotencyKey: `customer_waitlist_confirmation:${email.toLowerCase()}`,
+          idempotencyKey: `customer_waitlist_confirmation:${signupRef}`,
           template: "customer_waitlist_confirmation",
           category: "security",
           to: email,

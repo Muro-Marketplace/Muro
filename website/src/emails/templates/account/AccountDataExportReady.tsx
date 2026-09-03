@@ -1,4 +1,10 @@
 // Stream: tx (legal / GDPR). Not suppressible.
+//
+// Sent from GET /api/account/export once the dump has been built. The export is
+// generated on demand and served straight back as a download, so there is no
+// stored file and no link that expires: `downloadUrl` points at the account
+// export page, where a fresh copy can be generated any time, and `expiresAt`
+// is optional for a sender that does have a time-limited link.
 
 import { EmailShell, H1, P, Button, Small, SupportBlock } from "@/emails/_components";
 import type { TemplateEntry } from "@/emails/registry-types";
@@ -6,7 +12,8 @@ import type { TemplateEntry } from "@/emails/registry-types";
 export interface AccountDataExportReadyProps {
   firstName: string;
   downloadUrl: string;
-  expiresAt: string;
+  /** When set, the link is described as expiring on this date. Leave unset for a link that does not. */
+  expiresAt?: string;
   supportUrl?: string;
 }
 
@@ -16,7 +23,12 @@ export function AccountDataExportReady({ firstName, downloadUrl, expiresAt, supp
       <H1>Your data export is ready</H1>
       <P>Hi {firstName}, the data export you requested is ready to download.</P>
       <Button href={downloadUrl}>Download your data</Button>
-      <Small>This link expires on {expiresAt}. After that you&rsquo;ll need to request a new export.</Small>
+      {expiresAt ? (
+        <Small>This link expires on {expiresAt}. After that you&rsquo;ll need to request a new export.</Small>
+      ) : (
+        <Small>You can generate a fresh export from your account page at any time.</Small>
+      )}
+      <Small>If you didn&rsquo;t request this, contact support straight away.</Small>
       <SupportBlock supportUrl={supportUrl} />
     </EmailShell>
   );
@@ -24,8 +36,7 @@ export function AccountDataExportReady({ firstName, downloadUrl, expiresAt, supp
 
 export const mock: AccountDataExportReadyProps = {
   firstName: "Maya",
-  downloadUrl: "https://wallplace.co.uk/account/export/abc123",
-  expiresAt: "1 May 2026",
+  downloadUrl: "https://wallplace.co.uk/account/export",
   supportUrl: "https://wallplace.co.uk/support",
 };
 

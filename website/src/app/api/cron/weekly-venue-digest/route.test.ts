@@ -40,7 +40,15 @@ function req(): Request {
   });
 }
 
-const VENUE_ROW = { user_id: "u-venue", name: "The Curzon", slug: "the-curzon", created_at: "2026-01-01T00:00:00Z" };
+const VENUE_ROW = {
+  user_id: "u-venue",
+  name: "The Curzon",
+  slug: "the-curzon",
+  created_at: "2026-01-01T00:00:00Z",
+  // NULL until the venue touches the switch, which is the state almost every
+  // row is in; the cron must read that as "on".
+  email_digest_enabled: null as boolean | null,
+};
 
 // Real artist_profiles columns only (tests/integration/schema-columns.json):
 // there is no "image" column, so the fixture (and the route) use profile_image.
@@ -70,10 +78,10 @@ function builder(table: string, respond: () => unknown) {
   return node;
 }
 
-function setupDb(artistRows: unknown[] = []) {
+function setupDb(artistRows: unknown[] = [], venueRow: Record<string, unknown> = VENUE_ROW) {
   fromMock.mockImplementation((table: string) =>
     builder(table, () => {
-      if (table === "venue_profiles") return { data: [VENUE_ROW] };
+      if (table === "venue_profiles") return { data: [venueRow] };
       if (table === "analytics_events") return { count: 41, error: null };
       if (table === "placements") return { count: 2, error: null };
       if (table === "artist_profiles") return { data: artistRows };
@@ -143,5 +151,67 @@ describe("GET /api/cron/weekly-venue-digest — suggested artists", () => {
     setupDb([{ ...CORE_ARTIST_ROW, review_status: "pending" }]);
     await GET(req());
     expect(digestProps[0]).not.toHaveProperty("suggestedArtists");
+  });
+});
+
+// Email audit, 2026-09-04. The venue portal's "Weekly digest" switch writes
+// venue_profiles.email_digest_enabled (PATCH /api/account/preferences) and
+// nothing read it: the only gate was email_preferences.digests_enabled, deep
+// inside sendEmail, so the switch the venue could actually see did nothing at
+// all. Both are honoured now, and either off means no digest.
+describe("GET /api/cron/weekly-venue-digest honours the portal's digest switch", () => {
+  it("sends when the profile switch is on", async () => {
+    setupDb([], { ...VENUE_ROW, email_digest_enabled: true });
+    await GET(req());
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends when the profile switch has never been touched (null)", async () => {
+    setupDb([], { ...VENUE_ROW, email_digest_enabled: null });
+    await GET(req());
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends nothing when the profile switch is off", async () => {
+    // Fail-before: the digest went out anyway, and the switch was decorative.
+    setupDb([], { ...VENUE_ROW, email_digest_enabled: false });
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("reads the column, so a select that stopped naming it would fail here", async () => {
+    const columns: string[] = [];
+    fromMock.mockImplementation((table: string) => {
+      const node: Record<string, unknown> = {};
+      const self = () => node;
+      for (const m of ["eq", "gte", "lte", "lt", "in", "is", "not", "or", "order", "limit"]) node[m] = self;
+      node.select = (cols = "") => {
+        if (table === "venue_profiles") columns.push(cols);
+        return node;
+      };
+      node.then = (onOk: (v: unknown) => unknown) =>
+        Promise.resolve(
+          table === "venue_profiles"
+            ? { data: [VENUE_ROW] }
+            : table === "artist_profiles"
+              ? { data: [] }
+              : { count: 2, error: null },
+        ).then(onOk);
+      return node;
+    });
+
+    await GET(req());
+
+    expect(columns.join(" ")).toContain("email_digest_enabled");
+  });
+
+  // The pipeline's own gate is unchanged: email_preferences.digests_enabled is
+  // checked inside sendEmail, so "either flag off means no digest" holds
+  // without this route knowing anything about that table.
+  it("leaves the preference-row gate to the pipeline, sending as the digests category", async () => {
+    setupDb();
+    await GET(req());
+    expect(sendEmailMock.mock.calls[0][0].category).toBe("digests");
   });
 });

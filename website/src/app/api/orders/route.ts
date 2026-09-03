@@ -29,6 +29,8 @@ import {
   CustomerOrderStatusUpdate,
   orderStatusText,
 } from "@/emails/templates/orders/CustomerOrderStatusUpdate";
+import { signOrderToken } from "@/lib/order-tracking-token";
+import { readOrderItem, type RawOrderItem } from "@/lib/order-items";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -269,6 +271,32 @@ export async function PATCH(request: Request) {
           artistEmail = null;
         }
       }
+
+      // Email audit 2026-09-03 (fix 2). The dispatcher spreads `data` into each
+      // template, and these templates declare more than the four keys that
+      // used to be passed: the buyer's "processing" email led with "undefined
+      // is preparing your piece", the dispatch email never showed the tracking
+      // reference this same request had just stored, the delivered email's
+      // date and both its buttons were blank, and the artist's own delivered
+      // email greeted them by the buyer's first name.
+      const { artistName, artistFirstName } = await resolveArtistForOrder(db, {
+        artistUserId: artistUserId || null,
+        artistSlug: (order as { artist_slug?: string | null }).artist_slug ?? null,
+      });
+      const firstItem = firstOrderItem(order.items);
+      const trackingRef =
+        (typeof trackingNumber === "string" && trackingNumber.trim()) ||
+        ((order as { tracking_number?: string | null }).tracking_number ?? "").trim() ||
+        undefined;
+      const deliveredIso =
+        (updates.delivered_at as string | undefined) ??
+        ((order as { delivered_at?: string | null }).delivered_at ?? null);
+      const deliveredAt = deliveredIso ? formatUkDate(deliveredIso) : undefined;
+      // The buyer's order page hosts both the Confirm delivery CTA and the
+      // Report a problem form (B29), and it authenticates a guest buyer by the
+      // same signed token the receipt carries, so both buttons go there.
+      const buyerOrderUrl = await buyerOrderPageUrl(orderId, order.buyer_email ?? null);
+
       await recordOrderEvent({
         orderId,
         newStatus: status,
@@ -282,10 +310,24 @@ export async function PATCH(request: Request) {
         data: {
           firstName: firstName0,
           orderNumber: orderId,
-          orderUrl: `${SITE}/customer-portal`,
+          orderUrl: buyerOrderUrl,
           // 09 item 1.5: the cancellation template needs the verb phrase, and
           // the dispatcher spreads `data` straight into the component.
           statusText: orderStatusText(status),
+          // customer_order_processing, _out_for_delivery and _delivered.
+          artistName,
+          workTitle: firstItem?.title,
+          workImage: firstItem?.image,
+          trackingNumber: trackingRef,
+          deliveredAt,
+          confirmUrl: buyerOrderUrl,
+          reportProblemUrl: buyerOrderUrl,
+        },
+        // artist_order_delivered reads firstName and orderUrl too. These win
+        // for the artist's copy only; the buyer's templates never see them.
+        artistData: {
+          firstName: artistFirstName,
+          orderUrl: `${SITE}/artist-portal/orders`,
         },
         metadata: { tracking_number: trackingNumber ?? null },
       });
@@ -563,5 +605,88 @@ export async function PATCH(request: Request) {
     // indistinguishable from a malformed body (Phase E item 14).
     console.error("[orders] unhandled error", err);
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+}
+
+/** "fin-coles" -> "Fin Coles". Empty for an empty slug. */
+function deSlug(slug: string | null | undefined): string {
+  return (slug ?? "")
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
+ * The artist's display name and greeting for the lifecycle emails. Profile
+ * name first (by user id, then by slug for legacy rows), then the de-slugged
+ * slug as the display name of last resort. Owner-reported 2026-08-30: a raw
+ * slug must never reach an email, and a greeting with no name says "there".
+ */
+async function resolveArtistForOrder(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  ids: { artistUserId: string | null; artistSlug: string | null },
+): Promise<{ artistName: string; artistFirstName: string }> {
+  let name = "";
+  const lookups: Array<["user_id" | "slug", string]> = [];
+  if (ids.artistUserId) lookups.push(["user_id", ids.artistUserId]);
+  if (ids.artistSlug) lookups.push(["slug", ids.artistSlug]);
+  for (const [column, value] of lookups) {
+    if (name) break;
+    try {
+      const { data: profile } = await db
+        .from("artist_profiles")
+        .select("name")
+        .eq(column, value)
+        .maybeSingle<{ name?: string | null }>();
+      name = (typeof profile?.name === "string" ? profile.name : "").trim();
+    } catch {
+      name = "";
+    }
+  }
+  const fromSlug = deSlug(ids.artistSlug);
+  return {
+    artistName: name || fromSlug || "Your artist",
+    artistFirstName: (name || fromSlug).split(" ")[0] || "there",
+  };
+}
+
+/** The first line of `orders.items`, in either of its two shapes, or null. */
+function firstOrderItem(items: unknown): { title: string; image?: string } | null {
+  let list: unknown = items;
+  if (typeof list === "string") {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      list = null;
+    }
+  }
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const raw = list[0] as RawOrderItem | null;
+  if (!raw || typeof raw !== "object") return null;
+  return { title: readOrderItem(raw).title, image: raw.image?.trim() || undefined };
+}
+
+/** "Friday 4 September 2026", or undefined for a value that is not a date. */
+function formatUkDate(iso: string): string | undefined {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+/**
+ * The buyer's order page, signed for a guest buyer where the secret allows.
+ * Best-effort: without ORDER_TOKEN_SECRET the link still resolves for a
+ * signed-in buyer, and a broken signer must not cost the buyer the email.
+ */
+async function buyerOrderPageUrl(orderId: string, buyerEmail: string | null): Promise<string> {
+  const base = `${SITE}/orders/${encodeURIComponent(orderId)}`;
+  if (!buyerEmail) return base;
+  try {
+    const token = await signOrderToken({ orderId, email: buyerEmail });
+    return `${base}?t=${encodeURIComponent(token)}`;
+  } catch (err) {
+    console.warn("[orders PATCH] signOrderToken failed, sending an unsigned order link:", err);
+    return base;
   }
 }

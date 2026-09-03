@@ -49,10 +49,96 @@
 // anonymisation passes below.
 
 import { NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { sendEmail } from "@/lib/email/send";
+import { AccountDeletionConfirmed } from "@/emails/templates/account/AccountDeletionConfirmed";
+import { AccountDeletionRequested } from "@/emails/templates/account/AccountDeletionRequested";
 
 const CONFIRM_STRING = "DELETE MY ACCOUNT";
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
+
+// Email audit, 2026-09-04. Two account templates existed for this flow and
+// nothing sent them. Now:
+//
+//   account_deletion_confirmed  after auth.admin.deleteUser succeeds, to the
+//                               address captured from the token before the
+//                               user was removed. No userId on the send: the
+//                               auth user is gone and every row keyed to it
+//                               was just deleted, so the event row must not
+//                               reference it.
+//   account_deletion_requested  ONLY on the retained path below, where the
+//                               scrub could not finish and support completes
+//                               the erasure by hand. That is the one state in
+//                               which "scheduled, and you can still cancel"
+//                               is true; on the ordinary path the account is
+//                               erased in this same request, and a "you can
+//                               cancel" email a second before "it is deleted"
+//                               would be a lie. The Stripe-abort path sends
+//                               nothing: nothing was removed and the response
+//                               already says to try again.
+//
+// Both are keyed on the user id plus the request timestamp, so a retried
+// request is a new event and a Vercel replay of the same one is not.
+
+function firstNameOf(user: User): string {
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const displayName = typeof meta.display_name === "string" ? meta.display_name : "";
+  return displayName.trim().split(" ").filter(Boolean)[0] || "there";
+}
+
+/** Best-effort: the erasure outcome stands whatever the mail does. */
+async function notifyDeletionRequested(
+  email: string,
+  userId: string,
+  firstName: string,
+  requestedAt: string,
+): Promise<void> {
+  if (!email) return;
+  try {
+    await sendEmail({
+      idempotencyKey: `account_deletion_requested:${userId}:${requestedAt}`,
+      template: "account_deletion_requested",
+      category: "security",
+      to: email,
+      userId,
+      subject: "Your Wallplace account is scheduled for deletion",
+      react: AccountDeletionRequested({
+        firstName,
+        // No date: support finishes this by hand. Cancelling is a message to
+        // support too, since nothing else can stop a manual erasure.
+        cancelDeletionUrl: `${SITE}/support`,
+        supportUrl: `${SITE}/support`,
+      }),
+      metadata: { requestedAt },
+    });
+  } catch (err) {
+    console.error("[account/delete] deletion-requested email failed:", err);
+  }
+}
+
+async function notifyDeletionConfirmed(
+  email: string,
+  userId: string,
+  firstName: string,
+  requestedAt: string,
+): Promise<void> {
+  if (!email) return;
+  try {
+    await sendEmail({
+      idempotencyKey: `account_deletion_confirmed:${userId}:${requestedAt}`,
+      template: "account_deletion_confirmed",
+      category: "security",
+      to: email,
+      subject: "Your Wallplace account has been deleted",
+      react: AccountDeletionConfirmed({ firstName, supportUrl: `${SITE}/support` }),
+      metadata: { requestedAt },
+    });
+  } catch (err) {
+    console.error("[account/delete] deletion-confirmed email failed:", err);
+  }
+}
 
 // Tables to wipe rows from, keyed by the user_id (or equivalent) column.
 // Order matters: child tables before parents so foreign-key cascades
@@ -142,6 +228,8 @@ export async function POST(request: Request) {
   const userId = auth.user!.id; // ← from verified bearer token, never from body
   const email = auth.user!.email || "";
   const anonTag = `[deleted-${userId.slice(0, 8)}]`;
+  const requestedAt = new Date().toISOString();
+  const firstName = firstNameOf(auth.user!);
 
   // C14c: every step is checked, and failures COLLECT rather than
   // short-circuit — same idiom as the sibling DELETE /api/account. A scrub
@@ -263,6 +351,7 @@ export async function POST(request: Request) {
   // the job by hand.
   if (failures.length > 0) {
     console.error("[account/delete] erasure incomplete, auth user RETAINED", { userId, failures });
+    await notifyDeletionRequested(email, userId, firstName, requestedAt);
     return NextResponse.json(
       {
         error:
@@ -282,5 +371,6 @@ export async function POST(request: Request) {
     );
   }
 
+  await notifyDeletionConfirmed(email, userId, firstName, requestedAt);
   return NextResponse.json({ ok: true });
 }

@@ -74,8 +74,17 @@ beforeEach(() => {
   rateLimitMock.mockReset();
 
   rateLimitMock.mockResolvedValue(null);
-  insertMock.mockResolvedValue({ error: null });
-  anonFrom.mockReturnValue({ insert: insertMock });
+  // The insert now ends `.select("id").maybeSingle()` so the sends can be
+  // keyed on the registration row rather than on the bare email address
+  // (email audit fix 5). insertMock still records the written row and still
+  // decides the outcome, so every assertion above it is unchanged.
+  insertMock.mockResolvedValue({ data: { id: "reg-1" }, error: null });
+  anonFrom.mockReturnValue({
+    insert: (row: unknown) => {
+      const result = insertMock(row);
+      return { select: () => ({ maybeSingle: async () => await result }) };
+    },
+  });
   notifyMock.mockResolvedValue({ ok: true, skipped: false, messageId: "m" });
   sendEmailMock.mockResolvedValue(undefined);
   adminMock.mockImplementation(() => {
@@ -189,6 +198,46 @@ describe("POST /api/register-venue is not an account-existence oracle (E36d)", (
     await flush();
     expect(res.status).toBe(500);
     expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  // Email audit 2026-09-03 (fix 5). Both sends were keyed on the bare email
+  // address, so a person registering a SECOND venue with the same contact
+  // address was swallowed by the idempotency guard for ever: no confirmation
+  // to them, no alert to the team, and no record that anything was dropped.
+  it("keys both sends on the registration row, not on the email address", async () => {
+    await POST(post(VALID));
+    await flush();
+
+    expect(notifyMock.mock.calls[0][0].idempotencyKey).toBe("admin_new_venue:reg-1");
+    expect(sendEmailMock.mock.calls[0][0].idempotencyKey).toBe(
+      "venue_registration_confirmation:reg-1",
+    );
+  });
+
+  it("gives a second registration from the same address its own keys", async () => {
+    await POST(post(VALID));
+    await flush();
+    insertMock.mockResolvedValue({ data: { id: "reg-2" }, error: null });
+    await POST(post({ ...VALID, venueName: "Their Second Pub" }));
+    await flush();
+
+    const keys = sendEmailMock.mock.calls.map((c) => c[0].idempotencyKey);
+    expect(keys).toEqual([
+      "venue_registration_confirmation:reg-1",
+      "venue_registration_confirmation:reg-2",
+    ]);
+  });
+
+  it("falls back to a unique key when the insert returns no row", async () => {
+    // Unreachable in practice (the insert succeeded), but a shared key here
+    // would silently reinstate the swallowing this fix removes.
+    insertMock.mockResolvedValue({ data: null, error: null });
+    await POST(post(VALID));
+    await flush();
+
+    const key = String(sendEmailMock.mock.calls[0][0].idempotencyKey);
+    expect(key).not.toBe("venue_registration_confirmation:");
+    expect(key).not.toContain(VALID.email);
   });
 });
 

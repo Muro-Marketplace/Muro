@@ -12,10 +12,15 @@
 // existed. Without it the accepted artist's FIRST contact from Wallplace is an
 // unbranded Supabase email, and it is the one carrying their only way in.
 //
-// Not registered in the app's own registry: nothing in src/ sends it. Supabase
-// does, from a template pasted into the dashboard.
+// Registered in the app's registry for RENDER coverage only: nothing in src/
+// sends it (Supabase does, from a template pasted into the dashboard), so
+// `npm run email:audit` lists it among the templates with no send path, which
+// is correct. Registering it means `npm run email:render` and the preview
+// library exercise it, so a broken edit here is caught before it is pasted
+// into the dashboard rather than after.
 
 import { EmailShell, H1, P, Button, Small } from "@/emails/_components";
+import type { TemplateEntry } from "@/emails/registry-types";
 
 export interface AccountInviteProps {
   firstName: string;
@@ -56,3 +61,21 @@ export const mock: AccountInviteProps = {
   inviteUrl: "https://www.wallplace.co.uk/reset-password?token=example",
   supportUrl: "https://wallplace.co.uk/support",
 };
+
+const entry: TemplateEntry<AccountInviteProps> = {
+  id: "account_invite",
+  name: "Account invite (Supabase)",
+  description:
+    "The set-a-password invite an accepted artist receives. Sent by Supabase from the dashboard template, never by the app; registered so it renders in CI.",
+  stream: "tx",
+  persona: "artist",
+  category: "security",
+  subject: "Welcome to Wallplace, set your password",
+  previewText: "Set your password and get started on Wallplace.",
+  component: AccountInvite,
+  mock,
+  canUnsubscribe: false,
+  hasInAppEquivalent: false,
+  priority: 1,
+};
+export default entry;

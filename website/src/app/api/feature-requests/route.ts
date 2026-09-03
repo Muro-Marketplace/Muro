@@ -9,8 +9,14 @@ import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { sendEmail } from "@/lib/email/send";
+import { unverifiedRecipientAllowed } from "@/lib/email/unverified-recipient";
+import { FeedbackReceived } from "@/emails/templates/account/FeedbackReceived";
 
 export const runtime = "nodejs";
+
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
 
 const createSchema = z.object({
   title: z.string().min(3).max(160),
@@ -70,6 +76,72 @@ export async function POST(request: Request) {
   if (error) {
     console.error("[feature-requests POST]", error);
     return NextResponse.json({ error: "Could not save request" }, { status: 500 });
+  }
+
+  // The row is written; from here everything is best-effort and the response
+  // is the same whatever the mail does. Until now a request went into the
+  // table and nobody was told: no alert to the team and nothing to the sender.
+  const requestId = data?.id ? String(data.id) : null;
+  const contactEmail = parsed.data.email || (userId ? auth.user?.email || null : null);
+  if (requestId) {
+    try {
+      await sendAdminAlert({
+        idempotencyKey: `admin_feature_request:${requestId}`,
+        subject: `New feature request: ${parsed.data.title.trim()}`,
+        summary: "Someone submitted a feature request.",
+        fields: [
+          { label: "Reference", value: requestId },
+          { label: "From", value: contactEmail ?? "anonymous" },
+          ...(parsed.data.role ? [{ label: "Role", value: parsed.data.role }] : []),
+          ...(parsed.data.category ? [{ label: "Category", value: parsed.data.category }] : []),
+          { label: "Request", value: `${parsed.data.title.trim()}: ${parsed.data.description.trim()}` },
+        ],
+        actionPath: "/admin/feature-requests",
+        actionLabel: "Open the queue",
+      });
+    } catch (err) {
+      console.error("[feature-requests POST] admin alert failed:", err);
+    }
+
+    if (contactEmail) {
+      // The sender's acknowledgement. `email` on the body is free text from an
+      // optionally anonymous caller, so unless it is the signed-in caller's own
+      // address off the token this is a REFLECTED send and the per-recipient
+      // cap applies, as on the contact form: many IPs at one inbox is the
+      // attack the per-IP limit above does not cover.
+      const ownAddress =
+        !!userId &&
+        !!auth.user?.email &&
+        auth.user.email.trim().toLowerCase() === contactEmail.trim().toLowerCase();
+      const meta = (auth.user?.user_metadata ?? {}) as Record<string, unknown>;
+      const displayName = typeof meta.display_name === "string" ? meta.display_name : "";
+      try {
+        const allowed =
+          ownAddress || (await unverifiedRecipientAllowed({ to: contactEmail, template: "feedback_received" }));
+        if (allowed) {
+          await sendEmail({
+            idempotencyKey: `feedback_ack:feature_request:${requestId}`,
+            template: "feedback_received",
+            category: "orders_and_payouts",
+            to: contactEmail,
+            // No userId for an unverified address: attaching one would apply
+            // somebody's preferences to an address we have not tied to them.
+            userId: ownAddress ? userId ?? undefined : undefined,
+            subject: "Thanks for your feature request",
+            react: FeedbackReceived({
+              firstName: (ownAddress && displayName.trim().split(" ").filter(Boolean)[0]) || "there",
+              referenceId: requestId,
+              submittedType: "feature request",
+              messageExcerpt: `${parsed.data.title.trim()}: ${parsed.data.description.trim()}`.slice(0, 300),
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { referenceId: requestId, kind: "feature request" },
+          });
+        }
+      } catch (err) {
+        console.error("[feature-requests POST] acknowledgement failed:", err);
+      }
+    }
   }
 
   return NextResponse.json({ success: true, id: data?.id });

@@ -34,9 +34,16 @@
 // resolveCurationRow never even attempts the metadata lookup once the
 // subscription-id one has already found the row.
 //
-// Out of scope (feature, not this reconcile bug): the customer renewal receipt
-// and the curation refund path (D57.4 / D56.3). The renewal-paid customer
-// notification belongs with D23.
+// Email audit, 2026-09-04: the venue paying for the subscription now hears
+// about all three lifecycle events, not just the admin. A renewal sends a
+// receipt (CurationRenewalReceipt), a failed payment sends dunning
+// (CurationPaymentFailed, retry and final variants, mirroring the paid-loan
+// sibling), and a confirmed cancellation sends a confirmation
+// (CurationSubscriptionCancelled). Each is keyed on the Stripe object that
+// caused it, so a webhook redelivery cannot double it, and each sits in its
+// own try/catch so a mail failure never reaches the reconciler. The admin
+// alerts are unchanged. Still out of scope: the curation refund path
+// (D57.4 / D56.3).
 //
 // Review fix: because checkout.session.completed never fires for a programme
 // (this file's header above), a programme's FIRST payment used to trigger
@@ -53,16 +60,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { readSubscriptionIdFromInvoice } from "@/lib/stripe-subscription-period";
+import { epochToUkDate, readSubscriptionIdFromInvoice } from "@/lib/stripe-subscription-period";
 import { sendAdminAlert } from "@/lib/email/admin-alert";
 import { sendEmail } from "@/lib/email/send";
 import { CurationProgrammeConfirmed } from "@/emails/templates/venue-lifecycle/CurationProgrammeConfirmed";
+import {
+  CurationPaymentFailed,
+  curationKindLabel,
+  type CurationSubscriptionKind,
+} from "@/emails/templates/payments/CurationPaymentFailed";
+import { CurationRenewalReceipt } from "@/emails/templates/payments/CurationRenewalReceipt";
+import { CurationSubscriptionCancelled } from "@/emails/templates/payments/CurationSubscriptionCancelled";
 import { CURATION_TIERS, type CurationTierKey } from "@/lib/curation-tiers";
 import { accrueProgrammeRent } from "@/lib/curation/programme-rent";
 
 interface CurationRow {
   id: string;
   status: string;
+  /** The requester's auth user id when they were signed in at enquiry time; null for an anonymous enquiry. */
+  requester_user_id: string | null;
   contact_email: string | null;
   contact_name: string | null;
   venue_name: string | null;
@@ -85,7 +101,7 @@ async function findBySubscription(
   const { data, error } = await db
     .from("curation_requests")
     .select(
-      "id, status, contact_email, contact_name, venue_name, tier, quoted_amount_gbp, " +
+      "id, status, requester_user_id, contact_email, contact_name, venue_name, tier, quoted_amount_gbp, " +
         "billing_interval, pieces_estimate, rotation_cadence, term_months",
     )
     .eq("stripe_subscription_id", subId)
@@ -114,7 +130,7 @@ async function findByRequestId(
   const { data, error } = await db
     .from("curation_requests")
     .select(
-      "id, status, contact_email, contact_name, venue_name, tier, quoted_amount_gbp, " +
+      "id, status, requester_user_id, contact_email, contact_name, venue_name, tier, quoted_amount_gbp, " +
         "billing_interval, pieces_estimate, rotation_cadence, term_months",
     )
     .eq("id", curationRequestId)
@@ -182,6 +198,22 @@ function readCurationRequestIdFromSubscription(subscription: Stripe.Subscription
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
+
+/** Which of the two subscription products a row is, for the venue-facing copy. */
+function kindOf(row: CurationRow): CurationSubscriptionKind {
+  return row.tier === "programme" ? "programme" : "managed";
+}
+
+/** Today as the UK date the venue emails print, for a Stripe timestamp that is missing. */
+function todayUk(): string {
+  return new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function contactFirstName(row: CurationRow): string {
+  return (row.contact_name || "there").trim().split(" ")[0] || "there";
+}
+
 /**
  * invoice.paid for a managed curation subscription: the service is being paid
  * for, so keep it in_progress and stamp the payment. Returns false when the
@@ -228,6 +260,7 @@ export async function handleCurationInvoicePaid(
         invoiceId: invoice.id,
         periodMonths: row.billing_interval === "quarter" ? 3 : 1,
         quotedAmountPence: Math.round((row.quoted_amount_gbp ?? 0) * 100),
+        venueName: row.venue_name,
       });
     } catch (err) {
       console.error("[curation billing] programme rent accrual failed", {
@@ -267,6 +300,37 @@ export async function handleCurationInvoicePaid(
       actionPath: "/admin/curation",
       actionLabel: "View in admin",
     });
+
+    // The venue's own receipt. Until this existed the alert above was the
+    // only send on a renewal, so a venue paying every month or quarter heard
+    // nothing after their first invoice. Keyed on the invoice, like the
+    // alert; own try/catch, since the two are separate failure domains.
+    if (row.contact_email) {
+      try {
+        await sendEmail({
+          idempotencyKey: `curation_renewal_receipt:${invoice.id}`,
+          template: "curation_renewal_receipt",
+          category: "orders_and_payouts",
+          to: row.contact_email,
+          userId: row.requester_user_id ?? undefined,
+          subject: `Payment received for ${row.venue_name ?? "your venue"}`,
+          react: CurationRenewalReceipt({
+            contactFirstName: contactFirstName(row),
+            venueName: row.venue_name ?? "your venue",
+            kind: kindOf(row),
+            invoiceNumber: invoice.number || invoice.id || "invoice",
+            amountPaid: { amount: invoice.amount_paid ?? 0, currency: "GBP" },
+            paidOn: epochToUkDate(invoice.status_transitions?.paid_at, todayUk()),
+            billingInterval: row.billing_interval === "quarter" ? "quarter" : "month",
+            invoiceUrl: invoice.hosted_invoice_url || `${SITE}/curated`,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { curationRequestId: row.id, invoiceId: invoice.id ?? "" },
+        });
+      } catch (err) {
+        console.error("[curation billing] renewal receipt failed", { requestId: row.id, err });
+      }
+    }
   }
 
   // Review fix: a programme's checkout session never carries
@@ -380,6 +444,39 @@ export async function handleCurationSubscriptionDeleted(
     actionPath: "/admin/curation",
     actionLabel: "View in admin",
   });
+
+  // The venue's confirmation. customer.subscription.deleted means the
+  // subscription has actually ended (Stripe fires it at the end of the period
+  // for a scheduled cancellation, and immediately otherwise), so the copy is
+  // past tense: it is over and no further payment will be taken. Keyed on the
+  // subscription, so a redelivery cannot double it.
+  if (row.contact_email) {
+    try {
+      const kind = kindOf(row);
+      await sendEmail({
+        idempotencyKey: `curation_subscription_cancelled:${subscription.id}`,
+        template: "curation_subscription_cancelled",
+        category: "orders_and_payouts",
+        to: row.contact_email,
+        userId: row.requester_user_id ?? undefined,
+        subject:
+          kind === "programme"
+            ? "Your Wallplace programme has ended"
+            : "Your Wallplace curation subscription has ended",
+        react: CurationSubscriptionCancelled({
+          contactFirstName: contactFirstName(row),
+          venueName: row.venue_name ?? "your venue",
+          kind,
+          endedOn: epochToUkDate(subscription.ended_at ?? subscription.canceled_at, todayUk()),
+          restartUrl: `${SITE}/curated`,
+          supportUrl: `${SITE}/support`,
+        }),
+        metadata: { curationRequestId: row.id, subscriptionId: subscription.id },
+      });
+    } catch (err) {
+      console.error("[curation billing] cancellation confirmation failed", { requestId: row.id, err });
+    }
+  }
   return true;
 }
 
@@ -387,6 +484,11 @@ export async function handleCurationSubscriptionDeleted(
  * invoice.payment_failed for a managed curation subscription. Stripe retries a
  * few times; while attempts remain the row is past_due, and once Stripe gives up
  * (next_payment_attempt === null) it is effectively paused.
+ *
+ * The venue is told at both intensities (a retryable failure asks for the
+ * card to be fixed, the final one says the subscription is paused) and the
+ * admin is told on the final one, since that is the point the curator has to
+ * stop work. Before this the status flipped and nobody heard.
  */
 export async function handleCurationInvoiceFailed(
   invoice: Stripe.Invoice,
@@ -411,5 +513,70 @@ export async function handleCurationInvoiceFailed(
       ...(subId ? { stripe_subscription_id: subId } : {}),
     })
     .eq("id", row.id);
+
+  const kind = kindOf(row);
+  const kindWord = kind === "programme" ? "programme" : "curation";
+  // Stripe's amount_due is what the card was asked for; the quote is the
+  // fallback for an invoice object that arrived without it.
+  const amountDuePence = invoice.amount_due ?? Math.round((row.quoted_amount_gbp ?? 0) * 100);
+
+  if (row.contact_email) {
+    try {
+      await sendEmail({
+        // The stage is in the key, like the paid-loan dunning: the retry
+        // notice and the final notice are two different emails about the
+        // same invoice, and a redelivery of either must not double it.
+        idempotencyKey: `curation_dunning:${invoice.id}:${finalAttempt ? "final" : "retry"}`,
+        template: "curation_payment_failed",
+        category: "orders_and_payouts",
+        to: row.contact_email,
+        userId: row.requester_user_id ?? undefined,
+        subject: finalAttempt
+          ? `Your Wallplace ${kindWord} payments are paused`
+          : `Your Wallplace ${kindWord} payment failed`,
+        react: CurationPaymentFailed({
+          contactFirstName: contactFirstName(row),
+          venueName: row.venue_name ?? "your venue",
+          kind,
+          amountDue: { amount: amountDuePence, currency: "GBP" },
+          finalAttempt,
+          // Stripe's hosted invoice page lets the venue pay the invoice and
+          // update the card in one place; there is no Wallplace billing page
+          // for a curation subscription.
+          payUrl: invoice.hosted_invoice_url || `${SITE}/curated`,
+          supportUrl: `${SITE}/support`,
+        }),
+        metadata: { curationRequestId: row.id, invoiceId: invoice.id ?? "", finalAttempt },
+      });
+    } catch (err) {
+      console.error("[curation billing] dunning email failed", { requestId: row.id, err });
+    }
+  }
+
+  if (finalAttempt) {
+    try {
+      await sendAdminAlert({
+        idempotencyKey: `admin_curation_payment_failed:${invoice.id}`,
+        subject: `Curation payments paused, card failed: ${row.venue_name ?? ""}`,
+        summary:
+          `Stripe has given up collecting ${row.venue_name ?? "a venue"}'s ${curationKindLabel(kind)} payment ` +
+          `(£${(amountDuePence / 100).toFixed(2)}). The row is paused and the curator should stop work until it is paid.`,
+        fields: [
+          { label: "Request", value: row.id },
+          { label: "Venue", value: row.venue_name ?? "" },
+          { label: "Tier", value: row.tier ?? "" },
+          { label: "Amount due", value: `£${(amountDuePence / 100).toFixed(2)}` },
+          {
+            label: "Contact",
+            value: `${row.contact_name ?? ""}${row.contact_email ? ` <${row.contact_email}>` : ""}`,
+          },
+        ],
+        actionPath: "/admin/curation",
+        actionLabel: "View in admin",
+      });
+    } catch (err) {
+      console.error("[curation billing] payment-failed admin alert failed", { requestId: row.id, err });
+    }
+  }
   return true;
 }

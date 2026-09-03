@@ -73,7 +73,7 @@ export async function GET(request: Request) {
 
   const { data: venues } = await db
     .from("venue_profiles")
-    .select("user_id, name, slug, created_at")
+    .select("user_id, name, slug, created_at, email_digest_enabled")
     .not("user_id", "is", null)
     .lte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString());
 
@@ -90,6 +90,13 @@ export async function GET(request: Request) {
 
   const result = await runBatch(venues || [], async (venue) => {
     if (!venue.user_id) return;
+    // The portal's "Weekly digest" switch writes venue_profiles.email_digest_enabled
+    // (PATCH /api/account/preferences), and until now nothing read it: the only
+    // gate was email_preferences.digests_enabled, checked inside sendEmail, so the
+    // switch a venue could actually see did nothing. Both are honoured: this one
+    // here, the other in the pipeline. Either off means no digest. NULL (the
+    // column's default before anyone touches the switch) means on.
+    if (venue.email_digest_enabled === false) return;
 
     const [{ count: viewCount }, { count: requestCount }, { count: activeCount }] = await Promise.all([
       // `analytics_events` has NO `venue_slug`. It carries `venue_user_id` and

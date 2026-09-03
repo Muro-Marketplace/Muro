@@ -259,14 +259,26 @@ function patch(body: unknown, token: string | null = "Bearer x"): Promise<Respon
  * email is in ADMIN_EMAILS.
  */
 function mockFoundingProfiles(opts: {
-  existing?: { id: string; slug: string | null; is_founding_artist: boolean | null } | null;
+  existing?: {
+    id: string;
+    slug: string | null;
+    name?: string | null;
+    user_id?: string | null;
+    is_founding_artist: boolean | null;
+  } | null;
   fetchError?: { message: string } | null;
   foundingCount?: number;
   countError?: { message: string } | null;
   updateError?: { message: string } | null;
 } = {}) {
   const {
-    existing = { id: ARTIST_ID, slug: "maya-chen", is_founding_artist: false },
+    existing = {
+      id: ARTIST_ID,
+      slug: "maya-chen",
+      name: "Maya Chen",
+      user_id: "u-artist",
+      is_founding_artist: false,
+    },
     fetchError = null,
     foundingCount = 0,
     countError = null,
@@ -334,7 +346,7 @@ describe("PATCH /api/admin/artists founding cohort guard (Task 8)", () => {
     // The cohort is exactly full, but this artist is one of the 20 already
     // counted, so a retry of the same request must not 409 against itself.
     mockFoundingProfiles({
-      existing: { id: ARTIST_ID, slug: "maya-chen", is_founding_artist: true },
+      existing: { id: ARTIST_ID, slug: "maya-chen", name: "Maya Chen", user_id: "u-artist", is_founding_artist: true },
       foundingCount: 20,
     });
 
@@ -354,7 +366,7 @@ describe("PATCH /api/admin/artists founding cohort guard (Task 8)", () => {
 
   it("revokes founding status without consulting the count guard", async () => {
     mockFoundingProfiles({
-      existing: { id: ARTIST_ID, slug: "maya-chen", is_founding_artist: true },
+      existing: { id: ARTIST_ID, slug: "maya-chen", name: "Maya Chen", user_id: "u-artist", is_founding_artist: true },
       foundingCount: 20,
     });
 
@@ -420,5 +432,101 @@ describe("PATCH /api/admin/artists founding cohort guard (Task 8)", () => {
 
     expect(res.status).toBe(401);
     expect(updateMock).not.toHaveBeenCalled();
+  });
+});
+
+// Email audit, 2026-09-04. The flyer promises "First 20 artists: 6 months
+// free", and /api/subscribe reads this very flag to pick the long trial, but
+// setting it sent nothing: an artist could be given six free months and only
+// find out by noticing a badge on their billing page.
+describe("PATCH /api/admin/artists tells the artist about their founding place", () => {
+  it("emails the artist when the flag is set", async () => {
+    mockFoundingProfiles({ foundingCount: 3 });
+
+    const res = await patch({ id: ARTIST_ID, is_founding_artist: true });
+
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const sent = sendEmailMock.mock.calls[0][0];
+    expect(sent.template).toBe("artist_founding_place_confirmed");
+    expect(sent.to).toBe("maya@example.com");
+    expect(sent.userId).toBe("u-artist");
+    expect(sent.category).toBe("orders_and_payouts");
+    expect(sent.subject).toBe("Your founding place on Wallplace is confirmed");
+  });
+
+  it("keys the send on the artist and the moment, so a revoke-and-regrant is a new event", async () => {
+    mockFoundingProfiles({ foundingCount: 3 });
+    await patch({ id: ARTIST_ID, is_founding_artist: true });
+    expect(sendEmailMock.mock.calls[0][0].idempotencyKey).toMatch(
+      new RegExp(`^artist_founding_confirmed:${ARTIST_ID}:\\d{4}-\\d{2}-\\d{2}T`),
+    );
+  });
+
+  it("says nothing when the flag is revoked", async () => {
+    // "You are no longer a founding artist" is not an email anyone should get
+    // off an admin correcting a misclick.
+    mockFoundingProfiles({
+      existing: { id: ARTIST_ID, slug: "maya-chen", name: "Maya Chen", user_id: "u-artist", is_founding_artist: true },
+    });
+
+    const res = await patch({ id: ARTIST_ID, is_founding_artist: false });
+
+    expect(res.status).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith({ is_founding_artist: false });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("says nothing on a no-op re-promotion, which changed nothing", async () => {
+    mockFoundingProfiles({
+      existing: { id: ARTIST_ID, slug: "maya-chen", name: "Maya Chen", user_id: "u-artist", is_founding_artist: true },
+      foundingCount: 20,
+    });
+
+    await patch({ id: ARTIST_ID, is_founding_artist: true });
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("says nothing when the cohort is full and the flag was never set", async () => {
+    mockFoundingProfiles({ foundingCount: 20 });
+
+    const res = await patch({ id: ARTIST_ID, is_founding_artist: true });
+
+    expect(res.status).toBe(409);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("says nothing when the write failed, so nobody is promised a place they do not have", async () => {
+    mockFoundingProfiles({ foundingCount: 5, updateError: { message: "permission denied" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await patch({ id: ARTIST_ID, is_founding_artist: true });
+
+    expect(res.status).toBe(500);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("still applies the flag when the artist has no reachable address", async () => {
+    getUserById.mockResolvedValue({ data: { user: null }, error: null });
+    mockFoundingProfiles({ foundingCount: 3 });
+
+    const res = await patch({ id: ARTIST_ID, is_founding_artist: true });
+
+    expect(res.status).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith({ is_founding_artist: true });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("still applies the flag for a profile with no linked account", async () => {
+    mockFoundingProfiles({
+      existing: { id: ARTIST_ID, slug: "maya-chen", name: "Maya Chen", user_id: null, is_founding_artist: false },
+      foundingCount: 3,
+    });
+
+    const res = await patch({ id: ARTIST_ID, is_founding_artist: true });
+
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });

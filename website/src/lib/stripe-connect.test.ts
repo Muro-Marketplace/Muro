@@ -1,8 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { transfersCreate, fromMock, sendAdminAlertMock } = vi.hoisted(() => ({
+const { transfersCreate, fromMock, sendAdminAlertMock, sendEmailMock, getUserByIdMock } = vi.hoisted(() => ({
   transfersCreate: vi.fn(),
   fromMock: vi.fn(),
+  // Email audit 2026-09-03 (6c): the artist now hears about their own stuck
+  // payout, alongside the operator alert.
+  sendEmailMock: vi.fn(async (_input: { idempotencyKey: string; template: string; to: string; subject: string }) => ({
+    ok: true as const,
+    skipped: false as const,
+    messageId: "m",
+  })),
+  getUserByIdMock: vi.fn(async () => ({ data: { user: { email: "maya@example.com" } } })),
   // Typed via the parameter so `mock.calls[0][0]` is the alert object, not the
   // `never` an argless async fn infers.
   sendAdminAlertMock: vi.fn(
@@ -19,8 +27,10 @@ vi.mock("@/lib/stripe", () => ({
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
-  getSupabaseAdmin: () => ({ from: fromMock }),
+  getSupabaseAdmin: () => ({ from: fromMock, auth: { admin: { getUserById: getUserByIdMock } } }),
 }));
+
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 
 // alertExhaustedPayout lazily imports the alert helper so the transfer module
 // does not pull the email stack into every caller (C4). K1: that used to be the
@@ -208,6 +218,8 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
   }) {
     capturedUpdates = [];
     sendAdminAlertMock.mockClear();
+    sendEmailMock.mockClear();
+    getUserByIdMock.mockClear();
     transfersCreate.mockReset();
     transfersCreate.mockImplementation(async () => {
       if (opts.transfer instanceof Error) throw opts.transfer;
@@ -221,6 +233,12 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
         // WS2.6: an open refund request pauses the payout.
         const rows = opts.openRefund ? [{ id: "rr-1" }] : [];
         return { select: () => ({ eq: () => ({ eq: () => ({ limit: async () => ({ data: rows, error: null }) }) }) }) };
+      }
+      if (table === "artist_profiles") {
+        // The artist's greeting for the 6c notices.
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: "Maya Chen" } }) }) }),
+        };
       }
       // stripe_transfers: one chainable stub serving the sweep select
       // (.in().lt().lte().or().order().limit()), the executeTransfer read
@@ -309,6 +327,60 @@ describe("processPendingTransfers() retry sweep (C4)", () => {
     expect(res.processed).toBe(0);
     expect(capturedUpdates.find((u) => u.status === "cancelled")).toBeTruthy();
     expect(transfersCreate).not.toHaveBeenCalled();
+  });
+
+  // Email audit 2026-09-03 (6c). Both of these paths alerted an operator and
+  // told the artist nothing, so the person whose money was stuck, and the
+  // person who could clear the hold, heard only silence.
+  it("emails the artist when the payout has exhausted its retries", async () => {
+    setupSweep({ due: [failedLeg(5)], order: { status: "shipped" }, transfer: new Error("still failing") });
+    await processPendingTransfers();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const sent = sendEmailMock.mock.calls[0][0];
+    expect(sent).toMatchObject({
+      template: "artist_payout_retries_exhausted",
+      to: "maya@example.com",
+      // Keyed on the leg, so a re-run of the sweep does not re-send.
+      idempotencyKey: "artist_payout_exhausted:st_1",
+    });
+    expect(sent.subject).toContain("o1");
+    // The operator alert is unaffected.
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("emails the artist when the hold elapsed on an order that never shipped", async () => {
+    setupSweep({ due: [failedLeg(0)], order: { status: "confirmed" }, transfer: "success" });
+    await processPendingTransfers();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0]).toMatchObject({
+      template: "artist_order_unshipped_payout_held",
+      to: "maya@example.com",
+      idempotencyKey: "unshipped_payout_artist:st_1",
+    });
+  });
+
+  it("tells a venue leg's recipient nothing: shipping is not theirs to fix", async () => {
+    setupSweep({
+      due: [{ ...failedLeg(0), recipient_type: "venue" }],
+      order: { status: "confirmed" },
+      transfer: "success",
+    });
+    await processPendingTransfers();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not break the sweep when the artist has no auth email", async () => {
+    getUserByIdMock.mockResolvedValueOnce({ data: { user: null } } as never);
+    setupSweep({ due: [failedLeg(0)], order: { status: "confirmed" }, transfer: "success" });
+
+    const res = await processPendingTransfers();
+
+    expect(res.processed).toBe(0);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("skips a failed row whose backoff has not elapsed", async () => {

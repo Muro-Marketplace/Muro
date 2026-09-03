@@ -62,6 +62,7 @@ vi.mock("@/lib/email/send", () => ({
 }));
 
 import { PUT } from "./route";
+import { sendEmail } from "@/lib/email/send";
 
 beforeEach(() => {
   fromMock.mockReset();
@@ -722,5 +723,135 @@ describe("PUT /api/admin/applications/[id] merges metadata on accept (G5/H2)", (
       display_name: "Maya Chen",
       artist_slug: "maya-chen",
     });
+  });
+});
+
+// Email audit 2026-09-03, item 6. The approval went out as `placements` with a
+// user id, so the "Placement updates" toggle, vacation mode or the ten-a-day
+// cap could drop the one message telling an artist they are in.
+describe("PUT /api/admin/applications/[id] approval is a security-class notice (item 6)", () => {
+  beforeEach(() => {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: { id: "123", status: "pending", name: "Finlay Coles", email: "finlay@example.com", location: "London" },
+                error: null,
+              }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            applicationsUpdateMock(payload);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+          insert: async () => ({ error: null }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return {};
+    });
+    listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
+    inviteMock.mockResolvedValue({ data: { user: { id: "new-user-id" } }, error: null });
+    vi.mocked(sendEmail).mockClear();
+  });
+
+  it("sends artist_application_approved as security, still addressed to the new user", async () => {
+    const res = await PUT(req({ action: "accept" }), { params: Promise.resolve({ id: "123" }) });
+    expect(res.status).toBe(200);
+
+    const sent = vi
+      .mocked(sendEmail)
+      .mock.calls.map((c) => c[0])
+      .find((c) => c.template === "artist_application_approved");
+    expect(sent).toBeTruthy();
+    expect(sent!.category).toBe("security");
+    expect(sent!.userId).toBe("new-user-id");
+    expect(sent!.to).toBe("finlay@example.com");
+  });
+});
+
+// Email audit, 2026-09-04. The approval email said nothing about the founding
+// offer either way, on the one page an accepted artist definitely reads. It
+// now shows it, and ONLY to an artist the admin has actually flagged: the
+// offer is real money (FOUNDING_TRIAL_DAYS in /api/subscribe) and promising it
+// to somebody who does not have it would be a lie the billing page corrects.
+describe("PUT /api/admin/applications/[id] founding offer in the approval email", () => {
+  function setup(isFounding: boolean) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: { id: "123", status: "pending", name: "Maya Chen", email: "maya@example.com", location: "London" },
+                error: null,
+              }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            applicationsUpdateMock(payload);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          // Column-aware: the referral-code collision check reads `id` and
+          // must keep answering "no such row", while the founding read is the
+          // one this block is about.
+          select: (cols: string) => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: cols.includes("is_founding_artist") ? { is_founding_artist: isFounding } : null,
+                error: null,
+              }),
+            }),
+          }),
+          insert: async () => ({ error: null }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return {};
+    });
+    listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
+    inviteMock.mockResolvedValue({ data: { user: { id: "new-user-id" } }, error: null });
+    vi.mocked(sendEmail).mockClear();
+  }
+
+  async function approvalHtml(): Promise<string> {
+    const { render } = await import("@react-email/components");
+    const sent = vi
+      .mocked(sendEmail)
+      .mock.calls.map((c) => c[0])
+      .find((c) => c.template === "artist_application_approved");
+    expect(sent).toBeTruthy();
+    return render(sent!.react);
+  }
+
+  it("promises the six free months to an artist who is flagged founding", async () => {
+    setup(true);
+
+    const res = await PUT(req({ action: "accept" }), { params: Promise.resolve({ id: "123" }) });
+
+    expect(res.status).toBe(200);
+    expect(await approvalHtml()).toContain("6 months free");
+  });
+
+  it("promises nothing of the sort to an artist who is not", async () => {
+    // Fail-before-and-after guard: the offer must never appear off the flag.
+    setup(false);
+
+    await PUT(req({ action: "accept" }), { params: Promise.resolve({ id: "123" }) });
+
+    const html = await approvalHtml();
+    expect(html).not.toContain("6 months free");
+    expect(html).not.toContain("Founding artist offer");
   });
 });

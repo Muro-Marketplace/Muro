@@ -21,9 +21,6 @@ import { createNotification } from "@/lib/notifications";
 import { recordOrderEvent } from "@/lib/orders/lifecycle";
 import { signOrderToken } from "@/lib/order-tracking-token";
 import { VenueSaleFromPlacement } from "@/emails/templates/venue-lifecycle/VenueSaleFromPlacement";
-import { CustomerOrderReceipt } from "@/emails/templates/orders/CustomerOrderReceipt";
-import { ArtistWorkSold } from "@/emails/templates/orders/ArtistWorkSold";
-import { ArtistOrderConfirmation } from "@/emails/templates/orders/ArtistOrderConfirmation";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 

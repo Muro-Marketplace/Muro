@@ -460,6 +460,63 @@ describe("handleSubscriptionDeleted()", () => {
     expect(handled).toBe(true);
     expect(updates[0]).toMatchObject({ row: { status: "cancelled" } });
   });
+
+  // Email audit 2026-09-03 (6e). The start of a recurring card charge is
+  // emailed to the venue and its failure is emailed to the venue, but the
+  // charge ENDING was a bell and nothing else, as was the artist's monthly
+  // payout ending with it. Both are money events.
+  it("emails both the venue and the artist that the monthly billing has stopped", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    const { sendEmail } = await import("@/lib/email/send");
+    vi.mocked(sendEmail).mockClear();
+    const { db } = buildDb({
+      billingForSubscription: {
+        id: "row1",
+        placement_id: "p1",
+        payer_user_id: "v1",
+        payee_user_id: "a1",
+      },
+      placement: { work_title: "Mt. Fitz Roy", artist_slug: "fin-coles", monthly_fee_gbp: 45 },
+    });
+
+    await handleSubscriptionDeleted(
+      { id: "sub_111" } as unknown as Parameters<typeof handleSubscriptionDeleted>[0],
+      db as Parameters<typeof handleSubscriptionDeleted>[1],
+    );
+
+    const sends = vi.mocked(sendEmail).mock.calls.map((c) => c[0]);
+    const venue = sends.find((s) => s.template === "venue_paid_loan_billing_stopped");
+    const artist = sends.find((s) => s.template === "artist_paid_loan_billing_stopped");
+    expect(venue, "the venue was not told the charge had stopped").toBeTruthy();
+    expect(artist, "the artist was not told their payouts had stopped").toBeTruthy();
+    expect(venue!.subject).toContain("Mt. Fitz Roy");
+    expect(artist!.subject).toContain("Mt. Fitz Roy");
+    // Keyed per subscription per party, so a Stripe redelivery cannot double
+    // either one, and the two do not dedupe against each other.
+    expect(venue!.idempotencyKey).toBe("paid_loan_billing_stopped:sub_111:venue");
+    expect(artist!.idempotencyKey).toBe("paid_loan_billing_stopped:sub_111:artist");
+    // Never suppressible: the venue's card and the artist's income.
+    expect(venue!.category).toBe("orders_and_payouts");
+    expect(artist!.category).toBe("orders_and_payouts");
+  });
+
+  it("still marks the row cancelled when the emails throw", async () => {
+    isFlagOnMock.mockReturnValue(true);
+    const { sendEmail } = await import("@/lib/email/send");
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error("resend down"));
+    const { db, updates } = buildDb({
+      billingForSubscription: { id: "row1", placement_id: "p1", payer_user_id: "v1", payee_user_id: "a1" },
+      placement: { work_title: "Mt. Fitz Roy", artist_slug: "fin-coles", monthly_fee_gbp: 45 },
+    });
+
+    const handled = await handleSubscriptionDeleted(
+      { id: "sub_111" } as unknown as Parameters<typeof handleSubscriptionDeleted>[0],
+      db as Parameters<typeof handleSubscriptionDeleted>[1],
+    );
+
+    expect(handled).toBe(true);
+    expect(updates[0]).toMatchObject({ row: { status: "cancelled" } });
+  });
 });
 
 // ── E7c: the cancel path and the upsert conflict target (04 §B6) ─────────────

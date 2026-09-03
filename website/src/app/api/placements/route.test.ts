@@ -28,11 +28,23 @@ const {
   getWallProposalsForPlacementsMock,
   venueNewPlacementRequestMock,
   artistPlacementRequestSentMock,
+  venuePlacementRequestSentMock,
+  placementCancelledMock,
+  placementArtworkInstalledMock,
+  placementLiveOnWallMock,
 } = vi.hoisted(() => ({
   verifyWallProposalLinkMock: vi.fn(),
   getWallProposalsForPlacementsMock: vi.fn(async () => ({})),
   venueNewPlacementRequestMock: vi.fn(() => null),
   artistPlacementRequestSentMock: vi.fn(() => null),
+  // Email audit 2026-09-03: these four were `() => null` stubs, which proved a
+  // send happened but nothing about what it said. They are spies now so the
+  // receipt, the canceller's own confirmation and the per-party labels link
+  // can be asserted on.
+  venuePlacementRequestSentMock: vi.fn(() => null),
+  placementCancelledMock: vi.fn(() => null),
+  placementArtworkInstalledMock: vi.fn(() => null),
+  placementLiveOnWallMock: vi.fn(() => null),
   authMock: vi.fn(),
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn(() => false),
@@ -104,12 +116,14 @@ vi.mock("@/emails/templates/placements/VenueNewPlacementRequest", () => ({ Venue
 vi.mock("@/emails/templates/placements/ArtistPlacementAccepted", () => ({ ArtistPlacementAccepted: () => null }));
 vi.mock("@/emails/templates/placements/ArtistPlacementDeclined", () => ({ ArtistPlacementDeclined: () => null }));
 vi.mock("@/emails/templates/placements/ArtistPlacementRequestSent", () => ({ ArtistPlacementRequestSent: artistPlacementRequestSentMock }));
+vi.mock("@/emails/templates/placements/VenuePlacementRequestSent", () => ({ VenuePlacementRequestSent: venuePlacementRequestSentMock }));
 vi.mock("@/emails/templates/placements/VenuePlacementAcceptedConfirmation", () => ({ VenuePlacementAcceptedConfirmation: () => null }));
 vi.mock("@/emails/templates/placements/PlacementVenueDeclinedArtistRequest", () => ({ PlacementVenueDeclinedArtistRequest: () => null }));
-vi.mock("@/emails/templates/placements/PlacementCancelled", () => ({ PlacementCancelled: () => null }));
+vi.mock("@/emails/templates/placements/PlacementCancelled", () => ({ PlacementCancelled: placementCancelledMock }));
 vi.mock("@/emails/templates/placements/PlacementCounterOfferReceived", () => ({ PlacementCounterOfferReceived: () => null }));
 vi.mock("@/emails/templates/placements/PlacementScheduled", () => ({ PlacementScheduled: () => null }));
-vi.mock("@/emails/templates/placements/PlacementArtworkInstalled", () => ({ PlacementArtworkInstalled: () => null }));
+vi.mock("@/emails/templates/placements/PlacementArtworkInstalled", () => ({ PlacementArtworkInstalled: placementArtworkInstalledMock }));
+vi.mock("@/emails/templates/placements/PlacementLiveOnWall", () => ({ PlacementLiveOnWall: placementLiveOnWallMock }));
 vi.mock("@/emails/templates/placements/PlacementEnded", () => ({ PlacementEnded: () => null }));
 
 import { GET, PATCH, POST } from "./route";
@@ -1888,5 +1902,221 @@ describe("POST /api/placements honours a venue's opt-out from first contact", ()
     getUserByIdMock.mockResolvedValue({ data: { user: { email: "venue@example.com", user_metadata: {} } } });
     const res = await post({ fromVenue: false, placements: [PROPOSAL_PLACEMENT] });
     expect(res.status).not.toBe(403);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Email audit 2026-09-03, items 3, 7 and 8.
+//
+//   3. A venue that sent a placement request got no receipt (the comment here
+//      said "we can wire VenuePlacementRequestSent if/when one's added"), and
+//      the party who CANCELS a placement got a bell and no email, on a
+//      placement that may carry the monthly payment they have just stopped.
+//   7. Installed and live sent BOTH parties to /artist-portal/labels, which
+//      bounces a venue off the artist portal guard.
+//   8. The venue receipt must not claim a wall preview, because a
+//      venue-initiated request is never laid out on a wall first.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** First argument of a template spy's Nth call, as plain props. */
+function templateProps(mock: { mock: { calls: unknown } }, callIndex = 0): Record<string, unknown> {
+  const calls = mock.mock.calls as unknown as unknown[][];
+  return calls[callIndex][0] as Record<string, unknown>;
+}
+
+type SentEmail = { idempotencyKey: string; template: string; category: string; to: string; subject: string; userId?: string };
+
+function emailsSent(): SentEmail[] {
+  return (vi.mocked(sendEmail).mock.calls as unknown as unknown[][]).map((c) => c[0] as unknown as SentEmail);
+}
+
+describe("POST /api/placements gives the venue its own receipt (item 3)", () => {
+  const VENUE_REQUEST = {
+    fromVenue: true,
+    artistSlug: "maya-chen",
+    placements: [{
+      id: CLIENT_ID,
+      workTitle: "Last Light",
+      venueSlug: "self",
+      type: "paid_loan",
+      qrEnabled: false,
+      monthlyFeeGbp: 120,
+    }],
+  };
+
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: VENUE, email: "v@example.com", user_metadata: {} }, error: null });
+    isFlagOnMock.mockReturnValue(false);
+    vi.mocked(sendEmail).mockClear();
+    venuePlacementRequestSentMock.mockClear();
+    artistPlacementRequestSentMock.mockClear();
+    setupPostDb();
+  });
+
+  it("emails the venue a receipt naming the artist, the works and the terms", async () => {
+    const res = await post(VENUE_REQUEST);
+
+    expect(res.status).toBe(200);
+    // Fail-before: nothing was sent to the requesting venue at all.
+    await vi.waitFor(() => expect(venuePlacementRequestSentMock).toHaveBeenCalled());
+    const receipt = emailsSent().find((e) => e.template === "venue_placement_request_sent");
+    expect(receipt).toBeTruthy();
+    expect(receipt!.to).toBe("v@example.com");
+    expect(receipt!.userId).toBe(VENUE);
+    expect(receipt!.subject).toBe("Request sent to Maya Chen");
+    // Keyed apart from the invitation to the artist, which uses
+    // placement_request:<id>:to_artist, so the two cannot dedupe each other.
+    expect(receipt!.idempotencyKey).toBe(`placement_request_receipt:${CLIENT_ID}:to_venue`);
+    expect(venuePlacementRequestSentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artistName: "Maya Chen",
+        requestedWorks: ["Last Light"],
+        proposedTerms: expect.stringContaining("120"),
+        placementUrl: expect.stringContaining(`/placements/${CLIENT_ID}`),
+      }),
+    );
+  });
+
+  it("claims no wall preview, because a venue's request is never laid out on one (item 8)", async () => {
+    await post(VENUE_REQUEST);
+
+    await vi.waitFor(() => expect(venuePlacementRequestSentMock).toHaveBeenCalled());
+    const props = templateProps(venuePlacementRequestSentMock);
+    expect(props.wallPreviewUrl).toBeUndefined();
+    expect(props.wallName).toBeUndefined();
+  });
+
+  it("does not send the artist's receipt template to the venue", async () => {
+    await post(VENUE_REQUEST);
+
+    await vi.waitFor(() => expect(venuePlacementRequestSentMock).toHaveBeenCalled());
+    expect(artistPlacementRequestSentMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH /api/placements confirms the cancellation to the canceller too (item 3)", () => {
+  const ACTIVE_PAID: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+    monthly_fee_gbp: 12,
+  };
+
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: ARTIST, email: "a@example.com", user_metadata: {} }, error: null });
+    vi.mocked(sendEmail).mockClear();
+    placementCancelledMock.mockClear();
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "venue@example.com", user_metadata: {} } } });
+  });
+
+  it("sends both parties a cancellation, under keys that cannot dedupe each other", async () => {
+    setupDb(ACTIVE_PAID);
+
+    const res = await patch({ id: "pl-1", status: "cancelled" });
+
+    expect(res.status).toBeLessThan(400);
+    const cancellations = emailsSent().filter((e) => e.template === "placement_cancelled");
+    // Fail-before: one email, to the other party. The canceller, who on a paid
+    // loan is usually the venue being charged, got nothing.
+    expect(cancellations).toHaveLength(2);
+    expect(cancellations.map((e) => e.idempotencyKey).sort()).toEqual([
+      "placement_cancelled:pl-1",
+      "placement_cancelled:pl-1:canceller",
+    ]);
+    const own = cancellations.find((e) => e.idempotencyKey.endsWith(":canceller"))!;
+    expect(own.to).toBe("a@example.com");
+    expect(own.userId).toBe(ARTIST);
+    expect(own.subject).toBe("You cancelled the placement with Kings Arms");
+  });
+
+  it("addresses the canceller in the second person, carrying the monthly fee that stops", async () => {
+    setupDb(ACTIVE_PAID);
+
+    await patch({ id: "pl-1", status: "cancelled" });
+
+    expect(placementCancelledMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selfCancelled: true,
+        counterpartyName: "Kings Arms",
+        recipientPersona: "artist",
+        monthlyFeeGbp: 12,
+      }),
+    );
+    // The other party's copy is unchanged: not self-cancelled.
+    expect(placementCancelledMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientPersona: "venue", monthlyFeeGbp: 12 }),
+    );
+    expect(templateProps(placementCancelledMock, 0).selfCancelled).toBeUndefined();
+  });
+
+  it("still confirms to the canceller when the other party has no reachable address", async () => {
+    getUserByIdMock.mockResolvedValue({ data: { user: null } });
+    setupDb(ACTIVE_PAID);
+
+    await patch({ id: "pl-1", status: "cancelled" });
+
+    const cancellations = emailsSent().filter((e) => e.template === "placement_cancelled");
+    expect(cancellations).toHaveLength(1);
+    expect(cancellations[0].idempotencyKey).toBe("placement_cancelled:pl-1:canceller");
+  });
+
+  it("sends nothing on a transition that is not a cancellation", async () => {
+    setupDb(ACTIVE_PAID);
+
+    await patch({ id: "pl-1", stage: "scheduled" });
+
+    expect(emailsSent().some((e) => e.template === "placement_cancelled")).toBe(false);
+  });
+});
+
+describe("PATCH /api/placements sends each party to their own labels page (item 7)", () => {
+  const ACTIVE: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+  };
+
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: ARTIST, email: "a@example.com", user_metadata: {} }, error: null });
+    vi.mocked(sendEmail).mockClear();
+    placementArtworkInstalledMock.mockClear();
+    placementLiveOnWallMock.mockClear();
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "party@example.com", user_metadata: {} } } });
+  });
+
+  // The route fans out over [artist, venue] in that order, so call 0 is the
+  // artist's copy and call 1 the venue's.
+  it("installed: the artist gets the artist portal, the venue gets the venue portal", async () => {
+    setupDb(ACTIVE);
+
+    await patch({ id: "pl-1", stage: "installed" });
+
+    expect(placementArtworkInstalledMock).toHaveBeenCalledTimes(2);
+    expect(templateProps(placementArtworkInstalledMock, 0).qrLabelsUrl).toBe(
+      "https://wallplace.co.uk/artist-portal/labels?venue=kings-arms",
+    );
+    // Fail-before: this was the artist portal too, which bounces a venue off
+    // the artist portal guard.
+    expect(templateProps(placementArtworkInstalledMock, 1).qrLabelsUrl).toBe(
+      "https://wallplace.co.uk/venue-portal/labels?placement=pl-1",
+    );
+  });
+
+  it("live: the same split, with the venue's link preselecting this placement", async () => {
+    setupDb(ACTIVE);
+
+    await patch({ id: "pl-1", stage: "live" });
+
+    expect(placementLiveOnWallMock).toHaveBeenCalledTimes(2);
+    expect(templateProps(placementLiveOnWallMock, 0).qrLabelsUrl).toContain("/artist-portal/labels");
+    expect(templateProps(placementLiveOnWallMock, 1).qrLabelsUrl).toBe(
+      "https://wallplace.co.uk/venue-portal/labels?placement=pl-1",
+    );
   });
 });

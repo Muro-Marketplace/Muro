@@ -42,7 +42,9 @@ describe("public claims the site cannot evidence stay out", () => {
   });
 
   it("the pricing cards match the tier perks (Pro is Featured; Premium and Pro get Artwork of the Week)", () => {
-    const cards = read("src/components/ArtistPricingCards.tsx");
+    // The cards render lib/plan-features (one list, shared with the
+    // trial-ending email), so the perks are read from there.
+    const cards = read("src/lib/plan-features.ts");
     expect(cards).not.toMatch(/Featured artist profile and badge/);
     expect((cards.match(/Artwork of the Week/g) || []).length).toBe(2);
     expect(cards).toMatch(/Featured artist: your profile leads the marketplace/);

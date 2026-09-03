@@ -36,23 +36,32 @@ export async function POST(request: Request) {
       .filter(Boolean)
       .join("\n\n");
 
-    const { error } = await supabase.from("venue_registrations").insert({
-      venue_name: d.venueName,
-      venue_type: d.venueType,
-      contact_name: d.contactName,
-      email: d.email,
-      phone: d.phone || null,
-      address_line1: d.addressLine1,
-      address_line2: d.addressLine2 || null,
-      city: d.city,
-      postcode: d.postcode,
-      wall_space: d.wallSpace || null,
-      art_interests: d.artInterests || [],
-      message: message || null,
-      hear_about: d.hearAbout || null,
-      status: "pending",
-      created_at: new Date().toISOString(),
-    });
+    // The inserted row's id keys both sends below. Email audit 2026-09-03
+    // (fix 5): they were keyed on the bare address, so the SECOND venue a
+    // person registers with the same contact email was silently swallowed by
+    // the idempotency guard, for ever, and neither they nor the team heard
+    // about it. One registration, one key.
+    const { data: inserted, error } = await supabase
+      .from("venue_registrations")
+      .insert({
+        venue_name: d.venueName,
+        venue_type: d.venueType,
+        contact_name: d.contactName,
+        email: d.email,
+        phone: d.phone || null,
+        address_line1: d.addressLine1,
+        address_line2: d.addressLine2 || null,
+        city: d.city,
+        postcode: d.postcode,
+        wall_space: d.wallSpace || null,
+        art_interests: d.artInterests || [],
+        message: message || null,
+        hear_about: d.hearAbout || null,
+        status: "pending",
+        created_at: new Date().toISOString(),
+      })
+      .select("id")
+      .maybeSingle<{ id: string }>();
 
     // E36d. A duplicate used to answer 409 "A registration with this email
     // already exists", turning a public unauthenticated form into an
@@ -88,10 +97,15 @@ export async function POST(request: Request) {
     // fresh branch measurably slower than the duplicate one, so identical
     // status codes would still have leaked through latency.
     if (!alreadyRegistered) {
+      // One key per registration, not per address. The row id is the natural
+      // one; a timestamp stands in on the (unreachable, insert-succeeded)
+      // path where PostgREST returned no row, so a legitimate second
+      // registration still gets its email either way.
+      const registrationRef = inserted?.id ?? `t${Date.now()}`;
       afterResponse(async () => {
         // K1: was notifyAdminNewVenue in the legacy module.
         await sendAdminAlert({
-          idempotencyKey: `admin_new_venue:${d.email.toLowerCase()}`,
+          idempotencyKey: `admin_new_venue:${registrationRef}`,
           subject: `New venue registration: ${d.venueName}`,
           summary: `${d.venueName} registered through the public form.`,
           fields: [
@@ -105,7 +119,7 @@ export async function POST(request: Request) {
         });
 
         await sendEmail({
-          idempotencyKey: `venue_registration_confirmation:${d.email.toLowerCase()}`,
+          idempotencyKey: `venue_registration_confirmation:${registrationRef}`,
           template: "venue_registration_confirmation",
           category: "security",
           to: d.email,

@@ -1,7 +1,8 @@
 // ADDITION, decisive good news. Stream: notify.
 
-import { EmailShell, H1, P, Button, Badge } from "@/emails/_components";
+import { EmailShell, H1, P, Button, Badge, InfoBox } from "@/emails/_components";
 import type { TemplateEntry } from "@/emails/registry-types";
+import { trialOffer } from "@/lib/pricing";
 
 export interface ArtistApplicationApprovedProps {
   firstName: string;
@@ -21,6 +22,15 @@ export interface ArtistApplicationApprovedProps {
   selectedPlan?: string | null;
   /** Where they start the plan. */
   billingUrl?: string;
+  /**
+   * True only when artist_profiles.is_founding_artist is set for this artist.
+   * The founding offer ("first 20 artists: 6 months free", src/lib/pricing.ts)
+   * renders on that flag and on nothing else: the application form and the
+   * pricing page both promise it, and this email used to say nothing either
+   * way. An artist who is not flagged must never be told they have it, so the
+   * default is false and the block is absent.
+   */
+  isFounding?: boolean;
 }
 
 export function ArtistApplicationApproved({
@@ -29,14 +39,23 @@ export function ArtistApplicationApproved({
   welcomeMessage,
   selectedPlan,
   billingUrl,
+  isFounding = false,
 }: ArtistApplicationApprovedProps) {
   const plan = (selectedPlan || "").trim();
   const planName = plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : null;
+  const founding = isFounding ? trialOffer(true) : null;
   return (
     <EmailShell stream="notify" persona="artist" category="placements" preview="You're in">
       <H1><Badge tone="success">Accepted</Badge> <span style={{ marginLeft: 6 }}>You&rsquo;re in, {firstName}</span></H1>
       <P>Your work has been accepted into Wallplace. Welcome aboard.</P>
       {welcomeMessage && <P>{welcomeMessage}</P>}
+      {founding && (
+        <InfoBox tone="info">
+          <strong>{founding.headline}</strong>
+          <br />
+          {founding.detail}
+        </InfoBox>
+      )}
       <P>Next up, go live on the marketplace:</P>
       <Button href={goLiveUrl} persona="artist">Open artist portal</Button>
       {planName && billingUrl && (
@@ -56,12 +75,15 @@ export const mock: ArtistApplicationApprovedProps = {
   welcomeMessage: "The Mare Street series especially caught our eye. We think venues will love it.",
   selectedPlan: "pro",
   billingUrl: "https://wallplace.co.uk/artist-portal/billing",
+  // The mock renders the founding block so the preview library exercises it.
+  // The live send passes the artist's real flag, false for almost everyone.
+  isFounding: true,
 };
 
 const entry: TemplateEntry<ArtistApplicationApprovedProps> = {
   id: "artist_application_approved",
   name: "Application approved",
-  description: "Welcome-in email after acceptance.",
+  description: "Welcome-in email after acceptance. Shows the founding offer only for an artist already flagged is_founding_artist.",
   stream: "notify",
   persona: "artist",
   category: "placements",

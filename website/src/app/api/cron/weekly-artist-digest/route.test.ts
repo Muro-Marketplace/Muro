@@ -84,7 +84,15 @@ function builder(table: string, respond: Responder) {
   return node;
 }
 
-const ARTIST_ROW = { user_id: "u-artist", name: "Alice Painter", slug: "alice", created_at: "2026-01-01T00:00:00Z" };
+const ARTIST_ROW = {
+  user_id: "u-artist",
+  name: "Alice Painter",
+  slug: "alice",
+  created_at: "2026-01-01T00:00:00Z",
+  // NULL until the artist touches the switch, which is the state almost every
+  // row is in; the cron must read that as "on".
+  email_digest_enabled: null as boolean | null,
+};
 
 interface DbOpts {
   /** qr_scan rows returned for the top-works aggregation. */
@@ -94,6 +102,8 @@ interface DbOpts {
   messagesReceived?: number;
   messagesUnread?: number;
   qrScanCount?: number;
+  /** The artist_profiles row the run walks, so a test can flip the switch. */
+  artistRow?: Record<string, unknown>;
 }
 
 function setupDb(opts: DbOpts = {}) {
@@ -103,11 +113,12 @@ function setupDb(opts: DbOpts = {}) {
     messagesReceived = 5,
     messagesUnread = 0,
     qrScanCount = 5,
+    artistRow = ARTIST_ROW,
   } = opts;
 
   fromMock.mockImplementation((table: string) =>
     builder(table, (ctx) => {
-      if (table === "artist_profiles") return { data: [ARTIST_ROW] };
+      if (table === "artist_profiles") return { data: [artistRow] };
       if (table === "artist_works") return { data: works };
       if (table === "analytics_events") {
         // Head counts vs the row read that feeds topWorks.
@@ -239,5 +250,69 @@ describe("GET /api/cron/weekly-artist-digest top works (H23)", () => {
     await GET(req());
     expect(digestProps[0]!.topWorks).toEqual([]);
     expect(fromMock.mock.calls.map(([t]) => t)).not.toContain("artist_works");
+  });
+});
+
+// Email audit, 2026-09-04. The artist portal's "Weekly digest" switch writes
+// artist_profiles.email_digest_enabled (PATCH /api/account/preferences) and
+// nothing read it: the only gate was email_preferences.digests_enabled, deep
+// inside sendEmail, so the switch the artist could actually see did nothing at
+// all. Both are honoured now, and either off means no digest.
+describe("GET /api/cron/weekly-artist-digest honours the portal's digest switch", () => {
+  it("sends when the profile switch is on", async () => {
+    setupDb({ artistRow: { ...ARTIST_ROW, email_digest_enabled: true } });
+    await GET(req());
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends when the profile switch has never been touched (null)", async () => {
+    setupDb({ artistRow: { ...ARTIST_ROW, email_digest_enabled: null } });
+    await GET(req());
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends nothing when the profile switch is off", async () => {
+    // Fail-before: the digest went out anyway, and the switch was decorative.
+    setupDb({ artistRow: { ...ARTIST_ROW, email_digest_enabled: false } });
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("does no per-artist work at all for a switched-off artist", async () => {
+    setupDb({ artistRow: { ...ARTIST_ROW, email_digest_enabled: false } });
+    await GET(req());
+    // The gate sits before the counting queries, so a muted artist costs one
+    // row read rather than five counts.
+    expect(fromMock.mock.calls.map(([t]) => t)).toEqual(["artist_profiles"]);
+  });
+
+  it("reads the column, so a select that stopped naming it would fail here", async () => {
+    const columns: string[] = [];
+    fromMock.mockImplementation((table: string) =>
+      builder(table, (ctx) => {
+        if (table === "artist_profiles") {
+          columns.push(ctx.columns);
+          return { data: [ARTIST_ROW] };
+        }
+        if (table === "messages" || table === "placements" || table === "analytics_events") {
+          return { count: 5, error: null };
+        }
+        return { data: [] };
+      }),
+    );
+
+    await GET(req());
+
+    expect(columns.join(" ")).toContain("email_digest_enabled");
+  });
+
+  // The pipeline's own gate is unchanged: email_preferences.digests_enabled is
+  // checked inside sendEmail, so "either flag off means no digest" holds
+  // without this route knowing anything about that table.
+  it("leaves the preference-row gate to the pipeline, sending as the digests category", async () => {
+    setupDb();
+    await GET(req());
+    expect(sendEmailMock.mock.calls[0][0].category).toBe("digests");
   });
 });

@@ -39,6 +39,14 @@ export interface OrderLifecycleInput {
    *  the component reads everything else. Caller decides what to send
    *  through (firstName, workTitle, orderUrl, ...). */
   data: Record<string, unknown>;
+  /**
+   * Props that apply only to the ARTIST's templates, merged over `data` for
+   * artist-recipient triggers. One `data` object feeds every template an event
+   * fires, and the buyer's and artist's templates both read `firstName` and
+   * `orderUrl`, so without this the artist was greeted by the buyer's name and
+   * sent to the buyer's order page. Buyer templates never see these keys.
+   */
+  artistData?: Record<string, unknown>;
   /** Optional metadata stored on the order_events row. */
   metadata?: Record<string, unknown>;
 }
@@ -142,10 +150,14 @@ export async function recordOrderEvent(
     // guest buyers), never the actor's.
     const recipientUserId =
       trigger.recipient === "buyer" ? input.buyerUserId : input.artistUserId;
+    const data =
+      trigger.recipient === "artist" && input.artistData
+        ? { ...input.data, ...input.artistData }
+        : input.data;
     const result = await sendTransactional({
       to: trigger.to,
       template: trigger.template,
-      data: input.data,
+      data,
       idempotencyKey,
       userId: recipientUserId ?? undefined,
     });

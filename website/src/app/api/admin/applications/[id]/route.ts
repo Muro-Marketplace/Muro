@@ -248,6 +248,21 @@ export async function PUT(
       }
     }
 
+    // The founding flag, for the approval email below. Almost always false at
+    // this point (the profile was created just above without it), but a
+    // profile that already existed and was flagged by an admin gets the
+    // founding offer in the email that welcomes them in, and nobody else is
+    // told they have six months free (src/lib/pricing.ts).
+    let isFounding = false;
+    {
+      const { data: foundingRow } = await db
+        .from("artist_profiles")
+        .select("is_founding_artist")
+        .eq("user_id", userId)
+        .maybeSingle<{ is_founding_artist: boolean | null }>();
+      isFounding = Boolean(foundingRow?.is_founding_artist);
+    }
+
     // ─── Referral ledger (row G L2366) ───
     // `artist_referrals` held 0 rows across the whole production database. The
     // referrer's 30-day credit is applied later by the Stripe webhook
@@ -311,7 +326,7 @@ export async function PUT(
       await sendEmail({
         idempotencyKey: `application_approved:${id}`,
         template: "artist_application_approved",
-        category: "placements",
+        category: "security",
         to: app.email,
         subject: "You're in, welcome to Wallplace",
         userId,
@@ -325,6 +340,7 @@ export async function PUT(
           // way to know they were on nothing.
           selectedPlan: (app as Record<string, unknown>).selected_plan as string | null,
           billingUrl: `${SITE}/artist-portal/billing`,
+          isFounding,
         }),
         metadata: { applicationId: id, userId },
       });

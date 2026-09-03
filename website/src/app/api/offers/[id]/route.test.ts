@@ -6,16 +6,34 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { fromMock, authMock } = vi.hoisted(() => ({
+const { fromMock, authMock, getUserByIdMock, sendEmailMock, outcomeTemplateMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
   authMock: vi.fn(),
+  // Defaults to no user, which short-circuits the outcome email; the outcome
+  // tests point it at real counterparties.
+  // The signature is declared rather than inferred from a named-but-unused
+  // parameter, so the per-test mockImplementation((id) => ...) still types.
+  getUserByIdMock: vi.fn<
+    (id: string) => Promise<{
+      data: { user: null | { id: string; email: string; user_metadata: Record<string, unknown> } };
+    }>
+  >(async () => ({ data: { user: null } })),
+  sendEmailMock: vi.fn(async () => ({ ok: true, skipped: false, messageId: "m" })),
+  outcomeTemplateMock: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
-vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
+vi.mock("@/lib/supabase-admin", () => ({
+  getSupabaseAdmin: () => ({ from: fromMock, auth: { admin: { getUserById: getUserByIdMock } } }),
+}));
 vi.mock("@/lib/notifications", () => ({ createNotification: vi.fn(async () => {}) }));
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
+vi.mock("@/emails/templates/messages/OfferOutcomeNotification", () => ({
+  OfferOutcomeNotification: outcomeTemplateMock,
+}));
 
 import { PATCH } from "./route";
+import { formatOfferDeadline } from "@/lib/offers/expiry";
 
 const BUYER = "u-buyer";
 const ARTIST = "u-artist";
@@ -96,6 +114,10 @@ function patch(action: string, actor = ARTIST) {
 beforeEach(() => {
   fromMock.mockReset();
   authMock.mockReset();
+  getUserByIdMock.mockReset();
+  getUserByIdMock.mockResolvedValue({ data: { user: null } });
+  sendEmailMock.mockClear();
+  outcomeTemplateMock.mockClear();
 });
 
 describe("PATCH /api/offers/[id] enforces the expiry deadline (F41)", () => {
@@ -168,5 +190,168 @@ describe("PATCH /api/offers/[id] enforces the expiry deadline (F41)", () => {
     const res = await patch("accept");
 
     expect(res.status).toBe(200);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Email audit 2026-09-03, item 1. Accept, decline and withdraw produced a bell
+// and a thread line and no email, while the venue whose offer was accepted has
+// a payment step with a deadline. The counterparty of whoever acted now gets
+// the outcome by email, on the money category, keyed per row and outcome.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** setupDb plus names on the profiles and titles on the works. */
+function setupOutcomeDb(offer: OfferRow) {
+  setupDb(offer);
+  const base = fromMock.getMockImplementation()!;
+  fromMock.mockImplementation((table: string) => {
+    if (table === "artist_profiles" || table === "venue_profiles") {
+      const row = table === "artist_profiles"
+        ? { slug: "alice", name: "Alice Artist" }
+        : { slug: "kettle", name: "The Copper Kettle" };
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: row }) }) }) };
+    }
+    if (table === "artist_works") {
+      return { select: () => ({ in: async () => ({ data: [{ title: "Harbour Light" }], error: null }) }) };
+    }
+    return base(table);
+  });
+}
+
+type SentEmail = {
+  idempotencyKey: string;
+  template: string;
+  category: string;
+  to: string;
+  subject: string;
+  userId?: string;
+};
+
+function sentEmails(): SentEmail[] {
+  return (sendEmailMock.mock.calls as unknown as unknown[][]).map((c) => c[0] as unknown as SentEmail);
+}
+
+describe("PATCH /api/offers/[id] emails the counterparty with the outcome (item 1)", () => {
+  beforeEach(() => {
+    getUserByIdMock.mockImplementation(async (id: string) => ({
+      data: { user: { id, email: `${id}@example.com`, user_metadata: {} } },
+    }));
+  });
+
+  it("accept by the artist: the venue gets the payment link and the offer deadline, on the money category", async () => {
+    setupOutcomeDb({ ...BASE_OFFER, expires_at: FUTURE, work_ids: ["w-1"], collection_id: null });
+
+    const res = await patch("accept", ARTIST);
+
+    expect(res.status).toBe(200);
+    expect(sentEmails()).toHaveLength(1);
+    const sent = sentEmails()[0];
+    expect(sent.template).toBe("offer_outcome_notification");
+    expect(sent.category).toBe("orders_and_payouts");
+    expect(sent.to).toBe(`${BUYER}@example.com`);
+    expect(sent.userId).toBe(BUYER);
+    expect(sent.idempotencyKey).toBe("offer_outcome:off_1:accepted:u-buyer");
+    expect(sent.subject).toBe("Alice Artist accepted your offer of £42.00");
+    expect(outcomeTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "accepted",
+        recipientRole: "venue",
+        counterpartyName: "Alice Artist",
+        formattedAmount: "£42.00",
+        itemTitle: "Harbour Light",
+        paymentUrl: expect.stringContaining("/venue-portal/offers?pay=off_1"),
+        offerDeadline: formatOfferDeadline({ expires_at: FUTURE }),
+        offersUrl: expect.stringContaining("/venue-portal/offers?focus=off_1"),
+      }),
+    );
+  });
+
+  it("decline by the artist: the venue is told, with no payment link", async () => {
+    setupOutcomeDb({ ...BASE_OFFER, expires_at: null, work_ids: [], collection_id: null });
+
+    const res = await patch("decline", ARTIST);
+
+    expect(res.status).toBe(200);
+    const sent = sentEmails()[0];
+    expect(sent.to).toBe(`${BUYER}@example.com`);
+    expect(sent.idempotencyKey).toBe("offer_outcome:off_1:declined:u-buyer");
+    expect(sent.subject).toBe("Alice Artist declined your offer of £42.00");
+    expect(outcomeTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "declined", recipientRole: "venue", paymentUrl: undefined, offerDeadline: undefined }),
+    );
+  });
+
+  it("withdraw by the venue: the artist is told", async () => {
+    setupOutcomeDb({ ...BASE_OFFER, work_ids: [], collection_id: null });
+
+    const res = await patch("withdraw", BUYER);
+
+    expect(res.status).toBe(200);
+    const sent = sentEmails()[0];
+    expect(sent.to).toBe(`${ARTIST}@example.com`);
+    expect(sent.userId).toBe(ARTIST);
+    expect(sent.idempotencyKey).toBe("offer_outcome:off_1:withdrawn:u-artist");
+    expect(sent.subject).toBe("The Copper Kettle withdrew their offer of £42.00");
+    expect(outcomeTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: "withdrawn",
+        recipientRole: "artist",
+        counterpartyName: "The Copper Kettle",
+        offersUrl: expect.stringContaining("/artist-portal/offers?focus=off_1"),
+      }),
+    );
+  });
+
+  it("accept by the venue of the artist's counter: the artist is told, and the counter is named as one", async () => {
+    setupOutcomeDb({
+      ...BASE_OFFER,
+      created_by_user_id: ARTIST,
+      parent_offer_id: "off_0",
+      work_ids: [],
+      collection_id: null,
+    });
+
+    const res = await patch("accept", BUYER);
+
+    expect(res.status).toBe(200);
+    const sent = sentEmails()[0];
+    expect(sent.to).toBe(`${ARTIST}@example.com`);
+    expect(sent.subject).toBe("The Copper Kettle accepted your counter offer of £42.00");
+    expect(outcomeTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "accepted", recipientRole: "artist", isCounter: true, paymentUrl: undefined }),
+    );
+  });
+
+  it("names a collection when the offer was on one", async () => {
+    setupOutcomeDb({ ...BASE_OFFER, work_ids: [], collection_id: "col-1" });
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) =>
+      table === "artist_collections"
+        ? { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { name: "Harbour Series" } }) }) }) }
+        : base(table),
+    );
+
+    await patch("accept", ARTIST);
+
+    expect(outcomeTemplateMock).toHaveBeenCalledWith(expect.objectContaining({ itemTitle: "Harbour Series" }));
+  });
+
+  it("still answers 200, and sends nothing, when the counterparty has no reachable address", async () => {
+    getUserByIdMock.mockResolvedValue({ data: { user: null } });
+    setupOutcomeDb({ ...BASE_OFFER, work_ids: [], collection_id: null });
+
+    const res = await patch("accept", ARTIST);
+
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the offer is refused as lapsed", async () => {
+    setupOutcomeDb({ ...BASE_OFFER, expires_at: PAST, work_ids: [], collection_id: null });
+
+    const res = await patch("accept", ARTIST);
+
+    expect(res.status).toBe(409);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });

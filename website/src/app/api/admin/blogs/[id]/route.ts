@@ -155,14 +155,14 @@ export async function PATCH(
       await sendEmail({
         idempotencyKey: `blog_published:${id}`,
         template: "artist_blog_published",
-        category: "placements",
+        category: "security",
         to: author.email,
         userId: author.userId,
         subject: "Your Wallplace post is live",
         react: ArtistBlogPublished({
           firstName: author.firstName,
           title: blog.title || "your post",
-          blogUrl: `${SITE}/journal/${encodeURIComponent(blog.slug || id)}`,
+          blogUrl: `${SITE}/blog/${encodeURIComponent(blog.slug || id)}`,
           supportUrl: `${SITE}/support`,
         }),
         metadata: { blogId: id },
@@ -208,7 +208,7 @@ export async function PATCH(
       await sendEmail({
         idempotencyKey: `blog_rejected:${id}`,
         template: "artist_blog_rejected",
-        category: "placements",
+        category: "security",
         to: author.email,
         userId: author.userId,
         subject: "A note on your Wallplace post",

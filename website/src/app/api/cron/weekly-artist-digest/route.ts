@@ -111,12 +111,19 @@ export async function GET(request: Request) {
   // the digest, they're still in onboarding.
   const { data: artists } = await db
     .from("artist_profiles")
-    .select("user_id, name, slug, created_at")
+    .select("user_id, name, slug, created_at, email_digest_enabled")
     .not("user_id", "is", null)
     .lte("created_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString());
 
   const result = await runBatch(artists || [], async (artist) => {
     if (!artist.user_id) return;
+    // The portal's "Weekly digest" switch writes artist_profiles.email_digest_enabled
+    // (PATCH /api/account/preferences), and until now nothing read it: the only
+    // gate was email_preferences.digests_enabled, checked inside sendEmail, so the
+    // switch an artist could actually see did nothing. Both are honoured: this one
+    // here, the other in the pipeline. Either off means no digest. NULL (the
+    // column's default before anyone touches the switch) means on.
+    if (artist.email_digest_enabled === false) return;
 
     // Count views, scans, messages, placements from the last 7 days.
     // `messageCount` is every message RECEIVED in the week; `unreadCount` is

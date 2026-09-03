@@ -32,7 +32,30 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PayoutCapability, PayoutTarget } from "@/lib/payouts/capability";
 import type { ScheduleTransferParams } from "@/lib/stripe-connect";
 
-const { sendAdminAlertMock, canReceivePayoutMock, scheduleTransferMock, recordBlockedLegMock } = vi.hoisted(() => ({
+const {
+  sendAdminAlertMock,
+  sendEmailMock,
+  canReceivePayoutMock,
+  scheduleTransferMock,
+  recordBlockedLegMock,
+} = vi.hoisted(() => ({
+  // Email audit, 2026-09-04: rent was recorded and settled with nothing said
+  // to the artist it belonged to. accrueProgrammeRent now sends a statement
+  // per artist per paid invoice and settleProgrammeRent a note per payout, so
+  // the artist-facing sends need their own mock: without one the real
+  // sendEmail runs against these fakes, throws, and is swallowed by the
+  // helpers' own try/catch, leaving both sends untested.
+  sendEmailMock: vi.fn(
+    async (_input: {
+      idempotencyKey: string;
+      template: string;
+      to: string;
+      subject: string;
+      userId?: string;
+      react: unknown;
+      metadata?: Record<string, unknown>;
+    }) => ({ ok: true as const, skipped: false as const, messageId: "m" }),
+  ),
   sendAdminAlertMock: vi.fn(
     async (_input: {
       idempotencyKey: string;
@@ -58,6 +81,7 @@ const { sendAdminAlertMock, canReceivePayoutMock, scheduleTransferMock, recordBl
 }));
 
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: sendAdminAlertMock }));
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 vi.mock("@/lib/payouts/capability", () => ({ canReceivePayout: canReceivePayoutMock }));
 vi.mock("@/lib/stripe-connect", () => ({
   scheduleTransfer: scheduleTransferMock,
@@ -77,6 +101,44 @@ interface FakePlacement {
   programme_rent_gbp: number | null;
   status: string;
   programme_request_id: string | null;
+  work_title: string | null;
+}
+
+/** How an artist's account and profile answer the lookup behind their emails. */
+interface FakeArtistAccount {
+  email?: string | null;
+  name?: string | null;
+}
+
+/**
+ * The two reads every artist-facing send makes: the auth user (for the
+ * address) and artist_profiles (for the name). Shared by both fake databases
+ * below, so the accrual statement and the settlement note resolve their
+ * recipient the same way the real ones do.
+ */
+function artistLookup(accounts: Record<string, FakeArtistAccount> = {}) {
+  const accountFor = (id: string): FakeArtistAccount =>
+    accounts[id] ?? { email: `${id}@example.com`, name: "Maya Chen" };
+  return {
+    auth: {
+      admin: {
+        getUserById: async (id: string) => {
+          const account = accountFor(id);
+          return {
+            data: { user: account.email ? { id, email: account.email, user_metadata: {} } : null },
+            error: null,
+          };
+        },
+      },
+    },
+    profileTable: {
+      select: () => ({
+        eq: (_col: string, val: string) => ({
+          maybeSingle: async () => ({ data: { name: accountFor(val).name ?? null }, error: null }),
+        }),
+      }),
+    },
+  };
 }
 
 /**
@@ -96,13 +158,17 @@ function makeDb(
   options: {
     selectError?: { message: string };
     insertErrorForPlacementIds?: Record<string, { code?: string; message: string }>;
+    artists?: Record<string, FakeArtistAccount>;
   } = {},
 ) {
   const inserted: Array<Record<string, unknown>> = [];
   const seenKeys = new Set<string>();
+  const lookup = artistLookup(options.artists);
 
   const db = {
+    auth: lookup.auth,
     from(table: string) {
+      if (table === "artist_profiles") return lookup.profileTable;
       if (table === "placements") {
         return {
           select: () => {
@@ -175,8 +241,14 @@ function placement(overrides: Partial<FakePlacement> & { id: string }): FakePlac
     programme_rent_gbp: 10,
     status: "active",
     programme_request_id: "cr_prog_1",
+    work_title: `Work ${overrides.id}`,
     ...overrides,
   };
+}
+
+/** Every artist-facing email sent by the call under test. */
+function sentEmails() {
+  return sendEmailMock.mock.calls.map((c) => c[0]);
 }
 
 const lastAlert = () => sendAdminAlertMock.mock.calls.at(-1)?.[0];
@@ -593,6 +665,146 @@ describe("accrueProgrammeRent — Finding 1: a mid-loop error must not cost its 
 // Connect) is left completely untouched — no automatic clawback — but
 // counted, so the admin alert can say exactly how much is unrecoverable
 // without a human conversation.
+// Email audit, 2026-09-04. Rent accrued to an artist and nothing told them:
+// the money was recorded as owed and paid out a quarter later with no
+// statement in between, so an artist had no way to know what they had earned
+// or when it was coming.
+describe("accrueProgrammeRent — the artist's rent statement", () => {
+  it("sends one statement per artist, listing every piece and the total", async () => {
+    const { db } = makeDb([
+      placement({ id: "p1", artist_user_id: "artist_a", work_title: "Last Light" }),
+      placement({ id: "p2", artist_user_id: "artist_a", work_title: "Low Tide" }),
+    ]);
+
+    await accrueProgrammeRent(db, {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_1",
+      periodMonths: 1,
+      quotedAmountPence: 25000,
+      venueName: "Riverside Offices",
+    });
+
+    // Fail-before: two accrual rows were written and no email went anywhere.
+    const emails = sentEmails();
+    expect(emails).toHaveLength(1);
+    expect(emails[0].template).toBe("artist_programme_rent_statement");
+    expect(emails[0].to).toBe("artist_a@example.com");
+    expect(emails[0].userId).toBe("artist_a");
+    // £10/month each, so £20 across the two pieces.
+    expect(emails[0].subject).toBe("£20.00 of programme rent recorded for you");
+  });
+
+  it("keys the statement on the invoice and the artist, so one run is one email each", async () => {
+    const { db } = makeDb([
+      placement({ id: "p1", artist_user_id: "artist_a" }),
+      placement({ id: "p2", artist_user_id: "artist_b" }),
+    ]);
+
+    await accrueProgrammeRent(db, {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_1",
+      periodMonths: 1,
+      quotedAmountPence: 25000,
+    });
+
+    expect(sentEmails().map((e) => e.idempotencyKey)).toEqual([
+      "programme_rent_statement:in_1:artist_a",
+      "programme_rent_statement:in_1:artist_b",
+    ]);
+  });
+
+  it("sends nothing on a replay, because nothing was newly accrued", async () => {
+    // A Stripe redelivery 23505s every insert. The artist has already had this
+    // invoice's statement and must not get a second copy of it.
+    const { db } = makeDb([placement({ id: "p1", artist_user_id: "artist_a" })]);
+    const input = {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_1",
+      periodMonths: 1,
+      quotedAmountPence: 25000,
+    };
+
+    await accrueProgrammeRent(db, input);
+    sendEmailMock.mockClear();
+    const replay = await accrueProgrammeRent(db, input);
+
+    expect(replay).toMatchObject({ accrued: 0, skipped: 1 });
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing to an artist whose own insert failed, while the others still hear", async () => {
+    const { db } = makeDb(
+      [
+        placement({ id: "p1", artist_user_id: "artist_a" }),
+        placement({ id: "p2", artist_user_id: "artist_b" }),
+      ],
+      { insertErrorForPlacementIds: { p1: { code: "08006", message: "connection failure" } } },
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await accrueProgrammeRent(db, {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_1",
+      periodMonths: 1,
+      quotedAmountPence: 25000,
+    });
+
+    // Telling an artist their rent is recorded when the row never landed would
+    // be worse than telling them nothing.
+    expect(sentEmails().map((e) => e.to)).toEqual(["artist_b@example.com"]);
+  });
+
+  it("sends nothing when the pool guard refuses the whole invoice", async () => {
+    const { db } = makeDb([
+      placement({ id: "p1", artist_user_id: "artist_a", programme_rent_gbp: 200 }),
+    ]);
+
+    const result = await accrueProgrammeRent(db, {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_1",
+      periodMonths: 1,
+      quotedAmountPence: 25000,
+    });
+
+    expect(result.blockedReason).toBeTruthy();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("skips the statement for an artist with no reachable address, keeping the accrual", async () => {
+    const { db, inserted } = makeDb([placement({ id: "p1", artist_user_id: "artist_a" })], {
+      artists: { artist_a: { email: null } },
+    });
+
+    const result = await accrueProgrammeRent(db, {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_1",
+      periodMonths: 1,
+      quotedAmountPence: 25000,
+    });
+
+    expect(result.accrued).toBe(1);
+    expect(inserted).toHaveLength(1);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("a failed statement never costs anyone their accrual", async () => {
+    sendEmailMock.mockRejectedValueOnce(new Error("resend down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { db, inserted } = makeDb([placement({ id: "p1", artist_user_id: "artist_a" })]);
+
+    const result = await accrueProgrammeRent(db, {
+      curationRequestId: "cr_prog_1",
+      invoiceId: "in_1",
+      periodMonths: 1,
+      quotedAmountPence: 25000,
+    });
+
+    expect(result).toMatchObject({ accrued: 1, skipped: 0, failed: 0 });
+    expect(inserted).toHaveLength(1);
+    errSpy.mockRestore();
+  });
+});
+
 describe("voidProgrammeAccrualsForInvoice", () => {
   interface FakeAccrualForVoid {
     id: string;
@@ -862,10 +1074,13 @@ describe("settleProgrammeRent", () => {
    * `rows` reference reproduces a real rerun: the second call's SELECT sees
    * whatever the first call's UPDATE actually wrote, not a fresh fixture.
    */
-  function makeSettlementDb(rows: FakeAccrualRow[]) {
+  function makeSettlementDb(rows: FakeAccrualRow[], artists: Record<string, FakeArtistAccount> = {}) {
     const updateCalls: Array<{ ids: string[]; payload: Record<string, unknown> }> = [];
+    const lookup = artistLookup(artists);
     const db = {
+      auth: lookup.auth,
       from(table: string) {
+        if (table === "artist_profiles") return lookup.profileTable;
         if (table !== "programme_rent_accruals") throw new Error(`unexpected table ${table}`);
         return {
           select: () => {
@@ -1144,5 +1359,91 @@ describe("settleProgrammeRent", () => {
     await settleProgrammeRent(db, { asOf: farFuture });
 
     expect(rows[0].settled_at).toBe(farFuture.toISOString());
+  });
+
+  // Email audit, 2026-09-04: the transfer was scheduled and the artist was
+  // told nothing, so money appeared in their Stripe account with no notice
+  // and no way to tie it to a period.
+  describe("the artist's settlement note", () => {
+    it("tells each paid artist what was settled and for which period", async () => {
+      const { db } = makeSettlementDb([
+        accrualRow({ id: "a1", artist_user_id: "artist_a", amount_pence: 4000 }),
+        accrualRow({ id: "a2", artist_user_id: "artist_a", amount_pence: 2000 }),
+      ]);
+
+      await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+      const emails = sentEmails();
+      expect(emails).toHaveLength(1);
+      expect(emails[0].template).toBe("artist_programme_rent_settled");
+      expect(emails[0].to).toBe("artist_a@example.com");
+      expect(emails[0].userId).toBe("artist_a");
+      expect(emails[0].subject).toBe("Programme rent on the way: £60.00");
+    });
+
+    it("keys the note on the settlement order id, so a rerun in the same quarter cannot double it", async () => {
+      const { db, rows } = makeSettlementDb([
+        accrualRow({ id: "a1", artist_user_id: "artist_a", amount_pence: 4000 }),
+      ]);
+
+      await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+      expect(sentEmails()[0].idempotencyKey).toBe(
+        "programme_rent_settled:programme-settlement:2026Q4:artist_a",
+      );
+
+      // The rerun finds the row already settled, so nothing is re-sent either.
+      sendEmailMock.mockClear();
+      await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+      expect(rows[0].settled_at).toBeTruthy();
+      expect(sendEmailMock).not.toHaveBeenCalled();
+    });
+
+    it("says nothing to an artist whose payout was blocked, because nothing has moved", async () => {
+      canReceivePayoutMock.mockImplementation(
+        async (_db: unknown, target: PayoutTarget): Promise<PayoutCapability> =>
+          target.userId === "artist_a"
+            ? { ok: false, accountId: null, reason: "no_account" }
+            : { ok: true, accountId: `acct_${target.userId}`, reason: null },
+      );
+      const { db } = makeSettlementDb([
+        accrualRow({ id: "a1", artist_user_id: "artist_a", amount_pence: 4000 }),
+        accrualRow({ id: "a2", artist_user_id: "artist_b", amount_pence: 1000 }),
+      ]);
+
+      await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+      expect(sentEmails().map((e) => e.to)).toEqual(["artist_b@example.com"]);
+    });
+
+    it("a failed note is not a failed settlement: the artist stays settled and no admin alert fires", async () => {
+      // The note lives outside the per-artist try/catch's failure meaning. A
+      // mail outage must not report the payout as failed or leave the accrual
+      // unsettled for the next run to pay a second time.
+      sendEmailMock.mockRejectedValueOnce(new Error("resend down"));
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const { db, rows } = makeSettlementDb([
+        accrualRow({ id: "a1", artist_user_id: "artist_a", amount_pence: 4000 }),
+      ]);
+
+      const result = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+      expect(result).toMatchObject({ artistsPaid: 1, blocked: 0, totalPence: 4000 });
+      expect(rows[0].settled_at).toBe(ASOF_Q4_START.toISOString());
+      expect(sendAdminAlertMock).not.toHaveBeenCalled();
+      errSpy.mockRestore();
+    });
+
+    it("skips an artist with no reachable address without disturbing the payout", async () => {
+      const { db, rows } = makeSettlementDb(
+        [accrualRow({ id: "a1", artist_user_id: "artist_a", amount_pence: 4000 })],
+        { artist_a: { email: null } },
+      );
+
+      const result = await settleProgrammeRent(db, { asOf: ASOF_Q4_START });
+
+      expect(result.artistsPaid).toBe(1);
+      expect(rows[0].settled_at).toBe(ASOF_Q4_START.toISOString());
+      expect(sendEmailMock).not.toHaveBeenCalled();
+    });
   });
 });

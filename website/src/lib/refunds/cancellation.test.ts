@@ -30,9 +30,13 @@ const ORDER = {
   items: [{ workId: "w-1", quantity: 1 }],
 };
 
+/** Every UPDATE payload written this test, with its table. */
+let writes: Array<{ table: string; row: Record<string, unknown> }> = [];
+
 /** `failWrite` names the table whose UPDATE reports an error. */
 function setupDb(opts: { paidLegs?: Array<{ id: string; stripe_transfer_id: string }>; failWrite?: string } = {}) {
   const { paidLegs = [], failWrite } = opts;
+  writes = [];
   fromMock.mockImplementation((table: string) => ({
     select: () => ({
       eq: (..._a: unknown[]) => ({
@@ -40,8 +44,11 @@ function setupDb(opts: { paidLegs?: Array<{ id: string; stripe_transfer_id: stri
         eq: async () => ({ data: paidLegs, error: null }),
       }),
     }),
-    update: () => ({
-      eq: async () => ({ error: table === failWrite ? { message: "row is locked" } : null }),
+    update: (row: Record<string, unknown>) => ({
+      eq: async () => {
+        writes.push({ table, row });
+        return { error: table === failWrite ? { message: "row is locked" } : null };
+      },
     }),
   }));
 }
@@ -87,5 +94,25 @@ describe("a DB write that fails after the money moved", () => {
     setupDb({ paidLegs: [{ id: "leg-1", stripe_transfer_id: "tr_1" }] });
     await processCancellationRefund(db, { refundRequestId: "rr-1", orderId: "o1" });
     expect(sendAdminAlertMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("the refund is recorded so the webhook can recognise it (email audit fix 3)", () => {
+  it("writes the Stripe refund id, the approved status and a processed time onto the request", async () => {
+    // charge.refunded fires for this refund too. The order stays `cancelled`,
+    // so the webhook's only way to know the refund is ours is this row.
+    setupDb();
+    await processCancellationRefund(db, { refundRequestId: "rr-1", orderId: "o1" });
+
+    const request = writes.find((w) => w.table === "refund_requests");
+    expect(request).toBeTruthy();
+    expect(request!.row).toMatchObject({ status: "approved", stripe_refund_id: "re_1" });
+    expect(typeof request!.row.processed_at).toBe("string");
+  });
+
+  it("does not touch the order's status: cancelled stays cancelled", async () => {
+    setupDb();
+    await processCancellationRefund(db, { refundRequestId: "rr-1", orderId: "o1" });
+    expect(writes.some((w) => w.table === "orders")).toBe(false);
   });
 });

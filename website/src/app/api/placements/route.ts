@@ -18,6 +18,7 @@ import { artistMayApproachVenue, VENUE_PREFERS_FIRST_MOVE } from "@/lib/venues/o
 import { ArtistPlacementAccepted } from "@/emails/templates/placements/ArtistPlacementAccepted";
 import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPlacementDeclined";
 import { ArtistPlacementRequestSent } from "@/emails/templates/placements/ArtistPlacementRequestSent";
+import { VenuePlacementRequestSent } from "@/emails/templates/placements/VenuePlacementRequestSent";
 import { VenuePlacementAcceptedConfirmation } from "@/emails/templates/placements/VenuePlacementAcceptedConfirmation";
 import { PaidLoanSetUpPayment } from "@/emails/templates/payments/PaidLoanSetUpPayment";
 import { isPaidLoan } from "@/lib/arrangement-type";
@@ -678,11 +679,8 @@ export async function POST(request: Request) {
       }
 
       // Receipt to the requester themselves, closes the "did it go
-      // through?" loop. Only wired for artist-initiated requests today;
-      // the venue-initiated flow falls back to the legacy notify and we
-      // can wire VenuePlacementRequestSent if/when one's added. Sent
-      // fire-and-forget so a flaky email service can't fail the
-      // placement create itself.
+      // through?" loop. The artist-initiated half first; the venue-initiated
+      // half follows below with its own template.
       if (!fromVenue && auth.user?.email) {
         const senderEmail = auth.user.email;
         const senderUserId = auth.user.id;
@@ -729,6 +727,52 @@ export async function POST(request: Request) {
             metadata: { placementId: placementIdForLink },
           }).catch((err) => {
             if (err) console.error("Artist receipt email failed:", err);
+          });
+        });
+      }
+
+      // The venue-initiated half of the same receipt. The comment here used
+      // to say "we can wire VenuePlacementRequestSent if/when one's added",
+      // and until it existed a venue that sent a request got no confirmation
+      // it went anywhere. No wall preview is passed: a venue's request is
+      // never laid out on a wall first (wallProposal is always null on this
+      // branch), and the template only shows a capture when handed both a
+      // URL and a wall name, so it cannot claim a preview that does not
+      // exist. Deferred past the response, like the artist's receipt.
+      if (fromVenue && auth.user?.email) {
+        const senderEmail = auth.user.email;
+        const senderUserId = auth.user.id;
+        const senderFirstName =
+          (auth.user.user_metadata?.first_name as string | undefined) ||
+          venueProfile!.name.split(" ")[0] ||
+          "there";
+        const placementIdForLink = parsed.data[0]?.id;
+        const placementUrl = placementIdForLink
+          ? `${SITE}/placements/${encodeURIComponent(placementIdForLink)}`
+          : `${SITE}/venue-portal/placements`;
+        const termsSummary = placementTermsSummary(
+          parsed.data[0].type,
+          parsed.data[0].revenueSharePercent,
+          parsed.data[0].monthlyFeeGbp,
+        );
+        const artistName = artistProfile!.name;
+        const requestedWorks = parsed.data.map((p) => p.workTitle);
+        afterResponse(async () => {
+          await sendEmail({
+            idempotencyKey: `placement_request_receipt:${placementIdForLink}:to_venue`,
+            template: "venue_placement_request_sent",
+            category: "placements",
+            to: senderEmail,
+            subject: `Request sent to ${artistName}`,
+            userId: senderUserId,
+            react: VenuePlacementRequestSent({
+              firstName: senderFirstName,
+              artistName,
+              placementUrl,
+              requestedWorks,
+              proposedTerms: termsSummary,
+            }),
+            metadata: { placementId: placementIdForLink },
           });
         });
       }
@@ -1772,6 +1816,13 @@ export async function PATCH(request: Request) {
         const artistName = artistP?.name || "The artist";
         const venueName = venueP?.name || existing.venue || "The venue";
         const placementUrl = `${SITE}/placements/${encodeURIComponent(id)}`;
+        // Each party's own labels page. Both parties used to be sent to the
+        // artist portal, which bounced the venue off its guard. The venue
+        // page takes ?placement= to preselect the placement being labelled.
+        const qrLabelsUrlFor = (uid: string): string =>
+          uid === existing.venue_user_id
+            ? `${SITE}/venue-portal/labels?placement=${encodeURIComponent(id)}`
+            : `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`;
 
         async function sendToParty(opts: {
           user: typeof artistUser;
@@ -1848,7 +1899,7 @@ export async function PATCH(request: Request) {
                 venueName,
                 artistName,
                 installedWorks: [],
-                qrLabelsUrl: `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`,
+                qrLabelsUrl: qrLabelsUrlFor(party.uid),
               }),
             });
           }
@@ -1877,7 +1928,7 @@ export async function PATCH(request: Request) {
                 venueName,
                 artistName,
                 workTitle: existing.work_title || "The work",
-                qrLabelsUrl: `${SITE}/artist-portal/labels?venue=${encodeURIComponent(existing.venue_slug || "")}`,
+                qrLabelsUrl: qrLabelsUrlFor(party.uid),
                 venueSharePercent: existing.revenue_share_percent ?? null,
               }),
             });
@@ -2339,6 +2390,41 @@ export async function PATCH(request: Request) {
           }
         } catch (err) {
           console.warn("Cancellation email skipped:", err);
+        }
+
+        // Rows 2179-2187, the email half. The canceller got the billing bell
+        // above and no email, on a placement that may carry the monthly
+        // payment they have just stopped. Their own copy of the same
+        // template, keyed apart from the other party's so the two sends
+        // cannot dedupe each other. Same category as the other party's copy:
+        // the pipeline resolves placement_cancelled to orders_and_payouts.
+        if (auth.user?.email) {
+          try {
+            const cancellerFirstName =
+              (auth.user.user_metadata?.first_name as string | undefined) ||
+              (cancellerName || "there").split(" ")[0];
+            await sendEmail({
+              idempotencyKey: `placement_cancelled:${id}:canceller`,
+              template: "placement_cancelled",
+              category: "placements",
+              to: auth.user.email,
+              subject: `You cancelled the placement with ${otherPartyName}`,
+              userId: auth.user.id,
+              react: PlacementCancelled({
+                firstName: cancellerFirstName,
+                cancelledByName: cancellerName,
+                recipientPersona: cancellerIsArtist ? "artist" : "venue",
+                selfCancelled: true,
+                counterpartyName: otherPartyName,
+                placementUrl,
+                nextStepUrl: cancellerIsArtist ? `${SITE}/spaces` : `${SITE}/browse`,
+                monthlyFeeGbp: existing.monthly_fee_gbp ?? null,
+              }),
+              metadata: { placementId: id, selfCancelled: true },
+            });
+          } catch (err) {
+            console.warn("Canceller confirmation email skipped:", err);
+          }
         }
 
         // Post a placement_response message into the conversation so the

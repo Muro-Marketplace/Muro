@@ -6,14 +6,20 @@
 // to our own sendEmail() so anything we send from here flows through
 // the same suppression / preference / throttle pipeline as everything else.
 //
-// Currently handles:
-//   - "auth.suspicious_login", fire AccountSuspiciousLogin
+// Currently handles: nothing. Every recognised event is acknowledged and
+// logged. The `auth.suspicious_login` branch that used to live here was
+// dead code: Supabase emits no such event, nothing else produced one, and the
+// `account_suspicious_login` template it rendered had no live sender. The
+// template stays registered (src/emails/registry.ts) as the documented target
+// for when a real new-device signal exists; the handler is gone so the route
+// no longer claims a capability it does not have.
 //
 // Welcome emails are NOT fired from here. They need richer data than the
 // webhook payload provides (featured works for customers, profile-state
 // driven checklist for artists). We trigger those from the API endpoint
-// that has the data on hand, e.g. /api/auth/oauth-finalize after profile
-// creation, or a dedicated welcome cron.
+// that has the data on hand, e.g. /api/auth/welcome after sign-in, /api/apply
+// once the artist bridge row exists, and /api/venue-profile once the venue row
+// exists.
 //
 // Anything else is logged and 200'd so unknown events don't make the
 // webhook unhealthy.
@@ -24,13 +30,8 @@
 
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { sendEmail } from "@/lib/email/send";
-import { AccountSuspiciousLogin } from "@/emails/templates/account/AccountSuspiciousLogin";
 
 export const runtime = "nodejs";
-
-const SUPPORT_URL = "https://wallplace.co.uk/support";
 
 function timingSafeEqualHex(a: string, b: string): boolean {
   try {
@@ -54,15 +55,9 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
   return timingSafeEqualHex(expected, signature.replace(/^sha256=/, ""));
 }
 
-interface SuspiciousLoginPayload {
+interface WebhookPayload {
   type?: string;
   event?: string;
-  suspicious?: {
-    userId: string;
-    loginTime: string;
-    location?: string;
-    device?: string;
-  };
 }
 
 export async function POST(request: Request) {
@@ -72,7 +67,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  let payload: SuspiciousLoginPayload;
+  let payload: WebhookPayload;
   try {
     payload = JSON.parse(rawBody);
   } catch {
@@ -80,51 +75,10 @@ export async function POST(request: Request) {
   }
 
   const event = payload.type || payload.event || "";
-
-  try {
-    if (event === "auth.suspicious_login" || event === "user.suspicious_login") {
-      await handleSuspiciousLogin(payload);
-    }
-    // Unknown events ignored on purpose, don't 5xx and force retries.
-  } catch (err) {
-    console.error("[webhooks/supabase] handler error:", err);
-    // Still 200; we've logged. Returning 5xx makes Supabase retry forever.
-  }
+  // Every event is ignored on purpose, and logged so a hook someone wires in
+  // the dashboard is visible in the function logs. Don't 5xx: Supabase
+  // retries on failure and an unhandled event is not a failure.
+  console.info("[webhooks/supabase] event received, no handler:", event || "(untyped)");
 
   return NextResponse.json({ ok: true });
-}
-
-async function handleSuspiciousLogin(payload: SuspiciousLoginPayload) {
-  const sus = payload.suspicious;
-  if (!sus?.userId) return;
-
-  const db = getSupabaseAdmin();
-  const { data: { user } } = await db.auth.admin.getUserById(sus.userId);
-  if (!user?.email) return;
-
-  const meta = (user.user_metadata || {}) as Record<string, unknown>;
-  const firstName =
-    (typeof meta.display_name === "string" && (meta.display_name as string).split(" ")[0]) ||
-    user.email.split("@")[0];
-
-  await sendEmail({
-    idempotencyKey: `suspicious:${sus.userId}:${sus.loginTime}`,
-        // Owner decision 7 (2026-08-28): this label was "suspicious_login", which is not a
-    // registry id, so the audit could not connect the send to the template it
-    // renders. The 22 live email_events rows carrying the five old labels were
-    // UPDATEd to the new ones in the same change, so history did not split.
-    template: "account_suspicious_login",
-    category: "security",
-    to: user.email,
-    subject: "New sign-in to your Wallplace account",
-    react: AccountSuspiciousLogin({
-      firstName,
-      loginTime: sus.loginTime,
-      location: sus.location || "Unknown location",
-      device: sus.device || "Unknown device",
-      secureAccountUrl: "https://wallplace.co.uk/account/security",
-      supportUrl: SUPPORT_URL,
-    }),
-    userId: sus.userId,
-  });
 }

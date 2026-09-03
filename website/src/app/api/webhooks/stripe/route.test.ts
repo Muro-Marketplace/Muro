@@ -182,7 +182,12 @@ vi.mock("@/emails/templates/orders/ArtistWorkSold", () => ({ ArtistWorkSold: () 
 vi.mock("@/emails/templates/payments/ArtistPayoutSent", () => ({ ArtistPayoutSent: () => null }));
 vi.mock("@/emails/templates/payments/ArtistPayoutFailed", () => ({ ArtistPayoutFailed: () => null }));
 vi.mock("@/emails/templates/payments/SubscriptionPaymentFailed", () => ({ SubscriptionPaymentFailed: () => null }));
-vi.mock("@/emails/templates/payments/SubscriptionTrialEnding", () => ({ SubscriptionTrialEnding: () => null }));
+// Recording spy (email audit fix 1): the trial-ending props are asserted,
+// because the benefits list is what used to be hand-written and wrong.
+const { trialEndingPropsMock } = vi.hoisted(() => ({
+  trialEndingPropsMock: vi.fn((_props: unknown) => null),
+}));
+vi.mock("@/emails/templates/payments/SubscriptionTrialEnding", () => ({ SubscriptionTrialEnding: trialEndingPropsMock }));
 vi.mock("@/emails/templates/payments/SubscriptionUpgraded", () => ({ SubscriptionUpgraded: () => null }));
 vi.mock("@/emails/templates/payments/SubscriptionCancelled", () => ({ SubscriptionCancelled: () => null }));
 vi.mock("@/emails/templates/payments/SubscriptionRenewalReceipt", () => ({ SubscriptionRenewalReceipt: () => null }));
@@ -3112,5 +3117,462 @@ describe("Stripe webhook — programme refund/dispute rent clawback (Task 8)", (
       );
       expect(res.status).toBe(200);
     });
+  });
+});
+
+// ── Email audit 2026-09-03: the billing, refund, chargeback and payout stream ──
+//
+// Each of these was a money event that reached an operator, a bell, or nobody,
+// while the person whose money moved was told nothing (or, for the trial
+// notice, was told through a channel they could switch off). The admin alerts
+// are unchanged throughout; these assert the missing half.
+describe("Stripe webhook — billing and money notices (email audit 2026-09-03)", () => {
+  const PRICE_ID = "price_premium_test";
+
+  /** The sends the pipeline was handed, by template id. */
+  function sentTemplates(): Record<string, Record<string, unknown>> {
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const call of sendEmailMock.mock.calls as unknown as Array<[Record<string, unknown>]>) {
+      out[call[0].template as string] = call[0];
+    }
+    return out;
+  }
+
+  /**
+   * A db whose artist_profiles / venue_profiles lookups answer by the column
+   * queried, so a profile resolves for its own owner and for nobody else.
+   */
+  function setupDb(opts: {
+    order?: Record<string, unknown> | null;
+    artistProfile?: Record<string, unknown> | null;
+    venueProfile?: Record<string, unknown> | null;
+    placement?: Record<string, unknown> | null;
+    refundRequests?: Array<Record<string, unknown>>;
+  } = {}) {
+    const legs: Array<Record<string, unknown>> = [];
+    fromMock.mockImplementation((table: string) => {
+      if (table === "stripe_webhook_events") return webhookEventsStub();
+      if (table === "orders") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: opts.order ?? null, error: null }) }) }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "refund_requests") {
+        return {
+          select: () => ({ eq: async () => ({ data: opts.refundRequests ?? [], error: null }) }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: opts.artistProfile ?? null, error: null }) }),
+          }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "venue_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: opts.venueProfile ?? null, error: null }) }),
+          }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "placements") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: opts.placement ?? null, error: null }) }) }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "placement_recurring_billings") {
+        return { upsert: async () => ({ error: null }) };
+      }
+      if (table === "stripe_transfers") {
+        // The leg updates chain differently per branch (.eq().in(),
+        // .eq().eq().like(), .eq("id")), so the update returns one
+        // self-referential chain that awaits to a success from any of them.
+        const chain: Record<string, unknown> = {};
+        for (const method of ["eq", "in", "like", "not", "is"]) chain[method] = () => chain;
+        chain.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve);
+        return {
+          select: () => ({ eq: () => ({ eq: async () => ({ data: legs, error: null }) }) }),
+          update: () => chain,
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: null, error: null }), single: async () => ({ data: null, error: null }) }),
+        }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+    });
+  }
+
+  beforeEach(() => {
+    process.env.STRIPE_PRICE_PREMIUM = PRICE_ID;
+    authGetUserByIdMock.mockResolvedValue({ data: { user: { email: "maya@example.com" } } });
+  });
+
+  afterEach(() => {
+    delete process.env.STRIPE_PRICE_PREMIUM;
+  });
+
+  // ── Fix 1: the trial notice is a billing notice ──
+  describe("trial ending", () => {
+    beforeEach(() => {
+      setupDb({ artistProfile: { user_id: "u-artist", name: "Maya Chen" } });
+      constructEventMock.mockReturnValue({
+        id: "evt_trial",
+        type: "customer.subscription.trial_will_end",
+        data: {
+          object: {
+            id: "sub_trial",
+            customer: "cus_1",
+            trial_end: 1_782_678_400,
+            items: {
+              data: [{ price: { id: PRICE_ID, unit_amount: 2499, currency: "gbp", recurring: { interval: "month" } } }],
+            },
+          },
+        },
+      });
+    });
+
+    it("sends as orders_and_payouts, so the only warning before a charge cannot be switched off", async () => {
+      // It went out as `promotions`: opt-in, default off, suppressible and
+      // throttled, so anyone with a preferences row was charged with no notice.
+      await POST(buildRequest());
+      expect(sentTemplates().subscription_trial_ending).toMatchObject({
+        category: "orders_and_payouts",
+        to: "maya@example.com",
+        idempotencyKey: "trial_ending:sub_trial",
+      });
+    });
+
+    it("quotes the plan's real feature list and the amount about to be charged", async () => {
+      const { PLAN_FEATURES } = await import("@/lib/plan-features");
+      await POST(buildRequest());
+
+      const props = trialEndingPropsMock.mock.calls[0][0] as {
+        benefits: string[];
+        amount?: { amount: number };
+        planName: string;
+      };
+      expect(props.benefits).toEqual([...PLAN_FEATURES.premium]);
+      // The three hand-written lines it used to carry, two of which named
+      // things that are not plan features at all.
+      expect(props.benefits).not.toContain("Priority matching with venues");
+      expect(props.benefits).not.toContain("Advanced QR analytics");
+      expect(props.amount).toEqual({ amount: 2499, currency: "GBP" });
+    });
+  });
+
+  // ── Fix 4: the two subscription-end moments ──
+  describe("subscription cancellation", () => {
+    it("confirms at the moment the artist cancels, with the date access really ends", async () => {
+      // Nothing was sent here at all; the confirmation waited for `deleted`,
+      // by which time its "you keep access until then" copy was false.
+      setupDb({ artistProfile: { user_id: "u-artist", name: "Maya Chen", subscription_plan: "premium" } });
+      constructEventMock.mockReturnValue({
+        id: "evt_cancel",
+        type: "customer.subscription.updated",
+        data: {
+          object: {
+            id: "sub_1",
+            customer: "cus_1",
+            status: "active",
+            cancel_at_period_end: true,
+            cancel_at: 1_782_678_400,
+            items: { data: [{ price: { id: PRICE_ID }, current_period_end: 1_782_678_400 }] },
+          },
+          previous_attributes: { cancel_at_period_end: false },
+        },
+      });
+
+      await POST(buildRequest());
+
+      const sent = sentTemplates().subscription_cancelled;
+      expect(sent, "the artist heard nothing when they cancelled").toBeTruthy();
+      expect(sent).toMatchObject({ category: "orders_and_payouts", to: "maya@example.com" });
+      expect(sent.metadata).toMatchObject({ accessEndsAt: "28 June 2026" });
+      // Keyed on the event, so a redelivery dedupes while a later cancel after
+      // a reactivation is its own confirmation.
+      expect(String(sent.idempotencyKey)).toContain("evt_cancel");
+    });
+
+    it("says nothing on an update that is not a cancellation", async () => {
+      setupDb({ artistProfile: { user_id: "u-artist", name: "Maya Chen", subscription_plan: "premium" } });
+      constructEventMock.mockReturnValue({
+        id: "evt_update",
+        type: "customer.subscription.updated",
+        data: {
+          object: {
+            id: "sub_1",
+            customer: "cus_1",
+            status: "active",
+            cancel_at_period_end: false,
+            items: { data: [{ price: { id: PRICE_ID } }] },
+          },
+          previous_attributes: { status: "trialing" },
+        },
+      });
+
+      await POST(buildRequest());
+      expect(sentTemplates().subscription_cancelled).toBeUndefined();
+    });
+
+    it("on deletion says the subscription HAS ended, not that access continues", async () => {
+      setupDb({
+        artistProfile: {
+          user_id: "u-artist",
+          name: "Maya Chen",
+          subscription_plan: "premium",
+          stripe_subscription_id: "sub_1",
+        },
+      });
+      constructEventMock.mockReturnValue({
+        id: "evt_deleted",
+        type: "customer.subscription.deleted",
+        data: { object: { id: "sub_1", customer: "cus_1", ended_at: 1_782_678_400, cancel_at: null } },
+      });
+
+      await POST(buildRequest());
+
+      const sent = sentTemplates();
+      expect(sent.subscription_ended).toMatchObject({
+        category: "orders_and_payouts",
+        idempotencyKey: "subscription_ended:sub_1",
+      });
+      // The old copy promised access "until" a date that had already passed.
+      expect(sent.subscription_cancelled).toBeUndefined();
+    });
+  });
+
+  // ── Fix 3: the double refund on cancellation ──
+  describe("charge.refunded no longer re-runs a refund we made ourselves", () => {
+    it("skips a cancelled order whose refund request is already settled", async () => {
+      // The cancellation path refunds and leaves the order `cancelled`, so the
+      // old status check (`refunded` only) let Stripe's echo re-run the full
+      // branch: legs reversed twice, stock restored twice, a second buyer
+      // email and an admin alert claiming a dashboard refund was reconciled.
+      setupDb({
+        order: { id: "ord_c", status: "cancelled", buyer_email: "b@x.com", items: [{ workId: "w1", qty: 1 }] },
+        refundRequests: [{ id: "rr1", status: "approved", stripe_refund_id: "re_1" }],
+      });
+      constructEventMock.mockReturnValue({
+        id: "evt_refund_c",
+        type: "charge.refunded",
+        data: { object: { id: "ch_c", payment_intent: "pi_c", refunded: true, amount_refunded: 5000 } },
+      });
+
+      const res = await POST(buildRequest());
+
+      await expect(res.json()).resolves.toMatchObject({ ignored: "cancellation_refund_settled" });
+      expect(sendEmailMock).not.toHaveBeenCalled();
+      expect(transfersCreateReversalMock).not.toHaveBeenCalled();
+      expect(rpcMock).not.toHaveBeenCalledWith("restock_work", expect.anything());
+      expect(notifyAdminCurationPaidMock).not.toHaveBeenCalled();
+    });
+
+    it("skips any refund whose id we already recorded, whatever the order status", async () => {
+      setupDb({
+        order: { id: "ord_r", status: "confirmed", buyer_email: "b@x.com", items: [] },
+        refundRequests: [{ id: "rr1", status: "approved", stripe_refund_id: "re_known" }],
+      });
+      constructEventMock.mockReturnValue({
+        id: "evt_refund_r",
+        type: "charge.refunded",
+        data: {
+          object: {
+            id: "ch_r",
+            payment_intent: "pi_r",
+            refunded: true,
+            amount_refunded: 5000,
+            refunds: { data: [{ id: "re_known" }] },
+          },
+        },
+      });
+
+      const res = await POST(buildRequest());
+
+      await expect(res.json()).resolves.toMatchObject({ ignored: "refund_already_recorded" });
+      expect(sendEmailMock).not.toHaveBeenCalled();
+    });
+
+    it("still reconciles a genuine dashboard refund, which has no recorded request", async () => {
+      setupDb({
+        order: { id: "ord_d", status: "confirmed", buyer_email: "b@x.com", items: [] },
+        refundRequests: [],
+      });
+      constructEventMock.mockReturnValue({
+        id: "evt_refund_d",
+        type: "charge.refunded",
+        data: { object: { id: "ch_d", payment_intent: "pi_d", refunded: true, amount_refunded: 5000 } },
+      });
+
+      await POST(buildRequest());
+
+      expect(sentTemplates().customer_refund_confirmation).toMatchObject({
+        idempotencyKey: "refund:ord_d:dashboard",
+      });
+    });
+  });
+
+  // ── 6a: the artist's copy of a chargeback ──
+  describe("chargebacks reach the artist", () => {
+    it("tells the artist their payout is held, why, and by when evidence is due", async () => {
+      setupDb({
+        order: { id: "ord_1", status: "confirmed", buyer_email: "b@x.com", artist_slug: "maya", artist_user_id: "u-artist" },
+        artistProfile: { name: "Maya Chen" },
+      });
+      constructEventMock.mockReturnValue({
+        id: "evt_dp",
+        type: "charge.dispute.created",
+        data: {
+          object: {
+            id: "dp_1",
+            payment_intent: "pi_1",
+            amount: 24000,
+            currency: "gbp",
+            reason: "product_not_received",
+            evidence_details: { due_by: 1_782_678_400 },
+          },
+        },
+      });
+
+      await POST(buildRequest());
+
+      expect(sentTemplates().artist_chargeback_opened).toMatchObject({
+        category: "orders_and_payouts",
+        to: "maya@example.com",
+        idempotencyKey: "chargeback_opened_artist:dp_1",
+      });
+      // The operator alert still fires; this is the artist's half, not a swap.
+      expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: "chargeback_opened:dp_1" }),
+      );
+    });
+
+    it("tells the artist the outcome when the bank decides", async () => {
+      setupDb({
+        order: { id: "ord_1", status: "disputed", delivered_at: null, artist_user_id: "u-artist" },
+        artistProfile: { name: "Maya Chen" },
+      });
+      constructEventMock.mockReturnValue({
+        id: "evt_dpc",
+        type: "charge.dispute.closed",
+        data: { object: { id: "dp_1", payment_intent: "pi_1", amount: 24000, currency: "gbp", status: "won" } },
+      });
+
+      await POST(buildRequest());
+
+      const sent = sentTemplates().artist_chargeback_closed;
+      expect(sent).toMatchObject({ idempotencyKey: "chargeback_closed_artist:dp_1" });
+      expect(sent.metadata).toMatchObject({ outcome: "won" });
+    });
+
+    it("stays quiet on a warning status, which is not a decision", async () => {
+      setupDb({
+        order: { id: "ord_1", status: "disputed", delivered_at: null, artist_user_id: "u-artist" },
+        artistProfile: { name: "Maya Chen" },
+      });
+      constructEventMock.mockReturnValue({
+        id: "evt_dpw",
+        type: "charge.dispute.closed",
+        data: { object: { id: "dp_2", payment_intent: "pi_1", amount: 24000, currency: "gbp", status: "warning_closed" } },
+      });
+
+      await POST(buildRequest());
+      expect(sentTemplates().artist_chargeback_closed).toBeUndefined();
+    });
+  });
+
+  // ── 6b: the buyer's copy of a refund that bounced ──
+  it("tells the buyer plainly when their refund did not go through", async () => {
+    // They had already had "refund on the way"; the bounce alerted an operator
+    // and left the buyer watching a card that never got its money back.
+    setupDb({
+      order: { id: "ord_1", status: "refunded", buyer_email: "b@x.com", buyer_user_id: null, shipping: { fullName: "Bob Buyer" } },
+    });
+    constructEventMock.mockReturnValue({
+      id: "evt_rf",
+      type: "refund.failed",
+      data: { object: { id: "re_1", payment_intent: "pi_1", amount: 24000, currency: "gbp", failure_reason: "expired_or_canceled_card" } },
+    });
+
+    await POST(buildRequest());
+
+    expect(sentTemplates().customer_refund_failed).toMatchObject({
+      category: "orders_and_payouts",
+      to: "b@x.com",
+      idempotencyKey: "refund_failed_buyer:re_1",
+    });
+    expect(notifyAdminCurationPaidMock).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: "refund_failed:re_1" }),
+    );
+  });
+
+  // ── 6d: the venue's record of the monthly charge it just agreed to ──
+  it("confirms the monthly paid-loan charge to the venue that just set it up", async () => {
+    setupDb({
+      placement: {
+        id: "pl-1",
+        venue_user_id: "u-venue",
+        artist_user_id: "u-artist",
+        monthly_fee_gbp: 45,
+        work_title: "Mt. Fitz Roy",
+        stripe_subscription_id: null,
+      },
+      venueProfile: { name: "The Curzon" },
+      artistProfile: { name: "Fin Coles" },
+    });
+    subscriptionsRetrieveMock.mockResolvedValue({
+      id: "sub_pl",
+      customer: "cus_v",
+      trial_end: null,
+      items: { data: [{ current_period_start: 1_780_000_000, current_period_end: 1_782_678_400 }] },
+    });
+    constructEventMock.mockReturnValue({
+      id: "evt_pl",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_1",
+          mode: "subscription",
+          subscription: "sub_pl",
+          metadata: { kind: "paid_loan_monthly", placement_id: "pl-1" },
+        },
+      },
+    });
+
+    await POST(buildRequest());
+
+    expect(sentTemplates().venue_paid_loan_payment_set_up).toMatchObject({
+      category: "orders_and_payouts",
+      to: "maya@example.com",
+      idempotencyKey: "paid_loan_payment_set_up:sub_pl",
+    });
+  });
+
+  // ── 6f: the venue's share leaving Stripe for their bank ──
+  it("tells a venue their payout is on the way, not only artists", async () => {
+    // payout.paid resolved artist_profiles only, so a venue's revenue share
+    // left for their bank and matched nobody here.
+    setupDb({ artistProfile: null, venueProfile: { user_id: "u-venue", name: "The Curzon" } });
+    constructEventMock.mockReturnValue({
+      id: "evt_po",
+      type: "payout.paid",
+      account: "acct_venue",
+      data: { object: { id: "po_1", amount: 4800, currency: "gbp", arrival_date: 1_782_678_400 } },
+    });
+
+    await POST(buildRequest());
+
+    const sent = sentTemplates().venue_payout_sent;
+    expect(sent, "the venue was never told their payout went out").toBeTruthy();
+    expect(sent).toMatchObject({ category: "orders_and_payouts", idempotencyKey: "payout_sent:po_1" });
+    expect(sent.metadata).toMatchObject({ recipient: "venue" });
+    // An artist payout is unaffected: one account, one recipient.
+    expect(sentTemplates().artist_payout_sent).toBeUndefined();
   });
 });

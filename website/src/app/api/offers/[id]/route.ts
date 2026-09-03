@@ -8,9 +8,44 @@ import { z } from "zod";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { createNotification } from "@/lib/notifications";
-import { isOfferLapsed } from "@/lib/offers/expiry";
+import { formatOfferDeadline, isOfferLapsed } from "@/lib/offers/expiry";
+import { sendEmail } from "@/lib/email/send";
+import { OfferOutcomeNotification } from "@/emails/templates/messages/OfferOutcomeNotification";
 
 export const runtime = "nodejs";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+
+/**
+ * What the offer was on, for the outcome email: a collection name, a single
+ * work title, or "<title> and N more". Null when it cannot be resolved; the
+ * email reads fine without it and a lookup failure must not stop the send.
+ */
+async function offerItemTitle(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  offer: { collection_id?: string | null; work_ids?: string[] | null },
+): Promise<string | null> {
+  try {
+    if (offer.collection_id) {
+      const { data } = await db
+        .from("artist_collections")
+        .select("name")
+        .eq("id", offer.collection_id)
+        .maybeSingle<{ name: string | null }>();
+      return data?.name?.trim() || null;
+    }
+    const ids = Array.isArray(offer.work_ids) ? offer.work_ids : [];
+    if (ids.length === 0) return null;
+    const { data } = await db.from("artist_works").select("title").in("id", ids);
+    const titles = ((data || []) as Array<{ title: string | null }>)
+      .map((w) => (w.title || "").trim())
+      .filter(Boolean);
+    if (titles.length === 0) return null;
+    return titles.length === 1 ? titles[0] : `${titles[0]} and ${titles.length - 1} more`;
+  } catch {
+    return null;
+  }
+}
 
 const patchSchema = z.object({
   action: z.enum(["accept", "decline", "withdraw"]),
@@ -176,21 +211,34 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       link: recipientLink,
     }).catch((err) => console.warn("[offers] bell failed:", err));
 
+    // Names and slugs for the thread line and the email below. Best-effort:
+    // a missing profile must not fail a status change already committed.
+    let artistSlug: string | null = null;
+    let venueSlug: string | null = null;
+    let artistName: string | null = null;
+    let venueName: string | null = null;
+    try {
+      const [{ data: artistRow }, { data: venueRow }] = await Promise.all([
+        db.from("artist_profiles").select("slug, name").eq("user_id", offer.artist_user_id).maybeSingle<{ slug: string | null; name: string | null }>(),
+        db.from("venue_profiles").select("slug, name").eq("user_id", offer.buyer_user_id).maybeSingle<{ slug: string | null; name: string | null }>(),
+      ]);
+      artistSlug = artistRow?.slug ?? null;
+      venueSlug = venueRow?.slug ?? null;
+      artistName = artistRow?.name ?? null;
+      venueName = venueRow?.name ?? null;
+    } catch (err) {
+      console.warn("[offers] profile lookup skipped:", err);
+    }
+    const formatted = `£${(offer.amount_pence / 100).toFixed(2)}`;
+    const senderIsArtist = me === offer.artist_user_id;
+
     // Drop a status-change line into the conversation thread so the
     // negotiation reads as one continuous chat rather than disjointed
     // bell notifications. Best-effort — don't block the response.
     try {
-      const [{ data: artistRow }, { data: venueRow }] = await Promise.all([
-        db.from("artist_profiles").select("slug").eq("user_id", offer.artist_user_id).maybeSingle<{ slug: string | null }>(),
-        db.from("venue_profiles").select("slug").eq("user_id", offer.buyer_user_id).maybeSingle<{ slug: string | null }>(),
-      ]);
-      const artistSlug = artistRow?.slug;
-      const venueSlug = venueRow?.slug;
       if (artistSlug && venueSlug) {
         const [a, b] = [artistSlug, venueSlug].sort();
         const conversationId = `dm-${a}__${b}`;
-        const formatted = `£${(offer.amount_pence / 100).toFixed(2)}`;
-        const senderIsArtist = me === offer.artist_user_id;
         const senderSlug = senderIsArtist ? artistSlug : venueSlug;
         const recipientSlug = senderIsArtist ? venueSlug : artistSlug;
         const summary = newStatus === "accepted"
@@ -218,6 +266,71 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     } catch (err) {
       console.warn("[offers] thread message skipped:", err);
+    }
+
+    // Email the counterparty of whoever acted. Until now the outcome of an
+    // offer reached them as a bell and a thread line only, while the venue
+    // whose offer was accepted has a payment step to complete. Money, so it
+    // goes out as orders_and_payouts (the offer that opened the negotiation
+    // already does, via TEMPLATE_CATEGORY_OVERRIDES). The status gate above
+    // means a row enters each outcome once, so the key is the row, the
+    // outcome and the recipient. Best-effort, like the thread line: the
+    // status change is already committed.
+    const counterpartyUserId: string = senderIsArtist ? offer.buyer_user_id : offer.artist_user_id;
+    try {
+      const { data: { user: recipientUser } } = await db.auth.admin.getUserById(counterpartyUserId);
+      if (recipientUser?.email) {
+        const recipientIsArtist = counterpartyUserId === offer.artist_user_id;
+        const recipientName = recipientIsArtist ? artistName : venueName;
+        const firstName =
+          (recipientUser.user_metadata?.first_name as string | undefined) ||
+          (recipientName || "").split(" ")[0] ||
+          ((recipientUser.user_metadata?.display_name as string | undefined) || "").split(" ")[0] ||
+          recipientUser.email.split("@")[0];
+        const counterpartyName = senderIsArtist ? artistName || "The artist" : venueName || "The venue";
+        const outcome = newStatus as "accepted" | "declined" | "withdrawn";
+        const isCounter = !!offer.parent_offer_id;
+        const noun = isCounter ? "counter offer" : "offer";
+        const subject =
+          outcome === "accepted"
+            ? `${counterpartyName} accepted your ${noun} of ${formatted}`
+            : outcome === "declined"
+              ? `${counterpartyName} declined your ${noun} of ${formatted}`
+              : `${counterpartyName} withdrew their ${noun} of ${formatted}`;
+        const offersPath = recipientIsArtist ? "/artist-portal/offers" : "/venue-portal/offers";
+        const itemTitle = await offerItemTitle(db, offer);
+        await sendEmail({
+          idempotencyKey: `offer_outcome:${id}:${outcome}:${counterpartyUserId}`,
+          template: "offer_outcome_notification",
+          category: "orders_and_payouts",
+          to: recipientUser.email,
+          subject,
+          userId: counterpartyUserId,
+          react: OfferOutcomeNotification({
+            firstName,
+            recipientRole: recipientIsArtist ? "artist" : "venue",
+            counterpartyName,
+            formattedAmount: formatted,
+            outcome,
+            isCounter,
+            itemTitle: itemTitle ?? undefined,
+            offersUrl: `${SITE}${offersPath}?focus=${encodeURIComponent(id)}`,
+            // The same deep link the bell uses: the venue portal fires the
+            // Stripe checkout on mount for ?pay=<offerId>.
+            paymentUrl:
+              outcome === "accepted" && !recipientIsArtist
+                ? `${SITE}/venue-portal/offers?pay=${encodeURIComponent(id)}`
+                : undefined,
+            // purchase_offers.expires_at, the deadline the offers list shows
+            // as "Expires <date>".
+            offerDeadline: formatOfferDeadline(offer) ?? undefined,
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { offerId: id, outcome },
+        });
+      }
+    } catch (err) {
+      console.warn("[offers] outcome email skipped:", err);
     }
   }
 

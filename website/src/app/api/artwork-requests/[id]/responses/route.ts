@@ -17,8 +17,28 @@ import {
 } from "@/lib/authz";
 import { createNotification } from "@/lib/notifications";
 import { checkArtistOutreachCap, outreachCapPayload } from "@/lib/outreach-cap";
+import { sendEmail } from "@/lib/email/send";
+import { VenueBriefResponseReceived } from "@/emails/templates/artwork-requests/VenueBriefResponseReceived";
 
 export const runtime = "nodejs";
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+
+/** Matches the space the venue email's quote block is designed for. */
+const PREVIEW_CHARS = 200;
+
+function previewOf(text: string): string {
+  const t = (text ?? "").trim();
+  return t.length > PREVIEW_CHARS ? `${t.slice(0, PREVIEW_CHARS - 3)}…` : t;
+}
+
+/** How the venue email names each response type. */
+const RESPONSE_TYPE_LABEL: Record<"placement" | "offer" | "commission" | "message", string> = {
+  placement: "placement proposal",
+  offer: "purchase offer",
+  commission: "commission proposal",
+  message: "message",
+};
 
 // Zod schema. Message min(3) was too aggressive — a "Yes!" was rejected
 // as "invalid response" with no UI breadcrumb. Relaxed to min(1).
@@ -131,9 +151,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   // Artist-only: must have an artist profile to respond.
   const { data: artist } = await db
     .from("artist_profiles")
-    .select("user_id, slug")
+    .select("user_id, slug, name")
     .eq("user_id", auth.user!.id)
-    .maybeSingle();
+    .maybeSingle<{ user_id: string; slug: string | null; name?: string | null }>();
   if (!artist) {
     return NextResponse.json(
       { error: "artist_only", message: "Only artists can respond to artwork requests." },
@@ -331,6 +351,46 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     body: parsed.data.message.slice(0, 140),
     link: `/venue-portal/artwork-requests/${id}`,
   }).catch((err) => console.warn("[response] bell failed:", err));
+
+  // "An artist responded to your brief", to the venue. The bell above was the
+  // only signal, while the artist's side of the same exchange (accept,
+  // decline) has emailed since F48. Best-effort, like those: a flaky mail
+  // service or a missing profile must not fail a response already saved.
+  // Keyed on the response row, which is unique per submission.
+  try {
+    const { data: { user: venueUser } } = await db.auth.admin.getUserById(req.venue_user_id);
+    if (venueUser?.email) {
+      const { data: venueRow } = await db
+        .from("venue_profiles")
+        .select("name")
+        .eq("user_id", req.venue_user_id)
+        .maybeSingle<{ name: string | null }>();
+      const firstName =
+        (venueUser.user_metadata?.first_name as string | undefined) ||
+        (venueRow?.name || "").split(" ")[0] ||
+        "there";
+      const artistName = artist.name?.trim() || "An artist";
+      await sendEmail({
+        idempotencyKey: `artwork_request_response:${inserted.id}:to_venue`,
+        template: "venue_brief_response_received",
+        category: "placements",
+        to: venueUser.email,
+        subject: `${artistName} responded to your brief`,
+        userId: req.venue_user_id,
+        react: VenueBriefResponseReceived({
+          firstName,
+          artistName,
+          requestTitle: req.title,
+          responseTypeLabel: RESPONSE_TYPE_LABEL[parsed.data.responseType],
+          messagePreview: previewOf(parsed.data.message),
+          responsesUrl: `${SITE}/venue-portal/artwork-requests/${encodeURIComponent(id)}`,
+        }),
+        metadata: { requestId: id, responseId: inserted.id },
+      });
+    }
+  } catch (err) {
+    console.warn("[response] venue email skipped:", err);
+  }
 
   return NextResponse.json({ success: true, id: inserted?.id });
 }

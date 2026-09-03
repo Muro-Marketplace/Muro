@@ -21,15 +21,24 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { authMock, adminMock, getProfileMock, upsertMock } = vi.hoisted(() => ({
+const { authMock, adminMock, getProfileMock, upsertMock, triggerWelcomeMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
   adminMock: vi.fn(),
   getProfileMock: vi.fn(),
   upsertMock: vi.fn(),
+  // Typed against the helper's own union, so a test can hand back the failure
+  // shape without TypeScript locking in the success one.
+  triggerWelcomeMock: vi.fn(
+    async (_userId: string): Promise<{ ok: true; sent: boolean; reason?: string } | { ok: false; error: string }> => ({
+      ok: true,
+      sent: true,
+    }),
+  ),
 }));
 
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: adminMock }));
+vi.mock("@/lib/email/welcome", () => ({ triggerWelcomeIfNeeded: triggerWelcomeMock }));
 vi.mock("@/lib/db/venue-profiles", () => ({
   getVenueProfileByUserId: getProfileMock,
   upsertVenueProfile: upsertMock,
@@ -140,6 +149,8 @@ beforeEach(() => {
   authMock.mockReset();
   adminMock.mockReset();
   upsertMock.mockReset();
+  triggerWelcomeMock.mockClear();
+  triggerWelcomeMock.mockResolvedValue({ ok: true, sent: true });
 });
 
 describe("E34: a self-asserted venue_slug is not an ownership signal", () => {
@@ -411,5 +422,95 @@ describe("E34: the new row is hydrated from the venue's own registration", () =>
     const body = await (await PATCH(patchReq({ ensureProfile: true }))).json();
     expect(body.slug).toBe("squatter");
     expect(admin.inserted[0].name).toBe("Squatter");
+  });
+});
+
+// Email audit, 2026-09-04. The venue welcome almost never fired. AuthContext
+// POSTs /api/auth/welcome once per sign-in, but a venue's profile row is
+// created lazily HERE, after that, so triggerWelcomeIfNeeded answered "no
+// profile yet" and the client's per-user guard meant nothing retried it. Same
+// fix /api/apply already made for artists: trigger it the moment the row
+// exists. welcomed_at stays the idempotency guard inside the helper, so this
+// cannot double-send.
+describe("the venue welcome fires when the profile row appears", () => {
+  it("triggers the welcome for a newly created row", async () => {
+    const admin = makeAdmin();
+    adminMock.mockReturnValue(admin.client);
+    authMock.mockResolvedValue({
+      user: {
+        id: "venue-1",
+        email: "new@kettle.example",
+        email_confirmed_at: CONFIRMED,
+        user_metadata: { display_name: "The Copper Kettle" },
+      },
+      error: null,
+    });
+
+    const body = await (await PATCH(patchReq({ ensureProfile: true }))).json();
+
+    expect(body.status).toBe("created");
+    await vi.waitFor(() => expect(triggerWelcomeMock).toHaveBeenCalledWith("venue-1"));
+  });
+
+  it("triggers the welcome for a row adopted by confirmed email", async () => {
+    const admin = makeAdmin({
+      venue_profiles: [
+        { id: "orphan-1", slug: "the-copper-kettle", user_id: null, email: "owner@kettle.example", created_at: "2026-01-01" },
+      ],
+    });
+    adminMock.mockReturnValue(admin.client);
+    authMock.mockResolvedValue({
+      user: {
+        id: "owner-1",
+        email: "owner@kettle.example",
+        email_confirmed_at: CONFIRMED,
+        user_metadata: { display_name: "The Copper Kettle" },
+      },
+      error: null,
+    });
+
+    const body = await (await PATCH(patchReq({ ensureProfile: true }))).json();
+
+    expect(body.status).toBe("adopted_by_email");
+    await vi.waitFor(() => expect(triggerWelcomeMock).toHaveBeenCalledWith("owner-1"));
+  });
+
+  it("does not re-trigger for a caller who is already linked", async () => {
+    // Nothing appeared, so nothing is new to welcome. The helper would no-op
+    // on welcomed_at anyway; not calling it saves the round trip.
+    const admin = makeAdmin({ venue_profiles: [{ id: "mine", slug: "my-venue", user_id: "user-1" }] });
+    adminMock.mockReturnValue(admin.client);
+    authMock.mockResolvedValue({
+      user: { id: "user-1", email: "me@example.com", email_confirmed_at: CONFIRMED, user_metadata: {} },
+      error: null,
+    });
+
+    const body = await (await PATCH(patchReq({ ensureProfile: true }))).json();
+
+    expect(body.status).toBe("already_linked");
+    expect(triggerWelcomeMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the created row even when the welcome fails", async () => {
+    triggerWelcomeMock.mockResolvedValue({ ok: false, error: "resend down" });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const admin = makeAdmin();
+    adminMock.mockReturnValue(admin.client);
+    authMock.mockResolvedValue({
+      user: {
+        id: "venue-2",
+        email: "new2@kettle.example",
+        email_confirmed_at: CONFIRMED,
+        user_metadata: { display_name: "Second Venue" },
+      },
+      error: null,
+    });
+
+    const res = await PATCH(patchReq({ ensureProfile: true }));
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).status).toBe("created");
+    await vi.waitFor(() => expect(errSpy).toHaveBeenCalled());
+    errSpy.mockRestore();
   });
 });

@@ -147,4 +147,35 @@ describe("recordOrderEvent()", () => {
     });
     expect(sendTransactionalMock).not.toHaveBeenCalled();
   });
+
+  it("merges artistData over data for the artist's template only", async () => {
+    // One `data` feeds both templates on order.delivered, and both read
+    // firstName and orderUrl, so the artist used to be greeted by the buyer's
+    // name and sent to the buyer's order page.
+    sendTransactionalMock.mockClear();
+    await recordOrderEvent({
+      orderId: "o1",
+      newStatus: "delivered",
+      buyerEmail: "b@e.com",
+      artistEmail: "a@e.com",
+      data: { firstName: "Bob", orderUrl: "https://wallplace.co.uk/orders/o1", orderNumber: "o1" },
+      artistData: { firstName: "Maya", orderUrl: "https://wallplace.co.uk/artist-portal/orders" },
+    });
+
+    const byTemplate = Object.fromEntries(
+      sendTransactionalMock.mock.calls.map((c: unknown[]) => {
+        const call = c[0] as { template: string; data: Record<string, unknown> };
+        return [call.template, call.data];
+      }),
+    );
+    expect(byTemplate.order_delivered).toMatchObject({
+      firstName: "Bob",
+      orderUrl: "https://wallplace.co.uk/orders/o1",
+    });
+    expect(byTemplate.artist_order_delivered).toMatchObject({
+      firstName: "Maya",
+      orderUrl: "https://wallplace.co.uk/artist-portal/orders",
+      orderNumber: "o1",
+    });
+  });
 });

@@ -15,6 +15,8 @@ vi.mock("@/lib/supabase", () => ({ supabase: { from: anonFromMock } }));
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: adminFromMock }) }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => null) }));
 vi.mock("@/lib/email/notifications", () => ({ sendMessageUnreadEmail: vi.fn(async () => {}) }));
+// The enquirer's acknowledgement goes through the pipeline; not under test here.
+vi.mock("@/lib/email/send", () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: vi.fn(async () => ({ user: null, error: null })) }));
 
 import { POST } from "./route";

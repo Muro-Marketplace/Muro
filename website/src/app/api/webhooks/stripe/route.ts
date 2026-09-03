@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { WORKS_CAP } from "@/lib/pricing";
+import { planFeaturesFor } from "@/lib/plan-features";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleTransfer, recordBlockedLeg } from "@/lib/stripe-connect";
 import { canReceivePayout } from "@/lib/payouts/capability";
@@ -21,6 +21,13 @@ import { SubscriptionUpgraded } from "@/emails/templates/payments/SubscriptionUp
 import { SubscriptionCancelled } from "@/emails/templates/payments/SubscriptionCancelled";
 import { SubscriptionCardExpiring } from "@/emails/templates/payments/SubscriptionCardExpiring";
 import { SubscriptionRenewalReceipt } from "@/emails/templates/payments/SubscriptionRenewalReceipt";
+// Email audit 2026-09-03, billing stream.
+import { SubscriptionEnded } from "@/emails/templates/payments/SubscriptionEnded";
+import { VenuePaidLoanPaymentSetUp } from "@/emails/templates/payments/VenuePaidLoanPaymentSetUp";
+import { VenuePayoutSent } from "@/emails/templates/payments/VenuePayoutSent";
+import { ArtistChargebackOpened, describeDisputeReason } from "@/emails/templates/orders/ArtistChargebackOpened";
+import { ArtistChargebackClosed } from "@/emails/templates/orders/ArtistChargebackClosed";
+import { CustomerRefundFailed, describeRefundFailure } from "@/emails/templates/orders/CustomerRefundFailed";
 import { ArtistStripeKycNeeded } from "@/emails/templates/artist-additions/ArtistStripeKycNeeded";
 // Only the default remains here: the per-artist rate is resolved inside
 // buildArtistLegs, one artist at a time (E9).
@@ -580,7 +587,7 @@ async function handleWebhookEvent(
 
     const { data: placement, error: plErr } = await db
       .from("placements")
-      .select("id, venue_user_id, artist_user_id, monthly_fee_gbp")
+      .select("id, venue_user_id, artist_user_id, monthly_fee_gbp, work_title")
       .eq("id", placementId)
       .maybeSingle();
     if (plErr || !placement) {
@@ -634,6 +641,48 @@ async function handleWebhookEvent(
         // SEE the payment; the detail page carries the payment status banner.
         link: `/placements/${encodeURIComponent(placementId)}`,
       }).catch(() => {});
+
+      // Email audit 2026-09-03 (6d). The venue has just committed to a monthly
+      // card charge and had nothing in writing: the amount, the cadence, the
+      // first and next charge dates and how to stop it. Keyed on the
+      // subscription, so a redelivered session cannot send a second copy.
+      try {
+        const venue = await resolveRecipient(db, "venue", placement.venue_user_id);
+        if (venue) {
+          const { data: artistRow } = await db
+            .from("artist_profiles")
+            .select("name")
+            .eq("user_id", placement.artist_user_id)
+            .maybeSingle<{ name: string | null }>();
+          const workTitle = (placement.work_title as string | null) || "your placed artwork";
+          await sendEmail({
+            idempotencyKey: `paid_loan_payment_set_up:${subscriptionId}`,
+            template: "venue_paid_loan_payment_set_up",
+            category: "orders_and_payouts",
+            to: venue.email,
+            userId: venue.userId,
+            subject: `Monthly payments are set up for ${workTitle}`,
+            react: VenuePaidLoanPaymentSetUp({
+              venueFirstName: venue.firstName,
+              artistName: artistRow?.name?.trim() || "the artist",
+              workTitle,
+              monthlyFee: { amount: Math.round(Number(placement.monthly_fee_gbp) * 100), currency: "GBP" },
+              // Checkout in subscription mode takes the first invoice at the
+              // session itself, unless the subscription starts with a trial.
+              firstChargeDate: epochToUkDate(subscription.trial_end ?? cpStart, "today"),
+              nextChargeDate: epochToUkDate(cpEnd),
+              trialEndsAt: subscription.trial_end ? epochToUkDate(subscription.trial_end) : undefined,
+              placementUrl: `${SITE}/placements/${encodeURIComponent(placementId)}`,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { placementId, subscriptionId },
+          });
+        }
+      } catch (mailErr) {
+        // The billing row is recorded; a mail failure must not make Stripe
+        // retry a webhook whose real work is done.
+        console.error("[webhook] paid-loan set-up email failed:", mailErr);
+      }
     }
 
     return NextResponse.json({ received: true });
@@ -1640,6 +1689,58 @@ async function handleWebhookEvent(
       } catch (err) {
         console.error("Upgraded email error:", err);
       }
+
+      // ─── Cancellation scheduled (email audit 2026-09-03, fix 4) ───
+      // The artist clicking cancel is a `customer.subscription.updated` that
+      // flips cancel_at_period_end (or sets cancel_at), with the old value in
+      // previous_attributes. This is the moment "scheduled to end on X, you
+      // keep access until then" is true. subscription_cancelled used to go out
+      // on `deleted` instead, when the access had already gone, and nothing at
+      // all was sent at the moment of cancelling; `deleted` now sends
+      // subscription_ended. Keyed on the event: the same key covers a Stripe
+      // redelivery, while a cancel, a reactivation and a second cancel in one
+      // period are three events and three confirmations.
+      const previous = (event.data.previous_attributes ?? {}) as Partial<Stripe.Subscription>;
+      const cancelJustScheduled =
+        (subscription.cancel_at_period_end === true && previous.cancel_at_period_end === false) ||
+        (!!subscription.cancel_at && "cancel_at" in previous && !previous.cancel_at);
+      if (cancelJustScheduled) {
+        try {
+          const { data: profile } = await db
+            .from("artist_profiles")
+            .select("user_id, name")
+            .eq("stripe_customer_id", customerId)
+            .maybeSingle<{ user_id: string | null; name: string | null }>();
+          if (profile?.user_id) {
+            const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
+            if (user?.email) {
+              const accessEndsAt = epochToUkDate(
+                subscription.cancel_at ?? periodFromSubscription(subscription).cpEnd,
+                "the end of your current billing period",
+              );
+              const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
+              await sendEmail({
+                idempotencyKey: `subscription_cancelled:${subscription.id}:${event.id}`,
+                template: "subscription_cancelled",
+                category: "orders_and_payouts",
+                to: user.email,
+                subject: `Your ${planLabel} subscription is cancelled`,
+                userId: profile.user_id,
+                react: SubscriptionCancelled({
+                  firstName: (profile.name || "there").split(" ")[0],
+                  planName: planLabel,
+                  accessEndsAt,
+                  reactivateUrl: `${SITE}/artist-portal/billing`,
+                  supportUrl: `${SITE}/support`,
+                }),
+                metadata: { subscriptionId: subscription.id, accessEndsAt },
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Cancellation email error:", err);
+        }
+      }
     }
 
     // ─── Referral credit (item 25) ───
@@ -1766,10 +1867,18 @@ async function handleWebhookEvent(
           const trialEndDate = subscription.trial_end
             ? new Date(subscription.trial_end * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
             : "soon";
+          // Email audit 2026-09-03 (fix 1). This is the only notice before the
+          // first real charge, and it went out as `promotions`: opt-in, default
+          // off, suppressible, throttled. A billing notice always sends. The
+          // benefits are the plan's own feature list, shared with the pricing
+          // cards, instead of three hand-written lines that had drifted from
+          // them, and the amount about to be charged rides along.
+          const trialItem = subscription.items.data[0];
+          const trialUnitAmount = trialItem?.price?.unit_amount;
           await sendEmail({
             idempotencyKey: `trial_ending:${subscription.id}`,
             template: "subscription_trial_ending",
-            category: "promotions",
+            category: "orders_and_payouts",
             to: user.email,
             subject: `Your ${planLabel} trial ends ${trialEndDate}`,
             userId: profile.user_id,
@@ -1778,11 +1887,16 @@ async function handleWebhookEvent(
               planName: planLabel,
               trialEndDate,
               upgradeUrl: `${SITE}/artist-portal/billing`,
-              benefits: [
-                `Up to ${WORKS_CAP[planLabel.toLowerCase()] ?? WORKS_CAP.core} works in your portfolio`,
-                "Priority matching with venues",
-                "Advanced QR analytics",
-              ],
+              benefits: planFeaturesFor(planLabel),
+              amount:
+                typeof trialUnitAmount === "number"
+                  ? {
+                      amount: trialUnitAmount,
+                      currency: (trialItem?.price?.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR",
+                    }
+                  : undefined,
+              billingInterval: trialItem?.price?.recurring?.interval === "year" ? "year" : "month",
+              supportUrl: `${SITE}/support`,
             }),
             metadata: { subscriptionId: subscription.id },
           });
@@ -1836,27 +1950,32 @@ async function handleWebhookEvent(
 
     if (error) console.error("Subscription delete error:", error);
 
-    // Cancellation confirmation email.
+    // Access has ended (email audit 2026-09-03, fix 4). This used to send
+    // subscription_cancelled, whose copy promised access "until" a date that
+    // had already passed by the time Stripe deletes a subscription. The
+    // cancel-moment email now fires from customer.subscription.updated; this
+    // one says what is true now: it has ended, and nothing more is charged.
     try {
       if (profile?.user_id) {
         const { data: { user } } = await db.auth.admin.getUserById(profile.user_id);
         if (user?.email) {
-          const accessEndsAt = subscription.cancel_at
-            ? new Date(subscription.cancel_at * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
-            : "the end of this billing period";
+          const endedAt = epochToUkDate(
+            subscription.ended_at,
+            new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+          );
           const planLabel = ((profile.subscription_plan as string) || "plan").charAt(0).toUpperCase() + ((profile.subscription_plan as string) || "plan").slice(1);
           await sendEmail({
-            idempotencyKey: `subscription_cancelled:${subscription.id}`,
-            template: "subscription_cancelled",
+            idempotencyKey: `subscription_ended:${subscription.id}`,
+            template: "subscription_ended",
             category: "orders_and_payouts",
             to: user.email,
-            subject: `Your ${planLabel} subscription is cancelled`,
+            subject: `Your ${planLabel} subscription has ended`,
             userId: profile.user_id,
-            react: SubscriptionCancelled({
+            react: SubscriptionEnded({
               firstName: (profile.name || "there").split(" ")[0],
               planName: planLabel,
-              accessEndsAt,
-              reactivateUrl: `${SITE}/artist-portal/billing`,
+              endedAt,
+              resubscribeUrl: `${SITE}/artist-portal/billing`,
               supportUrl: `${SITE}/support`,
             }),
             metadata: { subscriptionId: subscription.id },
@@ -1864,7 +1983,7 @@ async function handleWebhookEvent(
         }
       }
     } catch (err) {
-      console.error("Cancelled email error:", err);
+      console.error("Ended email error:", err);
     }
     } // end if (!isStale) — D13
   }
@@ -2241,6 +2360,52 @@ async function handleWebhookEvent(
             metadata: { payoutId: payout.id, connectAccountId },
           });
         }
+      } else {
+        // Email audit 2026-09-03 (6f). A venue's revenue share leaves Stripe for
+        // their bank through this same event and, until now, matched no
+        // profile here (the failure case, payout.failed, already resolved
+        // venues). Same key namespace: a payout belongs to exactly one account.
+        const { data: venueProfile } = await db
+          .from("venue_profiles")
+          .select("user_id, name")
+          .eq("stripe_connect_account_id", connectAccountId)
+          .maybeSingle<{ user_id: string | null; name: string | null }>();
+        if (venueProfile?.user_id) {
+          const { data: { user: venueUser } } = await db.auth.admin.getUserById(venueProfile.user_id);
+          if (venueUser?.email) {
+            const amount = { amount: payout.amount, currency: (payout.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" };
+            const arrival = payout.arrival_date
+              ? new Date(payout.arrival_date * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+              : "shortly";
+            const amountLabel = `£${(payout.amount / 100).toFixed(2)}`;
+            createNotification({
+              userId: venueProfile.user_id,
+              kind: "payout_sent",
+              title: `Payout sent · ${amountLabel}`,
+              body: `Expected to land ${arrival}`,
+              link: "/venue-portal/orders",
+              idempotencyKey: `payout_sent:${payout.id}`,
+            }).catch((err) => console.warn("[stripe webhook] venue payout notification failed:", err));
+
+            await sendEmail({
+              idempotencyKey: `payout_sent:${payout.id}`,
+              template: "venue_payout_sent",
+              category: "orders_and_payouts",
+              to: venueUser.email,
+              subject: `Payout on the way: ${amountLabel}`,
+              userId: venueProfile.user_id,
+              react: VenuePayoutSent({
+                firstName: (venueProfile.name || "there").split(" ")[0],
+                payoutAmount: amount,
+                payoutDate: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
+                expectedArrival: arrival,
+                ordersUrl: `${SITE}/venue-portal/orders`,
+                supportUrl: `${SITE}/support`,
+              }),
+              metadata: { payoutId: payout.id, connectAccountId, recipient: "venue" },
+            });
+          }
+        }
       }
     }
   }
@@ -2312,7 +2477,11 @@ async function handleWebhookEvent(
     const paymentIntentId =
       typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
     const { data: order } = paymentIntentId
-      ? await db.from("orders").select("id, status, buyer_email, artist_slug").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      ? await db
+          .from("orders")
+          .select("id, status, buyer_email, artist_slug, artist_user_id")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle<{ id: string; status: string; buyer_email: string | null; artist_slug: string | null; artist_user_id: string | null }>()
       : { data: null };
 
     if (order) {
@@ -2363,6 +2532,39 @@ async function handleWebhookEvent(
       actionPath: "/admin/financials",
       actionLabel: "Open financials",
     });
+
+    // Email audit 2026-09-03 (6a). The artist's copy: their payout is held,
+    // the evidence has a deadline, and they may be the one holding the proof.
+    // The admin alert above is unchanged.
+    if (order?.artist_user_id) {
+      try {
+        const artist = await resolveRecipient(db, "artist", order.artist_user_id);
+        if (artist) {
+          await sendEmail({
+            idempotencyKey: `chargeback_opened_artist:${dispute.id}`,
+            template: "artist_chargeback_opened",
+            category: "orders_and_payouts",
+            to: artist.email,
+            userId: artist.userId,
+            subject: `A chargeback has been opened on order ${order.id}`,
+            react: ArtistChargebackOpened({
+              firstName: artist.firstName,
+              orderNumber: order.id,
+              amount: { amount: dispute.amount, currency: (dispute.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" },
+              reasonText: describeDisputeReason(dispute.reason),
+              evidenceDueBy: dispute.evidence_details?.due_by
+                ? new Date(dispute.evidence_details.due_by * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+                : "the date the bank has set",
+              ordersUrl: `${SITE}/artist-portal/orders`,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { disputeId: dispute.id, orderId: order.id },
+          });
+        }
+      } catch (mailErr) {
+        console.error("[webhook] chargeback-opened artist email failed:", mailErr);
+      }
+    }
     return NextResponse.json({ received: true });
   }
 
@@ -2371,9 +2573,15 @@ async function handleWebhookEvent(
     const paymentIntentId =
       typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id;
     const { data: order } = paymentIntentId
-      ? await db.from("orders").select("id, status, delivered_at").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      ? await db
+          .from("orders")
+          .select("id, status, delivered_at, artist_user_id")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle<{ id: string; status: string; delivered_at: string | null; artist_user_id: string | null }>()
       : { data: null };
 
+    // Paid legs clawed back on a loss, so the artist's email can say so.
+    let reversedLegs = 0;
     if (order && dispute.status === "won") {
       // Release the held legs back to the queue; the sweep pays them.
       await db
@@ -2408,6 +2616,7 @@ async function handleWebhookEvent(
             { idempotencyKey: `chargeback:${dispute.id}:reversal:${leg.id}` },
           );
           await db.from("stripe_transfers").update({ status: "reversed", updated_at: new Date().toISOString() }).eq("id", leg.id);
+          reversedLegs += 1;
         } catch (revErr) {
           console.error("[webhook] chargeback reversal failed:", { leg: leg.id, revErr });
         }
@@ -2432,6 +2641,40 @@ async function handleWebhookEvent(
       actionPath: "/admin/financials",
       actionLabel: "Open financials",
     });
+
+    // Email audit 2026-09-03 (6a). The artist's copy of the decision. Only a
+    // won or lost outcome changes what happens to their money; the warning
+    // statuses are Stripe's early-warning states and not a decision.
+    if (order?.artist_user_id && (dispute.status === "won" || dispute.status === "lost")) {
+      try {
+        const artist = await resolveRecipient(db, "artist", order.artist_user_id);
+        if (artist) {
+          await sendEmail({
+            idempotencyKey: `chargeback_closed_artist:${dispute.id}`,
+            template: "artist_chargeback_closed",
+            category: "orders_and_payouts",
+            to: artist.email,
+            userId: artist.userId,
+            subject:
+              dispute.status === "won"
+                ? `The chargeback on order ${order.id} was decided in your favour`
+                : `The chargeback on order ${order.id} went the buyer's way`,
+            react: ArtistChargebackClosed({
+              firstName: artist.firstName,
+              orderNumber: order.id,
+              amount: { amount: dispute.amount, currency: (dispute.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" },
+              outcome: dispute.status,
+              payoutReversed: reversedLegs > 0,
+              ordersUrl: `${SITE}/artist-portal/orders`,
+              supportUrl: `${SITE}/support`,
+            }),
+            metadata: { disputeId: dispute.id, orderId: order.id, outcome: dispute.status, reversedLegs },
+          });
+        }
+      } catch (mailErr) {
+        console.error("[webhook] chargeback-closed artist email failed:", mailErr);
+      }
+    }
     return NextResponse.json({ received: true });
   }
 
@@ -2469,6 +2712,45 @@ async function handleWebhookEvent(
         }
       }
       return NextResponse.json({ received: true, ignored: order ? "already_refunded" : "no_matching_order" });
+    }
+
+    // Email audit 2026-09-03 (fix 3): the double refund on cancellation.
+    // stripe.refunds.create from the cancellation path
+    // (lib/refunds/cancellation.ts) and from the in-app refund engine both
+    // echo back here as charge.refunded, and only the engine marks the order
+    // `refunded`. A cancelled order stays `cancelled`, so its own refund
+    // re-ran the full-refund branch below: legs reversed a second time, stock
+    // restored twice, a second buyer email, and an admin alert claiming a
+    // dashboard refund had been reconciled. Both paths record the Stripe
+    // refund id on their refund_requests row, so a refund whose id we already
+    // hold is ours. Charge.refunds is not expanded on API versions from
+    // 2022-11-15, so a cancelled order whose refund request is complete is
+    // treated the same way when the event carries no refund list.
+    const incomingRefundIds = new Set(
+      ((charge as { refunds?: { data?: Array<{ id?: string }> } | null }).refunds?.data ?? [])
+        .map((r) => r.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    );
+    const { data: refundRequestRows } = await db
+      .from("refund_requests")
+      .select("id, status, stripe_refund_id")
+      .eq("order_id", order.id);
+    const refundRequests = (refundRequestRows ?? []) as Array<{
+      id: string;
+      status: string | null;
+      stripe_refund_id: string | null;
+    }>;
+    const refundAlreadyRecorded = refundRequests.some(
+      (r) => !!r.stripe_refund_id && incomingRefundIds.has(r.stripe_refund_id),
+    );
+    const cancellationRefundSettled =
+      order.status === "cancelled" &&
+      refundRequests.some((r) => !!r.stripe_refund_id && r.status === "approved");
+    if (refundAlreadyRecorded || cancellationRefundSettled) {
+      return NextResponse.json({
+        received: true,
+        ignored: refundAlreadyRecorded ? "refund_already_recorded" : "cancellation_refund_settled",
+      });
     }
 
     const fullyRefunded = charge.refunded === true;
@@ -2561,7 +2843,11 @@ async function handleWebhookEvent(
     const paymentIntentId =
       typeof refund.payment_intent === "string" ? refund.payment_intent : refund.payment_intent?.id;
     const { data: order } = paymentIntentId
-      ? await db.from("orders").select("id, status").eq("stripe_payment_intent_id", paymentIntentId).maybeSingle()
+      ? await db
+          .from("orders")
+          .select("id, status, buyer_email, buyer_user_id, shipping")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle<{ id: string; status: string; buyer_email: string | null; buyer_user_id: string | null; shipping: unknown }>()
       : { data: null };
     await sendAdminAlert({
       idempotencyKey: `refund_failed:${refund.id}`,
@@ -2575,6 +2861,35 @@ async function handleWebhookEvent(
       actionPath: "/admin/financials",
       actionLabel: "Open financials",
     });
+
+    // Email audit 2026-09-03 (6b). The buyer had already been told "refund on
+    // the way". Say plainly that it did not go through, that the money is not
+    // lost, and what happens next. Keyed on the refund: one bounce, one email.
+    if (order?.buyer_email) {
+      try {
+        const shippingName = (order.shipping as { fullName?: string } | null)?.fullName ?? "";
+        const firstName =
+          (shippingName.trim() || order.buyer_email.split("@")[0] || "there").split(" ")[0] || "there";
+        await sendEmail({
+          idempotencyKey: `refund_failed_buyer:${refund.id}`,
+          template: "customer_refund_failed",
+          category: "orders_and_payouts",
+          to: order.buyer_email,
+          userId: order.buyer_user_id ?? undefined,
+          subject: `Your refund for order ${order.id} did not go through`,
+          react: CustomerRefundFailed({
+            firstName,
+            orderNumber: order.id,
+            refundAmount: { amount: refund.amount, currency: (refund.currency || "gbp").toUpperCase() as "GBP" | "USD" | "EUR" },
+            reasonText: describeRefundFailure((refund as { failure_reason?: string }).failure_reason),
+            supportUrl: `${SITE}/support`,
+          }),
+          metadata: { refundId: refund.id, orderId: order.id },
+        });
+      } catch (mailErr) {
+        console.error("[webhook] refund-failed buyer email failed:", mailErr);
+      }
+    }
     return NextResponse.json({ received: true });
   }
 
@@ -2903,4 +3218,31 @@ async function resolveInvoiceIdForPaymentIntent(paymentIntentId: string): Promis
     console.error("[webhook] failed to resolve invoice for payment intent", { paymentIntentId, err });
     return null;
   }
+}
+
+/**
+ * A user's email and first name for the artist- and venue-facing notices the
+ * 2026-09-03 email audit added. One lookup shape, so the send sites that need
+ * it cannot each drift on the "there" fallback or greet somebody by a slug.
+ * Null when the user has no auth email, which is the only case with nothing
+ * to send.
+ */
+async function resolveRecipient(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  kind: "artist" | "venue",
+  userId: string | null | undefined,
+): Promise<{ userId: string; email: string; firstName: string; name: string } | null> {
+  if (!userId) return null;
+  const [{ data: authData }, { data: profile }] = await Promise.all([
+    db.auth.admin.getUserById(userId),
+    db
+      .from(kind === "artist" ? "artist_profiles" : "venue_profiles")
+      .select("name")
+      .eq("user_id", userId)
+      .maybeSingle<{ name: string | null }>(),
+  ]);
+  const email = authData?.user?.email ?? null;
+  if (!email) return null;
+  const name = (profile?.name ?? "").trim();
+  return { userId, email, firstName: name.split(" ")[0] || "there", name };
 }

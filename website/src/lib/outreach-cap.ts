@@ -24,11 +24,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * Units of new-venue outreach allowed per rolling week, by plan.
  *
- * Exported because the pricing cards, the application form and the plan emails
- * all quote these numbers to artists as a selling point. They were hardcoded in
- * three places and a merge briefly dropped two of them; the enforcement and the
- * promise have to come from one place, like `WORKS_CAP` and
- * `ACTIVE_PLACEMENT_CAP` in `@/lib/pricing`.
+ * Exported because the pricing page, the pricing cards and the artist billing
+ * page all quote these numbers to artists as a selling point. (No email quotes
+ * them: the plan emails describe the plan without the outreach figures.) They
+ * were hardcoded in three places and a merge briefly dropped two of them; the
+ * enforcement and the promise have to come from one place, like `WORKS_CAP`
+ * and `ACTIVE_PLACEMENT_CAP` in `@/lib/pricing`.
  */
 export const OUTREACH_WEEKLY_LIMIT: Record<string, number> = {
   core: 7,

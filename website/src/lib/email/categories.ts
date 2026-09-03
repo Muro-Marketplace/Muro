@@ -62,9 +62,26 @@ export const CATEGORY_RULES: Record<EmailCategory, CategoryRules> = {
 // pipeline cannot disagree about these templates again. The registry entries
 // carry the same category so the preview library tells the truth.
 //
-// Application outcomes (artist_application_submitted / _approved / _rejected)
-// are also miscategorised per R4.12 but are account-state notices, not money;
-// they are left for a deliberate decision rather than mislabelled as orders.
+// Email audit, 2026-09-03, two further groups:
+//
+//   1. placement_counter_offer_received. Every other response in a placement
+//      negotiation (accept, decline, cancel) is on the list above, while the
+//      counter, the step that carries the revised money terms, could still be
+//      dropped by the "Placement updates" toggle, vacation mode or the daily
+//      cap. Same reasoning, same target.
+//
+//   2. Account decisions. artist_application_approved and the two blog
+//      decisions (artist_blog_published, artist_blog_rejected) were sent as
+//      `placements` WITH a user id, so the one message carrying the decision
+//      could be silenced by the "Placement updates" toggle, vacation mode or
+//      the ten-a-day cap, and pass 2 item 3.1 found a blog rejection that
+//      reached its author by no route at all. They are not money, so
+//      `orders_and_payouts` would mislabel them; they are account-state
+//      notices, which is what `security` (tx stream, always sends, no
+//      throttle, no one-click unsubscribe) is for here.
+//      artist_application_rejected is sent without a user id, so no
+//      preference, vacation or throttle gate ever applies to it, and it is
+//      deliberately left as it is.
 export const TEMPLATE_CATEGORY_OVERRIDES: Record<string, EmailCategory> = {
   offer_received_notification: "orders_and_payouts",
   artist_placement_accepted: "orders_and_payouts",
@@ -72,6 +89,10 @@ export const TEMPLATE_CATEGORY_OVERRIDES: Record<string, EmailCategory> = {
   artist_placement_declined: "orders_and_payouts",
   placement_venue_declined_artist_request: "orders_and_payouts",
   placement_cancelled: "orders_and_payouts",
+  placement_counter_offer_received: "orders_and_payouts",
+  artist_application_approved: "security",
+  artist_blog_published: "security",
+  artist_blog_rejected: "security",
 };
 
 /**

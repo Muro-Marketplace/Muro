@@ -30,6 +30,9 @@ const { sendAdminAlertMock, sendEmailMock, accrueProgrammeRentMock } = vi.hoiste
       template: string;
       to: string;
       subject: string;
+      // Threaded through for a requester who has an account; absent for the
+      // anonymous curation enquiries the flow is built to accept.
+      userId?: string;
       react: unknown;
       metadata?: Record<string, unknown>;
     }) => ({ ok: true as const, skipped: false as const, messageId: "m" }),
@@ -73,6 +76,9 @@ import {
 const ROW = {
   id: "cr_1",
   status: "in_progress",
+  // A curation enquiry can be made anonymously (see ../../app/api/curation
+  // /route.ts), so the paying contact often has no Wallplace account at all.
+  requester_user_id: null,
   contact_email: "maya@example.com",
   contact_name: "Maya Chen",
   venue_name: "The Copper Kettle",
@@ -89,6 +95,7 @@ const ROW = {
 const PROGRAMME_ROW = {
   id: "cr_prog_1",
   status: "pending_payment",
+  requester_user_id: "u-venue",
   contact_email: "sam@example.com",
   contact_name: "Sam Okafor",
   venue_name: "Riverside Offices",
@@ -209,7 +216,19 @@ function makeDbWithColumnResults(
 function invoice(
   subId: string | null,
   nextAttempt: number | null = 123,
-  extra: { billingReason?: string; amountPaid?: number; curationRequestId?: string; id?: string } = {},
+  extra: {
+    billingReason?: string;
+    amountPaid?: number;
+    curationRequestId?: string;
+    id?: string;
+    // The fields the venue-facing receipt and dunning emails read off the
+    // invoice: the amount the card was asked for, the invoice's human number,
+    // when it settled, and Stripe's hosted page to pay it on.
+    amountDue?: number;
+    number?: string;
+    paidAt?: number;
+    hostedInvoiceUrl?: string;
+  } = {},
 ): Stripe.Invoice {
   const subscriptionDetails =
     subId || extra.curationRequestId
@@ -229,6 +248,10 @@ function invoice(
     next_payment_attempt: nextAttempt,
     billing_reason: extra.billingReason,
     amount_paid: extra.amountPaid,
+    amount_due: extra.amountDue,
+    number: extra.number,
+    hosted_invoice_url: extra.hostedInvoiceUrl,
+    ...(extra.paidAt ? { status_transitions: { paid_at: extra.paidAt } } : {}),
   } as unknown as Stripe.Invoice;
 }
 
@@ -533,6 +556,9 @@ describe("handleCurationInvoicePaid — Task 6 programme rent accrual wiring", (
       invoiceId: "in_month_1",
       periodMonths: 1,
       quotedAmountPence: 25000,
+      // The venue's name travels with the accrual so the artist's rent
+      // statement can name who is paying it.
+      venueName: "Riverside Offices",
     });
   });
 
@@ -547,6 +573,7 @@ describe("handleCurationInvoicePaid — Task 6 programme rent accrual wiring", (
       invoiceId: "in_q_1",
       periodMonths: 3,
       quotedAmountPence: 25000,
+      venueName: "Riverside Offices",
     });
   });
 
@@ -773,5 +800,224 @@ describe("handleCurationInvoiceFailed — Task 5 programme metadata resolution",
 
     expect(handled).toBe(false);
     expect(updates).toHaveLength(0);
+  });
+});
+
+// Email audit, 2026-09-04. All three reconcilers told the admin and nobody
+// else, so the venue actually paying for a programme or a managed
+// subscription heard nothing after its first invoice: not a receipt when the
+// renewal was taken, not a word when the card failed, not a confirmation when
+// the subscription ended. These pin the venue's half of each event, and that
+// the admin's half is unchanged.
+describe("handleCurationInvoicePaid — the venue's renewal receipt", () => {
+  it("sends the paying venue a receipt on a renewal, alongside the admin alert", async () => {
+    const { db } = makeDb(PROGRAMME_ROW);
+
+    await handleCurationInvoicePaid(
+      invoice("sub_prog_1", null, {
+        billingReason: "subscription_cycle",
+        amountPaid: 25000,
+        id: "in_renewal_1",
+        number: "WP-INV-00517",
+        paidAt: 1_788_000_000,
+        hostedInvoiceUrl: "https://invoice.stripe.com/i/acct_x/test_1",
+      }),
+      db,
+    );
+
+    // Fail-before: only the admin was told a renewal had been taken.
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    const email = lastEmail();
+    expect(email?.template).toBe("curation_renewal_receipt");
+    expect(email?.to).toBe("sam@example.com");
+    expect(email?.subject).toBe("Payment received for Riverside Offices");
+  });
+
+  it("keys the receipt on the invoice, so a Stripe redelivery cannot send a second", async () => {
+    const { db } = makeDb(PROGRAMME_ROW);
+
+    await handleCurationInvoicePaid(
+      invoice("sub_prog_1", null, { billingReason: "subscription_cycle", amountPaid: 25000, id: "in_renewal_2" }),
+      db,
+    );
+
+    expect(lastEmail()?.idempotencyKey).toBe("curation_renewal_receipt:in_renewal_2");
+  });
+
+  it("threads the requester's user id through when there is one, and omits it when the enquiry was anonymous", async () => {
+    const { db: progDb } = makeDb(PROGRAMME_ROW);
+    await handleCurationInvoicePaid(
+      invoice("sub_prog_1", null, { billingReason: "subscription_cycle", amountPaid: 25000, id: "in_r3" }),
+      progDb,
+    );
+    expect(lastEmail()?.userId).toBe("u-venue");
+
+    const { db: managedDb } = makeDb(ROW);
+    await handleCurationInvoicePaid(
+      invoice("sub_cur_1", null, { billingReason: "subscription_cycle", amountPaid: 7999, id: "in_r4" }),
+      managedDb,
+    );
+    expect(lastEmail()?.userId).toBeUndefined();
+  });
+
+  it("does not send a receipt on the first invoice, which has its own confirmation", async () => {
+    const { db } = makeDb(PROGRAMME_ROW);
+
+    await handleCurationInvoicePaid(
+      invoice("sub_prog_1", null, { billingReason: "subscription_create", amountPaid: 25000, id: "in_first" }),
+      db,
+    );
+
+    const templates = sendEmailMock.mock.calls.map((c) => c[0].template);
+    expect(templates).toContain("curation_programme_confirmed");
+    expect(templates).not.toContain("curation_renewal_receipt");
+  });
+
+  it("still alerts the admin when the row has no contact email to receipt", async () => {
+    const { db } = makeDb({ ...ROW, contact_email: null });
+
+    const handled = await handleCurationInvoicePaid(
+      invoice("sub_cur_1", null, { billingReason: "subscription_cycle", amountPaid: 7999 }),
+      db,
+    );
+
+    expect(handled).toBe(true);
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("a failed receipt does not break reconciliation", async () => {
+    sendEmailMock.mockRejectedValueOnce(new Error("resend down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { db, updates } = makeDb(ROW);
+
+    const handled = await handleCurationInvoicePaid(
+      invoice("sub_cur_1", null, { billingReason: "subscription_cycle", amountPaid: 7999 }),
+      db,
+    );
+
+    expect(handled).toBe(true);
+    expect(updates[0].status).toBe("in_progress");
+    errSpy.mockRestore();
+  });
+});
+
+describe("handleCurationInvoiceFailed — the venue's dunning", () => {
+  it("asks the venue to fix the card while Stripe still has retries left, and does not alert the admin yet", async () => {
+    const { db } = makeDb(PROGRAMME_ROW);
+
+    const handled = await handleCurationInvoiceFailed(
+      invoice("sub_prog_1", 1_700_000_000, { id: "in_fail_1", amountDue: 25000 }),
+      db,
+    );
+
+    // Fail-before: the row flipped to past_due and nobody was told at all.
+    expect(handled).toBe(true);
+    const email = lastEmail();
+    expect(email?.template).toBe("curation_payment_failed");
+    expect(email?.to).toBe("sam@example.com");
+    expect(email?.subject).toBe("Your Wallplace programme payment failed");
+    expect(email?.idempotencyKey).toBe("curation_dunning:in_fail_1:retry");
+    expect(sendAdminAlertMock).not.toHaveBeenCalled();
+  });
+
+  it("tells the venue the payments are paused, and the admin to stop the work, on the final attempt", async () => {
+    const { db } = makeDb(PROGRAMME_ROW);
+
+    await handleCurationInvoiceFailed(invoice("sub_prog_1", null, { id: "in_fail_2", amountDue: 25000 }), db);
+
+    const email = lastEmail();
+    expect(email?.subject).toBe("Your Wallplace programme payments are paused");
+    expect(email?.idempotencyKey).toBe("curation_dunning:in_fail_2:final");
+    const alert = lastAlert();
+    expect(alert?.subject).toContain("Curation payments paused");
+    expect(alert?.subject).toContain("Riverside Offices");
+    expect(alert?.idempotencyKey).toBe("admin_curation_payment_failed:in_fail_2");
+  });
+
+  it("names the managed subscription rather than a programme for a managed row", async () => {
+    const { db } = makeDb(ROW);
+
+    await handleCurationInvoiceFailed(invoice("sub_cur_1", 1_700_000_000, { amountDue: 7999 }), db);
+
+    expect(lastEmail()?.subject).toBe("Your Wallplace curation payment failed");
+  });
+
+  it("still writes the status when the row has no contact email", async () => {
+    const { db, updates } = makeDb({ ...PROGRAMME_ROW, contact_email: null });
+
+    const handled = await handleCurationInvoiceFailed(invoice("sub_prog_1", null, { id: "in_fail_3" }), db);
+
+    expect(handled).toBe(true);
+    expect(updates[0].status).toBe("paused");
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    // The admin still hears about a final failure, which is the signal that
+    // the curator should stop working unpaid.
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed dunning email does not stop the admin alert or the handler", async () => {
+    sendEmailMock.mockRejectedValueOnce(new Error("resend down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { db, updates } = makeDb(PROGRAMME_ROW);
+
+    const handled = await handleCurationInvoiceFailed(invoice("sub_prog_1", null, { id: "in_fail_4" }), db);
+
+    expect(handled).toBe(true);
+    expect(updates[0].status).toBe("paused");
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    errSpy.mockRestore();
+  });
+});
+
+describe("handleCurationSubscriptionDeleted — the venue's confirmation", () => {
+  it("confirms the cancellation to the venue as well as the admin", async () => {
+    const { db } = makeDb(PROGRAMME_ROW);
+
+    const handled = await handleCurationSubscriptionDeleted(
+      { id: "sub_prog_1", ended_at: 1_788_000_000 } as unknown as Stripe.Subscription,
+      db,
+    );
+
+    // Fail-before: Stripe confirmed the cancellation, the admin was told to
+    // stop the work, and the venue paying for it heard nothing.
+    expect(handled).toBe(true);
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    const email = lastEmail();
+    expect(email?.template).toBe("curation_subscription_cancelled");
+    expect(email?.to).toBe("sam@example.com");
+    expect(email?.subject).toBe("Your Wallplace programme has ended");
+    expect(email?.idempotencyKey).toBe("curation_subscription_cancelled:sub_prog_1");
+  });
+
+  it("says curation subscription, not programme, for a managed row", async () => {
+    const { db } = makeDb(ROW);
+
+    await handleCurationSubscriptionDeleted({ id: "sub_cur_1" } as Stripe.Subscription, db);
+
+    expect(lastEmail()?.subject).toBe("Your Wallplace curation subscription has ended");
+  });
+
+  it("still cancels the row and alerts when there is no contact email", async () => {
+    const { db, updates } = makeDb({ ...ROW, contact_email: null });
+
+    const handled = await handleCurationSubscriptionDeleted({ id: "sub_cur_1" } as Stripe.Subscription, db);
+
+    expect(handled).toBe(true);
+    expect(updates[0].status).toBe("cancelled");
+    expect(sendAdminAlertMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("a failed confirmation does not break the cancellation", async () => {
+    sendEmailMock.mockRejectedValueOnce(new Error("resend down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { db, updates } = makeDb(ROW);
+
+    const handled = await handleCurationSubscriptionDeleted({ id: "sub_cur_1" } as Stripe.Subscription, db);
+
+    expect(handled).toBe(true);
+    expect(updates[0].status).toBe("cancelled");
+    errSpy.mockRestore();
   });
 });

@@ -17,12 +17,27 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const { mockDeleteUser, fromMock, getAuthMock, subsCancelMock } = vi.hoisted(() => ({
+const { mockDeleteUser, fromMock, getAuthMock, subsCancelMock, sendEmailMock } = vi.hoisted(() => ({
   mockDeleteUser: vi.fn(),
   fromMock: vi.fn(),
   getAuthMock: vi.fn(),
   subsCancelMock: vi.fn(),
+  sendEmailMock: vi.fn(async (_input: {
+    idempotencyKey: string;
+    template: string;
+    category: string;
+    to: string;
+    subject: string;
+    userId?: string;
+    react: unknown;
+    metadata?: Record<string, unknown>;
+  }) => ({ ok: true as const, skipped: false as const, messageId: "m-1" })),
 }));
+
+// Email audit, 2026-09-04: erasure now tells the person it happened. Mocked
+// here so the real pipeline does not run its own email_events queries against
+// the PostgREST fake below.
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
 
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
@@ -130,6 +145,8 @@ beforeEach(() => {
   mockDeleteUser.mockReset();
   fromMock.mockReset();
   getAuthMock.mockReset();
+  sendEmailMock.mockClear();
+  sendEmailMock.mockResolvedValue({ ok: true, skipped: false, messageId: "m-1" });
 
   getAuthMock.mockImplementation(async (r: Request) => {
     const auth = r.headers.get("authorization");
@@ -432,5 +449,105 @@ describe("stripe subscriptions are cancelled on deletion (WS3.2)", () => {
     const res = await POST(req());
     expect(res.status).toBe(200);
     expect(mockDeleteUser).toHaveBeenCalled();
+  });
+});
+
+// ─── Email audit, 2026-09-04: the deletion flow sent nothing ───────────────
+// account_deletion_confirmed and account_deletion_requested both existed,
+// styled and registered, and no code sent either. Someone exercised their
+// right to erasure and got a JSON 200 and silence.
+
+describe("POST /api/account/delete tells the person what happened", () => {
+  it("confirms the deletion once the auth user is actually gone", async () => {
+    const res = await POST(req("Bearer valid"));
+
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const sent = sendEmailMock.mock.calls[0][0];
+    expect(sent.template).toBe("account_deletion_confirmed");
+    expect(sent.to).toBe("a@x.com");
+    expect(sent.category).toBe("security");
+    // No userId: the auth user has just been deleted and every row keyed to it
+    // with it, so the event row must not reference one.
+    expect(sent.userId).toBeUndefined();
+    expect(sent.idempotencyKey).toMatch(/^account_deletion_confirmed:u1:\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("sends after the delete, not before, so a failed delete never claims success", async () => {
+    mockDeleteUser.mockResolvedValue({ data: null, error: { message: "auth boom" } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(req("Bearer valid"));
+
+    expect(res.status).toBe(500);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("sends the scheduled notice, not the confirmation, when support has to finish by hand", async () => {
+    // The C14c retained path: the scrub failed, the account still exists, and
+    // "your account has been deleted" would be false. This is the one state in
+    // which "scheduled, and you can still cancel" is true.
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "saved_items") {
+        return { delete: () => ({ eq: async () => ({ error: { message: "boom" } }) }) };
+      }
+      return base(table);
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(req("Bearer valid"));
+
+    expect(res.status).toBe(500);
+    const sent = sendEmailMock.mock.calls[0][0];
+    expect(sent.template).toBe("account_deletion_requested");
+    expect(sent.userId).toBe("u1");
+    expect(sent.idempotencyKey).toMatch(/^account_deletion_requested:u1:/);
+  });
+
+  it("says nothing when the Stripe abort means nothing was removed", async () => {
+    // Nothing has been deleted and nothing scheduled: the response already
+    // tells the caller to try again, and an email would only alarm them.
+    installDb();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      const chain = base(table) as Record<string, unknown>;
+      if (table === "artist_profiles") {
+        return {
+          ...chain,
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: { stripe_subscription_id: "sub_saas" }, error: null }) }),
+          }),
+        };
+      }
+      return chain;
+    });
+    subsCancelMock.mockRejectedValue(new Error("stripe down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(req("Bearer valid"));
+
+    expect(res.status).toBe(500);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the account has no address", async () => {
+    getAuthMock.mockResolvedValue({ user: { id: "u1", email: undefined }, error: null });
+
+    const res = await POST(req("Bearer valid"));
+
+    expect(res.status).toBe(200);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("still deletes the account when the confirmation email fails", async () => {
+    sendEmailMock.mockRejectedValueOnce(new Error("resend down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await POST(req("Bearer valid"));
+
+    expect(res.status).toBe(200);
+    expect(mockDeleteUser).toHaveBeenCalledWith("u1");
+    errSpy.mockRestore();
   });
 });

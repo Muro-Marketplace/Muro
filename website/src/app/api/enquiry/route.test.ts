@@ -10,18 +10,22 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getAuthenticatedUserMock, fromMock, anonFromMock } = vi.hoisted(() => ({
-  getAuthenticatedUserMock: vi.fn(),
-  fromMock: vi.fn(),
-  anonFromMock: vi.fn(),
-}));
+const { getAuthenticatedUserMock, fromMock, anonFromMock, getUserByIdMock, sendEmailMock, enquiryReceivedMock } =
+  vi.hoisted(() => ({
+    getAuthenticatedUserMock: vi.fn(),
+    fromMock: vi.fn(),
+    anonFromMock: vi.fn(),
+    getUserByIdMock: vi.fn(async () => ({ data: { user: null as null | { id: string; email: string } } })),
+    sendEmailMock: vi.fn(async () => ({ ok: true, skipped: false, messageId: "m" })),
+    enquiryReceivedMock: vi.fn(() => null),
+  }));
 
 vi.mock("@/lib/api-auth", () => ({
   getAuthenticatedUser: (...args: unknown[]) => getAuthenticatedUserMock(...args),
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
-  getSupabaseAdmin: () => ({ from: fromMock }),
+  getSupabaseAdmin: () => ({ from: fromMock, auth: { admin: { getUserById: getUserByIdMock } } }),
 }));
 
 // The POST path (public enquiry submit) pulls in the anon client, emails and
@@ -31,8 +35,11 @@ vi.mock("@/lib/supabase", () => ({ supabase: { from: (...a: unknown[]) => anonFr
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => null) }));
 vi.mock("@/lib/email/admin-alert", () => ({ sendAdminAlert: vi.fn() }));
 vi.mock("@/lib/email/notifications", () => ({ sendMessageUnreadEmail: vi.fn() }));
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
+vi.mock("@/emails/templates/messages/EnquiryReceived", () => ({ EnquiryReceived: enquiryReceivedMock }));
 
 import { GET, PATCH, POST } from "./route";
+import { sendMessageUnreadEmail } from "@/lib/email/notifications";
 
 const ENQUIRY_ROW = {
   id: 7,
@@ -109,6 +116,11 @@ function req(method: "GET" | "PATCH", body?: unknown): Request {
 beforeEach(() => {
   getAuthenticatedUserMock.mockReset();
   fromMock.mockReset();
+  getUserByIdMock.mockReset();
+  getUserByIdMock.mockResolvedValue({ data: { user: null } });
+  sendEmailMock.mockClear();
+  enquiryReceivedMock.mockClear();
+  vi.mocked(sendMessageUnreadEmail).mockClear();
   getAuthenticatedUserMock.mockResolvedValue({
     user: { id: "artist-user-1" },
     error: null,
@@ -263,5 +275,130 @@ describe("POST /api/enquiry names the sender consistently (C L1124)", () => {
     const { messageRow } = await submit({});
 
     expect(String(messageRow?.content)).toContain("fcoles2598@gmail.com");
+  });
+});
+
+// Email audit 2026-09-03, item 4. Two gaps on the public enquiry POST:
+//
+//   1. The artist's inbox email ignored artist_profiles.message_notifications_enabled,
+//      which api/messages honours for the very same template, so an artist who
+//      had switched per-message email off still got one for every enquiry.
+//   2. The enquirer got nothing back, so a delivered enquiry and a form that
+//      silently failed looked identical from their side.
+describe("POST /api/enquiry honours the artist's message switch and acknowledges the enquirer (item 4)", () => {
+  const BODY = {
+    senderName: "Priya Patel",
+    senderEmail: "priya@example.com",
+    artistSlug: "maya-chen",
+    workTitle: "Morning Field",
+    enquiryType: "general",
+    message: "Is this still available?",
+  };
+
+  function setupPost({ notificationsEnabled }: { notificationsEnabled: boolean | null | undefined }) {
+    anonFromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({ maybeSingle: async () => ({ data: { name: "Maya Chen" }, error: null }) }),
+          }),
+        };
+      }
+      return { insert: async () => ({ error: null }) };
+    });
+    fromMock.mockImplementation((table: string) => {
+      if (table === "messages") {
+        return {
+          insert: () => ({
+            select: () => ({ maybeSingle: async () => ({ data: { id: "m-77" }, error: null }) }),
+          }),
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: { name: "Maya Chen", user_id: "u-maya", message_notifications_enabled: notificationsEnabled },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    });
+    getUserByIdMock.mockResolvedValue({ data: { user: { id: "u-maya", email: "maya@example.com" } } });
+  }
+
+  function submit() {
+    return POST(
+      new Request("http://localhost/api/enquiry", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(BODY),
+      }),
+    );
+  }
+
+  it("skips the artist's inbox email when they have switched message notifications off", async () => {
+    setupPost({ notificationsEnabled: false });
+
+    const res = await submit();
+
+    expect(res.status).toBe(200);
+    // Fail-before: the switch was never read here, so this sent.
+    expect(sendMessageUnreadEmail).not.toHaveBeenCalled();
+  });
+
+  it("still emails the artist when the switch is on", async () => {
+    setupPost({ notificationsEnabled: true });
+    await submit();
+    expect(sendMessageUnreadEmail).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendMessageUnreadEmail).mock.calls[0][0]).toMatchObject({
+      recipientEmail: "maya@example.com",
+      recipientUserId: "u-maya",
+      messageId: "m-77",
+    });
+  });
+
+  it("treats an unset switch as on, exactly as api/messages does", async () => {
+    setupPost({ notificationsEnabled: null });
+    await submit();
+    expect(sendMessageUnreadEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("acknowledges the enquirer: no user id, the always-send category, keyed on the message row", async () => {
+    setupPost({ notificationsEnabled: true });
+
+    await submit();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const sent = (sendEmailMock.mock.calls as unknown as unknown[][])[0][0] as unknown as {
+      idempotencyKey: string; template: string; category: string; to: string; userId?: string; subject: string;
+    };
+    expect(sent.template).toBe("enquiry_received");
+    expect(sent.category).toBe("orders_and_payouts");
+    expect(sent.to).toBe("priya@example.com");
+    expect(sent.userId).toBeUndefined();
+    expect(sent.idempotencyKey).toBe("enquiry_ack:m-77");
+    expect(sent.subject).toBe("We've passed your message to Maya Chen");
+    expect(enquiryReceivedMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstName: "Priya",
+        artistName: "Maya Chen",
+        workTitle: "Morning Field",
+        enquiryTypeLabel: "General question",
+        messageExcerpt: "Is this still available?",
+        artistProfileUrl: expect.stringContaining("/browse/maya-chen"),
+      }),
+    );
+  });
+
+  it("acknowledges the enquirer even when the artist has switched their own email off", async () => {
+    setupPost({ notificationsEnabled: false });
+    await submit();
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(((sendEmailMock.mock.calls as unknown as unknown[][])[0][0] as unknown as { template: string }).template).toBe("enquiry_received");
   });
 });

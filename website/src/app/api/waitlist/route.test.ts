@@ -55,8 +55,17 @@ beforeEach(() => {
   insertMock.mockReset();
   fromMock.mockReset();
   sendEmailMock.mockReset();
-  insertMock.mockResolvedValue({ error: null });
-  fromMock.mockReturnValue({ insert: insertMock });
+  // The insert now ends `.select("id").maybeSingle()` so the confirmation can
+  // be keyed on the signup row rather than on the bare email address (email
+  // audit fix 5). insertMock still records the written row and still decides
+  // the outcome, so every assertion above it is unchanged.
+  insertMock.mockResolvedValue({ data: { id: "wl-1" }, error: null });
+  fromMock.mockReturnValue({
+    insert: (row: unknown) => {
+      const result = insertMock(row);
+      return { select: () => ({ maybeSingle: async () => await result }) };
+    },
+  });
   sendEmailMock.mockResolvedValue({ ok: true, skipped: false, messageId: "m1" });
 });
 
@@ -109,5 +118,30 @@ describe("POST /api/waitlist is not an account-existence oracle (E36d)", () => {
     const res = await POST(post({ name: "x", email: "sam@example.com", userType: "nope" }));
     expect(res.status).toBe(400);
     expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  // Email audit 2026-09-03 (fix 5). Keyed on the bare address, anyone removed
+  // from the list and signing up again was swallowed by the idempotency guard
+  // for ever, with no confirmation and no record that one was dropped.
+  it("keys the confirmation on the signup row, not on the email address", async () => {
+    await POST(post(VALID));
+    await flush();
+    expect(sendEmailMock.mock.calls[0][0].idempotencyKey).toBe(
+      "customer_waitlist_confirmation:wl-1",
+    );
+  });
+
+  it("gives a later signup from the same address its own key", async () => {
+    await POST(post(VALID));
+    await flush();
+    insertMock.mockResolvedValue({ data: { id: "wl-2" }, error: null });
+    await POST(post(VALID));
+    await flush();
+
+    const keys = sendEmailMock.mock.calls.map((c) => c[0].idempotencyKey);
+    expect(keys).toEqual([
+      "customer_waitlist_confirmation:wl-1",
+      "customer_waitlist_confirmation:wl-2",
+    ]);
   });
 });

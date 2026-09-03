@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { sendEmail } from "@/lib/email/send";
+import { AccountDataExportReady } from "@/emails/templates/account/AccountDataExportReady";
+
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
 
 // GET /api/account/export
 // Authenticated user receives a JSON dump of every record we hold keyed to
@@ -139,6 +143,36 @@ export async function GET(request: Request) {
       emailPreferences,
     },
   };
+
+  // Receipt for the export, to the account's own address. Two jobs: it is the
+  // record that a subject-access export was produced, and, because it goes to
+  // the account's address whoever held the token, it is the signal the real
+  // owner gets if someone else exported their data. The export is generated
+  // on demand and served straight back, so there is no stored file to link
+  // to: the button points at the account page, where a fresh copy can be
+  // generated any time. Best-effort: the dump is the response either way.
+  if (email) {
+    const meta = (auth.user!.user_metadata ?? {}) as Record<string, unknown>;
+    const displayName = typeof meta.display_name === "string" ? meta.display_name : "";
+    try {
+      await sendEmail({
+        idempotencyKey: `account_data_export_ready:${userId}:${payload.exportedAt}`,
+        template: "account_data_export_ready",
+        category: "security",
+        to: email,
+        userId,
+        subject: "Your Wallplace data export is ready",
+        react: AccountDataExportReady({
+          firstName: displayName.trim().split(" ").filter(Boolean)[0] || "there",
+          downloadUrl: `${SITE}/account/export`,
+          supportUrl: `${SITE}/support`,
+        }),
+        metadata: { exportedAt: payload.exportedAt },
+      });
+    } catch (err) {
+      console.error("[account/export] receipt email failed:", err);
+    }
+  }
 
   return new NextResponse(JSON.stringify(payload, null, 2), {
     status: 200,

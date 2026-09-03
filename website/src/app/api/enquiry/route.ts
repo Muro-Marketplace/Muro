@@ -3,6 +3,9 @@ import { supabase } from "@/lib/supabase";
 import { enquirySchema } from "@/lib/validations";
 import { sendAdminAlert } from "@/lib/email/admin-alert";
 import { sendMessageUnreadEmail } from "@/lib/email/notifications";
+import { sendEmail } from "@/lib/email/send";
+import { EnquiryReceived } from "@/emails/templates/messages/EnquiryReceived";
+import { enquiryTypeLabel } from "@/lib/enquiry-types";
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
@@ -18,6 +21,16 @@ import { checkRateLimit } from "@/lib/rate-limit";
 /** Statuses the artist can move an enquiry between. Every row starts
  *  "pending" (set by POST); "handled" is the artist's done-with-this flag. */
 const ENQUIRY_STATUSES = ["pending", "handled"] as const;
+
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+
+/** Matches the space the acknowledgement's quote block is designed for. */
+const EXCERPT_CHARS = 280;
+
+function excerpt(text: string): string {
+  const t = (text ?? "").trim();
+  return t.length > EXCERPT_CHARS ? `${t.slice(0, EXCERPT_CHARS - 3)}…` : t;
+}
 
 type ArtistSlugResult =
   | { slug: string; error?: undefined }
@@ -206,14 +219,17 @@ export async function POST(request: Request) {
       .select("id")
       .maybeSingle<{ id: string }>();
 
-    // Notify the artist by email
+    // Notify the artist by email. Honours the artist's own "message
+    // notifications" switch exactly as api/messages does for the same
+    // template; this send used to ignore it, so an artist who had turned the
+    // per-message email off still got one for every enquiry.
     const { data: artistProfile } = await db
       .from("artist_profiles")
-      .select("name, user_id")
+      .select("name, user_id, message_notifications_enabled")
       .eq("slug", artistSlug)
       .single();
 
-    if (artistProfile?.user_id) {
+    if (artistProfile?.user_id && artistProfile.message_notifications_enabled !== false) {
       const { data: { user: artistUser } } = await db.auth.admin.getUserById(artistProfile.user_id);
       if (artistUser?.email) {
         // K1: was notifyNewMessage in the legacy module, which sent from an
@@ -238,6 +254,37 @@ export async function POST(request: Request) {
           metadata: { artistSlug },
         });
       }
+    }
+
+    // Acknowledge the enquirer. Until now the enquiry went to the artist and
+    // to the team and the sender got nothing back, so a delivered enquiry
+    // and a form that silently failed looked identical from their side.
+    // Keyed on the message row (or the per-submission conversation id it
+    // fell back to), so a second genuine enquiry is acknowledged too. There
+    // is no user id: the enquirer is anonymous, so no preference row,
+    // vacation mode or throttle can apply, and the category is the
+    // always-send bucket the contact-form acknowledgement uses. Best-effort:
+    // the enquiry is already saved and delivered.
+    try {
+      await sendEmail({
+        idempotencyKey: `enquiry_ack:${insertedMessage?.id ?? cid}`,
+        template: "enquiry_received",
+        category: "orders_and_payouts",
+        to: senderEmail,
+        subject: `We've passed your message to ${artistDisplayName}`,
+        react: EnquiryReceived({
+          firstName: senderName.trim().split(" ")[0] || "there",
+          artistName: artistDisplayName,
+          workTitle: workTitle || undefined,
+          enquiryTypeLabel: enquiryTypeLabel(enquiryType),
+          messageExcerpt: excerpt(message),
+          artistProfileUrl: `${SITE}/browse/${encodeURIComponent(artistSlug)}`,
+          supportUrl: `${SITE}/contact`,
+        }),
+        metadata: { artistSlug, enquiryType },
+      });
+    } catch (err) {
+      console.warn("[enquiry] acknowledgement email skipped:", err);
     }
 
     return NextResponse.json({ success: true });

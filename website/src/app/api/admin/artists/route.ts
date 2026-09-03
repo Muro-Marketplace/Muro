@@ -22,6 +22,7 @@ import { sendEmail } from "@/lib/email/send";
 import { FOUNDING_ARTIST_LIMIT } from "@/lib/pricing";
 import { OperationalAccountRestricted } from "@/emails/templates/legal/OperationalAccountRestricted";
 import { OperationalAccountRestored } from "@/emails/templates/legal/OperationalAccountRestored";
+import { ArtistFoundingPlaceConfirmed } from "@/emails/templates/artist-additions/ArtistFoundingPlaceConfirmed";
 
 export const runtime = "nodejs";
 
@@ -243,9 +244,15 @@ async function setFoundingStatus(
 ): Promise<Response> {
   const { data: artist, error: fetchError } = await db
     .from("artist_profiles")
-    .select("id, slug, is_founding_artist")
+    .select("id, slug, name, user_id, is_founding_artist")
     .eq("id", id)
-    .maybeSingle<{ id: string; slug: string | null; is_founding_artist: boolean | null }>();
+    .maybeSingle<{
+      id: string;
+      slug: string | null;
+      name: string | null;
+      user_id: string | null;
+      is_founding_artist: boolean | null;
+    }>();
 
   if (fetchError) {
     console.error("Admin artists PATCH fetch error:", fetchError);
@@ -297,5 +304,55 @@ async function setFoundingStatus(
     action: "artist.founding_status",
     context: { artist_id: artist.id, slug: artist.slug, is_founding_artist: isFounding },
   });
+
+  // Tell the artist. The flag used to be set silently, so the six free months
+  // the flyer promises reached the artist only if they noticed the badge on
+  // their billing page. Promotion only: revoking the flag is an admin
+  // correction, and "you are no longer founding" is not an email anyone should
+  // get off a misclick. The timestamp is in the key on purpose, as in
+  // notifyArtist: the flag can be revoked and granted again, and each grant is
+  // its own event the idempotency check must not swallow.
+  if (isFounding) {
+    await notifyFoundingPlace(db, artist, new Date().toISOString());
+  }
   return NextResponse.json({ success: true, is_founding_artist: isFounding });
+}
+
+/** Best-effort, like notifyArtist: the flag is written and audited regardless. */
+async function notifyFoundingPlace(
+  db: ReturnType<typeof getSupabaseAdmin>,
+  artist: { id: string; name: string | null; user_id: string | null },
+  at: string,
+): Promise<void> {
+  if (!artist.user_id) return;
+
+  let email: string | undefined;
+  let firstName = "there";
+  try {
+    const { data } = await db.auth.admin.getUserById(artist.user_id);
+    email = data?.user?.email ?? undefined;
+    const meta = (data?.user?.user_metadata ?? {}) as Record<string, unknown>;
+    const displayName =
+      (typeof meta.display_name === "string" && meta.display_name) || artist.name || "";
+    if (displayName) firstName = displayName.split(" ")[0];
+  } catch (err) {
+    console.error("[admin/artists] could not resolve the founding artist's account:", err);
+    return;
+  }
+  if (!email) return;
+
+  await sendEmail({
+    idempotencyKey: `artist_founding_confirmed:${artist.id}:${at}`,
+    template: "artist_founding_place_confirmed",
+    category: "orders_and_payouts",
+    to: email,
+    userId: artist.user_id,
+    subject: "Your founding place on Wallplace is confirmed",
+    react: ArtistFoundingPlaceConfirmed({
+      firstName,
+      billingUrl: `${SITE}/artist-portal/billing`,
+      supportUrl: `${SITE}/support`,
+    }),
+    metadata: { artistProfileId: artist.id },
+  });
 }

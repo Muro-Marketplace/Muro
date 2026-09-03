@@ -323,6 +323,72 @@ async function alertExhaustedPayout(
   } catch (err) {
     console.error("[stripe-connect] exhausted-payout alert failed:", err);
   }
+
+  // Email audit 2026-09-03 (6c). The artist whose money is stuck heard
+  // nothing: this alerted an operator and stopped there, so the first they
+  // knew was the payout not arriving. Best-effort and after the admin alert,
+  // which is the one that must not be lost.
+  if (record.recipient_type === "artist") {
+    await notifyArtist(record.recipient_user_id, async (artist) => {
+      const { sendEmail } = await import("@/lib/email/send");
+      const { ArtistPayoutRetriesExhausted } = await import(
+        "@/emails/templates/payments/ArtistPayoutRetriesExhausted"
+      );
+      const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+      await sendEmail({
+        // Keyed on the transfer, so a re-run of the sweep over the same
+        // exhausted record does not re-send.
+        idempotencyKey: `artist_payout_exhausted:${record.id}`,
+        template: "artist_payout_retries_exhausted",
+        category: "orders_and_payouts",
+        to: artist.email,
+        userId: artist.userId,
+        subject: `We could not send your payout for ${record.order_id}`,
+        react: ArtistPayoutRetriesExhausted({
+          firstName: artist.firstName,
+          orderNumber: record.order_id,
+          payoutAmount: { amount: record.amount_cents, currency: "GBP" },
+          payoutDetailsUrl: `${SITE}/artist-portal/billing`,
+          supportUrl: `${SITE}/support`,
+        }),
+        metadata: { transferId: record.id, orderId: record.order_id },
+      });
+    });
+  }
+}
+
+/**
+ * Resolve an artist's email and greeting, then run `send`. Every failure is
+ * swallowed and logged: these are courtesy notices attached to money paths
+ * whose real work has already happened, and a mail fault must not break the
+ * sweep. Imported lazily for the same reason the admin alert is, so the
+ * transfer module does not pull the email stack into every caller.
+ */
+async function notifyArtist(
+  recipientUserId: string,
+  send: (artist: { userId: string; email: string; firstName: string }) => Promise<void>,
+): Promise<void> {
+  try {
+    if (!recipientUserId) return;
+    const db = getSupabaseAdmin();
+    const [{ data: authData }, { data: profile }] = await Promise.all([
+      db.auth.admin.getUserById(recipientUserId),
+      db
+        .from("artist_profiles")
+        .select("name")
+        .eq("user_id", recipientUserId)
+        .maybeSingle<{ name: string | null }>(),
+    ]);
+    const email = authData?.user?.email;
+    if (!email) return;
+    await send({
+      userId: recipientUserId,
+      email,
+      firstName: (profile?.name ?? "").trim().split(" ")[0] || "there",
+    });
+  } catch (err) {
+    console.error("[stripe-connect] artist payout notice failed:", err);
+  }
 }
 
 /**
@@ -395,6 +461,36 @@ export async function processPendingTransfers(): Promise<SweepResult> {
           actionPath: "/admin/financials",
           actionLabel: "Open financials",
         }).catch(() => {});
+
+        // Email audit 2026-09-03 (6c). The hold is correct, but only an
+        // operator was told, so the one person who can clear it, by shipping
+        // or by cancelling, was the one person not asked. Keyed on the leg, so
+        // the daily sweep asks once rather than every day.
+        if (record.recipient_type === "artist") {
+          await notifyArtist(record.recipient_user_id as string, async (artist) => {
+            const { sendEmail } = await import("@/lib/email/send");
+            const { ArtistOrderUnshippedPayoutHeld } = await import(
+              "@/emails/templates/orders/ArtistOrderUnshippedPayoutHeld"
+            );
+            const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+            await sendEmail({
+              idempotencyKey: `unshipped_payout_artist:${record.id}`,
+              template: "artist_order_unshipped_payout_held",
+              category: "orders_and_payouts",
+              to: artist.email,
+              userId: artist.userId,
+              subject: `Order ${record.order_id} needs to ship before we can pay you`,
+              react: ArtistOrderUnshippedPayoutHeld({
+                firstName: artist.firstName,
+                orderNumber: String(record.order_id),
+                payoutAmount: { amount: record.amount_cents as number, currency: "GBP" },
+                ordersUrl: `${SITE}/artist-portal/orders`,
+                supportUrl: `${SITE}/support`,
+              }),
+              metadata: { transferId: record.id, orderId: record.order_id },
+            });
+          });
+        }
         continue;
       }
       if (order) {

@@ -13,6 +13,26 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 // ---- Mocks ------------------------------------------------------------
 
+// Item 2b (email audit 2026-09-03): the venue is emailed when an artist
+// responds. The send funnels through sendEmail, mocked here; the template is
+// mocked so its props can be asserted on.
+const { sendEmailMock, venueTemplateMock } = vi.hoisted(() => ({
+  sendEmailMock: vi.fn(async () => ({ ok: true, skipped: false, messageId: "m" })),
+  venueTemplateMock: vi.fn(() => null),
+}));
+vi.mock("@/lib/email/send", () => ({ sendEmail: sendEmailMock }));
+vi.mock("@/emails/templates/artwork-requests/VenueBriefResponseReceived", () => ({
+  VenueBriefResponseReceived: venueTemplateMock,
+}));
+// The venue's auth user and profile row, for the response email. Null user =
+// no reachable address, which must skip the email and nothing else.
+let venueUser: { id: string; email: string; user_metadata: Record<string, unknown> } | null = {
+  id: "u-venue",
+  email: "venue@example.com",
+  user_metadata: {},
+};
+let venueRow: { name: string | null } | null = { name: "The Copper Kettle" };
+
 // Capture the .insert() call so the test can assert what columns the
 // route asked the DB to write.
 let lastInsert: Record<string, unknown> | null = null;
@@ -24,8 +44,8 @@ let insertAttempts: Record<string, unknown>[] = [];
 let firstInsertError: { message: string; code?: string } | null = null;
 // What the artist_profiles lookup returns. Default is a real artist.
 let artistRow:
-  | { user_id: string; slug: string; review_status?: string }
-  | null = { user_id: "u-artist", slug: "the-artist", review_status: "approved" };
+  | { user_id: string; slug: string; review_status?: string; name?: string | null }
+  | null = { user_id: "u-artist", slug: "the-artist", review_status: "approved", name: "Maya Chen" };
 // What the artwork_requests lookup returns. Default is an open request.
 type RequestRow = {
   id: string;
@@ -97,6 +117,7 @@ vi.mock("@/lib/supabase-admin", () => {
     chain.order = () => chain;
     chain.maybeSingle = async () => {
       if (table === "artist_profiles") return { data: artistRow, error: null };
+      if (table === "venue_profiles") return { data: venueRow, error: null };
       if (table === "artwork_requests") {
         const row = artworkRequestRow;
         if (!row) return { data: null, error: null };
@@ -150,6 +171,7 @@ vi.mock("@/lib/supabase-admin", () => {
   return {
     getSupabaseAdmin: () => ({
       from: (table: string) => makeChainable(table),
+      auth: { admin: { getUserById: async () => ({ data: { user: venueUser } }) } },
     }),
   };
 });
@@ -163,7 +185,11 @@ beforeEach(async () => {
   insertAttempts = [];
   firstInsertError = null;
   priorResponseRow = null;
-  artistRow = { user_id: "u-artist", slug: "the-artist", review_status: "approved" };
+  sendEmailMock.mockClear();
+  venueTemplateMock.mockClear();
+  venueUser = { id: "u-venue", email: "venue@example.com", user_metadata: {} };
+  venueRow = { name: "The Copper Kettle" };
+  artistRow = { user_id: "u-artist", slug: "the-artist", review_status: "approved", name: "Maya Chen" };
   artworkRequestRow = {
     id: "arq_1",
     venue_user_id: "u-venue",
@@ -571,5 +597,78 @@ describe("POST responses guards against duplicates (F45)", () => {
     const { POST } = await import("./route");
     const res = await POST(buildRequest({ responseType: "message", message: "first" }), ctx);
     expect(res.status).toBe(200);
+  });
+});
+
+// ── Item 2b (email audit 2026-09-03): the venue is emailed on a response ──────
+//
+// The bell was the only signal, while the artist's side of the same exchange
+// (accept, decline) has emailed since F48.
+describe("POST responses emails the venue (item 2b)", () => {
+  type SentEmail = { idempotencyKey: string; template: string; category: string; to: string; userId?: string; subject: string };
+  const sent = () => (sendEmailMock.mock.calls as unknown as unknown[][]).map((c) => c[0] as unknown as SentEmail);
+
+  it("sends the venue one email, keyed on the response row, on the placements category", async () => {
+    const { POST } = await import("./route");
+    const res = await POST(
+      buildRequest({
+        responseType: "placement",
+        message: "Happy to lend three pieces on a revenue share.",
+        proposedMonthlyFeePence: 0,
+        proposedQrEnabled: true,
+        proposedRevenueSharePercent: 30,
+      }),
+      ctx,
+    );
+
+    expect(res.status).toBe(200);
+    expect(sent()).toHaveLength(1);
+    const email = sent()[0];
+    expect(email.template).toBe("venue_brief_response_received");
+    expect(email.category).toBe("placements");
+    expect(email.to).toBe("venue@example.com");
+    expect(email.userId).toBe("u-venue");
+    expect(email.idempotencyKey).toBe("artwork_request_response:new-row-id:to_venue");
+    expect(email.subject).toBe("Maya Chen responded to your brief");
+    expect(venueTemplateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        firstName: "The",
+        artistName: "Maya Chen",
+        requestTitle: "Coffee shop wall",
+        responseTypeLabel: "placement proposal",
+        messagePreview: "Happy to lend three pieces on a revenue share.",
+        responsesUrl: expect.stringContaining("/venue-portal/artwork-requests/arq_1"),
+      }),
+    );
+  });
+
+  it("names the response type the venue will see", async () => {
+    const { POST } = await import("./route");
+    await POST(buildRequest({ responseType: "commission", message: "I can paint one.", proposedCommissionAmountPence: 50_000 }), ctx);
+    expect(venueTemplateMock).toHaveBeenCalledWith(expect.objectContaining({ responseTypeLabel: "commission proposal" }));
+  });
+
+  it("still saves the response when the venue has no reachable address", async () => {
+    venueUser = null;
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "hello" }), ctx);
+    expect(res.status).toBe(200);
+    expect(lastInsert).not.toBeNull();
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the response is refused", async () => {
+    artworkRequestRow = {
+      id: "arq_1",
+      venue_user_id: "u-venue",
+      status: "closed",
+      title: "Closed brief",
+      visibility: "semi_public",
+      invited_artist_slugs: [],
+    };
+    const { POST } = await import("./route");
+    const res = await POST(buildRequest({ responseType: "message", message: "hi" }), ctx);
+    expect(res.status).toBe(409);
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });

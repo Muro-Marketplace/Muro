@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import Button from "@/components/Button";
-import { PLAN_PRICES, PLATFORM_FEE_PERCENT, WORKS_CAP, ACTIVE_PLACEMENT_CAP } from "@/lib/pricing";
-import { OUTREACH_WEEKLY_LIMIT } from "@/lib/outreach-cap";
+import { PLAN_PRICES, PLATFORM_FEE_PERCENT } from "@/lib/pricing";
+// The feature lists live in lib/plan-features so the trial-ending email quotes
+// the same list these cards show. tests/integration/public-claims.test.ts reads
+// the perks from there.
+import { PLAN_FEATURES } from "@/lib/plan-features";
 
 interface Plan {
   key: "core" | "premium" | "pro";
@@ -11,7 +14,7 @@ interface Plan {
   priceMonthly: number;
   priceAnnual: number;
   fee: string;
-  features: string[];
+  features: readonly string[];
   highlighted?: boolean;
   badge?: string;
 }
@@ -25,14 +28,7 @@ const PLANS: Plan[] = [
     priceMonthly: PLAN_PRICES.core.monthlyGbp,
     priceAnnual: PLAN_PRICES.core.annualGbp,
     fee: FEE_LINE,
-    features: [
-      `Up to ${ACTIVE_PLACEMENT_CAP.core} active venue placements at a time`,
-      `Up to ${WORKS_CAP.core} works in your portfolio`,
-      "Standard artist profile",
-      `Approach ${OUTREACH_WEEKLY_LIMIT.core} new venues a week`,
-      "Visibility to venues browsing the platform",
-      "Basic analytics dashboard",
-    ],
+    features: PLAN_FEATURES.core,
   },
   {
     key: "premium",
@@ -42,15 +38,7 @@ const PLANS: Plan[] = [
     fee: FEE_LINE,
     highlighted: true,
     badge: "Most Popular",
-    features: [
-      `Up to ${ACTIVE_PLACEMENT_CAP.premium} active venue placements at a time`,
-      `Up to ${WORKS_CAP.premium} works in your portfolio`,
-      "Artwork of the Week: put one work at the top of the gallery for seven days",
-      "Priority visibility in venue recommendations",
-      `Approach ${OUTREACH_WEEKLY_LIMIT.premium} new venues a week`,
-      "Full analytics, views, enquiries, conversion",
-      "Priority response from the Wallplace team",
-    ],
+    features: PLAN_FEATURES.premium,
   },
   {
     key: "pro",
@@ -58,17 +46,7 @@ const PLANS: Plan[] = [
     priceMonthly: PLAN_PRICES.pro.monthlyGbp,
     priceAnnual: PLAN_PRICES.pro.annualGbp,
     fee: FEE_LINE,
-    features: [
-      "Unlimited active venue placements",
-      `Up to ${WORKS_CAP.pro} works in your portfolio`,
-      "Priority for programme placements, which pay monthly rent",
-      "Featured artist: your profile leads the marketplace",
-      "Priority visibility in venue recommendations",
-      "Artwork of the Week: put one work at the top of the gallery for seven days",
-      `Approach ${OUTREACH_WEEKLY_LIMIT.pro} new venues a week`,
-      "Full analytics with venue breakdown and export",
-      "Dedicated account support",
-    ],
+    features: PLAN_FEATURES.pro,
   },
 ];
 

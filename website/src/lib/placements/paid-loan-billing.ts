@@ -634,6 +634,111 @@ export async function handleSubscriptionDeleted(
         idempotencyKey: `paid_loan_cancelled:${subscription.id}:${userId}`,
       }).catch(() => {});
     }
+
+    // Email audit 2026-09-03 (6e). Only bells fired here. A recurring card
+    // charge starting is emailed to the venue and its failure is emailed to
+    // the venue, but the charge ENDING was in-app only, and the artist's
+    // monthly payout ending with it likewise. Both are money events.
+    await notifyBillingStopped(db, subscription.id, fullRow);
   }
   return true;
+}
+
+/**
+ * Tell both parties the monthly billing has stopped. Best-effort throughout:
+ * the billing row is already marked cancelled, which is the part that decides
+ * whether anyone is charged again, and a mail failure must not make Stripe
+ * retry a webhook whose real work is done.
+ */
+async function notifyBillingStopped(
+  db: SupabaseClient,
+  subscriptionId: string,
+  row: { placement_id: string; payer_user_id: string | null; payee_user_id: string | null },
+): Promise<void> {
+  try {
+    const { data: placement } = await db
+      .from("placements")
+      .select("work_title, artist_slug, monthly_fee_gbp")
+      .eq("id", row.placement_id)
+      .maybeSingle<{ work_title: string | null; artist_slug: string | null; monthly_fee_gbp: number | null }>();
+    const workTitle = placement?.work_title || "your placed artwork";
+    const placementUrl = `${SITE}/placements/${encodeURIComponent(row.placement_id)}`;
+    const feePence = Math.round(Number(placement?.monthly_fee_gbp || 0) * 100);
+
+    const nameFor = async (table: "artist_profiles" | "venue_profiles", userId: string | null) => {
+      if (!userId) return "";
+      const { data } = await db
+        .from(table)
+        .select("name")
+        .eq("user_id", userId)
+        .maybeSingle<{ name: string | null }>();
+      return (data?.name ?? "").trim();
+    };
+    // Owner-reported 2026-08-30: never let a slug reach an email. The
+    // de-slugged slug is the display name of last resort.
+    const artistName =
+      (await nameFor("artist_profiles", row.payee_user_id)) ||
+      (placement?.artist_slug || "")
+        .split("-")
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ") ||
+      "the artist";
+    const venueName = (await nameFor("venue_profiles", row.payer_user_id)) || "the venue";
+
+    const emailFor = async (userId: string | null) => {
+      if (!userId) return null;
+      const { data } = await db.auth.admin.getUserById(userId);
+      return data?.user?.email ?? null;
+    };
+
+    const venueEmail = await emailFor(row.payer_user_id);
+    if (venueEmail) {
+      const { VenuePaidLoanBillingStopped } = await import(
+        "@/emails/templates/payments/VenuePaidLoanBillingStopped"
+      );
+      await sendEmail({
+        idempotencyKey: `paid_loan_billing_stopped:${subscriptionId}:venue`,
+        template: "venue_paid_loan_billing_stopped",
+        category: "orders_and_payouts",
+        to: venueEmail,
+        userId: row.payer_user_id ?? undefined,
+        subject: `Monthly payments have stopped for ${workTitle}`,
+        react: VenuePaidLoanBillingStopped({
+          venueFirstName: venueName.split(" ")[0] || "there",
+          workTitle,
+          artistName,
+          monthlyFee: feePence > 0 ? { amount: feePence, currency: "GBP" } : undefined,
+          placementUrl,
+          supportUrl: `${SITE}/support`,
+        }),
+        metadata: { placementId: row.placement_id, subscriptionId },
+      });
+    }
+
+    const artistEmail = await emailFor(row.payee_user_id);
+    if (artistEmail) {
+      const { ArtistPaidLoanBillingStopped } = await import(
+        "@/emails/templates/payments/ArtistPaidLoanBillingStopped"
+      );
+      await sendEmail({
+        idempotencyKey: `paid_loan_billing_stopped:${subscriptionId}:artist`,
+        template: "artist_paid_loan_billing_stopped",
+        category: "orders_and_payouts",
+        to: artistEmail,
+        userId: row.payee_user_id ?? undefined,
+        subject: `Monthly payments have stopped for ${workTitle}`,
+        react: ArtistPaidLoanBillingStopped({
+          artistFirstName: artistName.split(" ")[0] || "there",
+          workTitle,
+          venueName,
+          placementUrl,
+          supportUrl: `${SITE}/support`,
+        }),
+        metadata: { placementId: row.placement_id, subscriptionId },
+      });
+    }
+  } catch (mailErr) {
+    console.warn("[paid-loan] billing-stopped emails failed:", mailErr);
+  }
 }

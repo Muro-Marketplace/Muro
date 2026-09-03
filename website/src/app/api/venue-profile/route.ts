@@ -5,6 +5,8 @@ import { getVenueProfileByUserId, upsertVenueProfile } from "@/lib/db/venue-prof
 import { pickWritable, VENUE_PROFILE_WRITABLE } from "@/lib/db/writable-fields";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { slugify } from "@/lib/slugify";
+import { afterResponse } from "@/lib/after-response";
+import { triggerWelcomeIfNeeded } from "@/lib/email/welcome";
 import type { User } from "@supabase/supabase-js";
 
 // GET: fetch the current user's venue profile
@@ -130,6 +132,14 @@ export async function PATCH(request: Request) {
 // Any venue this strands (registered under one address, signed up under
 // another) is an admin "link to user" action, audited — the correct cost for an
 // operation that transfers ownership.
+//
+// The welcome email fires from here too. AuthContext POSTs /api/auth/welcome
+// once per sign-in, but for a venue that happens BEFORE this route has created
+// the row, so triggerWelcomeIfNeeded answered "no profile yet" and the client
+// never retried for that user: most venues never got a welcome at all. Same
+// fix /api/apply made for artists: trigger it at the moment the row exists.
+// welcomed_at stays the idempotency guard, so a venue whose sign-in trigger
+// DID find a row (a re-login after a stale tab) is not welcomed twice.
 async function ensureVenueProfile(user: User) {
   const db = getSupabaseAdmin();
   const userId = user.id;
@@ -167,6 +177,7 @@ async function ensureVenueProfile(user: User) {
         .update({ user_id: userId })
         .eq("id", target.id);
       if (!error) {
+        welcomeOnceLinked(userId);
         return NextResponse.json({ ok: true, status: "adopted_by_email", slug: target.slug });
       }
       console.error("[ensureVenueProfile] adopt-by-email update failed:", error);
@@ -201,6 +212,7 @@ async function ensureVenueProfile(user: User) {
       wall_space: registration?.wall_space || "",
     });
     if (!error) {
+      welcomeOnceLinked(userId);
       return NextResponse.json({ ok: true, status: "created", slug: insertSlug });
     }
     // Postgres unique_violation
@@ -214,6 +226,20 @@ async function ensureVenueProfile(user: User) {
   }
   console.error("[ensureVenueProfile] slug suffix exhausted for", baseSlug);
   return NextResponse.json({ ok: false, status: "slug_exhausted", slug }, { status: 500 });
+}
+
+/**
+ * The venue welcome, off the response path. Best-effort: a mail failure must
+ * not turn a successful profile creation into an error, and afterResponse
+ * already logs anything the task throws.
+ */
+function welcomeOnceLinked(userId: string): void {
+  afterResponse(async () => {
+    const outcome = await triggerWelcomeIfNeeded(userId);
+    if (!outcome.ok) {
+      console.error("[ensureVenueProfile] welcome email failed:", outcome.error);
+    }
+  });
 }
 
 type VenueRegistration = {

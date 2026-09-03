@@ -19,9 +19,19 @@ function actAs(who: "seller" | "buyer" | "stranger") {
 }
 
 const fromMock = vi.fn();
-vi.mock("@/lib/supabase-admin", () => ({
-  getSupabaseAdmin: () => ({ from: fromMock, auth: { admin: { getUserById: async () => ({ data: null }) } } }),
+// The artist's auth user, for the lifecycle emails that go to the artist. The
+// default resolves nobody, which is what every pre-existing case expects.
+const { getUserByIdMock } = vi.hoisted(() => ({
+  getUserByIdMock: vi.fn(
+    async (): Promise<{ data: { user: { email: string } | null } | null }> => ({ data: null }),
+  ),
 }));
+vi.mock("@/lib/supabase-admin", () => ({
+  getSupabaseAdmin: () => ({ from: fromMock, auth: { admin: { getUserById: getUserByIdMock } } }),
+}));
+// The buyer's order-page links carry a signed token. The secret is not set in
+// tests, so the signer is stubbed to a fixed value the assertions look for.
+vi.mock("@/lib/order-tracking-token", () => ({ signOrderToken: vi.fn(async () => "tok") }));
 
 // K1: the legacy @/lib/email is deleted. The statuses the lifecycle dispatcher
 // does not cover (cancelled / disputed / refunded) go through sendEmail now.
@@ -37,6 +47,8 @@ vi.mock("@/lib/notifications", () => ({ createNotification: createNotificationMo
 import { PATCH } from "./route";
 import { executeTransfer } from "@/lib/stripe-connect";
 import { sendEmail } from "@/lib/email/send";
+import { afterEach } from "vitest";
+import { render } from "@react-email/components";
 
 /**
  * assertOrderParty (E21) reads the order with .select("*").eq("id").or(...)
@@ -947,5 +959,220 @@ describe("the artist is told when someone else moves their order (row 874)", () 
 
     expect(res.status).toBe(200);
     expect(updated).toMatchObject({ status: "delivered" });
+  });
+});
+
+// Email audit 2026-09-03 (fix 2). The lifecycle templates declare more props
+// than the PATCH used to pass (firstName, orderNumber, orderUrl, statusText),
+// so the buyer's emails rendered with holes and the artist's greeted the
+// buyer. These run the REAL dispatcher and registry and render the element the
+// pipeline was handed, because a prop name that drifts from the template is
+// invisible to a mock.
+describe("lifecycle emails carry real order data (email audit fix 2)", () => {
+  const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
+  const ORDER = {
+    id: "o1",
+    artist_user_id: "u-artist",
+    artist_slug: "maya-chen",
+    buyer_user_id: null,
+    buyer_email: "b@x.com",
+    status: "confirmed",
+    status_history: [],
+    placement_id: null,
+    venue_revenue: null,
+    shipping: { fullName: "Bob Buyer" },
+    items: [
+      {
+        title: "Last Light on Mare Street",
+        image: "https://wallplace.co.uk/sample-work.jpg",
+        quantity: 1,
+        lineTotal: { amount: 24000, currency: "GBP" },
+      },
+    ],
+    tracking_number: null,
+    delivered_at: null,
+  };
+
+  /**
+   * `artistProfile` is the row artist_profiles returns FOR THE SELLER only.
+   * The lookup has to be column-aware: assertOrderParty resolves the caller's
+   * own slugs through this same table, so a mock that answers every query
+   * makes the buyer look like the owner of the artist slug, and the role gate
+   * then refuses their delivery confirmation with a 403. Pass null to model an
+   * artist with no profile row at all.
+   */
+  function setupOrder(
+    row: Record<string, unknown>,
+    artistProfile: { name: string | null; slug: string } | null = { name: "Maya Chen", slug: "maya-chen" },
+  ) {
+    let orderRead = false;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "orders" && !orderRead) {
+        orderRead = true;
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({ data: row }),
+              maybeSingle: async () => ({ data: row }),
+              or: () => ({ maybeSingle: async () => ({ data: row }) }),
+            }),
+          }),
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        };
+      }
+      if (table === "artist_profiles") {
+        const rowFor = (column: string, value: string) => {
+          if (!artistProfile) return null;
+          const owns =
+            (column === "user_id" && value === row.artist_user_id) ||
+            (column === "slug" && value === artistProfile.slug);
+          return owns ? artistProfile : null;
+        };
+        return {
+          select: () => ({
+            eq: (column: string, value: string) => ({
+              single: async () => ({ data: rowFor(column, value) }),
+              maybeSingle: async () => ({ data: rowFor(column, value) }),
+            }),
+          }),
+        };
+      }
+      if (table === "stripe_transfers") {
+        return {
+          select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: [] }) }) }),
+          update: () => ({
+            eq: () => ({ eq: () => Promise.resolve({ error: null }), in: () => Promise.resolve({ error: null }) }),
+          }),
+        };
+      }
+      return {
+        select: () => ({
+          eq: () => ({ single: async () => ({ data: null }), maybeSingle: async () => ({ data: null }) }),
+        }),
+        update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+        upsert: () => Promise.resolve({ error: null }),
+        insert: () => Promise.resolve({ error: null }),
+      };
+    });
+  }
+
+  function patch(body: unknown): Request {
+    return new Request("http://localhost/api/orders", {
+      method: "PATCH",
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * The HTML the pipeline would have sent for a registry template id, with
+   * React's empty text separators removed. React emits `<!-- -->` between two
+   * adjacent interpolations, so a sentence built from a prop and a literal
+   * reads as `Maya Chen<!-- --> is preparing` in the raw markup while an inbox
+   * shows it as one sentence. Stripping them lets the assertions read the
+   * sentence the recipient actually sees.
+   */
+  async function renderedEmail(templateId: string): Promise<string> {
+    const call = vi
+      .mocked(sendEmail)
+      .mock.calls.map((c) => c[0])
+      .find((c) => c.template === templateId);
+    expect(call, `no ${templateId} send reached the pipeline`).toBeTruthy();
+    return (await render(call!.react)).replaceAll("<!-- -->", "");
+  }
+
+  beforeEach(() => {
+    vi.mocked(sendEmail).mockReset();
+    vi.mocked(sendEmail).mockResolvedValue({ ok: true, skipped: false, messageId: "m" });
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "maya@x.com" } } });
+  });
+
+  afterEach(() => {
+    getUserByIdMock.mockResolvedValue({ data: null });
+    vi.useRealTimers();
+  });
+
+  it("processing: names the artist and shows the piece", async () => {
+    actAs("seller");
+    setupOrder({ ...ORDER, status: "confirmed" });
+
+    const res = await PATCH(patch({ orderId: "o1", status: "processing" }));
+
+    expect(res.status).toBe(200);
+    const html = await renderedEmail("customer_order_processing");
+    expect(html).toContain("Maya Chen is preparing your piece");
+    expect(html).toContain("Last Light on Mare Street");
+    expect(html).not.toContain("undefined");
+  });
+
+  it("out for delivery: carries the tracking reference the same request stored", async () => {
+    actAs("seller");
+    setupOrder({ ...ORDER, status: "processing" });
+
+    await PATCH(patch({ orderId: "o1", status: "shipped", trackingNumber: "TRK-777" }));
+
+    const html = await renderedEmail("customer_order_out_for_delivery");
+    expect(html).toContain("TRK-777");
+    expect(html).toContain("Maya Chen");
+  });
+
+  it("out for delivery: falls back to the tracking number already on the order", async () => {
+    actAs("seller");
+    setupOrder({ ...ORDER, status: "processing", tracking_number: "TRK-STORED" });
+
+    await PATCH(patch({ orderId: "o1", status: "shipped" }));
+
+    const html = await renderedEmail("customer_order_out_for_delivery");
+    expect(html).toContain("TRK-STORED");
+  });
+
+  it("delivered: dates the delivery, and both buttons link to the buyer's order page", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-04T10:00:00Z"));
+    actAs("buyer");
+    setupOrder({ ...ORDER, status: "shipped" });
+
+    const res = await PATCH(patch({ orderId: "o1", status: "delivered" }));
+
+    expect(res.status).toBe(200);
+    const html = await renderedEmail("customer_order_delivered");
+    // en-GB with a weekday renders "Friday, 4 September 2026".
+    expect(html).toContain("delivered on Friday, 4 September 2026");
+    // Confirm delivery and Report a problem both resolve to the order page,
+    // which hosts the confirm CTA and the dispute form (B29), signed for a
+    // guest buyer.
+    const orderPage = `${SITE_URL}/orders/o1?t=tok`;
+    expect(html.split(`href="${orderPage}"`).length - 1).toBeGreaterThanOrEqual(2);
+    expect(html).not.toContain('href=""');
+    expect(html).not.toContain("undefined");
+  });
+
+  it("delivered: greets the artist by the artist's name and links to their orders", async () => {
+    actAs("buyer");
+    setupOrder({ ...ORDER, status: "shipped" });
+
+    await PATCH(patch({ orderId: "o1", status: "delivered" }));
+
+    const html = await renderedEmail("artist_order_delivered");
+    expect(html).toContain("Hi Maya");
+    expect(html).not.toContain("Hi Bob");
+    expect(html).toContain(`${SITE_URL}/artist-portal/orders`);
+    // The buyer's copy is untouched by the artist overrides.
+    const buyerHtml = await renderedEmail("customer_order_delivered");
+    expect(buyerHtml).toContain("Hi Bob");
+  });
+
+  it("never lets a raw slug reach the buyer when the artist has no profile name", async () => {
+    // Owner-reported 2026-08-30: a slug in customer-facing copy ("a work by
+    // fin-coles"). With no profile row to read a name from, the de-slugged
+    // slug is the display name of last resort, never the slug itself.
+    actAs("seller");
+    setupOrder({ ...ORDER, status: "confirmed", artist_slug: "fin-coles" }, null);
+
+    await PATCH(patch({ orderId: "o1", status: "processing" }));
+
+    const html = await renderedEmail("customer_order_processing");
+    expect(html).toContain("Fin Coles is preparing your piece");
+    expect(html).not.toContain("fin-coles");
   });
 });

@@ -81,6 +81,12 @@ export async function processCancellationRefund(
     { idempotencyKey: `cancel:${args.orderId}:refund` },
   );
 
+  // The refund id on this row is what lets the charge.refunded webhook tell
+  // this refund (ours, already booked) from a dashboard refund it has to
+  // reconcile. Stripe echoes every refund back as charge.refunded, and the
+  // order stays `cancelled` rather than `refunded`, so before the webhook
+  // checked this row it re-ran its full-refund branch on our own refund: legs
+  // reversed a second time, stock restored twice, a second buyer email.
   const { error: reqErr } = await db
     .from("refund_requests")
     .update({

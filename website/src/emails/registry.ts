@@ -21,6 +21,12 @@ import AccountTwoFactorDisabled from "./templates/account/AccountTwoFactorDisabl
 import AccountTeamInvite from "./templates/account/AccountTeamInvite";
 import AccountTeamInviteAccepted from "./templates/account/AccountTeamInviteAccepted";
 import SupportRequestReceived from "./templates/account/SupportRequestReceived";
+// Email audit, 2026-09-04. The Supabase invite mail, registered for render
+// coverage only (nothing in src/ sends it; the dashboard template does), and
+// the feedback / feature-request acknowledgement, modelled on
+// SupportRequestReceived without its reply-time promise.
+import AccountInvite from "./templates/account/AccountInvite";
+import FeedbackReceived from "./templates/account/FeedbackReceived";
 
 // ── Onboarding ────────────────────────────────────────────────────────────
 import ArtistWelcomeChecklist from "./templates/onboarding/artist/ArtistWelcomeChecklist";
@@ -45,6 +51,9 @@ import VenueNewPlacementRequest from "./templates/placements/VenueNewPlacementRe
 // a legacy hand-written fallback survived on that half of the flow.
 import ArtistNewPlacementInvitation from "./templates/placements/ArtistNewPlacementInvitation";
 import ArtistPlacementRequestSent from "./templates/placements/ArtistPlacementRequestSent";
+// The venue-initiated half of the same receipt, which the route had a comment
+// promising "if/when one's added".
+import VenuePlacementRequestSent from "./templates/placements/VenuePlacementRequestSent";
 import ArtistPlacementAccepted from "./templates/placements/ArtistPlacementAccepted";
 import VenuePlacementAcceptedConfirmation from "./templates/placements/VenuePlacementAcceptedConfirmation";
 import ArtistPlacementDeclined from "./templates/placements/ArtistPlacementDeclined";
@@ -66,6 +75,10 @@ import PlacementContractCountersigned from "./templates/placements/PlacementCont
 // while every neighbouring flow emails the other party as well.
 import ArtistArtworkResponseAccepted from "./templates/artwork-requests/ArtistArtworkResponseAccepted";
 import ArtistArtworkResponseDeclined from "./templates/artwork-requests/ArtistArtworkResponseDeclined";
+// The two ends of a brief that emailed nobody: the artists a venue names on
+// its invite list, and the venue when one of them responds.
+import ArtistBriefInvitation from "./templates/artwork-requests/ArtistBriefInvitation";
+import VenueBriefResponseReceived from "./templates/artwork-requests/VenueBriefResponseReceived";
 
 // ── Messages ──────────────────────────────────────────────────────────────
 // ── Admin (internal) ──────────────────────────────────────────────────────
@@ -77,6 +90,10 @@ import MessageUnreadNotification from "./templates/messages/MessageUnreadNotific
 import MessageHourlyDigest from "./templates/messages/MessageHourlyDigest";
 import ReviewPostedNotification from "./templates/messages/ReviewPostedNotification";
 import OfferReceivedNotification from "./templates/messages/OfferReceivedNotification";
+// The outcome of an offer (accepted, declined, withdrawn) was bell-only.
+import OfferOutcomeNotification from "./templates/messages/OfferOutcomeNotification";
+// Acknowledgement to an anonymous enquirer, modelled on SupportRequestReceived.
+import EnquiryReceived from "./templates/messages/EnquiryReceived";
 
 // ── Performance (artist) ──────────────────────────────────────────────────
 import ArtistFirstQrScan from "./templates/performance/ArtistFirstQrScan";
@@ -144,6 +161,13 @@ import CustomerOrderProcessing from "./templates/orders/CustomerOrderProcessing"
 import CustomerOrderOutForDelivery from "./templates/orders/CustomerOrderOutForDelivery";
 import CustomerOrderDelivered from "./templates/orders/CustomerOrderDelivered";
 import CustomerConfirmDelivery48h from "./templates/orders/CustomerConfirmDelivery48h";
+// Email audit 2026-09-03, billing stream: the artist's copy of a chargeback
+// (the admin alert stays), the buyer's copy of a refund that bounced, and the
+// artist's copy of a payout held because the order never shipped.
+import ArtistChargebackOpened from "./templates/orders/ArtistChargebackOpened";
+import ArtistChargebackClosed from "./templates/orders/ArtistChargebackClosed";
+import CustomerRefundFailed from "./templates/orders/CustomerRefundFailed";
+import ArtistOrderUnshippedPayoutHeld from "./templates/orders/ArtistOrderUnshippedPayoutHeld";
 
 // ── Payments ──────────────────────────────────────────────────────────────
 import ArtistPayoutSent from "./templates/payments/ArtistPayoutSent";
@@ -165,6 +189,27 @@ import VenuePaidLoanInvoice from "./templates/payments/VenuePaidLoanInvoice";
 import SubscriptionStarted from "./templates/payments/SubscriptionStarted";
 import SubscriptionRenewalReceipt from "./templates/payments/SubscriptionRenewalReceipt";
 import SubscriptionCardExpiring from "./templates/payments/SubscriptionCardExpiring";
+// Email audit, 2026-09-04. The paying venue's three programme / managed
+// curation lifecycle emails (src/lib/curation/billing.ts), and the artist's
+// two programme rent emails (src/lib/curation/programme-rent.ts). Before these
+// the venue heard only about its first payment and the artist heard nothing.
+import CurationPaymentFailed from "./templates/payments/CurationPaymentFailed";
+import CurationRenewalReceipt from "./templates/payments/CurationRenewalReceipt";
+import CurationSubscriptionCancelled from "./templates/payments/CurationSubscriptionCancelled";
+import ArtistProgrammeRentStatement from "./templates/payments/ArtistProgrammeRentStatement";
+import ArtistProgrammeRentSettled from "./templates/payments/ArtistProgrammeRentSettled";
+// Email audit 2026-09-03, billing stream. subscription_cancelled now fires at
+// the cancel moment; this is what fires when the access actually ends.
+import SubscriptionEnded from "./templates/payments/SubscriptionEnded";
+// The venue's written record of the monthly charge it just agreed to, and both
+// parties' record of it stopping (bells only, before).
+import VenuePaidLoanPaymentSetUp from "./templates/payments/VenuePaidLoanPaymentSetUp";
+import VenuePaidLoanBillingStopped from "./templates/payments/VenuePaidLoanBillingStopped";
+import ArtistPaidLoanBillingStopped from "./templates/payments/ArtistPaidLoanBillingStopped";
+// payout.paid resolved artists only; venues share the same moment.
+import VenuePayoutSent from "./templates/payments/VenuePayoutSent";
+// The payout sweep gave up and told an operator, not the artist.
+import ArtistPayoutRetriesExhausted from "./templates/payments/ArtistPayoutRetriesExhausted";
 
 // ── Artist additions ──────────────────────────────────────────────────────
 import ArtistStripeKycNeeded from "./templates/artist-additions/ArtistStripeKycNeeded";
@@ -176,6 +221,8 @@ import ArtistApplicationRejected from "./templates/artist-additions/ArtistApplic
 import ArtistBlogPublished from "./templates/artist-additions/ArtistBlogPublished";
 import ArtistBlogRejected from "./templates/artist-additions/ArtistBlogRejected";
 import ArtistYearInReview from "./templates/artist-additions/ArtistYearInReview";
+// Email audit, 2026-09-04: the founding flag used to be set with no email.
+import ArtistFoundingPlaceConfirmed from "./templates/artist-additions/ArtistFoundingPlaceConfirmed";
 
 // ── Premium ───────────────────────────────────────────────────────────────
 import ArtistTierCapHit from "./templates/premium/ArtistTierCapHit";
@@ -318,6 +365,8 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   AccountTeamInvite,
   AccountTeamInviteAccepted,
   SupportRequestReceived,
+  AccountInvite,
+  FeedbackReceived,
 
   // Onboarding
   ArtistWelcomeChecklist,
@@ -339,6 +388,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   // Placements
   VenueNewPlacementRequest,
   ArtistPlacementRequestSent,
+  VenuePlacementRequestSent,
   ArtistPlacementAccepted,
   VenuePlacementAcceptedConfirmation,
   ArtistPlacementDeclined,
@@ -355,6 +405,8 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   PlacementConsignmentRecordCreated,
   ArtistArtworkResponseAccepted,
   ArtistArtworkResponseDeclined,
+  ArtistBriefInvitation,
+  VenueBriefResponseReceived,
   PlacementContractCountersigned,
 
   // Messages
@@ -362,6 +414,8 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   MessageHourlyDigest,
   ReviewPostedNotification,
   OfferReceivedNotification,
+  OfferOutcomeNotification,
+  EnquiryReceived,
 
   // Performance
   ArtistFirstQrScan,
@@ -401,6 +455,10 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   CustomerOrderOutForDelivery,
   CustomerOrderDelivered,
   CustomerConfirmDelivery48h,
+  ArtistChargebackOpened,
+  ArtistChargebackClosed,
+  CustomerRefundFailed,
+  ArtistOrderUnshippedPayoutHeld,
 
   // Payments
   ArtistPayoutSent,
@@ -419,6 +477,17 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   SubscriptionStarted,
   SubscriptionRenewalReceipt,
   SubscriptionCardExpiring,
+  CurationPaymentFailed,
+  CurationRenewalReceipt,
+  CurationSubscriptionCancelled,
+  ArtistProgrammeRentStatement,
+  ArtistProgrammeRentSettled,
+  SubscriptionEnded,
+  VenuePaidLoanPaymentSetUp,
+  VenuePaidLoanBillingStopped,
+  ArtistPaidLoanBillingStopped,
+  VenuePayoutSent,
+  ArtistPayoutRetriesExhausted,
 
   // Artist additions
   ArtistStripeKycNeeded,
@@ -429,6 +498,7 @@ export const EMAIL_REGISTRY: TemplateEntry<any>[] = [
   ArtistBlogPublished,
   ArtistBlogRejected,
   ArtistYearInReview,
+  ArtistFoundingPlaceConfirmed,
 
   // Premium
   ArtistTierCapHit,

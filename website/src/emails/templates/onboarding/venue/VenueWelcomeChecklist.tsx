@@ -12,13 +12,15 @@ const venueSteps: ChecklistStep[] = [
   { label: "Invite teammates (optional)", done: false, url: "https://wallplace.co.uk/venue-portal/settings/team" },
 ];
 
+// `inviteTeamUrl` used to sit here too. Nothing rendered it (the component
+// reads only the three props below), the portal has no team page, and the
+// welcome sender passed a URL that 404s. Removed rather than wired.
 export interface VenueWelcomeChecklistProps {
   firstName: string;
   venueName: string;
   spaceUrl: string;
   uploadPhotosUrl: string;
   artPreferencesUrl: string;
-  inviteTeamUrl: string;
   completedSteps: number;
   remainingSteps: ChecklistStep[];
 }
@@ -42,7 +44,6 @@ export const mock: VenueWelcomeChecklistProps = {
   spaceUrl: "https://wallplace.co.uk/venue-portal/profile",
   uploadPhotosUrl: "https://wallplace.co.uk/venue-portal/profile#photos",
   artPreferencesUrl: "https://wallplace.co.uk/venue-portal/profile#preferences",
-  inviteTeamUrl: "https://wallplace.co.uk/venue-portal/settings/team",
   completedSteps: 1,
   remainingSteps: venueSteps,
 };

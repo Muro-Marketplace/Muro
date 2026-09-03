@@ -47,6 +47,9 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { sendEmail } from "@/lib/email/send";
+import { ArtistProgrammeRentStatement } from "@/emails/templates/payments/ArtistProgrammeRentStatement";
+import { ArtistProgrammeRentSettled } from "@/emails/templates/payments/ArtistProgrammeRentSettled";
 import { PROGRAMME_RENT_SHARE_MAX } from "@/lib/curation-tiers";
 import { canReceivePayout } from "@/lib/payouts/capability";
 import { recordBlockedLeg, scheduleTransfer } from "@/lib/stripe-connect";
@@ -67,6 +70,11 @@ export interface AccrueProgrammeRentInput {
    * monthlyEquivalentGbp() does for the tier-floor guard at quote time.
    */
   quotedAmountPence: number;
+  /**
+   * The programme venue's name, for the artist's rent statement. Optional so
+   * the accrual never depends on it; the statement says "the venue" without it.
+   */
+  venueName?: string | null;
 }
 
 export interface AccrueProgrammeRentResult {
@@ -102,6 +110,138 @@ interface EligiblePlacementRow {
   id: string;
   artist_user_id: string;
   programme_rent_gbp: number;
+  work_title: string | null;
+}
+
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk").replace(/\/$/, "");
+
+/** A UK date for artist-facing copy. */
+function ukDate(d: Date): string {
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
+
+interface ArtistRecipient {
+  email: string;
+  firstName: string;
+}
+
+/**
+ * Where an artist's money emails go. Null when there is no address to send
+ * to; the caller then skips the mail and keeps the accrual or settlement.
+ */
+async function resolveArtistRecipient(
+  db: SupabaseClient,
+  artistUserId: string,
+): Promise<ArtistRecipient | null> {
+  const {
+    data: { user },
+  } = await db.auth.admin.getUserById(artistUserId);
+  if (!user?.email) return null;
+  const { data: profile } = await db
+    .from("artist_profiles")
+    .select("name")
+    .eq("user_id", artistUserId)
+    .maybeSingle<{ name: string | null }>();
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const displayName =
+    profile?.name?.trim() || (typeof meta.display_name === "string" ? meta.display_name : "");
+  const firstName = displayName.split(" ").filter(Boolean)[0] || "there";
+  return { email: user.email, firstName };
+}
+
+interface RentStatementInput {
+  artistUserId: string;
+  invoiceId: string;
+  venueName: string | null;
+  periodMonths: number;
+  lines: Array<{ workTitle: string; amountPence: number }>;
+  totalPence: number;
+}
+
+/**
+ * The artist's statement for one paid invoice. Rent used to be recorded as
+ * owed and paid out a quarter later with nothing in between, so the artist
+ * had no idea what they had earned or when it was coming. Keyed on the
+ * invoice AND the artist: one email per artist per accrual run, and a Stripe
+ * redelivery (which 23505-skips every insert and so reaches here with
+ * nothing newly accrued) never gets this far in the first place. Never
+ * throws: a mail failure must not cost anyone their accrual row.
+ */
+async function sendRentStatement(db: SupabaseClient, input: RentStatementInput): Promise<void> {
+  try {
+    const recipient = await resolveArtistRecipient(db, input.artistUserId);
+    if (!recipient) return;
+    await sendEmail({
+      idempotencyKey: `programme_rent_statement:${input.invoiceId}:${input.artistUserId}`,
+      template: "artist_programme_rent_statement",
+      category: "orders_and_payouts",
+      to: recipient.email,
+      userId: input.artistUserId,
+      subject: `£${(input.totalPence / 100).toFixed(2)} of programme rent recorded for you`,
+      react: ArtistProgrammeRentStatement({
+        firstName: recipient.firstName,
+        venueName: input.venueName?.trim() || "the venue",
+        periodMonths: input.periodMonths,
+        lines: input.lines.map((l) => ({
+          workTitle: l.workTitle,
+          amount: { amount: l.amountPence, currency: "GBP" },
+        })),
+        total: { amount: input.totalPence, currency: "GBP" },
+        billingUrl: `${SITE}/artist-portal/billing`,
+        supportUrl: `${SITE}/support`,
+      }),
+      metadata: { invoiceId: input.invoiceId, artistUserId: input.artistUserId },
+    });
+  } catch (err) {
+    console.error("[programme-rent] rent statement email failed", {
+      artistUserId: input.artistUserId,
+      invoiceId: input.invoiceId,
+      err,
+    });
+  }
+}
+
+interface SettlementNoteInput {
+  artistUserId: string;
+  orderId: string;
+  amountPence: number;
+  periodLabel: string;
+}
+
+/**
+ * The artist's note that their quarter's rent is on its way. Keyed on the
+ * synthetic settlement order id, which is stable per artist per quarter (see
+ * settleProgrammeRent), so a retried run cannot send a second copy. Never
+ * throws, and deliberately outside the per-artist settlement try/catch: a
+ * mail failure is not a settlement failure and must not trigger that alert.
+ */
+async function sendSettlementNote(db: SupabaseClient, input: SettlementNoteInput): Promise<void> {
+  try {
+    const recipient = await resolveArtistRecipient(db, input.artistUserId);
+    if (!recipient) return;
+    await sendEmail({
+      idempotencyKey: `programme_rent_settled:${input.orderId}`,
+      template: "artist_programme_rent_settled",
+      category: "orders_and_payouts",
+      to: recipient.email,
+      userId: input.artistUserId,
+      subject: `Programme rent on the way: £${(input.amountPence / 100).toFixed(2)}`,
+      react: ArtistProgrammeRentSettled({
+        firstName: recipient.firstName,
+        amount: { amount: input.amountPence, currency: "GBP" },
+        periodLabel: input.periodLabel,
+        payoutUrl: `${SITE}/artist-portal/billing`,
+        supportUrl: `${SITE}/support`,
+      }),
+      metadata: { orderId: input.orderId, artistUserId: input.artistUserId },
+    });
+  } catch (err) {
+    console.error("[programme-rent] settlement note email failed", {
+      artistUserId: input.artistUserId,
+      orderId: input.orderId,
+      err,
+    });
+  }
 }
 
 /**
@@ -122,7 +262,7 @@ export async function accrueProgrammeRent(
   // to accrue rent for.
   const { data, error } = await db
     .from("placements")
-    .select("id, artist_user_id, programme_rent_gbp")
+    .select("id, artist_user_id, programme_rent_gbp, work_title")
     .eq("programme_request_id", curationRequestId)
     .eq("status", "active")
     .gt("programme_rent_gbp", 0)
@@ -194,6 +334,11 @@ export async function accrueProgrammeRent(
   let accrued = 0;
   let skipped = 0;
   const failedPlacementIds: string[] = [];
+  // What was NEWLY recorded this run, per artist, for their statement below.
+  const accruedByArtist = new Map<
+    string,
+    { lines: Array<{ workTitle: string; amountPence: number }>; totalPence: number }
+  >();
   for (const p of placements) {
     const amountPence = Math.round(p.programme_rent_gbp * 100) * periodMonths;
     const { error: insertError } = await db.from("programme_rent_accruals").insert({
@@ -225,6 +370,10 @@ export async function accrueProgrammeRent(
       continue;
     }
     accrued++;
+    const group = accruedByArtist.get(p.artist_user_id) ?? { lines: [], totalPence: 0 };
+    group.lines.push({ workTitle: p.work_title?.trim() || "Untitled work", amountPence });
+    group.totalPence += amountPence;
+    accruedByArtist.set(p.artist_user_id, group);
   }
 
   if (failedPlacementIds.length > 0) {
@@ -260,6 +409,20 @@ export async function accrueProgrammeRent(
         err,
       });
     }
+  }
+
+  // After every insert has been attempted, never between them: the statement
+  // is about what was actually recorded, and a slow mail call must not sit
+  // between one placement's insert and the next.
+  for (const [artistUserId, group] of accruedByArtist) {
+    await sendRentStatement(db, {
+      artistUserId,
+      invoiceId,
+      venueName: input.venueName ?? null,
+      periodMonths,
+      lines: group.lines,
+      totalPence: group.totalPence,
+    });
   }
 
   return {
@@ -568,7 +731,11 @@ export async function settleProgrammeRent(
 ): Promise<SettleProgrammeRentResult> {
   const { asOf } = input;
   const quarterKey = quarterKeyFor(asOf);
-  const cutoffIso = quarterStartUtc(asOf).toISOString();
+  const cutoff = quarterStartUtc(asOf);
+  const cutoffIso = cutoff.toISOString();
+  // For the artist's note: everything settled this run accrued before the
+  // cutoff, i.e. up to and including the last day of the previous quarter.
+  const periodLabel = `the period up to ${ukDate(new Date(cutoff.getTime() - 24 * 60 * 60 * 1000))}`;
 
   const { data, error } = await db
     .from("programme_rent_accruals")
@@ -651,6 +818,16 @@ export async function settleProgrammeRent(
 
       artistsPaid++;
       totalPence += group.totalPence;
+
+      // The artist hears that it is on its way. Own try/catch inside the
+      // helper, so a mail failure here can never fall into the catch below
+      // and be reported as a settlement failure it is not.
+      await sendSettlementNote(db, {
+        artistUserId,
+        orderId,
+        amountPence: group.totalPence,
+        periodLabel,
+      });
     } catch (err) {
       // The accrual rows stay unsettled (settled_at was never written), so
       // this artist is retried automatically on the next run — the same
