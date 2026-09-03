@@ -24,6 +24,7 @@ import {
   withEditorChromeHidden,
   withOpaqueBackground,
   withSceneChromeHidden,
+  CAPTURE_TARGET_LONG_EDGE_PX,
 } from "./capture";
 
 // jsdom has no canvas backend: getContext() returns null and toBlob() is
@@ -76,8 +77,8 @@ function securityError(): Error {
 
 describe("capturePixelRatio", () => {
   it("scales the longer edge to the target", () => {
-    expect(capturePixelRatio(800, 600)).toBeCloseTo(3);
-    expect(capturePixelRatio(1200, 400)).toBeCloseTo(2);
+    expect(capturePixelRatio(800, 600)).toBeCloseTo(Math.min(CAPTURE_MAX_PIXEL_RATIO, CAPTURE_TARGET_LONG_EDGE_PX / 800));
+    expect(capturePixelRatio(1200, 400)).toBeCloseTo(CAPTURE_TARGET_LONG_EDGE_PX / 1200);
   });
 
   it("caps at the maximum so phones don't allocate a huge bitmap", () => {
@@ -85,7 +86,7 @@ describe("capturePixelRatio", () => {
   });
 
   it("goes below 1 for a stage already wider than the target", () => {
-    expect(capturePixelRatio(4800, 1000)).toBeCloseTo(0.5);
+    expect(capturePixelRatio(4800, 1000)).toBeCloseTo(CAPTURE_TARGET_LONG_EDGE_PX / 4800);
   });
 
   it("falls back to 1 for degenerate sizes", () => {
@@ -310,7 +311,7 @@ describe("captureStage", () => {
       y: 20,
       width: 800,
       height: 600,
-      pixelRatio: 3,
+      pixelRatio: Math.min(CAPTURE_MAX_PIXEL_RATIO, CAPTURE_TARGET_LONG_EDGE_PX / 800),
     });
     // The stage canvas was composited onto the opaque background.
     expect(fillStyleSeen).toBe(CAPTURE_BACKGROUND);

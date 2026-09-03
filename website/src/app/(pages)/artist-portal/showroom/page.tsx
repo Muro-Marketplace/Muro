@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState } from "react";
+import ImageLightbox from "@/components/ImageLightbox";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
@@ -130,6 +131,7 @@ export default function ArtistShowroomPage() {
 // ── Cards ─────────────────────────────────────────────────────────────
 
 function WallCard({ wall }: { wall: Wall }) {
+  const [viewOpen, setViewOpen] = useState(false);
   const aspect = wall.width_cm / wall.height_cm;
   const cardHeight = aspect >= 1 ? 140 : 200;
   const cardWidth = cardHeight * aspect;
@@ -142,11 +144,26 @@ function WallCard({ wall }: { wall: Wall }) {
   const photoUrl = wall.preview_image_url ?? (wall.kind === "uploaded" ? wall.source_image_url : null);
 
   return (
+    <>
     <Link
       href={`/artist-portal/showroom/${wall.id}`}
       className="group block rounded-xl border border-border bg-white overflow-hidden hover:border-stone-300 hover:shadow-md transition"
     >
-      <div className="bg-stone-100 grid place-items-center p-6" style={{ minHeight: 160 }}>
+      <div className="bg-stone-100 grid place-items-center p-6 relative" style={{ minHeight: 160 }}>
+        {photoUrl && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setViewOpen(true);
+            }}
+            className="absolute top-2 right-2 z-10 px-2 py-1 rounded-full bg-white/90 text-[11px] font-medium text-stone-700 shadow hover:bg-white"
+            aria-label={`View ${wall.name} full size`}
+          >
+            View
+          </button>
+        )}
         {photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -180,6 +197,17 @@ function WallCard({ wall }: { wall: Wall }) {
         </p>
       </div>
     </Link>
+    {photoUrl && (
+      <ImageLightbox
+        open={viewOpen}
+        onClose={() => setViewOpen(false)}
+        src={photoUrl}
+        alt={wall.name}
+        title={wall.name}
+        subtitle={`${wall.width_cm} × ${wall.height_cm} cm`}
+      />
+    )}
+    </>
   );
 }
 

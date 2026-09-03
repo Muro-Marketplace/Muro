@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import ImageLightbox from "@/components/ImageLightbox";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import EmptyState from "@/components/EmptyState";
@@ -173,6 +174,7 @@ export default function VenueWallsPage() {
 // ── Cards ─────────────────────────────────────────────────────────────
 
 function WallCard({ wall }: { wall: Wall }) {
+  const [viewOpen, setViewOpen] = useState(false);
   // Compute aspect ratio for the swatch, keep it within a card-friendly box.
   const aspect = wall.width_cm / wall.height_cm;
   const cardHeight = aspect >= 1 ? 140 : 200;
@@ -198,11 +200,26 @@ function WallCard({ wall }: { wall: Wall }) {
   const nameForFallback = displayWallName(wall.name);
 
   return (
+    <>
     <Link
       href={`/venue-portal/walls/${wall.id}`}
       className="group block rounded-xl border border-border bg-white overflow-hidden hover:border-stone-300 hover:shadow-md transition"
     >
-      <div className="bg-stone-100 grid place-items-center p-6" style={{ minHeight: 160 }}>
+      <div className="bg-stone-100 grid place-items-center p-6 relative" style={{ minHeight: 160 }}>
+        {imageUrl && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setViewOpen(true);
+            }}
+            className="absolute top-2 right-2 z-10 px-2 py-1 rounded-full bg-white/90 text-[11px] font-medium text-stone-700 shadow hover:bg-white"
+            aria-label={`View ${nameForFallback} full size`}
+          >
+            View
+          </button>
+        )}
         {imageUrl ? (
           <div
             style={{
@@ -239,6 +256,17 @@ function WallCard({ wall }: { wall: Wall }) {
         </p>
       </div>
     </Link>
+    {imageUrl && (
+      <ImageLightbox
+        open={viewOpen}
+        onClose={() => setViewOpen(false)}
+        src={imageUrl}
+        alt={previewUrl ? `${nameForFallback}, with artwork previewed on it` : nameForFallback}
+        title={nameForFallback}
+        subtitle={`${wall.width_cm} × ${wall.height_cm} cm`}
+      />
+    )}
+    </>
   );
 }
 

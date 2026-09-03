@@ -203,5 +203,6 @@ describe("<RenderPreview /> stays reachable on short screens", () => {
     const img = screen.getByAltText("Wall preview");
     expect(img.className).toContain("max-h-[62vh]");
     expect(screen.getByRole("button", { name: "Send to Testing Venue" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Fullscreen" })).toBeTruthy();
   });
 });

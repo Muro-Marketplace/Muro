@@ -24,7 +24,8 @@
  * src/lib/placements/wall-proposals.ts.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toggleFullscreen } from "@/lib/ui/fullscreen";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -67,6 +68,7 @@ export interface VenueWallCardProps {
 export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
   const { userType } = useAuth();
   const [open, setOpen] = useState(false);
+  const imageBoxRef = useRef<HTMLDivElement>(null);
 
   const previewUrl = wall.preview_image_url || null;
   const photoUrl =
@@ -179,7 +181,14 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
             {/* Wall image, the saved preview at full size when there is one. */}
             <div className="relative bg-stone-100 flex-1 min-h-0">
               {imageUrl ? (
-                <div className="relative w-full h-full min-h-[40vh]">
+                <div ref={imageBoxRef} className="relative w-full h-full min-h-[40vh] bg-stone-900">
+                  <button
+                    type="button"
+                    onClick={() => void toggleFullscreen(imageBoxRef.current)}
+                    className="absolute top-3 left-3 z-10 px-3 py-1.5 rounded-full bg-white/90 text-xs font-medium text-stone-800 shadow hover:bg-white"
+                  >
+                    Fullscreen
+                  </button>
                   <Image
                     src={imageUrl}
                     alt={imageAlt}

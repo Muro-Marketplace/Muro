@@ -233,6 +233,9 @@ function WallVisualizerInner(props: ExtendedProps) {
   // The venue's wall is not the artist's to change: no size, colour or
   // photo controls, and nothing is saved until Send.
   const wallLocked = props.mode === "artist_venue_wall";
+  // Saved walls render flat (no 3D-feeling lighting or shadows) and stay in
+  // 2D; the artwork-page sheet keeps its effects and the 3D view.
+  const flatSaved = props.mode !== "customer_artwork_page";
 
   // ── Auto-save ─────────────────────────────────────────────────────
   // The value we save is the items array, the dimensions and, for preset
@@ -645,6 +648,35 @@ function WallVisualizerInner(props: ExtendedProps) {
     [],
   );
 
+  // Arrow keys nudge the selected artwork: 1 cm, Shift for 5 cm, Alt for
+  // 0.1 cm, so a print can be lined up to a rail without a drag jumping it.
+  useEffect(() => {
+    if (!selectedItemId) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      const delta: Record<string, [number, number]> = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      };
+      const d = delta[e.key];
+      if (!d) return;
+      const item = items.find((it) => it.id === selectedItemId);
+      if (!item) return;
+      e.preventDefault();
+      const step = e.shiftKey ? 5 : e.altKey ? 0.1 : 1;
+      handleItemChange(selectedItemId, {
+        x_cm: Math.round((item.x_cm + d[0] * step) * 10) / 10,
+        y_cm: Math.round((item.y_cm + d[1] * step) * 10) / 10,
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedItemId, items, handleItemChange]);
+
   const handleBringForward = useCallback(() => {
     if (!selectedItemId) return;
     setItems((prev) => {
@@ -979,6 +1011,7 @@ function WallVisualizerInner(props: ExtendedProps) {
           />
         ) : (
           <WallCanvas
+            flat={flatSaved}
             handleRef={canvasRef}
             background={background}
             widthCm={widthCm}
@@ -1040,7 +1073,7 @@ function WallVisualizerInner(props: ExtendedProps) {
             config bar (bottom-centre) and the centred item toolbar
             (top-centre). */}
         <div className="absolute bottom-3 left-3 z-10">
-          <ViewModeToggle value={viewMode} onChange={setViewMode} />
+          {!flatSaved && <ViewModeToggle value={viewMode} onChange={setViewMode} />}
         </div>
 
         {/* Per-item toolbar, top centre when an item is selected.

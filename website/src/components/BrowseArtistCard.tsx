@@ -207,9 +207,13 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
                     e.stopPropagation();
                     router.push(`/browse/${artist.slug}#showroom`);
                   }}
-                  className="shrink-0 text-[11px] font-medium text-accent px-2.5 py-1 rounded-full border border-accent/40 hover:bg-accent/5 transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium text-accent px-1.5 py-0.5 rounded-sm border border-accent/50 hover:bg-accent/5 transition-colors"
                 >
                   View showroom
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
                 </button>
               )}
             </div>

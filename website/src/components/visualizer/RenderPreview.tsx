@@ -24,8 +24,9 @@
  * placement request inside this modal (ProposalSendPanel).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import ProposalSendPanel, { type ProposalSendPanelProps } from "./ProposalSendPanel";
+import { toggleFullscreen } from "@/lib/ui/fullscreen";
 
 export type SaveToWallStatus = "idle" | "saving" | "saved" | "error";
 
@@ -109,6 +110,8 @@ export default function RenderPreview({
     setPickedWorkId(initial);
   }, [saveToArtwork, open]);
 
+  const imageBoxRef = useRef<HTMLDivElement>(null);
+
   if (!open || !imageUrl) return null;
 
   return (
@@ -140,6 +143,7 @@ export default function RenderPreview({
             None of this stops a screenshot, this is a friction
             layer, not DRM. */}
         <div
+          ref={imageBoxRef}
           className="rounded-xl overflow-hidden bg-stone-900 shadow-2xl relative select-none"
           onContextMenu={venueViewer ? (e) => e.preventDefault() : undefined}
         >
@@ -290,6 +294,13 @@ export default function RenderPreview({
                 </a>
               </>
             )}
+            <button
+              type="button"
+              onClick={() => void toggleFullscreen(imageBoxRef.current)}
+              className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
+            >
+              Fullscreen
+            </button>
             <button
               type="button"
               onClick={onClose}

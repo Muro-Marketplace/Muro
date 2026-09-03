@@ -191,6 +191,31 @@ export default function ItemToolbar({
       >
         Delete
       </button>
+      {/* Fine position, in cm from the wall's top-left. Arrow keys nudge
+          the selected artwork too (1 cm, Shift 5 cm, Alt 0.1 cm). */}
+      <span className="hidden sm:inline-block h-4 w-px bg-black/10" />
+      <label className="flex items-center gap-1 text-[11px] text-stone-600">
+        Left
+        <input
+          type="number"
+          step={0.5}
+          value={Math.round(item.x_cm * 10) / 10}
+          onChange={(e) => onChange({ x_cm: Number(e.target.value) || 0 })}
+          className="w-16 rounded-md border border-stone-300 px-1.5 py-0.5 text-[11px] tabular-nums"
+          aria-label="Position from left (cm)"
+        />
+      </label>
+      <label className="flex items-center gap-1 text-[11px] text-stone-600">
+        Top
+        <input
+          type="number"
+          step={0.5}
+          value={Math.round(item.y_cm * 10) / 10}
+          onChange={(e) => onChange({ y_cm: Number(e.target.value) || 0 })}
+          className="w-16 rounded-md border border-stone-300 px-1.5 py-0.5 text-[11px] tabular-nums"
+          aria-label="Position from top (cm)"
+        />
+      </label>
     </div>
   );
 }

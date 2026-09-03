@@ -23,7 +23,7 @@ const { captureImageMock, capture3dMock, fetchMock } = vi.hoisted(() => ({
 }));
 
 type Handle = { captureImage: () => Promise<Blob> };
-type StubProps = { handleRef?: Ref<Handle>; selectedItemId?: string | null };
+type StubProps = { handleRef?: Ref<Handle>; selectedItemId?: string | null; flat?: boolean; };
 
 vi.mock("./WallCanvas", async () => {
   const React = await import("react");
@@ -32,6 +32,7 @@ vi.mock("./WallCanvas", async () => {
     return React.createElement("div", {
       "data-testid": "wall-canvas",
       "data-selected": String(props.selectedItemId ?? ""),
+      "data-flat": String(!!props.flat),
     });
   }
   return { default: WallCanvasStub };
@@ -281,8 +282,18 @@ describe("<WallVisualizer /> Preview", () => {
     expect(screen.queryByRole("dialog", { name: "Wall preview" })).toBeNull();
   });
 
-  it("tells a 3D user to switch to 2D when the scene can't be captured", async () => {
+  it("keeps a saved wall in 2D: no 3D tab, and the canvas draws flat", async () => {
     await mountVenueEditor();
+    expect(screen.queryByRole("tab", { name: "3D" })).toBeNull();
+    expect(screen.getByTestId("wall-canvas").getAttribute("data-flat")).toBe("true");
+  });
+
+  it("tells a 3D user on the artwork page to switch to 2D when the scene can't be captured", async () => {
+    render(
+      <WallVisualizer mode="customer_artwork_page" lockedWork={LOCKED_WORK} authToken={null} />,
+    );
+    await screen.findByTestId("wall-canvas");
+    expect(screen.getByTestId("wall-canvas").getAttribute("data-flat")).toBe("false");
     fireEvent.click(screen.getByRole("tab", { name: "3D" }));
     await screen.findByTestId("wall-3d-canvas");
     capture3dMock.mockRejectedValue(new Error("drawing buffer unavailable"));

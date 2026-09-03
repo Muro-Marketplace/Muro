@@ -98,6 +98,8 @@ interface Props {
   items: WallItem[];
   /** Map of work id → display data (image url, dimensions). */
   workById: Record<string, PanelWork>;
+  /** Flat rendering: no lighting gradients, no vignette, no drop shadows (saved walls). */
+  flat?: boolean;
   selectedItemId: string | null;
   onSelectItem: (id: string | null) => void;
   /** Called when an item moves or resizes, partial WallItem update. */
@@ -125,6 +127,7 @@ export default function WallCanvas({
   onItemChange,
   onAddItem,
   bgImageUrl,
+  flat = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -293,11 +296,12 @@ export default function WallCanvas({
               width={wallPxW}
               height={wallPxH}
               fill={wallColor}
+              shadowEnabled={!flat}
               shadowBlur={20}
               shadowOpacity={0.08}
               shadowOffsetY={6}
             />
-            {background.kind === "preset" && (
+            {background.kind === "preset" && !flat && (
               <>
                 {/* Horizontal light gradient: bright left, dark right. */}
                 <Rect
@@ -376,6 +380,7 @@ export default function WallCanvas({
               .sort((a, b) => a.z_index - b.z_index)
               .map((item) => (
                 <CanvasItem
+                  flat={flat}
                   key={item.id}
                   item={item}
                   work={workById[item.work_id]}
@@ -438,6 +443,7 @@ export default function WallCanvas({
 // ── CanvasItem ──────────────────────────────────────────────────────────
 
 interface CanvasItemProps {
+  flat?: boolean;
   item: WallItem;
   work?: PanelWork;
   pxPerCm: number;
@@ -476,6 +482,8 @@ function CanvasItem({
   onChange,
   onDragGuides,
   onClearGuides,
+
+  flat = false,
 }: CanvasItemProps) {
   const groupRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
@@ -664,7 +672,7 @@ function CanvasItem({
             height={pxH}
             {...getKonvaFrameProps(item.frame, pxW, pxH)}
             shadowColor="rgba(0,0,0,0.35)"
-            shadowEnabled={!selected && frameGeo.hasShadow}
+            shadowEnabled={!flat && !selected && frameGeo.hasShadow}
             shadowBlur={14}
             shadowOpacity={0.4}
             shadowOffsetY={6}
@@ -679,7 +687,7 @@ function CanvasItem({
             width={frameGeo.artwork.width}
             height={frameGeo.artwork.height}
             shadowColor="rgba(0,0,0,0.25)"
-            shadowEnabled={!selected && item.frame.style === "none"}
+            shadowEnabled={!flat && !selected && item.frame.style === "none"}
             shadowBlur={12}
             shadowOpacity={0.35}
             shadowOffsetY={5}

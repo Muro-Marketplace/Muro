@@ -20,9 +20,9 @@
  */
 
 /** Longer edge of the capture, in device pixels. */
-export const CAPTURE_TARGET_LONG_EDGE_PX = 2400;
+export const CAPTURE_TARGET_LONG_EDGE_PX = 3200;
 /** Never ask Konva for more than this, memory on phones is the limit. */
-export const CAPTURE_MAX_PIXEL_RATIO = 3;
+export const CAPTURE_MAX_PIXEL_RATIO = 4;
 export const CAPTURE_MIME = "image/webp";
 export const CAPTURE_QUALITY = 0.92;
 /**

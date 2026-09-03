@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { PublicShowroomWall } from "@/lib/artists/showroom";
 import { safeHexBackground } from "@/lib/hex-color";
+import ImageLightbox from "@/components/ImageLightbox";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -53,6 +54,7 @@ export default function ArtistProfileClient({
   const { user, displayName: authDisplayName, userType } = useAuth();
   const { showToast } = useToast();
   const [activeTheme, setActiveTheme] = useState("All");
+  const [showroomView, setShowroomView] = useState<PublicShowroomWall | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
   // Column count for the row-major masonry. CSS `columns` gave us a
   // pretty layout but filled column-1 top-to-bottom before starting
@@ -770,7 +772,14 @@ export default function ArtistProfileClient({
                 const picture = wall.preview_image_url ?? wall.source_image_url;
                 return (
                   <figure key={wall.id} className="rounded-sm overflow-hidden border border-border bg-white">
-                    <div className="aspect-[4/3] bg-stone-100 relative">
+                    <div
+                      className={`aspect-[4/3] bg-stone-100 relative ${picture ? "cursor-zoom-in" : ""}`}
+                      role={picture ? "button" : undefined}
+                      tabIndex={picture ? 0 : undefined}
+                      aria-label={picture ? `View ${wall.name} full size` : undefined}
+                      onClick={picture ? () => setShowroomView(wall) : undefined}
+                      onKeyDown={picture ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowroomView(wall); } } : undefined}
+                    >
                       {picture ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={picture} alt={`${wall.name}, ${wall.width_cm} by ${wall.height_cm} cm`} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
@@ -787,6 +796,16 @@ export default function ArtistProfileClient({
               })}
             </div>
           </div>
+          {showroomView && (showroomView.preview_image_url ?? showroomView.source_image_url) && (
+            <ImageLightbox
+              open
+              onClose={() => setShowroomView(null)}
+              src={(showroomView.preview_image_url ?? showroomView.source_image_url) as string}
+              alt={`${showroomView.name}, ${showroomView.width_cm} by ${showroomView.height_cm} cm`}
+              title={showroomView.name}
+              subtitle={`${showroomView.width_cm} × ${showroomView.height_cm} cm`}
+            />
+          )}
         </section>
       )}
 
