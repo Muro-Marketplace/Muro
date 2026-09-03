@@ -38,17 +38,17 @@ const HOW_IT_WORKS = [
   {
     n: "01",
     title: "Brief",
-    body: "Tell us about the space, audience, and the feel you want.",
+    body: "Tell us about the space, the audience and the feel you want, and whether you need a one-off shortlist or an ongoing programme.",
   },
   {
     n: "02",
     title: "Curate",
-    body: "A Wallplace curator hand-picks 5 to 8 works that fit your brief.",
+    body: "A Wallplace curator hand-picks 5 to 8 works that fit your brief. On a programme, that shortlist becomes your first rotation.",
   },
   {
     n: "03",
     title: "Place",
-    body: "Pick what you love. We arrange placement or purchase.",
+    body: "Pick what you love. For Curated we arrange placement or purchase. For a programme we install, rotate the work and pay the artists monthly.",
   },
 ];
 
@@ -503,14 +503,13 @@ export default function CuratedClient() {
           </div>
         </section>
 
-        {/* How it works — 3-step strip, demystifies the one-off route in
-            10s. Retitled to name Wallplace Curated specifically now
-            that Programmes is introduced above it, since Programmes
-            has its own how-it-works on its dedicated page. */}
+        {/* How it works: one 3-step strip covering both routes (owner
+            instruction, 3 September 2026), since Programmes is
+            introduced above it on this page. */}
         <section id="how" className="py-20 lg:py-28 bg-foreground text-white">
           <div className="max-w-[1200px] mx-auto px-6">
             <AnimateIn>
-              <h2 className="text-3xl md:text-4xl mb-12 text-white">How Wallplace Curated works</h2>
+              <h2 className="text-3xl md:text-4xl mb-12 text-white">How Wallplace Curated and Programmes work</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-10">
                 {HOW_IT_WORKS.map((step) => (
                   <div key={step.n}>
@@ -527,7 +526,7 @@ export default function CuratedClient() {
                 ))}
               </div>
               <p className="mt-10 text-sm text-white/60 italic">
-                Typical turnaround: 5 business days from brief to shortlist.
+                Typical turnaround: 5 business days from brief to shortlist. A programme usually goes from accepted quote to installation day in three to four weeks.
               </p>
             </AnimateIn>
           </div>
