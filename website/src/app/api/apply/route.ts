@@ -155,7 +155,11 @@ export async function POST(request: Request) {
     // marketplace and outbound actions (placements, sales) stay gated
     // by review_status='approved' so a pending profile doesn't leak
     // onto /browse or send placement requests.
-    if (authedUser && !alreadyApplied) {
+    // The bridge runs for every authenticated applicant, duplicate or not: it
+    // is idempotent (existingProfile check below), and an applicant whose
+    // first submission carried no session has an application but no profile
+    // row, which bounces them off the portal until this creates it.
+    if (authedUser) {
       try {
         const db = getSupabaseAdmin();
         const { data: existingProfile } = await db
@@ -275,6 +279,19 @@ export async function POST(request: Request) {
           } catch (welcomeErr) {
             console.error("Welcome email after application failed:", welcomeErr);
           }
+        }
+      });
+    }
+
+    // A duplicate skips the receipt and the admin ping, but a signed-in
+    // applicant still gets the welcome if they never had it (idempotent).
+    if (alreadyApplied && authedUser) {
+      const userId = authedUser.id;
+      afterResponse(async () => {
+        try {
+          await triggerWelcomeIfNeeded(userId);
+        } catch (welcomeErr) {
+          console.error("Welcome email after duplicate application failed:", welcomeErr);
         }
       });
     }

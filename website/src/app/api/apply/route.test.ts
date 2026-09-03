@@ -296,10 +296,10 @@ describe("POST /api/apply is not an account-existence oracle (E36d)", () => {
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
-  it("does not re-run the profile bridge on a duplicate", async () => {
+  it("still runs the idempotent profile bridge on a duplicate, so a stuck applicant gets their row", async () => {
     applicationInsertMock.mockReturnValue(DUPLICATE);
     await POST(req());
-    expect(profilesInsertMock).not.toHaveBeenCalled();
+    expect(profilesInsertMock).toHaveBeenCalledTimes(1);
   });
 
   it("still sends both on a fresh application", async () => {
@@ -515,5 +515,16 @@ describe("POST /api/apply sends the welcome checklist once the profile row exist
     await POST(req());
     await flush();
     expect(welcomeMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/apply on a duplicate from a signed-in applicant", () => {
+  it("still triggers the welcome (idempotent) without re-sending the receipt", async () => {
+    welcomeMock.mockClear();
+    applicationInsertMock.mockReturnValue({ error: { code: "23505" } });
+    await POST(req());
+    await flush();
+    expect(welcomeMock).toHaveBeenCalledWith("user-1");
+    expect(sendEmailMock).not.toHaveBeenCalled();
   });
 });

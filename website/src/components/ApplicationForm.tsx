@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import { useAuth } from "@/context/AuthContext";
+import { ApiError, mutate } from "@/lib/api-client";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { foundingOfferLine } from "@/lib/pricing";
@@ -276,23 +277,30 @@ export default function ApplicationForm() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          acknowledgedCoolingOff,
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Something went wrong");
-        if (data.fieldErrors && typeof data.fieldErrors === "object") {
-          setFieldErrors(data.fieldErrors as Record<string, string>);
+      // Owner-reported 2 September: the plain fetch here carried no session,
+      // so /api/apply never knew who applied, never created the applicant's
+      // artist_profiles row, and the portal bounced them back to this form.
+      // mutate() attaches the bearer token when there is a session.
+      try {
+        await mutate("/api/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...form,
+            acknowledgedCoolingOff,
+          }),
+        });
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message || "Something went wrong");
+          const payload = err.payload as { fieldErrors?: unknown } | null;
+          if (payload?.fieldErrors && typeof payload.fieldErrors === "object") {
+            setFieldErrors(payload.fieldErrors as Record<string, string>);
+          }
+          setSubmitting(false);
+          return;
         }
-        setSubmitting(false);
-        return;
+        throw err;
       }
 
       // Record terms acceptances (fire-and-forget)
@@ -879,7 +887,7 @@ export default function ApplicationForm() {
           Choose Your Plan
         </h3>
         <p className="text-xs text-muted mb-5">
-          {foundingOfferLine()} You can change your plan at any time after joining.
+          {foundingOfferLine()}{" "}You can change your plan at any time after joining.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {planOptions.map((plan) => (
