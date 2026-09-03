@@ -96,11 +96,17 @@ export async function PUT(request: Request) {
       updatePayload[key] = num;
     }
 
-    // Premium+ tier gate for theme fields. Strip them for Core artists so a
-    // downgraded user can't keep a paid theme live by editing unrelated fields.
-    // Being on the allowlist is not the gate: the theme fields are writable in
-    // principle, and this check is what decides whether they persist.
-    if ("profile_theme" in updatePayload || "label_theme" in updatePayload) {
+    // Premium+ tier gate for the public-profile background theme. Strip it
+    // for Core artists so a downgraded user can't keep a paid theme live by
+    // editing unrelated fields. Being on the allowlist is not the gate:
+    // profile_theme is writable in principle, and this check is what
+    // decides whether it persists.
+    //
+    // label_theme is deliberately NOT gated here, owner decision
+    // 2026-09-02: QR label colour moved off Edit Profile onto the label
+    // printing screens and is free for every plan, so it's left on
+    // updatePayload untouched below.
+    if ("profile_theme" in updatePayload) {
       const { getSupabaseAdmin } = await import("@/lib/supabase-admin");
       const { canCustomiseTheme } = await import("@/lib/profile-themes");
       const { data: existing } = await getSupabaseAdmin()
@@ -110,7 +116,6 @@ export async function PUT(request: Request) {
         .maybeSingle<{ subscription_plan: string | null }>();
       if (!canCustomiseTheme(existing?.subscription_plan)) {
         delete updatePayload.profile_theme;
-        delete updatePayload.label_theme;
       }
     }
 

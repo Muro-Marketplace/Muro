@@ -11,9 +11,9 @@ interface LabelPreviewProps {
   /** Initial per-label show flags. Index-parallel to `labels`. If
    *  omitted, defaults are derived from each label's data presence. */
   initialVisibility?: LabelVisibility[];
-  /** Premium+ colour theme id from the artist's profile. Passed
-   *  straight through to LabelSheet → QRLabel. Falls back to default
-   *  classic when undefined. */
+  /** QR label colour theme id (see lib/profile-themes.ts), free for
+   *  every plan. Passed straight through to LabelSheet → QRLabel.
+   *  Falls back to default classic when undefined. */
   labelTheme?: string;
   onClose: () => void;
 }

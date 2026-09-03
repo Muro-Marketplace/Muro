@@ -5,10 +5,12 @@ import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
+import LabelThemePicker from "@/components/labels/LabelThemePicker";
 import type { LabelData } from "@/components/labels/LabelSheet";
 import { LABEL_SIZES, LABEL_STYLES, type LabelSize, type LabelStyle } from "@/components/labels/QRLabel";
 import { authFetch } from "@/lib/api-client";
 import { displayPhysicalDimensions } from "@/lib/dimensions";
+import { DEFAULT_LABEL_THEME, type LabelThemeId } from "@/lib/profile-themes";
 
 interface LabelOptions {
   showMedium: boolean;
@@ -63,6 +65,10 @@ export default function VenueLabelsPage() {
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [labelSize, setLabelSize] = useState<LabelSize>("medium");
   const [tagline, setTagline] = useState("");
+  // Label colour (owner decision 2026-09-02): free for every plan, venues
+  // included. Chosen per print run; venues have no saved-profile theme
+  // column, so this lives only in component state, nothing is persisted.
+  const [labelThemeId, setLabelThemeId] = useState<LabelThemeId>(DEFAULT_LABEL_THEME);
   // Plan G #7: parity with the artist side. The high-level style
   // preset drives the default field-toggle set; users can still
   // override toggles individually below.
@@ -383,6 +389,15 @@ export default function VenueLabelsPage() {
                 </div>
               </div>
 
+              {/* Label colour (owner decision 2026-09-02): free for every
+                  plan, venues included. Chosen per print run; venues have
+                  no saved theme column so nothing here is persisted. */}
+              <div className="lg:w-64 bg-surface border border-border rounded-sm p-4">
+                <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-2">Label colour</h3>
+                <p className="text-xs text-muted mb-3">How the printed labels are styled</p>
+                <LabelThemePicker value={labelThemeId} onChange={setLabelThemeId} label="" />
+              </div>
+
               <div className="lg:w-64 bg-surface border border-border rounded-sm p-4">
                 <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-2">Your venue</h3>
                 <p className="text-sm text-foreground">{venueName || "Your venue"}</p>
@@ -558,6 +573,7 @@ export default function VenueLabelsPage() {
           labels={previewLabels}
           initialVisibility={buildVisibility(previewLabels)}
           availableSizes={[]}
+          labelTheme={labelThemeId}
           onClose={() => setShowPreview(false)}
         />
       )}

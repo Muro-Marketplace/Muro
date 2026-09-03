@@ -189,17 +189,23 @@ describe("PUT /api/artist-profile mass-assignment (E44)", () => {
     });
   });
 
-  it("still strips theme fields for a plan that cannot customise", async () => {
+  it("still strips profile_theme for a plan that cannot customise, but leaves label_theme (2026-09-02: label colour is free for every plan)", async () => {
     adminMock.mockReturnValue({
       from: () => ({
         select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { subscription_plan: "core" } }) }) }),
       }),
     });
-    await PUT(put({ name: "Maya", profile_theme: "midnight", label_theme: "gold" }));
+    await PUT(put({ name: "Maya", profile_theme: "midnight", label_theme: "dark" }));
     const payload = written();
     expect(payload).not.toHaveProperty("profile_theme");
-    expect(payload).not.toHaveProperty("label_theme");
+    expect(payload.label_theme).toBe("dark");
     expect(payload.name).toBe("Maya");
+  });
+
+  it("does not look up the artist's plan when only label_theme is sent, nothing is gated so there's nothing to check", async () => {
+    await PUT(put({ label_theme: "warm" }));
+    expect(adminMock).not.toHaveBeenCalled();
+    expect(written().label_theme).toBe("warm");
   });
 
   it("still requires authentication", async () => {

@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
-import QuickAddWork from "@/components/QuickAddWork";
 import { type ArtistWork, type Artist } from "@/data/artists";
 import { themes as allThemes } from "@/data/themes";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
@@ -15,15 +14,12 @@ import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   PROFILE_THEMES,
-  LABEL_THEMES,
   canCustomiseTheme,
   DEFAULT_PROFILE_THEME,
-  DEFAULT_LABEL_THEME,
   type ProfileTheme,
-  type LabelTheme,
 } from "@/lib/profile-themes";
 
 // Catalogue of common artwork mediums for the per-work Combobox. The
@@ -255,8 +251,6 @@ interface ProfileState {
   venueTypesSuitedFor: string[];
   /** Premium+ public-profile theme id. NULL/empty -> default light. */
   profileTheme: string;
-  /** Premium+ QR-label theme id. NULL/empty -> default classic. */
-  labelTheme: string;
 }
 
 /** Empty profile state for a brand-new artist who has just completed
@@ -290,7 +284,6 @@ function emptyProfile(nameSeed: string): ProfileState {
     deliveryRadius: "",
     venueTypesSuitedFor: [],
     profileTheme: "",
-    labelTheme: "",
   };
 }
 
@@ -340,7 +333,6 @@ function initProfile(a: Artist): ProfileState {
     deliveryRadius: a.deliveryRadius,
     venueTypesSuitedFor: [...a.venueTypesSuitedFor],
     profileTheme: a.profileTheme || "",
-    labelTheme: a.labelTheme || "",
   };
 }
 
@@ -348,6 +340,7 @@ export default function ProfileEditorPage() {
   const { artist, loading: artistLoading, profileId, refetch } = useCurrentArtist();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const isWelcome = searchParams?.get("welcome") === "1";
   const [profile, setProfile] = useState<ProfileState | null>(null);
@@ -374,12 +367,14 @@ export default function ProfileEditorPage() {
   }, [artist?.slug, user?.user_metadata, user?.email, fallbackTimestamp]);
   const [saved, setSaved] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // Drives the Save button's "Saving..." label and disables it mid-flight,
+  // shared by the sticky bar's button and the "Save and go to My
+  // Portfolio" action, both of which call handleSave.
+  const [saving, setSaving] = useState(false);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
 
   // All hooks must be declared before any conditional returns
   const [works, setWorks] = useState<ArtistWork[]>([]);
-  // Toggles the inline QuickAddWork card open above the works grid.
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
   // Tracks which avatar slot has a drag over it so we can light up the
   // right dropzone (banner vs profile pic) without the other one
   // flashing too.
@@ -388,7 +383,6 @@ export default function ProfileEditorPage() {
   useEffect(() => {
     if (profile) return;
     if (artist) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfile(initProfile(artist));
       return;
     }
@@ -406,7 +400,6 @@ export default function ProfileEditorPage() {
   useUnsavedWarning(hasUnsavedChanges);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!artist) { setWorks([]); return; }
     setWorks([...artist.works]);
   }, [artist]);
@@ -460,8 +453,11 @@ export default function ProfileEditorPage() {
     setHasUnsavedChanges(true);
   }
 
-  async function handleSave() {
-    if (!profile) return;
+  // Returns whether the save actually succeeded, callers that chain a
+  // navigation onto it (the Works section's "Save and go to My
+  // Portfolio") need to know before they move the user on.
+  async function handleSave(): Promise<boolean> {
+    if (!profile) return false;
 
     // Postcode is freeform but flagged in the label as "used for
     // distance search". Garbage values silently never match anything,
@@ -475,12 +471,13 @@ export default function ProfileEditorPage() {
         "Postcode doesn't look like a valid UK postcode (e.g. SW1A 1AA). Fix it or leave it blank.",
         { variant: "warn" },
       );
-      return;
+      return false;
     }
 
     // Save to Supabase. upsertArtistProfile handles both "first save for
     // a freshly-claimed account" (no existing row yet) and "update
     // existing profile", so we don't need a separate path for new users.
+    setSaving(true);
     try {
       // Bio: short (≤300, shown on cards + profile hero) + extended
       // (≤1000, optional, shown at the bottom of the public page).
@@ -534,13 +531,15 @@ export default function ProfileEditorPage() {
           can_arrange_framing: profile.canProvideFraming,
           delivery_radius: profile.deliveryRadius,
           venue_types_suited_for: profile.venueTypesSuitedFor,
-          // Premium+ theme selections. Sent for everyone so the API
-          // doesn't have to reach back into the user's plan; the
-          // server-side tier check in /api/artist-profile drops them
-          // for Core artists so a downgraded user can't keep a paid
-          // theme live by editing other fields.
+          // Premium+ theme selection. Sent for everyone so the API doesn't
+          // have to reach back into the user's plan; the server-side tier
+          // check in /api/artist-profile drops it for Core artists so a
+          // downgraded user can't keep a paid theme live by editing other
+          // fields. QR label colour used to be sent from here too, it now
+          // lives on the label-printing screens (owner decision
+          // 2026-09-02) and saves itself through /api/artist-profile
+          // straight from there.
           profile_theme: profile.profileTheme || null,
-          label_theme: profile.labelTheme || null,
         }),
       });
 
@@ -553,13 +552,26 @@ export default function ProfileEditorPage() {
         console.error("Profile save error:", err);
         showToast("Failed to save profile. Please check your connection.", { variant: "error" });
       }
-      return;
+      return false;
+    } finally {
+      setSaving(false);
     }
 
     setSaved(true);
     setHasUnsavedChanges(false);
     refetch();
     window.scrollTo({ top: 0, behavior: "smooth" });
+    return true;
+  }
+
+  // Works are managed in the full Portfolio editor now (see the Works
+  // section below), not here. When the profile form is dirty, save it
+  // first so nothing is lost, then only navigate once that save has
+  // actually succeeded, handleSave has already shown the error toast and
+  // left the user on this page if it failed.
+  async function handleGoToPortfolio() {
+    const ok = await handleSave();
+    if (ok) router.push("/artist-portal/portfolio");
   }
 
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
@@ -569,29 +581,50 @@ export default function ProfileEditorPage() {
   return (
     <ArtistPortalLayout activePath="/artist-portal/profile">
       <div className="max-w-5xl">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-serif">Edit Profile</h1>
-            <p className="text-sm text-muted mt-1">Customise how venues and buyers see you on Wallplace.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSave}
-              className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors"
+        {/*
+         * Sticky action bar. Save Changes used to live in the header row
+         * below and scrolled away with it, on a page this long that meant
+         * scrolling all the way back to the top just to save.
+         *
+         * top-14 / lg:top-16 matches the fixed site header's own h-14 /
+         * lg:h-16 (src/components/Header.tsx), so the bar clears it once
+         * it sticks. z-40 matches the sticky/fixed action bars on the
+         * labels pages, the same "above page content, below the header's
+         * z-[100] and modal dialogs (z-50+)" slot.
+         *
+         * PortalGuard can render a "pending review" or "not yet
+         * subscribed" banner above this whole page (see
+         * src/components/PortalGuard.tsx), but that banner is normal
+         * document flow, not sticky or fixed itself, so it has already
+         * scrolled out of view by the time this bar activates, there's
+         * nothing extra to offset for it. And because `position: sticky`
+         * only pins an element once scrolling would carry it above `top`,
+         * at rest (no scroll) this bar just sits in its normal place
+         * above the heading below, it doesn't cover it.
+         */}
+        <div className="sticky top-14 lg:top-16 z-40 mb-6 py-3 flex items-center justify-end gap-3 bg-background/90 backdrop-blur-sm border-b border-border">
+          <button
+            onClick={handleSave}
+            disabled={saving || !hasUnsavedChanges}
+            className="px-5 py-2 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+          {artist?.slug && (
+            <Link
+              href={`/browse/${artist.slug}`}
+              target="_blank"
+              className="text-sm text-accent hover:text-accent-hover transition-colors"
             >
-              Save Changes
-            </button>
-            {artist?.slug && (
-              <Link
-                href={`/browse/${artist.slug}`}
-                target="_blank"
-                className="text-sm text-accent hover:text-accent-hover transition-colors"
-              >
-                Preview Profile &rarr;
-              </Link>
-            )}
-          </div>
+              Preview Profile &rarr;
+            </Link>
+          )}
+        </div>
+
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-serif">Edit Profile</h1>
+          <p className="text-sm text-muted mt-1">Customise how venues and buyers see you on Wallplace.</p>
         </div>
 
         {/* First-time welcome, surfaced when the user arrives from the
@@ -961,32 +994,36 @@ export default function ProfileEditorPage() {
 
         {/* 6. Works */}
         <div className={sectionClass}>
-          <div className="flex items-center justify-between mb-5">
+          <div className="mb-5">
             <h2 className="text-lg font-medium">Your Works</h2>
-            {/* Quick-add opens an inline card right here so artists don't
-                get bounced to Portfolio for the common case. That page
-                stays the place for sizes, frames, extra photos and every
-                other in-place edit, the card links there for anyone who
-                needs it. */}
-            <button
-              type="button"
-              onClick={() => setShowQuickAdd((v) => !v)}
-              className="text-sm text-accent hover:text-accent-hover transition-colors"
-            >
-              {showQuickAdd ? "Close" : "+ Add Work"}
-            </button>
+            {/* The inline quick-add card (image, title, medium, one
+                size/price tier) has been removed, the owner wants artists
+                using the full Portfolio editor instead, sizes, frames,
+                extra photos and every other in-place edit already lived
+                there and nowhere else. This button saves the profile form
+                first when it's dirty, so nothing typed here is lost on
+                the way to Portfolio. */}
+            <p className="text-sm text-muted mt-1 mb-3">
+              Works are added and edited in My Portfolio. Save your profile changes first.
+            </p>
+            {hasUnsavedChanges ? (
+              <button
+                type="button"
+                onClick={handleGoToPortfolio}
+                disabled={saving}
+                className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {saving ? "Saving..." : "Save and go to My Portfolio"}
+              </button>
+            ) : (
+              <Link
+                href="/artist-portal/portfolio"
+                className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
+              >
+                Go to My Portfolio
+              </Link>
+            )}
           </div>
-
-          {showQuickAdd && (
-            <QuickAddWork
-              onAdded={(work) => {
-                setWorks((prev) => [...prev, work]);
-                setShowQuickAdd(false);
-                showToast("Artwork added");
-              }}
-              onCancel={() => setShowQuickAdd(false)}
-            />
-          )}
 
           {/* Works grid */}
           {works.length > 0 ? (
@@ -1004,7 +1041,7 @@ export default function ProfileEditorPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted text-center py-8">No works yet. Use &ldquo;+ Add Work&rdquo; to add your first piece.</p>
+            <p className="text-sm text-muted text-center py-8">No works yet. Use &ldquo;Go to My Portfolio&rdquo; to add your first piece.</p>
           )}
         </div>
 
@@ -1034,10 +1071,9 @@ export default function ProfileEditorPage() {
         </div>
 
         {/*
-         * Bottom Save Changes, duplicates the top button so users on
-         * a long edit page don't have to scroll back up after filling
-         * everything out. Same handler; same disabled-when-clean
-         * affordance via hasUnsavedChanges.
+         * Bottom Save Changes, duplicates the sticky bar's button so users
+         * on a long edit page have an explicit save at the end of the
+         * form too. Same handler and saving/disabled-when-clean state.
          */}
         <div className="flex items-center justify-between gap-4 py-6 border-t border-border">
           <p className="text-xs text-muted">
@@ -1047,10 +1083,10 @@ export default function ProfileEditorPage() {
           </p>
           <button
             onClick={handleSave}
-            disabled={!hasUnsavedChanges}
+            disabled={saving || !hasUnsavedChanges}
             className="px-6 py-3 bg-accent text-white text-sm font-medium rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Save Changes
+            {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
 
@@ -1068,15 +1104,14 @@ interface ThemePickerSectionProps {
 function ThemePickerSection({ profile, subscriptionPlan, onChange }: ThemePickerSectionProps) {
   const unlocked = canCustomiseTheme(subscriptionPlan);
   const currentProfileTheme = profile.profileTheme || DEFAULT_PROFILE_THEME;
-  const currentLabelTheme = profile.labelTheme || DEFAULT_LABEL_THEME;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
         <div>
-          <h2 className="text-lg font-medium">Profile & label theme</h2>
+          <h2 className="text-lg font-medium">Profile theme</h2>
           <p className="text-sm text-muted mt-1 max-w-xl">
-            Pick a colour scheme for your public profile and your QR labels.{" "}
+            Pick a colour scheme for your public profile.{" "}
             {unlocked ? (
               <>Changes apply on save.</>
             ) : (
@@ -1094,7 +1129,7 @@ function ThemePickerSection({ profile, subscriptionPlan, onChange }: ThemePicker
         )}
       </div>
 
-      <div className="mb-8">
+      <div>
         <p className="text-xs uppercase tracking-wider text-muted mb-3">Public profile background</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {PROFILE_THEMES.map((t) => (
@@ -1104,21 +1139,6 @@ function ThemePickerSection({ profile, subscriptionPlan, onChange }: ThemePicker
               selected={currentProfileTheme === t.id}
               disabled={!unlocked}
               onPick={() => unlocked && onChange({ profileTheme: t.id })}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <p className="text-xs uppercase tracking-wider text-muted mb-3">QR label colour</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {LABEL_THEMES.map((t) => (
-            <LabelThemeCard
-              key={t.id}
-              theme={t}
-              selected={currentLabelTheme === t.id}
-              disabled={!unlocked}
-              onPick={() => unlocked && onChange({ labelTheme: t.id })}
             />
           ))}
         </div>
@@ -1165,53 +1185,6 @@ function ProfileThemeCard({
       </div>
       <div className="px-3 py-2 border-t border-border bg-surface">
         <p className="text-[11px] text-muted leading-snug">{theme.description}</p>
-      </div>
-    </button>
-  );
-}
-
-function LabelThemeCard({
-  theme,
-  selected,
-  disabled,
-  onPick,
-}: {
-  theme: LabelTheme;
-  selected: boolean;
-  disabled: boolean;
-  onPick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onPick}
-      disabled={disabled}
-      aria-pressed={selected}
-      className={`text-left rounded-sm border transition-colors ${
-        selected ? "border-accent ring-1 ring-accent/40" : "border-border hover:border-foreground/30"
-      } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
-    >
-      <div
-        className="aspect-square p-3 rounded-t-sm flex flex-col items-center justify-center gap-1.5"
-        style={{ backgroundColor: theme.bg, color: theme.fg, borderColor: theme.border }}
-      >
-        {/* Minimal QR stand-in, enough to read the contrast at a glance */}
-        <div
-          className="w-8 h-8 grid grid-cols-3 gap-0.5"
-          aria-hidden
-        >
-          {Array.from({ length: 9 }).map((_, i) => (
-            <span
-              key={i}
-              className="block"
-              style={{ backgroundColor: i % 2 === 0 ? theme.fg : theme.bg }}
-            />
-          ))}
-        </div>
-        <p className="text-[10px] font-medium" style={{ color: theme.subtle }}>By Artist</p>
-      </div>
-      <div className="px-2 py-1.5 border-t border-border bg-surface text-center">
-        <p className="text-[11px] text-foreground">{theme.label}</p>
       </div>
     </button>
   );

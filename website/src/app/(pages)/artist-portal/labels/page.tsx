@@ -6,11 +6,13 @@ import Image from "next/image";
 import { buildVenueOptions, resolveVenueParam, type VenueOption } from "@/lib/labels/venue-options";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
+import LabelThemePicker from "@/components/labels/LabelThemePicker";
 import type { LabelData } from "@/components/labels/LabelSheet";
 import { LABEL_SIZES, LABEL_STYLES, type LabelSize, type LabelStyle } from "@/components/labels/QRLabel";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch } from "@/lib/api-client";
-import { canCustomiseTheme } from "@/lib/profile-themes";
+import { authFetch, mutate, apiErrorMessage } from "@/lib/api-client";
+import { useToast } from "@/context/ToastContext";
+import { DEFAULT_LABEL_THEME, getLabelTheme, type LabelThemeId } from "@/lib/profile-themes";
 
 interface LabelOptions {
   showMedium: boolean;
@@ -20,6 +22,7 @@ interface LabelOptions {
 
 export default function LabelsPage() {
   const { artist, loading: artistLoading } = useCurrentArtist();
+  const { showToast } = useToast();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [quantities, setQuantities] = useState<Record<number, number>>({});
@@ -35,9 +38,13 @@ export default function LabelsPage() {
   const [portfolioQty, setPortfolioQty] = useState(0);
   // Venue context for QR tracking
   const [selectedVenue, setSelectedVenue] = useState<VenueOption | null>(null);
-  // Owner decision 2026-08-28: the label colour follows the profile theme by
-  // DEFAULT but is a per-print choice, not a consequence of being on Pro.
-  const [labelColour, setLabelColour] = useState<"theme" | "classic">("theme");
+  // Owner decision 2026-09-02: label colour moved off Edit Profile and off
+  // the Premium gate, it's now a free, per-print choice made right here and
+  // remembered as the artist's default. Seeded once from that saved default
+  // below, labelThemeSeeded stops a later background refetch (see
+  // useCurrentArtist) from overwriting a colour picked in this session.
+  const [labelThemeId, setLabelThemeId] = useState<LabelThemeId>(DEFAULT_LABEL_THEME);
+  const [labelThemeSeeded, setLabelThemeSeeded] = useState(false);
   // QA flag D16: the dropdown must carry the venue SLUG, not just the display
   // name. The QR route attributes a scan to a venue (revenue share, redirect,
   // signed venue param) only via `vs=<slug>`; a name-only label loses the
@@ -111,6 +118,17 @@ export default function LabelsPage() {
     setPreselected(true);
   }, [artist, searchParams, preselected]);
 
+  // Seed the label-colour picker from the artist's saved default once
+  // `artist` has loaded. labelThemeSeeded guards it to run once, so a
+  // later background refetch doesn't clobber a colour picked in this
+  // session before it's had a chance to save.
+  useEffect(() => {
+    if (labelThemeSeeded || !artist) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLabelThemeId(getLabelTheme(artist.labelTheme).id);
+    setLabelThemeSeeded(true);
+  }, [artist, labelThemeSeeded]);
+
   // All hooks MUST be before any early return
   const totalLabels = useMemo(() => {
     let count = portfolioQty;
@@ -161,6 +179,21 @@ export default function LabelsPage() {
 
   function setQty(index: number, qty: number) {
     setQuantities((prev) => ({ ...prev, [index]: Math.max(1, Math.min(50, qty)) }));
+  }
+
+  async function handleLabelThemeChange(id: LabelThemeId) {
+    setLabelThemeId(id);
+    try {
+      await mutate("/api/artist-profile", {
+        method: "PUT",
+        body: JSON.stringify({ label_theme: id }),
+      });
+    } catch (err) {
+      showToast(
+        apiErrorMessage(err, "Couldn't save this as your default label colour. It's still applied to this print run."),
+        { variant: "warn" },
+      );
+    }
   }
 
   function toggleWork(index: number) {
@@ -241,19 +274,6 @@ export default function LabelsPage() {
           <p className="text-sm text-muted mt-1">
             Generate printable labels with QR codes. Visitors scan to view your profile and enquire.
           </p>
-          {!canCustomiseTheme(currentArtist.subscriptionPlan) && (
-            <div className="mt-4 flex items-center justify-between gap-3 px-4 py-3 bg-accent/5 border border-accent/20 rounded-sm">
-              <p className="text-xs text-foreground/80 leading-relaxed">
-                <strong className="text-foreground">Want coloured labels?</strong> Premium artists can pick from four label themes (dark, warm, accent and classic) and a matching public-profile colour scheme. Visible to scanners + readable in low light venues.
-              </p>
-              <a
-                href="/artist-portal/billing"
-                className="inline-flex items-center justify-center px-3 py-2 text-[11px] font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors shrink-0"
-              >
-                Upgrade
-              </a>
-            </div>
-          )}
         </div>
 
         {/* Customisation + Venue + Portfolio row */}
@@ -393,35 +413,12 @@ export default function LabelsPage() {
             </div>
           </div>
 
-          {/* Label colour (owner decision 2026-08-28): theme by default,
-              classic on demand, chosen per print run. */}
+          {/* Label colour (owner decision 2026-09-02): free for every plan,
+              chosen per print run and remembered as this artist's default. */}
           <div className="lg:w-64 bg-surface border border-border rounded-sm p-4">
             <h3 className="text-xs font-medium tracking-wider uppercase text-muted mb-2">Label colour</h3>
             <p className="text-xs text-muted mb-3">How the printed labels are styled</p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setLabelColour("theme")}
-                className={`flex-1 px-3 py-2 text-xs font-medium border rounded-sm transition-colors ${
-                  labelColour === "theme"
-                    ? "border-accent text-accent bg-accent/5"
-                    : "border-border text-muted hover:border-foreground/30"
-                }`}
-              >
-                My theme
-              </button>
-              <button
-                type="button"
-                onClick={() => setLabelColour("classic")}
-                className={`flex-1 px-3 py-2 text-xs font-medium border rounded-sm transition-colors ${
-                  labelColour === "classic"
-                    ? "border-accent text-accent bg-accent/5"
-                    : "border-border text-muted hover:border-foreground/30"
-                }`}
-              >
-                Classic
-              </button>
-            </div>
+            <LabelThemePicker value={labelThemeId} onChange={handleLabelThemeChange} label="" />
           </div>
 
           {/* Portfolio QR */}
@@ -594,16 +591,7 @@ export default function LabelsPage() {
           labels={previewLabels}
           initialVisibility={buildVisibility(previewLabels)}
           availableSizes={currentArtist.availableSizes}
-          labelTheme={
-            // Premium+ gate. Core artists keep the classic palette
-            // even if they somehow have a labelTheme saved (a tier
-            // downgrade, say) so they don't carry premium styling
-            // they're no longer paying for. On top of the gate, the
-            // print-time toggle lets any artist choose classic.
-            labelColour === "theme" && canCustomiseTheme(currentArtist.subscriptionPlan)
-              ? currentArtist.labelTheme
-              : undefined
-          }
+          labelTheme={labelThemeId}
           onClose={() => setShowPreview(false)}
         />
       )}
