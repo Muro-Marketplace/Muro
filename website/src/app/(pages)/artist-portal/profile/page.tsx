@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import QuickAddWork from "@/components/QuickAddWork";
 import { type ArtistWork, type Artist } from "@/data/artists";
 import { themes as allThemes } from "@/data/themes";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
@@ -377,6 +378,8 @@ export default function ProfileEditorPage() {
 
   // All hooks must be declared before any conditional returns
   const [works, setWorks] = useState<ArtistWork[]>([]);
+  // Toggles the inline QuickAddWork card open above the works grid.
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   // Tracks which avatar slot has a drag over it so we can light up the
   // right dropzone (banner vs profile pic) without the other one
   // flashing too.
@@ -960,18 +963,30 @@ export default function ProfileEditorPage() {
         <div className={sectionClass}>
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-lg font-medium">Your Works</h2>
-            {/* Send adds to /artist-portal/portfolio so there's one
-                authoritative place to manage works. The inline form
-                below is preserved for in-place edits of existing
-                pieces, but new-work creation always goes via Portfolio. */}
-            <Link
-              href="/artist-portal/portfolio"
+            {/* Quick-add opens an inline card right here so artists don't
+                get bounced to Portfolio for the common case. That page
+                stays the place for sizes, frames, extra photos and every
+                other in-place edit, the card links there for anyone who
+                needs it. */}
+            <button
+              type="button"
+              onClick={() => setShowQuickAdd((v) => !v)}
               className="text-sm text-accent hover:text-accent-hover transition-colors"
             >
-              + Add Work
-            </Link>
+              {showQuickAdd ? "Close" : "+ Add Work"}
+            </button>
           </div>
 
+          {showQuickAdd && (
+            <QuickAddWork
+              onAdded={(work) => {
+                setWorks((prev) => [...prev, work]);
+                setShowQuickAdd(false);
+                showToast("Artwork added");
+              }}
+              onCancel={() => setShowQuickAdd(false)}
+            />
+          )}
 
           {/* Works grid */}
           {works.length > 0 ? (
@@ -989,7 +1004,7 @@ export default function ProfileEditorPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted text-center py-8">No works yet. Use &ldquo;+ Add Work&rdquo; to add your first piece in the portfolio.</p>
+            <p className="text-sm text-muted text-center py-8">No works yet. Use &ldquo;+ Add Work&rdquo; to add your first piece.</p>
           )}
         </div>
 
