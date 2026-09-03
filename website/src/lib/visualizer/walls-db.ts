@@ -15,6 +15,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getPublicRenderUrl } from "./renders-db";
 import type {
   Wall,
   WallItem,
@@ -369,6 +370,64 @@ export async function deleteLayout(
     return false;
   }
   return true;
+}
+
+// ── Saved previews ──────────────────────────────────────────────────────
+
+/**
+ * Public URL of the saved preview for each wall in `wallIds`, keyed by
+ * wall id. A wall's preview is the render its most recently updated
+ * layout points at (`wall_layouts.last_render_id`); walls with no saved
+ * preview are simply absent from the result.
+ *
+ * Two queries for the whole set (layouts, then the renders they point
+ * at), never one per wall: the list page and the public profile call this
+ * for every wall they show.
+ */
+export async function getWallPreviewUrls(
+  wallIds: string[],
+  client?: SupabaseClient,
+): Promise<Record<string, string>> {
+  if (wallIds.length === 0) return {};
+  const conn = db(client);
+
+  const { data: layouts, error: layoutsErr } = await conn
+    .from("wall_layouts")
+    .select("wall_id, last_render_id, updated_at")
+    .in("wall_id", wallIds)
+    .order("updated_at", { ascending: false });
+  if (layoutsErr || !layouts) {
+    console.warn("[walls-db] getWallPreviewUrls layouts failed:", layoutsErr?.message);
+    return {};
+  }
+
+  // Newest layout with a render wins per wall (rows arrive newest first).
+  const renderIdByWall = new Map<string, string>();
+  for (const row of layouts as Array<{ wall_id: string; last_render_id: string | null }>) {
+    if (!row.last_render_id || renderIdByWall.has(row.wall_id)) continue;
+    renderIdByWall.set(row.wall_id, row.last_render_id);
+  }
+  if (renderIdByWall.size === 0) return {};
+
+  const { data: renders, error: rendersErr } = await conn
+    .from("wall_renders")
+    .select("id, output_path")
+    .in("id", Array.from(new Set(renderIdByWall.values())));
+  if (rendersErr || !renders) {
+    console.warn("[walls-db] getWallPreviewUrls renders failed:", rendersErr?.message);
+    return {};
+  }
+  const pathByRenderId = new Map<string, string>();
+  for (const row of renders as Array<{ id: string; output_path: string | null }>) {
+    if (row.output_path) pathByRenderId.set(row.id, row.output_path);
+  }
+
+  const out: Record<string, string> = {};
+  for (const [wallId, renderId] of renderIdByWall) {
+    const path = pathByRenderId.get(renderId);
+    if (path) out[wallId] = getPublicRenderUrl(path, conn);
+  }
+  return out;
 }
 
 // ── Row → domain type mapping ───────────────────────────────────────────

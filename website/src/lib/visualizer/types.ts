@@ -54,6 +54,10 @@ export interface Wall {
       photo as a thumbnail without each client minting URLs themselves.
       Not stored, recomputed on each list call (1h expiry). */
   source_image_url?: string;
+  /** Public URL of the preview the owner last saved from the editor (the
+      render its latest layout's `last_render_id` points at). Attached by
+      GET /api/walls and the public venue profile, never stored. */
+  preview_image_url?: string;
   width_cm: number;
   height_cm: number;
   /** Hex without leading '#' (e.g. 'F5F1EB'). Only meaningful for presets. */

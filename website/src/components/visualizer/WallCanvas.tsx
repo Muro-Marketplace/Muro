@@ -13,6 +13,14 @@
  *     and other items' edges/centres while dragging.
  *   - Frame overlays: each item is a Group of (image + coloured border).
  *     The MVP uses solid borders; PR #5 swaps to 9-slice frame PNGs.
+ *   - Capture: the parent passes `handleRef` and calls `captureImage()`
+ *     on it to get the wall as an encoded image. It is a re-render of
+ *     this stage's own node tree (Konva `toCanvas`), cropped to the wall
+ *     plus a small margin, with the selection handles and guides left
+ *     out, so the preview is exactly what the editor shows, only sharper.
+ *     The handle travels as an ordinary prop rather than `ref` because
+ *     the parent mounts this through next/dynamic, whose loadable
+ *     wrapper does not forward refs in every build.
  *
  * Coordinates:
  *   The layout JSON stays in cm. This component converts to/from stage
@@ -26,9 +34,11 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
+  type Ref,
 } from "react";
 import {
   Group,
@@ -46,6 +56,13 @@ import {
   snapAndGuide,
   type PxRect,
 } from "@/lib/visualizer/alignment";
+import {
+  CAPTURE_MARGIN_PX,
+  CaptureError,
+  EDITOR_CHROME_NAME,
+  captureRegion,
+  captureStage,
+} from "@/lib/visualizer/capture";
 import { computeFrameGeometry, getKonvaFrameProps } from "@/lib/visualizer/frames";
 import type {
   LayoutBackground,
@@ -62,7 +79,19 @@ const MAX_ITEM_CM = 1000;
 
 // ── Props ───────────────────────────────────────────────────────────────
 
+/** What the parent can ask of a mounted canvas through `handleRef`. */
+export interface WallCanvasHandle {
+  /**
+   * The wall as an encoded image (WebP, or PNG where the browser can't
+   * encode WebP). Rejects with a CaptureError; `reason: "tainted"` means
+   * an image on the stage was served without CORS headers.
+   */
+  captureImage(): Promise<Blob>;
+}
+
 interface Props {
+  /** Receives the imperative handle (see WallCanvasHandle). */
+  handleRef?: Ref<WallCanvasHandle>;
   background: LayoutBackground;
   widthCm: number;
   heightCm: number;
@@ -85,6 +114,7 @@ interface Props {
 }
 
 export default function WallCanvas({
+  handleRef,
   background,
   widthCm,
   heightCm,
@@ -135,6 +165,31 @@ export default function WallCanvas({
   const wallPxH = heightCm * pxPerCm;
   const wallOriginX = (size.w - wallPxW) / 2;
   const wallOriginY = (size.h - wallPxH) / 2;
+
+  // ── Capture (Preview) ───────────────────────────────────────────────
+  // Re-renders this stage's node tree at a higher pixel ratio, cropped to
+  // the wall plus a margin for its shadow. Transformers and guide lines
+  // are hidden for the duration without redrawing the screen, so the
+  // user sees no flicker and the capture has no handles on it.
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      captureImage: async () => {
+        const stage = stageRef.current;
+        if (!stage || pxPerCm === 0) {
+          throw new CaptureError("empty", "The wall hasn't finished laying out yet.");
+        }
+        return captureStage(stage, {
+          region: captureRegion(
+            { x: wallOriginX, y: wallOriginY, width: wallPxW, height: wallPxH },
+            { width: size.w, height: size.h },
+            CAPTURE_MARGIN_PX,
+          ),
+        });
+      },
+    }),
+    [pxPerCm, wallOriginX, wallOriginY, wallPxW, wallPxH, size.w, size.h],
+  );
 
   // ── Drop handler (HTML, outside Konva) ──────────────────────────────
   const handleDrop = useCallback(
@@ -347,10 +402,12 @@ export default function WallCanvas({
                 />
               ))}
 
-            {/* Alignment guides, drawn last so they sit above items. */}
+            {/* Alignment guides, drawn last so they sit above items.
+                Named as editor chrome so a capture leaves them out. */}
             {guides.vx.map((x, i) => (
               <Line
                 key={`vx-${i}`}
+                name={EDITOR_CHROME_NAME}
                 points={[x, wallOriginY, x, wallOriginY + wallPxH]}
                 stroke="#0F0F0F"
                 strokeWidth={1}
@@ -362,6 +419,7 @@ export default function WallCanvas({
             {guides.hy.map((y, i) => (
               <Line
                 key={`hy-${i}`}
+                name={EDITOR_CHROME_NAME}
                 points={[wallOriginX, y, wallOriginX + wallPxW, y]}
                 stroke="#0F0F0F"
                 strokeWidth={1}

@@ -1,23 +1,41 @@
 "use client";
 
 /**
- * RenderPreview, fullscreen modal that shows the freshly-rendered webp,
- * with quick actions (Download / Open in new tab / Close).
+ * RenderPreview, fullscreen modal that shows the preview the editor just
+ * captured, with quick actions (Save to wall / Download / Open in new tab
+ * / Close).
  *
- * Shown after a successful POST /render. Holds the publicUrl + meta from
- * the response. The parent owns the open/closed state (so it can also
- * close it when the user starts a new edit).
+ * The image is a blob object URL of a pixel capture of the editor stage,
+ * so it is exactly what the editor showed. A plain <img> is used because
+ * next/image cannot serve a blob URL. The parent owns the open/closed
+ * state (so it can also close it when the user starts a new edit).
  *
- * `cached` flag in the footer lets us be honest about whether quota was
- * used, important transparency point per the brief.
+ * `saveToWall` is the saved-wall affordance (venue My Walls editor and
+ * the artist modes): it stores this capture against the wall's layout so
+ * the wall list and the public venue profile show the wall as built.
  *
- * `saveToArtwork` is the artist-specific "promote this render to a
+ * `saveToArtwork` is the artist-specific "promote this preview to a
  * mockup on one of my artworks" affordance. When provided, we render a
  * picker showing the artist's works + a save button. Hidden in
  * customer/venue contexts.
  */
 
 import { useEffect, useState } from "react";
+
+export type SaveToWallStatus = "idle" | "saving" | "saved" | "error";
+
+export interface SaveToWallProps {
+  /** Starts the save; the parent tracks progress through `status`. */
+  onSave: () => void;
+  status: SaveToWallStatus;
+  error: string | null;
+  /** Button copy while idle, e.g. "Save this preview to my wall". */
+  label: string;
+  /** Button copy once saved. Defaults to "Saved". */
+  savedLabel?: string;
+  /** One line under the button explaining where the preview will show. */
+  hint?: string;
+}
 
 export interface SaveToArtworkProps {
   /** Works the artist can attach this mockup to. */
@@ -35,19 +53,14 @@ export interface SaveToArtworkProps {
 interface Props {
   open: boolean;
   onClose: () => void;
-  publicUrl: string | null;
-  cached: boolean;
-  costUnits: number;
-  meta?: {
-    width: number;
-    height: number;
-    itemCount: number;
-    skippedItems: number;
-    durationMs: number;
-  };
+  /** Object URL of the captured image. */
+  imageUrl: string | null;
+  /** File name offered by the Download link. */
+  downloadName?: string;
+  saveToWall?: SaveToWallProps;
   saveToArtwork?: SaveToArtworkProps;
   /** When true, hide the Download CTA + apply anti-save attributes
-      to the rendered image (right-click block, drag prevention,
+      to the image (right-click block, drag prevention,
       pointer-events:none). Used in the venue context where the
       composite is the artist's IP, venues shouldn't be able to
       one-click save it off the platform. Determined users can
@@ -58,10 +71,9 @@ interface Props {
 export default function RenderPreview({
   open,
   onClose,
-  publicUrl,
-  cached,
-  costUnits,
-  meta,
+  imageUrl,
+  downloadName = "wall-preview.webp",
+  saveToWall,
   saveToArtwork,
   venueViewer,
 }: Props) {
@@ -89,17 +101,13 @@ export default function RenderPreview({
     setPickedWorkId(initial);
   }, [saveToArtwork, open]);
 
-  if (!open || !publicUrl) return null;
-
-  const sublabel = cached
-    ? "Loaded from cache (no quota used)"
-    : `Used ${costUnits} render unit${costUnits === 1 ? "" : "s"}`;
+  if (!open || !imageUrl) return null;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Render preview"
+      aria-label="Wall preview"
       className="fixed inset-0 z-[60] grid place-items-center bg-black/70 backdrop-blur-sm p-4 sm:p-8"
       onClick={onClose}
     >
@@ -121,8 +129,8 @@ export default function RenderPreview({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={publicUrl}
-            alt="Wall visualisation"
+            src={imageUrl}
+            alt="Wall preview"
             className={`w-full h-auto block ${venueViewer ? "pointer-events-none select-none" : ""}`}
             draggable={venueViewer ? false : undefined}
             onContextMenu={venueViewer ? (e) => e.preventDefault() : undefined}
@@ -135,6 +143,44 @@ export default function RenderPreview({
             />
           )}
         </div>
+
+        {/*
+         * Save-to-wall strip. Rendered for saved walls (venue editor and
+         * artist modes). Primary action: the preview becomes the wall's
+         * picture on the wall list and, for venues who have published the
+         * wall, on their public profile.
+         */}
+        {saveToWall && (
+          <div className="rounded-xl bg-white/95 text-stone-900 px-4 py-3 shadow-lg flex flex-wrap items-center gap-3">
+            <div className="text-xs flex-1 min-w-[10rem]">
+              <p className="font-medium text-stone-900">
+                {saveToWall.status === "saved"
+                  ? "This preview is now saved to your wall."
+                  : "Happy with it? Save this preview to your wall."}
+              </p>
+              {saveToWall.hint && (
+                <p className="text-stone-500 leading-snug">{saveToWall.hint}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              disabled={saveToWall.status === "saving" || saveToWall.status === "saved"}
+              onClick={saveToWall.onSave}
+              className="text-xs font-medium px-3 py-1.5 rounded-full bg-stone-900 text-white hover:bg-stone-800 disabled:opacity-50"
+            >
+              {saveToWall.status === "saving"
+                ? "Saving…"
+                : saveToWall.status === "saved"
+                  ? (saveToWall.savedLabel ?? "Saved")
+                  : saveToWall.status === "error"
+                    ? "Try again"
+                    : saveToWall.label}
+            </button>
+            {saveToWall.status === "error" && saveToWall.error && (
+              <p className="basis-full text-xs text-red-600">{saveToWall.error}</p>
+            )}
+          </div>
+        )}
 
         {/*
          * Save-to-artwork strip. Only renders for the artist modes
@@ -157,6 +203,7 @@ export default function RenderPreview({
               value={pickedWorkId}
               onChange={(e) => setPickedWorkId(e.target.value)}
               disabled={saveToArtwork.saving}
+              aria-label="Artwork to attach this mockup to"
               className="text-xs px-3 py-1.5 rounded-md border border-stone-300 bg-white max-w-[14rem] truncate"
             >
               {saveToArtwork.works.map((w) => (
@@ -180,7 +227,7 @@ export default function RenderPreview({
               {saveToArtwork.saving
                 ? "Saving…"
                 : saveToArtwork.savedWorkId === pickedWorkId
-                  ? "Saved ✓"
+                  ? "Saved"
                   : "Save to artwork"}
             </button>
             {saveToArtwork.error && (
@@ -193,16 +240,9 @@ export default function RenderPreview({
 
         {/* Footer bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-2 text-white">
-          <div className="text-xs">
-            <p className="font-medium">{sublabel}</p>
-            {meta && (
-              <p className="text-white/60">
-                {meta.itemCount} item{meta.itemCount === 1 ? "" : "s"}
-                {meta.skippedItems > 0 && ` · ${meta.skippedItems} skipped`} ·{" "}
-                {Math.round(meta.durationMs / 100) / 10}s
-              </p>
-            )}
-          </div>
+          <p className="text-xs text-white/70">
+            Exactly as laid out in the editor.
+          </p>
           <div className="flex items-center gap-2">
             {/* Open-in-new-tab + Download are hidden for venues,
                 they shouldn't be one-clicking the artist's render
@@ -211,7 +251,7 @@ export default function RenderPreview({
             {!venueViewer && (
               <>
                 <a
-                  href={publicUrl}
+                  href={imageUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
@@ -219,8 +259,8 @@ export default function RenderPreview({
                   Open in new tab
                 </a>
                 <a
-                  href={publicUrl}
-                  download
+                  href={imageUrl}
+                  download={downloadName}
                   className="px-3 py-1.5 rounded-full bg-white/10 text-xs hover:bg-white/15"
                 >
                   Download

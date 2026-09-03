@@ -5,6 +5,7 @@ import { getOptionalUser } from "@/lib/api-auth";
 import { resolveSubscription } from "@/lib/subscriptions";
 import { canSeeVenueIdentity } from "@/lib/venue-visibility";
 import { isFlagOn } from "@/lib/feature-flags";
+import { getWallPreviewUrls } from "@/lib/visualizer/walls-db";
 
 // Gated data source for the public venue profile page. Venue identity (name,
 // description, photos, display needs, walls, open requests) is paywalled the
@@ -45,6 +46,8 @@ interface PublicWall {
   kind: "preset" | "uploaded";
   wall_color_hex: string;
   source_image_url?: string;
+  /** The preview the venue last saved from the editor, when there is one. */
+  preview_image_url?: string;
 }
 
 interface PublicArtworkRequest {
@@ -143,6 +146,13 @@ async function loadWalls(db: Db, venueUserId: string): Promise<PublicWall[]> {
         if (signed?.signedUrl) base.source_image_url = signed.signedUrl;
       }
       out.push(base);
+    }
+    // The preview the venue saved from the editor is what artists should
+    // see: the wall as it was built, not the bare photo. Only walls the
+    // venue made public reach this point, the gate above is unchanged.
+    const previews = await getWallPreviewUrls(out.map((w) => w.id), db);
+    for (const w of out) {
+      if (previews[w.id]) w.preview_image_url = previews[w.id];
     }
     return out;
   } catch {

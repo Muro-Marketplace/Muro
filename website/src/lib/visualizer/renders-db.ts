@@ -2,7 +2,8 @@
  * Render persistence, insert into wall_renders + upload to Storage.
  *
  * Storage layout:
- *   wall-renders/{user_id}/{render_id}.webp
+ *   wall-renders/{user_id}/{render_id}.webp   (or .png for a browser
+ *   capture from a browser that can't encode WebP; `contentType` decides)
  *
  *   The bucket should be publicly readable (set in the Supabase dashboard)
  *   so the resulting URL works in <img> tags + emails without a signed
@@ -17,6 +18,13 @@ import type { RenderKind, WallRender } from "./types";
 
 const RENDERS_BUCKET = "wall-renders";
 
+export type RenderContentType = "image/webp" | "image/png";
+
+const EXTENSION_FOR: Record<RenderContentType, string> = {
+  "image/webp": "webp",
+  "image/png": "png",
+};
+
 export interface PersistRenderInput {
   userId: string;
   layoutId: string | null;
@@ -24,6 +32,8 @@ export interface PersistRenderInput {
   layoutHash: string;
   costUnits: number;
   imageBuffer: Buffer;
+  /** What `imageBuffer` holds. Defaults to WebP, which sharp produces. */
+  contentType?: RenderContentType;
   /** Optional provider tag (null for the MVP non-AI compositor). */
   provider?: string | null;
   /** Optional prompt seed when AI provider used. */
@@ -48,13 +58,14 @@ export async function persistRender(
 ): Promise<PersistRenderResult | null> {
   const db = client ?? getSupabaseAdmin();
   const renderId = randomUUID();
-  const path = `${input.userId}/${renderId}.webp`;
+  const contentType: RenderContentType = input.contentType ?? "image/webp";
+  const path = `${input.userId}/${renderId}.${EXTENSION_FOR[contentType]}`;
 
   // 1. Upload bytes.
   const { error: uploadErr } = await db.storage
     .from(RENDERS_BUCKET)
     .upload(path, input.imageBuffer, {
-      contentType: "image/webp",
+      contentType,
       cacheControl: "604800",
       upsert: false,
     });

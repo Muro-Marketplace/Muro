@@ -22,6 +22,7 @@ import {
   countWallsByUser,
   createPresetWall,
   createUploadedWall,
+  getWallPreviewUrls,
   listWallsByUser,
 } from "@/lib/visualizer/walls-db";
 
@@ -44,21 +45,32 @@ export async function GET(request: Request) {
   // bucket is private, so we mint signed URLs server-side via the
   // admin client. 1h expiry matches what /api/walls/upload-photo
   // returns at create time.
+  //
+  // Every wall also carries `preview_image_url` when the owner has saved
+  // a preview from the editor, resolved for the whole list in one go so
+  // the cards can show the built wall rather than the bare photo or
+  // swatch.
   const db = getSupabaseAdmin();
-  const enriched = await Promise.all(
-    walls.map(async (w) => {
-      if (w.kind !== "uploaded" || !w.source_image_path) return w;
-      try {
-        const { data } = await db.storage
-          .from(PHOTOS_BUCKET)
-          .createSignedUrl(w.source_image_path, 60 * 60);
-        return data?.signedUrl
-          ? { ...w, source_image_url: data.signedUrl }
-          : w;
-      } catch {
-        return w;
-      }
-    }),
+  const [previews, enriched] = await Promise.all([
+    getWallPreviewUrls(walls.map((w) => w.id)),
+    Promise.all(
+      walls.map(async (w) => {
+        if (w.kind !== "uploaded" || !w.source_image_path) return w;
+        try {
+          const { data } = await db.storage
+            .from(PHOTOS_BUCKET)
+            .createSignedUrl(w.source_image_path, 60 * 60);
+          return data?.signedUrl
+            ? { ...w, source_image_url: data.signedUrl }
+            : w;
+        } catch {
+          return w;
+        }
+      }),
+    ),
+  ]);
+  const withPreviews = enriched.map((w) =>
+    previews[w.id] ? { ...w, preview_image_url: previews[w.id] } : w,
   );
 
   // Include tier-cap context so the client can disable the "+ New Wall"
@@ -68,7 +80,7 @@ export async function GET(request: Request) {
   const tier = await resolveTier({ userId: auth.user!.id });
   const limits = getTierLimits(tier);
   return NextResponse.json({
-    walls: enriched,
+    walls: withPreviews,
     tier,
     cap: limits.saved_walls,
   });

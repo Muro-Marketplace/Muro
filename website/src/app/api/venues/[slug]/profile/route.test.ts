@@ -20,12 +20,16 @@ const { fromMock, isFlagOnMock, getOptionalUserMock, resolveSubscriptionMock } =
 
 // `loadWalls` signs a URL for every uploaded wall, so the fake needs storage or
 // its try/catch swallows the whole load and the test passes for the wrong reason.
+// getPublicUrl serves the saved-preview lookup the same way.
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
     from: fromMock,
     storage: {
       from: () => ({
         createSignedUrl: async () => ({ data: { signedUrl: "https://signed.example/w1" } }),
+        getPublicUrl: (path: string) => ({
+          data: { publicUrl: `https://public.example/wall-renders/${path}` },
+        }),
       }),
     },
   }),
@@ -57,8 +61,8 @@ const WALL = {
   is_public_on_profile: true,
 };
 
-/** Table router: venue lookup, walls, artwork requests. */
-function installDb(walls: unknown[]) {
+/** Table router: venue lookup, walls, artwork requests, saved previews. */
+function installDb(walls: unknown[], extra: Record<string, unknown[]> = {}) {
   fromMock.mockImplementation((table: string) => {
     const chain: Record<string, unknown> = {};
     for (const m of ["select", "eq", "order", "limit", "in", "is", "gte"]) chain[m] = () => chain;
@@ -67,8 +71,9 @@ function installDb(walls: unknown[]) {
       chain.single = async () => ({ data: VENUE, error: null });
       return chain;
     }
+    const rows = table === "walls" ? walls : (extra[table] ?? []);
     chain.then = (resolve: (v: unknown) => unknown) =>
-      Promise.resolve({ data: table === "walls" ? walls : [], error: null }).then(resolve);
+      Promise.resolve({ data: rows, error: null }).then(resolve);
     return chain;
   });
 }
@@ -146,5 +151,39 @@ describe("GET /api/venues/[slug]/profile honours the wall kill-switch (D6 item 3
       expect(body.venue, String(flag)).not.toHaveProperty("user_id");
       expect(body.venue, String(flag)).not.toHaveProperty("postcode");
     }
+  });
+});
+
+describe("GET /api/venues/[slug]/profile carries the wall's saved preview", () => {
+  it("attaches preview_image_url from the layout's last render", async () => {
+    installDb([WALL], {
+      wall_layouts: [
+        { wall_id: "w1", last_render_id: "r1", updated_at: "2026-09-03T10:00:00Z" },
+      ],
+      wall_renders: [{ id: "r1", output_path: "u-venue/r1.webp" }],
+    });
+
+    const body = await (await GET(req(), ctx)).json();
+
+    expect(body.walls[0].preview_image_url).toBe(
+      "https://public.example/wall-renders/u-venue/r1.webp",
+    );
+    // The photo is still there for the card's fallback.
+    expect(body.walls[0].source_image_url).toBe("https://signed.example/w1");
+  });
+
+  it("omits preview_image_url when the venue has never saved a preview", async () => {
+    installDb([WALL]);
+    const body = await (await GET(req(), ctx)).json();
+    expect(body.walls[0]).not.toHaveProperty("preview_image_url");
+  });
+
+  it("only looks up previews for the public walls it is about to serve", async () => {
+    installDb([WALL]);
+    await GET(req(), ctx);
+    // Layout lookups happen after the walls query, never before it, so a
+    // private wall's preview can't be fetched and leak by another path.
+    const tables = fromMock.mock.calls.map((c) => c[0]);
+    expect(tables.indexOf("wall_layouts")).toBeGreaterThan(tables.indexOf("walls"));
   });
 });

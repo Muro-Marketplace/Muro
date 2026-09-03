@@ -1,13 +1,19 @@
 "use client";
 
-// Phase 2.6. Fixed bottom-left feedback bubble. Two tabs: feature
+// Phase 2.6. Fixed bottom-right feedback bubble. Two tabs: feature
 // request and feedback. Submissions hit /api/moderation, which stores
 // them in moderation_queue for the admin pool. The bubble itself is
 // mounted by the public + portal layouts; legal pages (/terms,
 // /privacy, /cookies, etc.) opt out so the chrome stays clean.
+//
+// Full-screen editors share the bottom-right corner (the wall
+// visualiser's Preview pill sits exactly where this button does), so
+// they hold the bubble hidden through feedback-bubble-visibility while
+// they are mounted.
 
 import { useState, type FormEvent } from "react";
 import { usePathname } from "next/navigation";
+import { useFeedbackBubbleHidden } from "@/lib/ui/feedback-bubble-visibility";
 
 type Tab = "feature" | "feedback";
 
@@ -28,6 +34,7 @@ export default function FeedbackBubble() {
   const isHidden = HIDDEN_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
+  const hiddenByEditor = useFeedbackBubbleHidden();
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("feature");
@@ -39,7 +46,7 @@ export default function FeedbackBubble() {
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  if (isHidden) return null;
+  if (isHidden || hiddenByEditor) return null;
 
   function resetForm() {
     setTitle("");

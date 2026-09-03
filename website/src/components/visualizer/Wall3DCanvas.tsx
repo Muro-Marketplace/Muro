@@ -40,9 +40,11 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
+  type Ref,
 } from "react";
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import {
@@ -51,6 +53,12 @@ import {
   useTexture,
 } from "@react-three/drei";
 import * as THREE from "three";
+import {
+  CaptureError,
+  EDITOR_CHROME_USER_DATA,
+  UNSUPPORTED_3D_MESSAGE,
+  captureScene,
+} from "@/lib/visualizer/capture";
 import {
   computeFrameGeometry,
   getFrameFinish,
@@ -70,6 +78,10 @@ const FRAME_DEPTH_M = 0.025; // additional thickness of the frame moulding
 const SHADOW_OPACITY = 0.35;
 
 interface Props {
+  /** Receives the imperative handle (see Wall3DCanvasHandle). A prop,
+   *  not `ref`: the parent mounts this through next/dynamic, whose
+   *  loadable wrapper does not forward refs in every build. */
+  handleRef?: Ref<Wall3DCanvasHandle>;
   background: LayoutBackground;
   /** Wall width in cm (real-world). */
   widthCm: number;
@@ -85,10 +97,26 @@ interface Props {
   bgImageUrl?: string | null;
 }
 
+/** What the parent can ask of a mounted 3D canvas through `handleRef`. */
+export interface Wall3DCanvasHandle {
+  /**
+   * The current view as an encoded image, at the canvas's own resolution
+   * (best effort: there is no higher-ratio re-render for WebGL). Rejects
+   * with a CaptureError when the scene isn't ready or the buffer can't
+   * be read; the parent tells the user to switch to 2D.
+   */
+  captureImage(): Promise<Blob>;
+}
+
+interface CaptureApi {
+  capture: () => Promise<Blob>;
+}
+
 /** Lifted to a module constant so deps in OrbitControlsRef stay stable. */
 const ORBIT_DAMPING = 0.08;
 
 export default function Wall3DCanvas({
+  handleRef,
   background,
   widthCm,
   heightCm,
@@ -102,6 +130,21 @@ export default function Wall3DCanvas({
 }: Props) {
   const wallW = widthCm / 100; // metres
   const wallH = heightCm / 100;
+
+  // Capture bridge, registered from inside <Canvas> where the renderer,
+  // scene and camera live.
+  const captureApiRef = useRef<CaptureApi | null>(null);
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      captureImage: async () => {
+        const api = captureApiRef.current;
+        if (!api) throw new CaptureError("unsupported", UNSUPPORTED_3D_MESSAGE);
+        return api.capture();
+      },
+    }),
+    [],
+  );
 
   const wallColor =
     background.kind === "preset" ? `#${background.color_hex}` : "#FFFFFF";
@@ -156,8 +199,8 @@ export default function Wall3DCanvas({
         camera={{ position: [0, wallH * 0.55, wallW * 1.35], fov: 45 }}
         gl={{
           antialias: true,
-          // preserveDrawingBuffer needed for canvas-to-blob if we ever
-          // export the 3D view as a render output.
+          // preserveDrawingBuffer so Preview can read the drawing buffer
+          // straight after a forced frame (see CaptureBridge).
           preserveDrawingBuffer: true,
           // ACES filmic tonemapping with a slightly lifted exposure,
           // gets the room out of the "video game" gamut into something
@@ -275,6 +318,12 @@ export default function Wall3DCanvas({
             }}
             wallW={wallW}
             wallH={wallH}
+          />
+
+          <CaptureBridge
+            onReady={(api) => {
+              captureApiRef.current = api;
+            }}
           />
 
           <OrbitControls
@@ -649,9 +698,10 @@ function ArtworkMesh({
         )}
       </Suspense>
 
-      {/* Selection: thin rectangular outline + 4 corner resize handles. */}
+      {/* Selection: thin rectangular outline + 4 corner resize handles.
+          Flagged as editor chrome so a Preview capture leaves them out. */}
       {selected && (
-        <>
+        <group userData={{ ...EDITOR_CHROME_USER_DATA }}>
           <SelectionOutline itemW={itemW} itemH={itemH} />
           {(
             [
@@ -673,7 +723,7 @@ function ArtworkMesh({
               onPointerCancel={onCornerPointerUp}
             />
           ))}
-        </>
+        </group>
       )}
 
       {/* Soft contact shadow under the item, a darker plane behind
@@ -808,6 +858,25 @@ function DropBridge({
     };
     onReady(api);
   }, [camera, raycaster, gl, wallPlane, wallW, wallH, onReady]);
+
+  return null;
+}
+
+// ── Capture bridge ─────────────────────────────────────────────────────
+
+/**
+ * Renders nothing; exposes `capture()` upwards. Forces one fresh frame
+ * with the selection chrome hidden, then reads the drawing buffer. Lives
+ * inside <Canvas> because that is where useThree() is available.
+ */
+function CaptureBridge({ onReady }: { onReady: (api: CaptureApi) => void }) {
+  const { gl, scene, camera } = useThree();
+
+  useEffect(() => {
+    onReady({
+      capture: () => captureScene(gl, scene, camera),
+    });
+  }, [gl, scene, camera, onReady]);
 
   return null;
 }

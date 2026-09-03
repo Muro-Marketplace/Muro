@@ -10,7 +10,8 @@
  *   - Switch frame style + finish
  *   - Cycle through listed artwork sizes (when the work has variants)
  *   - Drag/resize the artwork on the wall
- *   - Hit Render to get a polished composite (auth + quota required)
+ *   - Hit Preview to see the wall exactly as laid out (a capture of the
+ *     editor itself, nothing is uploaded or metered)
  *
  * Design choices:
  *   - Fullscreen on mobile, tall modal (90vh) on desktop. Konva needs

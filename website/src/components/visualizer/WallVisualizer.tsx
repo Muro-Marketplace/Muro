@@ -7,57 +7,70 @@
  *   - layout state (background, dimensions, items, selection)
  *   - works data (fetched once, kept as both list + lookup map)
  *   - high-level interactions: add/move/resize/delete/duplicate/z-order
- *   - render flow (POST /render → preview modal, 429 → upgrade modal)
+ *   - preview flow (capture the editor stage → preview modal → optional
+ *     Save to wall, which uploads the capture against the saved layout)
  *   - auto-save (debounced PATCH /layouts/[lid] when wallId+layoutId set)
  *
  * Composes:
  *   - WorksPanel       (presentational)
  *   - WallCanvas       (Konva, dynamic-imported with ssr:false)
- *   - QuotaChip        (self-fetching, refreshes after each render)
+ *   - Wall3DCanvas     (three.js, dynamic-imported with ssr:false)
  *   - ItemToolbar      (visible when an item is selected)
  *   - WallConfigBar    (preset/colour/dimensions)
- *   - UpgradeModal     (shown on 429 or chip-out click)
- *   - RenderPreview    (shown after a successful render)
+ *   - RenderPreview    (shown after a capture)
+ *
+ * Preview:
+ *   Preview used to POST the layout to a server compositor, which rebuilt
+ *   the scene with its own scale and a cover-cropped wall photo, so the
+ *   art never landed where the editor showed it. It is now a pixel
+ *   capture of the editor's own stage (see lib/visualizer/capture.ts):
+ *   what the user sees is what they get, nothing is fetched, nothing is
+ *   metered. Saving the preview stores that capture against the layout
+ *   so the wall list and the public venue profile show the wall as built.
  *
  * Feature flag:
  *   Returns null when WALL_VISUALIZER_V1 is off, so embedding routes
  *   compile + render fine.
  *
  * Persistence model:
- *   - Pass `wall` + `initialLayout` to enable auto-save + render. Without
- *     them, the editor runs in "preview only" mode (no persistence, fine
- *     for the customer artwork-page sheet, etc.)
+ *   - Pass `wall` + `initialLayout` to enable auto-save + Save to wall.
+ *     Without them, the editor runs in "preview only" mode (no
+ *     persistence, fine for the customer artwork-page sheet, etc.)
  *   - Auto-save PATCHes the layout 800ms after the last edit. The hook
  *     handles stale-while-saving so a fast typist can't outrun it.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
 import { isFlagOn } from "@/lib/feature-flags";
+import { hideFeedbackBubble } from "@/lib/ui/feedback-bubble-visibility";
 import { useMediaQuery } from "@/lib/use-media-query";
+import { CaptureError, captureErrorMessage } from "@/lib/visualizer/capture";
 import {
   buildSizeVariants,
   parseDimensions,
   pickDefaultSize,
-  type SizeVariant,
 } from "@/lib/visualizer/dimensions";
 import { wallPatchBody } from "@/lib/visualizer/wall-save";
 import { defaultFrameConfig } from "@/lib/visualizer/frames";
 import { PRESET_WALLS, getPresetWall } from "@/lib/visualizer/preset-walls";
+import {
+  previewFileName,
+  previewFormatFromType,
+} from "@/lib/visualizer/preview-image";
 import { useAutoSave } from "@/lib/visualizer/use-auto-save";
 import type {
   LayoutBackground,
-  QuotaConsumeResult,
   VisualizerEditorProps,
-  VisualizerTier,
   Wall,
   WallItem,
   WallLayout,
 } from "@/lib/visualizer/types";
 import ItemToolbar from "./ItemToolbar";
-import QuotaChip from "./QuotaChip";
-import RenderPreview from "./RenderPreview";
-import UpgradeModal, { type UpgradeReason } from "./UpgradeModal";
+import RenderPreview, { type SaveToWallStatus } from "./RenderPreview";
+import type { Wall3DCanvasHandle } from "./Wall3DCanvas";
+import type { WallCanvasHandle } from "./WallCanvas";
 import WorksPanel, { type PanelWork } from "./WorksPanel";
 
 const WallCanvas = dynamic(() => import("./WallCanvas"), {
@@ -89,13 +102,13 @@ const DEFAULT_ITEM_HEIGHT_CM = 80;
 // ── Public props ────────────────────────────────────────────────────────
 
 interface ExtendedProps extends VisualizerEditorProps {
-  /** Bearer token for authenticated API calls (quota, works fetch, render, save). */
+  /** Bearer token for authenticated API calls (works fetch, save, preview upload). */
   authToken?: string | null;
   /** Pre-supplied work to lock onto (artwork-page entry). */
   lockedWork?: PanelWork | null;
-  /** Loaded wall, required for auto-save + render. */
+  /** Loaded wall, required for auto-save + Save to wall. */
   wall?: Wall | null;
-  /** Loaded initial layout, required for auto-save + render. */
+  /** Loaded initial layout, required for auto-save + Save to wall. */
   initialLayout?: WallLayout | null;
   /**
    * Display URL for the wall photo (uploaded walls only). Resolved by
@@ -105,20 +118,16 @@ interface ExtendedProps extends VisualizerEditorProps {
   bgImageUrl?: string | null;
 }
 
-interface LastRender {
-  /** wall_renders.id, needed when promoting this render to an artwork
-   *  mockup. Optional because legacy server responses didn't include it. */
-  renderId?: string;
-  publicUrl: string;
-  cached: boolean;
-  costUnits: number;
-  meta?: {
-    width: number;
-    height: number;
-    itemCount: number;
-    skippedItems: number;
-    durationMs: number;
-  };
+interface CapturedPreview {
+  /** The encoded capture, kept so Save to wall can upload it. */
+  blob: Blob;
+  /** Object URL for the modal's <img>; revoked when replaced or on unmount. */
+  url: string;
+  /** Which editor produced it, for the error copy. */
+  view: ViewMode;
+  /** wall_renders.id once this capture has been stored for the wall, so
+   *  the mockup path can attach it without uploading twice. */
+  renderId: string | null;
 }
 
 export default function WallVisualizer(props: ExtendedProps) {
@@ -147,16 +156,36 @@ function WallVisualizerInner(props: ExtendedProps) {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("2d");
 
-  // ── Render flow state ─────────────────────────────────────────────
-  const [refreshNonce, setRefreshNonce] = useState(0);
-  const [renderInFlight, setRenderInFlight] = useState(false);
-  const [renderError, setRenderError] = useState<string | null>(null);
-  const [lastRender, setLastRender] = useState<LastRender | null>(null);
+  // ── Preview flow state ────────────────────────────────────────────
+  // The canvases hand their capture handle back through `handleRef`, an
+  // ordinary prop: next/dynamic's loadable wrapper swallows a real `ref`
+  // in the pages-runtime build, and a prop survives any wrapper.
+  const canvasRef = useRef<WallCanvasHandle>(null);
+  const canvas3dRef = useRef<Wall3DCanvasHandle>(null);
+  const [previewInFlight, setPreviewInFlight] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<CapturedPreview | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | undefined>(undefined);
-  const [upgradeTier, setUpgradeTier] = useState<VisualizerTier | null>(null);
-  const [upgradeResetsAt, setUpgradeResetsAt] = useState<string | null>(null);
+  // Save-to-wall state for the current capture. Reset on every new
+  // preview, since a fresh capture is a fresh thing to save.
+  const [wallSaveStatus, setWallSaveStatus] = useState<SaveToWallStatus>("idle");
+  const [wallSaveError, setWallSaveError] = useState<string | null>(null);
+
+  // Object URLs are per-document allocations; release the previous one
+  // when a new capture replaces it, and the last one on unmount.
+  useEffect(() => {
+    const url = preview?.url;
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [preview?.url]);
+
+  // The feedback bubble shares the bottom-right corner with the Preview
+  // pill. Hold it hidden for as long as this editor is mounted.
+  useEffect(() => {
+    const release = hideFeedbackBubble();
+    return release;
+  }, []);
 
   // ── Mobile UX ─────────────────────────────────────────────────────
   // On phones (and small tablets in portrait) the side rail of works
@@ -176,7 +205,7 @@ function WallVisualizerInner(props: ExtendedProps) {
 
   // Mockup-save state, only relevant in artist modes. Tracked here
   // (rather than inside RenderPreview) so it survives previews opening
-  // and closing, and so we can reset it on a fresh render.
+  // and closing, and so we can reset it on a fresh capture.
   const [mockupSaving, setMockupSaving] = useState(false);
   const [mockupSavedWorkId, setMockupSavedWorkId] = useState<string | null>(
     null,
@@ -632,158 +661,142 @@ function WallVisualizerInner(props: ExtendedProps) {
     setSelectedItemId(null);
   }, [selectedItemId]);
 
-  // ── Render flow ───────────────────────────────────────────────────
-  // Two paths:
-  //   1. Saved-wall path: POST to /api/walls/[id]/layouts/[lid]/render
-  //      with the items array, auto-saves the layout in the same
-  //      pipeline.
-  //   2. Quick path (customer artwork-page sheet): POST to
-  //      /api/walls/render-quick with preset_id + dims + work_id +
-  //      placement override. No DB rows for wall or layout.
-  const handleRender = useCallback(async () => {
-    if (renderInFlight) return;
+  // ── Preview flow ──────────────────────────────────────────────────
+  // Preview is a capture of the editor stage itself (see capture.ts), so
+  // it matches what is on screen to the pixel. Nothing is fetched and
+  // nothing is metered, so it works the same for a saved wall and for
+  // the customer artwork-page sheet.
+  //
+  // The selection is dropped first, synchronously: a selected item draws
+  // without its shadow (the Transformer's bounding box needs that), and
+  // the preview should show the wall as it looks at rest. flushSync
+  // commits the deselect, and react-konva commits the Konva tree inside
+  // that same layout pass, so the capture that follows sees it.
+  const handlePreview = useCallback(async () => {
+    if (previewInFlight) return;
     if (items.length === 0) {
-      setRenderError("Drag at least one artwork onto the wall.");
+      setPreviewError("Drag at least one artwork onto the wall.");
       return;
     }
 
-    const useQuick = !props.wall || !props.initialLayout;
-
-    setRenderInFlight(true);
-    setRenderError(null);
+    setPreviewInFlight(true);
+    setPreviewError(null);
     try {
-      let url: string;
-      let payload: Record<string, unknown>;
-
-      if (useQuick) {
-        // Customer / unsaved flow, single artwork to a preset wall.
-        const firstItem = items[0];
-        if (background.kind !== "preset") {
-          // Quick endpoint requires preset background (uploaded photos
-          // need a saved wall). Surface a helpful message.
-          setRenderError("Save the wall first to render uploaded photos.");
-          return;
-        }
-        url = "/api/walls/render-quick";
-        payload = {
-          preset_id: background.preset_id,
-          width_cm: widthCm,
-          height_cm: heightCm,
-          wall_color_hex: background.color_hex,
-          work_id: firstItem.work_id,
-          placement: {
-            x_cm: firstItem.x_cm,
-            y_cm: firstItem.y_cm,
-            width_cm: firstItem.width_cm,
-            height_cm: firstItem.height_cm,
-            frame: firstItem.frame,
-          },
-          kind: "standard",
-        };
-      } else {
-        url = `/api/walls/${props.wall!.id}/layouts/${props.initialLayout!.id}/render`;
-        payload = { kind: "standard", items };
+      flushSync(() => setSelectedItemId(null));
+      const handle = viewMode === "3d" ? canvas3dRef.current : canvasRef.current;
+      if (!handle) {
+        throw new CaptureError("unsupported", "The wall hasn't finished loading yet.");
       }
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(props.authToken
-            ? { Authorization: `Bearer ${props.authToken}` }
-            : {}),
-        },
-        body: JSON.stringify(payload),
+      const blob = await handle.captureImage();
+      setPreview({
+        blob,
+        url: URL.createObjectURL(blob),
+        view: viewMode,
+        renderId: null,
       });
-
-      // Always bump the chip, we may have spent units even on failure
-      // (only some failures refund), and a chip showing stale "10 left"
-      // after a 429 would be confusing.
-      setRefreshNonce((n) => n + 1);
-
-      if (res.status === 429) {
-        const body = (await res.json().catch(() => ({}))) as Partial<
-          QuotaConsumeResult & { error?: string }
-        >;
-        const reason = (body as { reason?: UpgradeReason }).reason;
-        const tier = (body as { tier?: VisualizerTier }).tier ?? null;
-        const resets = (body as { resets_at?: string }).resets_at ?? null;
-        setUpgradeReason(reason);
-        setUpgradeTier(tier);
-        setUpgradeResetsAt(resets);
-        setUpgradeOpen(true);
-        return;
-      }
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({} as Record<string, unknown>));
-        const msg =
-          typeof body.error === "string"
-            ? body.error
-            : `Render failed (${res.status}).`;
-        setRenderError(msg);
-        return;
-      }
-
-      const json = (await res.json()) as {
-        publicUrl: string;
-        cached: boolean;
-        cost_units: number;
-        meta?: LastRender["meta"];
-        render?: { id?: string };
-      };
-      setLastRender({
-        renderId: json.render?.id,
-        publicUrl: json.publicUrl,
-        cached: Boolean(json.cached),
-        costUnits: Number(json.cost_units ?? 0),
-        meta: json.meta,
-      });
-      // Fresh render → fresh mockup save state. The artist might want
-      // to attach this new render to a different work than last time.
+      // Fresh capture → fresh save state, on both the wall and the
+      // mockup paths. The artist might want to attach this new preview
+      // to a different work than last time.
+      setWallSaveStatus("idle");
+      setWallSaveError(null);
       setMockupSavedWorkId(null);
       setMockupError(null);
       setPreviewOpen(true);
     } catch (err) {
-      setRenderError(
-        err instanceof Error ? err.message : "Render failed unexpectedly.",
-      );
+      setPreviewError(captureErrorMessage(err, viewMode));
     } finally {
-      setRenderInFlight(false);
+      setPreviewInFlight(false);
     }
-  }, [
-    props.wall,
-    props.initialLayout,
-    props.authToken,
-    items,
-    renderInFlight,
-    background,
-    widthCm,
-    heightCm,
-  ]);
+  }, [items.length, previewInFlight, viewMode]);
 
-  // Auto-clear render errors after a few seconds.
+  // Auto-clear preview errors after a few seconds.
   useEffect(() => {
-    if (!renderError) return;
-    const t = setTimeout(() => setRenderError(null), 5000);
+    if (!previewError) return;
+    const t = setTimeout(() => setPreviewError(null), 5000);
     return () => clearTimeout(t);
-  }, [renderError]);
+  }, [previewError]);
 
   /**
-   * Promote the most recent render to a mockup on the chosen artwork.
-   * The render id is captured from the render-quick / layout-render
-   * response and stored on `lastRender.renderId`. Each successful save
-   * sets `mockupSavedWorkId` so the button label flips to "Saved ✓".
+   * Store the current capture against the saved wall's layout and return
+   * its wall_renders id. Flushes the layout auto-save first so the items
+   * on record are the ones in the picture, then uploads the image. Runs
+   * once per capture: a second call returns the id already obtained.
+   *
+   * Same shape as the wall-photo upload: a plain fetch carrying the
+   * bearer token, a multipart body, `res.ok` checked and thrown on, so a
+   * rejected write can never read as a success.
+   */
+  const storePreview = useCallback(async (): Promise<string> => {
+    if (!preview) throw new Error("Nothing to save, preview the wall first.");
+    if (preview.renderId) return preview.renderId;
+    if (!props.wall || !props.initialLayout) {
+      throw new Error("Save the wall first to keep a preview.");
+    }
+
+    const flushed = await saveNow();
+    if (flushed === "error") {
+      throw new Error("The layout couldn't be saved, so the preview wasn't stored. Try again.");
+    }
+
+    const format = previewFormatFromType(preview.blob.type);
+    const fd = new FormData();
+    fd.append("image", preview.blob, previewFileName(format));
+    const res = await fetch(
+      `/api/walls/${props.wall.id}/layouts/${props.initialLayout.id}/preview`,
+      {
+        method: "POST",
+        headers: props.authToken
+          ? { Authorization: `Bearer ${props.authToken}` }
+          : {},
+        body: fd,
+      },
+    );
+    if (res.status === 401) {
+      throw new Error("Session expired. Please sign in again.");
+    }
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `Save failed (${res.status})`);
+    }
+    const json = (await res.json()) as { render: { id: string }; publicUrl: string };
+    const capturedUrl = preview.url;
+    setPreview((prev) =>
+      prev && prev.url === capturedUrl ? { ...prev, renderId: json.render.id } : prev,
+    );
+    // Whichever path stored it, the wall now carries this preview.
+    setWallSaveStatus("saved");
+    return json.render.id;
+  }, [preview, props.wall, props.initialLayout, props.authToken, saveNow]);
+
+  const handleSaveToWall = useCallback(async () => {
+    if (wallSaveStatus === "saving" || wallSaveStatus === "saved") return;
+    setWallSaveStatus("saving");
+    setWallSaveError(null);
+    try {
+      await storePreview();
+    } catch (err) {
+      setWallSaveStatus("error");
+      setWallSaveError(
+        err instanceof Error ? err.message : "Save failed unexpectedly.",
+      );
+    }
+  }, [wallSaveStatus, storePreview]);
+
+  /**
+   * Promote the current preview to a mockup on the chosen artwork. The
+   * capture is stored first (once), then attached by its render id. Each
+   * successful save sets `mockupSavedWorkId` so the button reads "Saved".
    */
   const saveAsMockup = useCallback(
     async (workId: string) => {
-      if (!lastRender?.renderId) {
-        setMockupError("Nothing to save, render the scene first.");
+      if (!preview) {
+        setMockupError("Nothing to save, preview the wall first.");
         return;
       }
       setMockupSaving(true);
       setMockupError(null);
       try {
+        const renderId = await storePreview();
         const res = await fetch(`/api/works/${workId}/mockups`, {
           method: "POST",
           headers: {
@@ -792,7 +805,7 @@ function WallVisualizerInner(props: ExtendedProps) {
               ? { Authorization: `Bearer ${props.authToken}` }
               : {}),
           },
-          body: JSON.stringify({ render_id: lastRender.renderId }),
+          body: JSON.stringify({ render_id: renderId }),
         });
         if (res.status === 401) {
           // Expired session, bounce out so AuthContext picks up the
@@ -815,7 +828,7 @@ function WallVisualizerInner(props: ExtendedProps) {
         setMockupSaving(false);
       }
     },
-    [lastRender?.renderId, props.authToken],
+    [preview, storePreview, props.authToken],
   );
 
   // ── Render ──────────────────────────────────────────────────────────
@@ -837,9 +850,9 @@ function WallVisualizerInner(props: ExtendedProps) {
     },
   };
 
-  // Whether the floating Render button should be shown at all. Same
+  // Whether the floating Preview button should be shown at all. Same
   // gate the desktop branch used; reused for the mobile toolbar.
-  const renderButtonVisible =
+  const previewButtonVisible =
     canPersist || (props.mode === "customer_artwork_page" && items.length > 0);
 
   return (
@@ -849,6 +862,7 @@ function WallVisualizerInner(props: ExtendedProps) {
       <div className="relative flex-1 min-w-0">
         {viewMode === "3d" ? (
           <Wall3DCanvas
+            handleRef={canvas3dRef}
             background={background}
             widthCm={widthCm}
             heightCm={heightCm}
@@ -862,6 +876,7 @@ function WallVisualizerInner(props: ExtendedProps) {
           />
         ) : (
           <WallCanvas
+            handleRef={canvasRef}
             background={background}
             widthCm={widthCm}
             heightCm={heightCm}
@@ -897,12 +912,12 @@ function WallVisualizerInner(props: ExtendedProps) {
           </div>
         )}
 
-        {/* Top-right, quota chip + save status. The 2D/3D toggle
-            used to live here too but the centred ItemToolbar (top
-            centre) gets wide enough to overlap, so the toggle moved
-            to its own bottom-left perch. */}
-        <div className="absolute top-3 right-3 flex items-center gap-2">
-          {canPersist && (
+        {/* Top-right, save status. The 2D/3D toggle used to live here
+            too but the centred ItemToolbar (top centre) gets wide
+            enough to overlap, so the toggle moved to its own
+            bottom-left perch. */}
+        {canPersist && (
+          <div className="absolute top-3 right-3 flex items-center gap-2">
             <SaveStatus
               status={saveStatus}
               error={saveError}
@@ -910,19 +925,8 @@ function WallVisualizerInner(props: ExtendedProps) {
                 void saveNow();
               }}
             />
-          )}
-          <QuotaChip
-            ownerTypeHint={ownerTypeFromMode(props.mode)}
-            authToken={props.authToken ?? null}
-            refreshNonce={refreshNonce}
-            onUpgradeClick={() => {
-              setUpgradeReason("daily");
-              setUpgradeTier(null);
-              setUpgradeResetsAt(null);
-              setUpgradeOpen(true);
-            }}
-          />
-        </div>
+          </div>
+        )}
 
         {/* Bottom-left, 2D / 3D toggle. Clear of the centred wall
             config bar (bottom-centre) and the centred item toolbar
@@ -964,14 +968,14 @@ function WallVisualizerInner(props: ExtendedProps) {
             item toolbar above. The older `left-1/2 -translate-x-1/2`
             constrained the bar's shrink-to-fit width to 50% of the
             canvas, which forced Upload photo / Close onto a second
-            row even on wide screens. When the Render button is
+            row even on wide screens. When the Preview button is
             visible at bottom-right we narrow the strip's right
             boundary so the bar can't drift under it on tighter
             viewports. */}
         {!isMobile && (
           <div
             className={`pointer-events-none absolute bottom-3 flex justify-center ${
-              renderButtonVisible
+              previewButtonVisible
                 ? "left-3 right-[8.5rem]"
                 : "inset-x-3"
             }`}
@@ -993,35 +997,35 @@ function WallVisualizerInner(props: ExtendedProps) {
           </div>
         )}
 
-        {/* Bottom-right floating render button — desktop only.
-            Visible whenever there's something to render, either a
+        {/* Bottom-right floating Preview button — desktop only.
+            Visible whenever there's something to preview, either a
             saved wall+layout (venue/artist editor) OR a customer-flow
             sheet with a locked work auto-placed. The mobile toolbar
-            below carries the equivalent button. */}
-        {!isMobile && renderButtonVisible && (
-          <div className="absolute bottom-3 right-3 flex flex-col items-end gap-2">
-            {renderError && (
-              <div className="px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs max-w-[260px] text-right">
-                {renderError}
+            below carries the equivalent button. The feedback bubble,
+            which normally sits in this corner, is held hidden while
+            the editor is mounted so it can never cover this. */}
+        {!isMobile && previewButtonVisible && (
+          <div className="absolute bottom-3 right-3 z-10 flex flex-col items-end gap-2">
+            {previewError && (
+              <div role="alert" className="px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs max-w-[260px] text-right">
+                {previewError}
               </div>
             )}
             <button
               type="button"
-              onClick={handleRender}
-              disabled={renderInFlight}
+              onClick={handlePreview}
+              disabled={previewInFlight}
               className="px-4 py-2 rounded-full bg-stone-900 text-white text-sm font-medium shadow-lg hover:bg-stone-800 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {renderInFlight ? (
+              {previewInFlight ? (
                 <>
                   <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-                  Rendering…
+                  Previewing…
                 </>
               ) : (
                 <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polygon points="6,4 20,12 6,20" />
-                  </svg>
-                  Render
+                  <PreviewIcon />
+                  Preview
                 </>
               )}
             </button>
@@ -1030,8 +1034,8 @@ function WallVisualizerInner(props: ExtendedProps) {
 
         {/* Mobile-only: a single stacked toolbar at the bottom — a
             collapsible works strip (peek/collapsed states), an
-            optional render-error banner, and a slim iOS-style action
-            bar (wall-settings icon + Render). The wall stays
+            optional preview-error banner, and a slim iOS-style action
+            bar (wall-settings icon + Preview). The wall stays
             dominant because the strip is short and collapsable, and
             the action bar is only ~52px tall. The full WorksPanel
             and WallConfigBar still live in slide-up sheets, but
@@ -1059,9 +1063,9 @@ function WallVisualizerInner(props: ExtendedProps) {
                 />
               )}
 
-              {renderError && (
-                <div className="px-3 py-1.5 bg-red-50 border-t border-red-200 text-red-700 text-xs text-center">
-                  {renderError}
+              {previewError && (
+                <div role="alert" className="px-3 py-1.5 bg-red-50 border-t border-red-200 text-red-700 text-xs text-center">
+                  {previewError}
                 </div>
               )}
 
@@ -1070,9 +1074,9 @@ function WallVisualizerInner(props: ExtendedProps) {
                 onToggleWall={() =>
                   setMobileSheet((prev) => (prev === "wall" ? null : "wall"))
                 }
-                renderVisible={renderButtonVisible}
-                renderInFlight={renderInFlight}
-                onRender={handleRender}
+                previewVisible={previewButtonVisible}
+                previewInFlight={previewInFlight}
+                onPreview={handlePreview}
               />
             </div>
 
@@ -1125,31 +1129,51 @@ function WallVisualizerInner(props: ExtendedProps) {
       </div>
 
       {/* Modals */}
-      <UpgradeModal
-        open={upgradeOpen}
-        onClose={() => setUpgradeOpen(false)}
-        reason={upgradeReason}
-        currentTier={upgradeTier}
-        resetsAt={upgradeResetsAt}
-      />
       <RenderPreview
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        publicUrl={lastRender?.publicUrl ?? null}
-        cached={lastRender?.cached ?? false}
-        costUnits={lastRender?.costUnits ?? 0}
-        meta={lastRender?.meta}
+        imageUrl={preview?.url ?? null}
+        downloadName={
+          preview
+            ? previewFileName(previewFormatFromType(preview.blob.type))
+            : undefined
+        }
         // Hide the Download button + apply anti-save attributes when
         // the viewer is a venue. Realistic save-prevention only,
         // determined users can still screenshot, but right-click,
         // drag-to-desktop, and the explicit Download CTA are gone.
         // Artists keep download access because they want to share
-        // their renders on socials / attach to mockups.
+        // their previews on socials / attach to mockups.
         venueViewer={props.mode === "venue_my_walls"}
+        // Save to wall needs a saved wall + layout to store against;
+        // the customer artwork-page sheet has neither, so it gets
+        // Preview only.
+        saveToWall={
+          canPersist
+            ? {
+                onSave: () => {
+                  void handleSaveToWall();
+                },
+                status: wallSaveStatus,
+                error: wallSaveError,
+                label:
+                  props.mode === "venue_my_walls"
+                    ? "Save this preview to my wall"
+                    : "Save to wall",
+                savedLabel: "Saved",
+                hint:
+                  props.mode === "venue_my_walls"
+                    ? "It becomes this wall's picture on My Walls and, when the wall is shown on your public profile, there too."
+                    : "It becomes this wall's picture in your wall list.",
+              }
+            : undefined
+        }
+        // The mockup path stores the capture first (the same upload as
+        // Save to wall), then attaches it, so it only needs a saved wall.
         saveToArtwork={
           (props.mode === "artist_mockup" ||
             props.mode === "artist_showroom") &&
-          lastRender?.renderId &&
+          canPersist &&
           works.length > 0
             ? {
                 works: works.map((w) => ({
@@ -1167,6 +1191,27 @@ function WallVisualizerInner(props: ExtendedProps) {
         }
       />
     </div>
+  );
+}
+
+// ── Preview icon ────────────────────────────────────────────────────────
+
+function PreviewIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   );
 }
 
@@ -1500,19 +1545,6 @@ function clampDimension(value: number): number {
   return Math.min(1000, Math.max(50, Math.round(value)));
 }
 
-function ownerTypeFromMode(mode: VisualizerEditorProps["mode"]) {
-  if (mode === "venue_my_walls") return "venue" as const;
-  if (mode === "artist_mockup" || mode === "artist_showroom") return "artist" as const;
-  // customer_artwork_page is reachable from /browse/[slug]/[work] for any
-  // signed-in user, including artists and venues. Returning a literal
-  // "customer" hint forces the resolver to short-circuit to customer
-  // (2/day) even when the actual user is an artist_premium (10/day) or
-  // venue_standard (5/day). Undefined lets the resolver fall through
-  // artist → venue → customer based on what the user actually is, which
-  // is what we want here. Real customers still resolve to customer tier.
-  return undefined;
-}
-
 // ── Mobile works strip (collapsible peek carousel) ─────────────────────
 
 /**
@@ -1662,7 +1694,7 @@ function MobileWorksStrip({
 /**
  * Slim iOS-style action bar at the very bottom of the visualizer on
  * mobile. Two controls: a circular wall-settings button (gear icon),
- * and the primary Render pill that takes the remaining width.
+ * and the primary Preview pill that takes the remaining width.
  *
  * Roughly 52 px tall (plus safe-area-inset on the parent), so the wall
  * stays dominant. Pairs with MobileWorksStrip above it.
@@ -1670,15 +1702,15 @@ function MobileWorksStrip({
 function MobileActionBar({
   wallActive,
   onToggleWall,
-  renderVisible,
-  renderInFlight,
-  onRender,
+  previewVisible,
+  previewInFlight,
+  onPreview,
 }: {
   wallActive: boolean;
   onToggleWall: () => void;
-  renderVisible: boolean;
-  renderInFlight: boolean;
-  onRender: () => void;
+  previewVisible: boolean;
+  previewInFlight: boolean;
+  onPreview: () => void;
 }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-t border-black/5">
@@ -1709,36 +1741,27 @@ function MobileActionBar({
         </svg>
       </button>
 
-      {renderVisible ? (
+      {previewVisible ? (
         <button
           type="button"
-          onClick={onRender}
-          disabled={renderInFlight}
+          onClick={onPreview}
+          disabled={previewInFlight}
           className="flex-1 h-10 rounded-full bg-stone-900 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 px-4"
         >
-          {renderInFlight ? (
+          {previewInFlight ? (
             <>
               <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-              Rendering…
+              Previewing…
             </>
           ) : (
             <>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <polygon points="6,4 20,12 6,20" />
-              </svg>
-              Render
+              <PreviewIcon />
+              Preview
             </>
           )}
         </button>
       ) : (
-        // No render path (e.g. customer-mode with no items yet) — keep
+        // Nothing to preview yet (e.g. customer-mode with no items) — keep
         // the row balanced with a transparent spacer so the wall-
         // settings button doesn't drift to centre.
         <span className="flex-1" aria-hidden />

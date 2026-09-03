@@ -14,6 +14,7 @@ const listWallsByUserMock = vi.fn();
 const countWallsByUserMock = vi.fn();
 const createPresetWallMock = vi.fn();
 const createUploadedWallMock = vi.fn();
+const getWallPreviewUrlsMock = vi.fn();
 const resolveTierMock = vi.fn();
 const getTierLimitsMock = vi.fn();
 
@@ -22,6 +23,7 @@ vi.mock("@/lib/visualizer/walls-db", () => ({
   countWallsByUser: (...a: unknown[]) => countWallsByUserMock(...a),
   createPresetWall: (...a: unknown[]) => createPresetWallMock(...a),
   createUploadedWall: (...a: unknown[]) => createUploadedWallMock(...a),
+  getWallPreviewUrls: (...a: unknown[]) => getWallPreviewUrlsMock(...a),
 }));
 
 vi.mock("@/lib/visualizer/tier-resolver", () => ({
@@ -67,10 +69,12 @@ beforeEach(() => {
   countWallsByUserMock.mockReset();
   createPresetWallMock.mockReset();
   createUploadedWallMock.mockReset();
+  getWallPreviewUrlsMock.mockReset();
   resolveTierMock.mockReset();
   getTierLimitsMock.mockReset();
 
   process.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1 = "1";
+  getWallPreviewUrlsMock.mockResolvedValue({});
   resolveTierMock.mockResolvedValue("artist_premium");
   getTierLimitsMock.mockReturnValue({
     daily: 10,
@@ -120,6 +124,29 @@ describe("GET /api/walls", () => {
     const json = await res.json();
     expect(json.walls).toHaveLength(1);
     expect(listWallsByUserMock).toHaveBeenCalledWith("u-real");
+  });
+
+  it("attaches the saved preview URL to the walls that have one, resolved for the whole list at once", async () => {
+    listWallsByUserMock.mockResolvedValue([
+      { id: "w1", name: "Front", kind: "preset" },
+      { id: "w2", name: "Back", kind: "preset" },
+    ]);
+    getWallPreviewUrlsMock.mockResolvedValue({
+      w2: "https://cdn.example/wall-renders/u-real/r1.webp",
+    });
+    const { GET } = await import("./route");
+    const res = await GET(
+      new Request("https://w.local/api/walls", {
+        headers: { authorization: "Bearer valid" },
+      }),
+    );
+    const json = await res.json();
+    expect(getWallPreviewUrlsMock).toHaveBeenCalledTimes(1);
+    expect(getWallPreviewUrlsMock).toHaveBeenCalledWith(["w1", "w2"]);
+    expect(json.walls[0].preview_image_url).toBeUndefined();
+    expect(json.walls[1].preview_image_url).toBe(
+      "https://cdn.example/wall-renders/u-real/r1.webp",
+    );
   });
 });
 

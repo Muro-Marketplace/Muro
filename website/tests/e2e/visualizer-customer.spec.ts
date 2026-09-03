@@ -44,12 +44,12 @@ test.describe("wall visualiser — customer artwork sheet", () => {
       timeout: 10_000,
     });
 
-    // Quota chip is self-fetching — it might fall back to "Sign in to
-    // generate renders" for unauth'd users, or to a guest message.
-    // Either way, *something* informative should be visible in the
-    // top-right corner.
-    await expect(dialog.getByText(/sign in|daily renders|quota/i).first())
+    // The locked artwork auto-spawns, so the Preview action is offered
+    // straight away. It is a capture of the editor itself, no sign-in
+    // or quota involved, and there is no Render button any more.
+    await expect(dialog.getByRole("button", { name: /^preview$/i }).first())
       .toBeVisible({ timeout: 5_000 });
+    await expect(dialog.getByRole("button", { name: /^render$/i })).toHaveCount(0);
   });
 
   test("Esc closes the sheet", async ({ page }) => {

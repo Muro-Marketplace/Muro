@@ -188,6 +188,13 @@ function WallCard({ wall }: { wall: Wall }) {
     wall.kind === "uploaded" && typeof wall.source_image_url === "string" && wall.source_image_url.length > 0
       ? wall.source_image_url
       : null;
+  // The preview the venue saved from the editor wins over the bare photo:
+  // it is the wall as they built it, captured from the editor itself.
+  const previewUrl =
+    typeof wall.preview_image_url === "string" && wall.preview_image_url.length > 0
+      ? wall.preview_image_url
+      : null;
+  const imageUrl = previewUrl ?? photoUrl;
   const nameForFallback = displayWallName(wall.name);
 
   return (
@@ -196,7 +203,7 @@ function WallCard({ wall }: { wall: Wall }) {
       className="group block rounded-xl border border-border bg-white overflow-hidden hover:border-stone-300 hover:shadow-md transition"
     >
       <div className="bg-stone-100 grid place-items-center p-6" style={{ minHeight: 160 }}>
-        {photoUrl ? (
+        {imageUrl ? (
           <div
             style={{
               width: cardWidth,
@@ -205,8 +212,8 @@ function WallCard({ wall }: { wall: Wall }) {
             }}
           >
             <ImageWithFallback
-              src={photoUrl}
-              alt={nameForFallback}
+              src={imageUrl}
+              alt={previewUrl ? `${nameForFallback}, with artwork previewed on it` : nameForFallback}
               className="rounded shadow-inner object-cover w-full h-full"
               placeholderClassName="rounded shadow-inner bg-accent/10 text-accent flex items-center justify-center text-xl font-medium w-full h-full"
             />

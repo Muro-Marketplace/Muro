@@ -40,6 +40,7 @@ interface PublicWall {
   kind: "preset" | "uploaded";
   wall_color_hex: string;
   source_image_url?: string;
+  preview_image_url?: string;
 }
 
 interface PublicArtworkRequest {

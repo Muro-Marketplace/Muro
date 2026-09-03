@@ -10,6 +10,10 @@
  * info pre-filled. Customers and venues see the same card without
  * the artist CTA.
  *
+ * Image priority: the preview the venue saved from the editor (the wall
+ * with artwork on it, captured pixel-for-pixel from the editor), then
+ * the bare wall photo for uploaded walls, then the colour swatch.
+ *
  * Why a client component: the wall grid sits inside an RSC venue
  * page, so we punch through with this small island so we can hold
  * lightbox state + read the current user's role from AuthContext.
@@ -49,6 +53,8 @@ export interface VenueWallCardProps {
     kind: "preset" | "uploaded";
     wall_color_hex: string;
     source_image_url?: string;
+    /** The preview the venue saved from the editor, when there is one. */
+    preview_image_url?: string;
   };
   venue: {
     slug: string;
@@ -59,6 +65,14 @@ export interface VenueWallCardProps {
 export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
   const { userType } = useAuth();
   const [open, setOpen] = useState(false);
+
+  const previewUrl = wall.preview_image_url || null;
+  const photoUrl =
+    wall.kind === "uploaded" && wall.source_image_url ? wall.source_image_url : null;
+  const imageUrl = previewUrl ?? photoUrl;
+  const imageAlt = previewUrl
+    ? `${displayWallName(wall.name)}, with artwork previewed on it`
+    : wall.name;
 
   // Body-scroll lock + Esc-to-close while the lightbox is open.
   useEffect(() => {
@@ -93,10 +107,10 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
         className="group text-left rounded-sm overflow-hidden border border-border bg-white hover:border-accent/50 hover:shadow-sm transition-all"
       >
         <div className="aspect-[5/3] bg-stone-100 relative">
-          {wall.kind === "uploaded" && wall.source_image_url ? (
+          {imageUrl ? (
             <Image
-              src={wall.source_image_url}
-              alt={wall.name}
+              src={imageUrl}
+              alt={imageAlt}
               fill
               className="object-cover group-hover:scale-[1.02] transition-transform duration-500"
               sizes="(max-width: 640px) 100vw, 50vw"
@@ -162,13 +176,13 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
               </svg>
             </button>
 
-            {/* Wall image */}
+            {/* Wall image, the saved preview at full size when there is one. */}
             <div className="relative bg-stone-100 flex-1 min-h-0">
-              {wall.kind === "uploaded" && wall.source_image_url ? (
+              {imageUrl ? (
                 <div className="relative w-full h-full min-h-[40vh]">
                   <Image
-                    src={wall.source_image_url}
-                    alt={wall.name}
+                    src={imageUrl}
+                    alt={imageAlt}
                     fill
                     className="object-contain"
                     sizes="(max-width: 768px) 100vw, 768px"
