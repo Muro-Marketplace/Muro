@@ -2548,9 +2548,10 @@ function BrowsePortfoliosPageInner() {
                                 {work.title}
                               </h3>
                             </a>
-                            {/* Two lines reserved here as well, so a work with no
-                                medium is not a shorter card than its neighbours. */}
-                            <p className="text-[11px] text-muted mt-0.5 min-h-[2.1rem] line-clamp-2">
+                            {/* Artist and medium on their own lines, each kept to one
+                                line and always present, so a work with no medium is
+                                not a shorter card than its neighbours. */}
+                            <p className="text-[11px] text-muted mt-0.5 truncate">
                               <Link
                                 href={`/browse/${work.artistSlug}`}
                                 onClick={(e) => e.stopPropagation()}
@@ -2558,7 +2559,9 @@ function BrowsePortfoliosPageInner() {
                               >
                                 {work.artistName}
                               </Link>
-                              {work.medium ? ` · ${work.medium}` : ""}
+                            </p>
+                            <p className="text-[11px] text-muted truncate min-h-[1rem]">
+                              {work.medium || "\u00a0"}
                             </p>
                             <p className="text-[11px] text-foreground/80 mt-1 font-medium">
                               {formatPriceRange(work.pricing) || work.priceBand}
