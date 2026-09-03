@@ -9,6 +9,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { afterResponse } from "@/lib/after-response";
 import { slugify } from "@/lib/slugify";
 import { sendAdminAlert } from "@/lib/email/admin-alert";
+import { triggerWelcomeIfNeeded } from "@/lib/email/welcome";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -261,6 +262,20 @@ export async function POST(request: Request) {
           }),
           metadata: { email: d.email, location: d.location },
         });
+
+        // Owner-reported 2 September: no "account created" email arrived.
+        // The welcome checklist only fires from AuthContext on SIGNED_IN,
+        // which for a first-time applicant happens before the
+        // artist_profiles row exists, so triggerWelcomeIfNeeded answered
+        // "no profile yet" and nothing retried. The row exists now (bridge
+        // above), so trigger it here; it is idempotent on welcomed_at.
+        if (authedUser) {
+          try {
+            await triggerWelcomeIfNeeded(authedUser.id);
+          } catch (welcomeErr) {
+            console.error("Welcome email after application failed:", welcomeErr);
+          }
+        }
       });
     }
 

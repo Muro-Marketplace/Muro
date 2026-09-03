@@ -124,6 +124,13 @@ vi.mock("@/lib/email/admin-alert", () => ({
   },
 }));
 
+const { welcomeMock } = vi.hoisted(() => ({
+  welcomeMock: vi.fn(async (_userId: string) => ({ ok: true, sent: true })),
+}));
+vi.mock("@/lib/email/welcome", () => ({
+  triggerWelcomeIfNeeded: (userId: string) => welcomeMock(userId),
+}));
+
 vi.mock("@/lib/email/send", () => ({
   sendEmail: (...args: unknown[]) => {
     sendEmailMock(...args);
@@ -491,5 +498,22 @@ describe("POST /api/apply validates the referral code (row G L2366)", () => {
     await POST(req(VALID_BODY));
 
     expect(profilesSelectByReferralCodeMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/apply sends the welcome checklist once the profile row exists", () => {
+  it("triggers the welcome for an authed fresh application, off the response path", async () => {
+    welcomeMock.mockClear();
+    await POST(req());
+    await flush();
+    expect(welcomeMock).toHaveBeenCalledWith("user-1");
+  });
+
+  it("does not trigger it for an unauthenticated submission", async () => {
+    welcomeMock.mockClear();
+    getAuthenticatedUserMock.mockReturnValue({ user: null, error: { status: 401 } });
+    await POST(req());
+    await flush();
+    expect(welcomeMock).not.toHaveBeenCalled();
   });
 });

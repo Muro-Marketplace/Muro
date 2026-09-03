@@ -152,8 +152,8 @@ export default function ArtistSignUpPage() {
             Apply to join as an artist
           </h1>
           <p className="text-white/50 text-sm">
-            Create your account, verify your email, and the application
-            form is your next stop
+            Create your account and the application form is your next
+            stop
           </p>
         </div>
 
@@ -301,10 +301,9 @@ export default function ArtistSignUpPage() {
               {loading ? "Creating Account..." : "Create Account"}
             </button>
             <p className="text-[11px] text-muted text-center leading-relaxed">
-              We&rsquo;ll email you a verification link. Verify, sign in,
-              and you&rsquo;ll land on the application form. Approval
-              emails take you back to login, your account is already
-              set up.
+              Your account is created straight away and you&rsquo;ll land
+              on the application form. We email you once your
+              application is in, and again when it is approved.
             </p>
           </form>
         </div>
