@@ -13,7 +13,6 @@ interface ClaimResult {
   current_count: number;
 }
 import { slugify } from "@/lib/slugify";
-import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
 import { artistWorkInputSchema } from "@/lib/validations";
 import { WORKS_CAP } from "@/lib/pricing";
@@ -63,26 +62,14 @@ export async function POST(request: Request) {
       description, images,
     } = parsed.data;
 
-    // B2 + C2 (Phase 2.5, gated by GATING_V1):
-    //   - If the artist is not currently subscribed and tries to mark
-    //     a work `available=true`, return 402 so the client surfaces
-    //     the upgrade modal.
-    //   - On a new work, force `available=false` regardless so drafts
-    //     can be saved during onboarding without publishing.
-    if (isFlagOn("GATING_V1")) {
-      const sub = await isSubscribed(auth.user!.id);
-      if (!sub.active && available === true) {
-        return NextResponse.json(
-          {
-            error: "subscription_required",
-            message: "Publishing a work requires an active Wallplace subscription.",
-            upgrade_url: "/artist-portal/billing",
-          },
-          { status: 402 },
-        );
-      }
-    }
-
+    // Owner decision 2 September 2026: saving a work never depends on
+    // membership or review state. The marketplace lists an artist only once
+    // their application is approved and their membership is active (see
+    // getAllArtists and getArtistProfileBySlug), so an applicant can build
+    // their whole profile now, which is exactly what we want them to do. The
+    // old 402 here ("Publishing a work requires an active Wallplace
+    // subscription") blocked that and told them something untrue. Their
+    // situation is explained in the warnings on the response instead.
     // Posting limit per tier (#24). Core 8, Premium 20, Pro 50, sourced from
     // WORKS_CAP (@/lib/pricing) so this cannot drift from the single source
     // of truth for plan pricing/limits. Updates to an existing work don't
@@ -161,15 +148,10 @@ export async function POST(request: Request) {
     // is saved as a draft (available=false) until the artist either
     // upgrades or explicitly republishes it. The 402 check above
     // already short-circuits any explicit `available: true` attempt.
-    let effectiveAvailable: boolean;
-    if (typeof available === "boolean") {
-      effectiveAvailable = available;
-    } else if (isFlagOn("GATING_V1") && claimedNewRow) {
-      const sub = await isSubscribed(auth.user!.id);
-      effectiveAvailable = sub.active;
-    } else {
-      effectiveAvailable = true;
-    }
+    // No forced draft either: a work is available unless the artist says
+    // otherwise, so an approved artist does not find every piece marked
+    // unavailable the day they go live.
+    const effectiveAvailable: boolean = typeof available === "boolean" ? available : true;
 
     const { error, droppedColumns, savedRow, fallbackErrors } = await upsertWork(result.profile.id, {
       id,
@@ -224,6 +206,15 @@ export async function POST(request: Request) {
     } catch { /* best-effort */ }
 
     const warnings: string[] = [];
+    // Tell an unapproved or unsubscribed artist where their work stands
+    // rather than refusing the save.
+    const reviewStatus = (result.profile as { review_status?: string | null }).review_status ?? null;
+    const membership = await isSubscribed(auth.user!.id);
+    if (reviewStatus === "pending" || !membership?.active) {
+      warnings.push(
+        "Saved. Your works appear on the marketplace once your application is approved and your membership is active.",
+      );
+    }
 
     // Duplicate listing detection (#23). Soft warning, we don't
     // block the save, just flag potential duplicates so the artist

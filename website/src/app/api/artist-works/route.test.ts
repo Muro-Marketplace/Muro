@@ -80,60 +80,37 @@ const baseBody = {
   available: true,
 };
 
-describe("POST /api/artist-works — B2 publish gate", () => {
-  it("returns 402 with subscription_required code when GATING_V1 on + not subscribed + available=true", async () => {
+describe("POST /api/artist-works saves regardless of membership (owner decision 2 September 2026)", () => {
+  it("saves a work marked available for an unsubscribed artist and explains the marketplace rule in warnings", async () => {
     isFlagOnMock.mockImplementation((f: string) => f === "GATING_V1");
     isSubscribedMock.mockResolvedValue({ active: false, plan: null, user_type: "artist" });
 
     const res = await POST(req(baseBody));
-    expect(res.status).toBe(402);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toBe("subscription_required");
-    expect(upsertWorkMock).not.toHaveBeenCalled();
+    expect(body.error).toBeUndefined();
+    expect(upsertWorkMock).toHaveBeenCalledOnce();
+    expect(upsertWorkMock.mock.calls[0][1].available).toBe(true);
+    expect(body.warnings.some((w: string) => /marketplace/.test(w))).toBe(true);
   });
 
-  it("allows publishing when GATING_V1 on and subscription is active", async () => {
+  it("saves without the marketplace note when the artist is subscribed", async () => {
     isFlagOnMock.mockImplementation((f: string) => f === "GATING_V1");
     isSubscribedMock.mockResolvedValue({ active: true, plan: "core", user_type: "artist" });
 
     const res = await POST(req(baseBody));
     expect(res.status).toBe(200);
-    expect(upsertWorkMock).toHaveBeenCalledOnce();
+    const body = await res.json();
     expect(upsertWorkMock.mock.calls[0][1].available).toBe(true);
+    expect((body.warnings as string[]).some((w) => /marketplace/.test(w))).toBe(false);
   });
 
-  it("is a no-op when GATING_V1 is off (flag-gated behaviour)", async () => {
-    isFlagOnMock.mockReturnValue(false);
-
-    const res = await POST(req(baseBody));
-    expect(res.status).toBe(200);
-    expect(isSubscribedMock).not.toHaveBeenCalled();
-    expect(upsertWorkMock).toHaveBeenCalledOnce();
-    expect(upsertWorkMock.mock.calls[0][1].available).toBe(true);
-  });
-});
-
-describe("POST /api/artist-works — C2 default-draft", () => {
-  it("defaults new works to available=false when artist is not subscribed", async () => {
+  it("never forces a new work into a draft: an omitted flag means available", async () => {
     isFlagOnMock.mockImplementation((f: string) => f === "GATING_V1");
     isSubscribedMock.mockResolvedValue({ active: false, plan: null, user_type: "artist" });
-
-    // Caller omits `available` — server must infer false (draft).
     const { available: _drop, ...bodyNoFlag } = baseBody;
     void _drop;
 
-    const res = await POST(req(bodyNoFlag));
-    expect(res.status).toBe(200);
-    expect(upsertWorkMock).toHaveBeenCalledOnce();
-    expect(upsertWorkMock.mock.calls[0][1].available).toBe(false);
-  });
-
-  it("defaults new works to available=true when artist IS subscribed", async () => {
-    isFlagOnMock.mockImplementation((f: string) => f === "GATING_V1");
-    isSubscribedMock.mockResolvedValue({ active: true, plan: "premium", user_type: "artist" });
-
-    const { available: _drop, ...bodyNoFlag } = baseBody;
-    void _drop;
     const res = await POST(req(bodyNoFlag));
     expect(res.status).toBe(200);
     expect(upsertWorkMock.mock.calls[0][1].available).toBe(true);
