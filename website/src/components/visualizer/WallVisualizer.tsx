@@ -739,7 +739,10 @@ function WallVisualizerInner(props: ExtendedProps) {
     setPreviewError(null);
     try {
       flushSync(() => setSelectedItemId(null));
-      const handle = viewMode === "3d" ? canvas3dRef.current : canvasRef.current;
+      // Saved walls are always captured from the flat 2D stage: the 3D scene
+      // has a perspective camera and a directional light, so a capture of it
+      // shifted the art and threw shadows (owner report, 3 September 2026).
+      const handle = viewMode === "3d" && !flatSaved ? canvas3dRef.current : canvasRef.current;
       if (!handle) {
         throw new CaptureError("unsupported", "The wall hasn't finished loading yet.");
       }
