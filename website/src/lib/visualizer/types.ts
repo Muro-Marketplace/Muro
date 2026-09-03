@@ -300,7 +300,12 @@ export type VisualizerMode =
   | "venue_my_walls"
   | "customer_artwork_page"
   | "artist_mockup"
-  | "artist_showroom";
+  | "artist_showroom"
+  /** An artist laying their own works out on a venue's public wall to send
+      with a placement request. The wall is locked (no size, colour or photo
+      controls), nothing is persisted until Send, which stores the capture
+      as a wall proposal (src/lib/placements/wall-proposals.ts). */
+  | "artist_venue_wall";
 
 export interface VisualizerEditorProps {
   mode: VisualizerMode;

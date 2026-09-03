@@ -18,9 +18,14 @@
  * mockup on one of my artworks" affordance. When provided, we render a
  * picker showing the artist's works + a save button. Hidden in
  * customer/venue contexts.
+ *
+ * `proposal` is the artist-on-a-venue-wall affordance (`artist_venue_wall`):
+ * the primary action becomes "Send to {venue}", which opens a compact
+ * placement request inside this modal (ProposalSendPanel).
  */
 
 import { useEffect, useState } from "react";
+import ProposalSendPanel, { type ProposalSendPanelProps } from "./ProposalSendPanel";
 
 export type SaveToWallStatus = "idle" | "saving" | "saved" | "error";
 
@@ -59,6 +64,8 @@ interface Props {
   downloadName?: string;
   saveToWall?: SaveToWallProps;
   saveToArtwork?: SaveToArtworkProps;
+  /** The Send step for an artist proposing on a venue's wall. */
+  proposal?: ProposalSendPanelProps;
   /** When true, hide the Download CTA + apply anti-save attributes
       to the image (right-click block, drag prevention,
       pointer-events:none). Used in the venue context where the
@@ -75,6 +82,7 @@ export default function RenderPreview({
   downloadName = "wall-preview.webp",
   saveToWall,
   saveToArtwork,
+  proposal,
   venueViewer,
 }: Props) {
   // Esc to close.
@@ -237,6 +245,13 @@ export default function RenderPreview({
             )}
           </div>
         )}
+
+        {/*
+         * Send-to-venue step. Only for an artist laying out on a venue's
+         * public wall: the capture goes to the venue with a placement
+         * request, nothing is saved to the artist's own walls.
+         */}
+        {proposal && <ProposalSendPanel {...proposal} />}
 
         {/* Footer bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-2 text-white">

@@ -192,6 +192,23 @@ describe("POST render, gating", () => {
     const res = await POST(POST_REQ(), ctx("wall-1", "lay-1"));
     expect(res.status).toBe(404);
   });
+
+  it("404s an artist's proposal layout on the caller's own wall, consuming no quota", async () => {
+    // A wall proposal (src/lib/placements/wall-proposals.ts) sits on the
+    // venue's wall under the artist's user_id; wall ownership is not enough.
+    getLayoutByIdMock.mockResolvedValue({
+      id: "lay-p",
+      wall_id: "wall-1",
+      user_id: "u-artist",
+      name: "proposal:pl-1",
+      items: [],
+    });
+    const { POST } = await import("./route");
+    const res = await POST(POST_REQ(), ctx("wall-1", "lay-p"));
+    expect(res.status).toBe(404);
+    expect(consumeQuotaMock).not.toHaveBeenCalled();
+    expect(persistRenderMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST render, cache hit", () => {

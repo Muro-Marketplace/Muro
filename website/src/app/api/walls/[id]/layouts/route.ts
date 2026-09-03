@@ -4,6 +4,11 @@
  * GET   list layouts on a wall (owner only)
  * POST  create a new layout under a wall (owner only, tier-capped)
  *
+ * Both read the OWNER's layouts only: an artist's wall proposal is a
+ * wall_layouts row on this wall under the artist's user_id
+ * (src/lib/placements/wall-proposals.ts), and it must neither show in the
+ * venue's editor nor count against the venue's layout cap.
+ *
  * Tier cap:
  *   `getTierLimits(tier).saved_layouts_per_wall` controls how many
  *   layouts a wall can hold. -1 = unlimited; 0 = saving disabled
@@ -51,7 +56,7 @@ export async function GET(request: Request, ctx: RouteContext) {
   const r = await resolveOwnerWall(request, ctx);
   if (r.errResponse) return r.errResponse;
 
-  const layouts = await listLayoutsByWall(r.wall!.id);
+  const layouts = await listLayoutsByWall(r.wall!.id, r.userId!);
   return NextResponse.json({ layouts });
 }
 
@@ -96,7 +101,7 @@ export async function POST(request: Request, ctx: RouteContext) {
     );
   }
   if (limits.saved_layouts_per_wall > 0) {
-    const existing = await countLayoutsByWall(r.wall!.id);
+    const existing = await countLayoutsByWall(r.wall!.id, r.userId!);
     if (existing >= limits.saved_layouts_per_wall) {
       return NextResponse.json(
         {

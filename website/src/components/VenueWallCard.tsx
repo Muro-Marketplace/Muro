@@ -5,9 +5,10 @@
  *
  * Renders a single wall the venue has marked `is_public_on_profile`.
  * Click opens a lightbox showing the wall at full resolution with
- * dimensions + a "Request a placement on this wall" CTA that
- * deep-links into /artist-portal/placements with the venue and wall
- * info pre-filled. Customers and venues see the same card without
+ * dimensions + a "Place my work on this wall" CTA that opens the wall
+ * in the visualiser (/artist-portal/walls/propose/[wallId]) so the
+ * artist can drag their work onto it and send the picture with a
+ * placement request. Customers and venues see the same card without
  * the artist CTA.
  *
  * Image priority: the preview the venue saved from the editor (the wall
@@ -18,10 +19,9 @@
  * page, so we punch through with this small island so we can hold
  * lightbox state + read the current user's role from AuthContext.
  *
- * The full "drag artwork onto this wall and send the rendered
- * composite to the venue" flow is the next step, wires in the
- * existing WallVisualizer in a new artist-side mode. Tracked
- * separately; this card is the unblocker.
+ * The propose page is the artist-side mode of WallVisualizer
+ * (`artist_venue_wall`); what it sends is a wall proposal, see
+ * src/lib/placements/wall-proposals.ts.
  */
 
 import { useEffect, useState } from "react";
@@ -89,12 +89,10 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
     };
   }, [open]);
 
-  // Build a deep link into the artist's placement request flow with
-  // the venue + wall info encoded so the form can prefill a sensible
-  // opening message.
+  // The artist's route into this wall: the visualiser, locked to the
+  // venue's wall, with the venue named so the request knows where to go.
   const wallDims = `${wall.width_cm} × ${wall.height_cm} cm`;
-  const prefillMessage = `Hi ${venue.name}, I'd love to place work on your "${wall.name}" wall (${wallDims}).`;
-  const requestHref = `/artist-portal/placements?venue=${encodeURIComponent(venue.slug)}&wallName=${encodeURIComponent(wall.name)}&wallDims=${encodeURIComponent(wallDims)}&prefillMessage=${encodeURIComponent(prefillMessage)}`;
+  const proposeHref = `/artist-portal/walls/propose/${encodeURIComponent(wall.id)}?venue=${encodeURIComponent(venue.slug)}`;
 
   return (
     <>
@@ -216,27 +214,26 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
                 <p className="text-sm text-muted tabular-nums">{wallDims}</p>
               </div>
               <p className="text-xs text-muted leading-relaxed">
-                Open wall at {venue.name}. Use this in a placement
-                request and the venue will see exactly which wall
-                you&rsquo;re proposing for.
+                Open wall at {venue.name}. Place your work on it and the
+                venue will see exactly how you pictured it.
               </p>
 
               {userType === "artist" ? (
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-1">
                   <Link
-                    href={requestHref}
+                    href={proposeHref}
                     className="inline-flex items-center justify-center px-4 py-2.5 rounded-sm bg-accent text-white text-xs font-semibold tracking-wider uppercase hover:bg-accent-hover transition-colors"
                   >
-                    Request placement on this wall
+                    Place my work on this wall
                   </Link>
                   <span className="text-[11px] text-muted/80 text-center sm:text-left">
-                    Opens your placement form with this wall pre-filled.
+                    Drag your work onto the wall, preview it, and send the picture with your request.
                   </span>
                 </div>
               ) : userType === "venue" ? (
                 <p className="text-[11px] text-muted/80">
-                  Venues view-only. Artists can request to place work on
-                  this wall directly from here.
+                  Venues view-only. Artists can place their work on this
+                  wall and send you the picture from here.
                 </p>
               ) : (
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-1">

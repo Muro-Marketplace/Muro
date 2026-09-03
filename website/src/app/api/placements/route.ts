@@ -34,6 +34,10 @@ import { labelForArrangement } from "@/lib/arrangement-labels";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { afterResponse } from "@/lib/after-response";
 import { placementCapDecision } from "./placement-cap";
+import {
+  getWallProposalsForPlacements,
+  verifyWallProposalLink,
+} from "@/lib/placements/wall-proposals";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
@@ -312,7 +316,26 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ placements: enriched, userType: role.type });
+    // Artist wall proposals, resolved for the whole list at once (see
+    // src/lib/placements/wall-proposals.ts). Both portals read `wallProposal`
+    // off the row; null means the request was not laid out on a wall.
+    let proposals: Awaited<ReturnType<typeof getWallProposalsForPlacements>> = {};
+    try {
+      proposals = await getWallProposalsForPlacements(placementIds, db);
+    } catch (proposalErr) {
+      console.warn("[placements] wall proposal lookup failed:", proposalErr);
+    }
+    const withProposals = enriched.map((p) => {
+      const proposal = proposals[p.id as string];
+      return {
+        ...p,
+        wallProposal: proposal
+          ? { wallId: proposal.wallId, wallName: proposal.wallName, previewUrl: proposal.previewUrl }
+          : null,
+      };
+    });
+
+    return NextResponse.json({ placements: withProposals, userType: role.type });
   } catch (err) {
     // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
     // everything: an AuthzError that means 403 or 404, a schema failure, and a
@@ -461,6 +484,31 @@ export async function POST(request: Request) {
       );
     }
 
+    // Artist wall proposal (src/lib/placements/wall-proposals.ts). The artist
+    // may have laid the work out on this venue's public wall first; that
+    // proposal is a wall_layouts row named after this placement id. The link
+    // is verified here, at creation, and never written to the placement. The
+    // emails below carry the capture so both parties see the wall as pictured.
+    let wallProposal: { wallName: string; previewUrl: string | null } | null = null;
+    const proposalLayoutId = fromVenue
+      ? ""
+      : (parsed.data[0].wallProposalLayoutId || "").trim();
+    if (proposalLayoutId) {
+      const verified = await verifyWallProposalLink({
+        layoutId: proposalLayoutId,
+        placementId: parsed.data[0].id,
+        artistUserId: auth.user!.id,
+        venueUserId: venueProfile!.user_id,
+      });
+      if (!verified.ok) {
+        return NextResponse.json(
+          { error: verified.reason, reason: "wall_proposal_invalid" },
+          { status: 400 },
+        );
+      }
+      wallProposal = { wallName: verified.wall.name, previewUrl: verified.previewUrl };
+    }
+
     // Full row with every column the app understands. There is no fallback
     // chain any more (row 22): every column here exists in prod, so a failed
     // insert is a real error and is surfaced as one.
@@ -581,6 +629,8 @@ export async function POST(request: Request) {
               requestedWorks: parsed.data.map((p) => p.workTitle),
               proposedTerms: termsSummary,
               message: parsed.data[0].message || undefined,
+              wallPreviewUrl: wallProposal?.previewUrl ?? undefined,
+              wallName: wallProposal?.wallName,
             }),
             metadata: { placementId: placementIdForLink, arrangementType: parsed.data[0].type },
           });
@@ -660,6 +710,8 @@ export async function POST(request: Request) {
               placementUrl,
               requestedWorks: parsed.data.map((p) => p.workTitle),
               proposedTerms: termsSummary,
+              wallPreviewUrl: wallProposal?.previewUrl ?? undefined,
+              wallName: wallProposal?.wallName,
             }),
             metadata: { placementId: placementIdForLink },
           }).catch((err) => {

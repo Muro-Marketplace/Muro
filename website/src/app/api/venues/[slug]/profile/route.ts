@@ -6,6 +6,7 @@ import { resolveSubscription } from "@/lib/subscriptions";
 import { canSeeVenueIdentity } from "@/lib/venue-visibility";
 import { isFlagOn } from "@/lib/feature-flags";
 import { getWallPreviewUrls } from "@/lib/visualizer/walls-db";
+import { signWallPhotoUrl } from "@/lib/venues/public-walls";
 
 // Gated data source for the public venue profile page. Venue identity (name,
 // description, photos, display needs, walls, open requests) is paywalled the
@@ -140,17 +141,20 @@ async function loadWalls(db: Db, venueUserId: string): Promise<PublicWall[]> {
         kind: w.kind, wall_color_hex: w.wall_color_hex,
       };
       if (w.kind === "uploaded" && w.source_image_path) {
-        const { data: signed } = await db.storage
-          .from("wall-photos")
-          .createSignedUrl(w.source_image_path, 60 * 60);
-        if (signed?.signedUrl) base.source_image_url = signed.signedUrl;
+        const signed = await signWallPhotoUrl(db, w.source_image_path);
+        if (signed) base.source_image_url = signed;
       }
       out.push(base);
     }
     // The preview the venue saved from the editor is what artists should
     // see: the wall as it was built, not the bare photo. Only walls the
     // venue made public reach this point, the gate above is unchanged.
-    const previews = await getWallPreviewUrls(out.map((w) => w.id), db);
+    // Only the venue's own layouts: an artist's wall proposal is a layout
+    // on this wall too, and must never become the venue's preview.
+    const previews = await getWallPreviewUrls(
+      out.map((w) => ({ id: w.id, user_id: venueUserId })),
+      db,
+    );
     for (const w of out) {
       if (previews[w.id]) w.preview_image_url = previews[w.id];
     }

@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 // The public wall card shows the preview the venue saved from the editor
 // when there is one, so artists see the wall as it was built, and falls
-// back to the bare photo or the colour swatch otherwise.
+// back to the bare photo or the colour swatch otherwise. For an artist the
+// lightbox's call to action opens the wall in the visualiser.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ userType: null }) }));
+const { authState } = vi.hoisted(() => ({ authState: { userType: null as string | null } }));
+vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ userType: authState.userType }) }));
 vi.mock("next/link", () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
@@ -32,6 +34,9 @@ const BASE = {
   source_image_url: "https://signed.example/photo.jpg",
 };
 
+beforeEach(() => {
+  authState.userType = null;
+});
 afterEach(() => cleanup());
 
 const images = () => Array.from(document.querySelectorAll("img")).map((i) => i.getAttribute("src"));
@@ -92,5 +97,33 @@ describe("<VenueWallCard />", () => {
       />,
     );
     expect(images()).toEqual(["https://cdn.example/wall-renders/u/r2.webp"]);
+  });
+});
+
+describe("<VenueWallCard /> lightbox call to action", () => {
+  it("sends an artist to the visualiser for this wall, with the venue named", () => {
+    authState.userType = "artist";
+    render(<VenueWallCard wall={{ ...BASE, id: "wall 1" }} venue={VENUE} />);
+    fireEvent.click(screen.getByRole("button", { name: /view front room wall/i }));
+
+    const cta = screen.getByRole("link", { name: "Place my work on this wall" });
+    expect(cta.getAttribute("href")).toBe("/artist-portal/walls/propose/wall%201?venue=copper-kettle");
+    expect(screen.queryByRole("link", { name: /request placement/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /apply as an artist/i })).toBeNull();
+  });
+
+  it("keeps venues view-only and sends everyone else to apply", () => {
+    authState.userType = "venue";
+    render(<VenueWallCard wall={BASE} venue={VENUE} />);
+    fireEvent.click(screen.getByRole("button", { name: /view front room wall/i }));
+    expect(screen.queryByRole("link", { name: "Place my work on this wall" })).toBeNull();
+    expect(screen.getByText(/Venues view-only/)).toBeTruthy();
+    cleanup();
+
+    authState.userType = null;
+    render(<VenueWallCard wall={BASE} venue={VENUE} />);
+    fireEvent.click(screen.getByRole("button", { name: /view front room wall/i }));
+    expect(screen.getByRole("link", { name: "Apply as an artist" }).getAttribute("href")).toBe("/apply");
+    expect(screen.queryByRole("link", { name: "Place my work on this wall" })).toBeNull();
   });
 });

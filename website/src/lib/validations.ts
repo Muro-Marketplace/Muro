@@ -180,6 +180,11 @@ export const placementSchema = z.object({
     size: optionalString(100),
   })).max(20).optional(),
   requestedDimensions: optionalString(100),
+  // Artist wall proposal: the wall_layouts row (named `proposal:<id>`) the
+  // artist built on the venue's public wall before sending this request.
+  // Verified server-side against the caller and the venue, never stored on
+  // the placement (src/lib/placements/wall-proposals.ts).
+  wallProposalLayoutId: optionalString(100),
 });
 
 /**

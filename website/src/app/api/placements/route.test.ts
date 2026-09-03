@@ -17,7 +17,22 @@
 
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 
-const { authMock, fromMock, isFlagOnMock, cancelBillingMock, assertNoServerOwnedSpy, getUserByIdMock } = vi.hoisted(() => ({
+const {
+  authMock,
+  fromMock,
+  isFlagOnMock,
+  cancelBillingMock,
+  assertNoServerOwnedSpy,
+  getUserByIdMock,
+  verifyWallProposalLinkMock,
+  getWallProposalsForPlacementsMock,
+  venueNewPlacementRequestMock,
+  artistPlacementRequestSentMock,
+} = vi.hoisted(() => ({
+  verifyWallProposalLinkMock: vi.fn(),
+  getWallProposalsForPlacementsMock: vi.fn(async () => ({})),
+  venueNewPlacementRequestMock: vi.fn(() => null),
+  artistPlacementRequestSentMock: vi.fn(() => null),
   authMock: vi.fn(),
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn(() => false),
@@ -75,14 +90,20 @@ vi.mock("@/lib/placements/paid-loan-billing", () => ({
 }));
 vi.mock("@/lib/subscriptions", () => ({ isSubscribed: vi.fn(async () => true) }));
 vi.mock("@/lib/outreach-cap", () => ({ checkArtistOutreachCap: vi.fn(async () => null) }));
+// The wall proposal link is verified by its own module (tested there); the
+// route's job is to call it with the right parties and honour the answer.
+vi.mock("@/lib/placements/wall-proposals", () => ({
+  verifyWallProposalLink: verifyWallProposalLinkMock,
+  getWallProposalsForPlacements: getWallProposalsForPlacementsMock,
+}));
 
 // Email templates are React components; the route only builds them as payloads.
 // Written out rather than looped: vi.mock is hoisted above the loop body, so a
 // template-literal path inside a for-of resolves before `t` exists.
-vi.mock("@/emails/templates/placements/VenueNewPlacementRequest", () => ({ VenueNewPlacementRequest: () => null }));
+vi.mock("@/emails/templates/placements/VenueNewPlacementRequest", () => ({ VenueNewPlacementRequest: venueNewPlacementRequestMock }));
 vi.mock("@/emails/templates/placements/ArtistPlacementAccepted", () => ({ ArtistPlacementAccepted: () => null }));
 vi.mock("@/emails/templates/placements/ArtistPlacementDeclined", () => ({ ArtistPlacementDeclined: () => null }));
-vi.mock("@/emails/templates/placements/ArtistPlacementRequestSent", () => ({ ArtistPlacementRequestSent: () => null }));
+vi.mock("@/emails/templates/placements/ArtistPlacementRequestSent", () => ({ ArtistPlacementRequestSent: artistPlacementRequestSentMock }));
 vi.mock("@/emails/templates/placements/VenuePlacementAcceptedConfirmation", () => ({ VenuePlacementAcceptedConfirmation: () => null }));
 vi.mock("@/emails/templates/placements/PlacementVenueDeclinedArtistRequest", () => ({ PlacementVenueDeclinedArtistRequest: () => null }));
 vi.mock("@/emails/templates/placements/PlacementCancelled", () => ({ PlacementCancelled: () => null }));
@@ -91,7 +112,8 @@ vi.mock("@/emails/templates/placements/PlacementScheduled", () => ({ PlacementSc
 vi.mock("@/emails/templates/placements/PlacementArtworkInstalled", () => ({ PlacementArtworkInstalled: () => null }));
 vi.mock("@/emails/templates/placements/PlacementEnded", () => ({ PlacementEnded: () => null }));
 
-import { PATCH, POST } from "./route";
+import { GET, PATCH, POST } from "./route";
+import { checkArtistOutreachCap } from "@/lib/outreach-cap";
 import { assertNoServerOwned, PLACEMENT_SERVER_OWNED } from "@/lib/db/writable-fields";
 // Mocked above; imported so the R4.14 tests can assert on the calls.
 import { sendEmail } from "@/lib/email/send";
@@ -1632,5 +1654,215 @@ describe("PATCH /api/placements keeps the stepper reading forward", () => {
     await patch({ id: "pl-1", stage: "installed" });
 
     expect(updates[0]).not.toHaveProperty("scheduled_for");
+  });
+});
+
+// ── Artist wall proposals (src/lib/placements/wall-proposals.ts) ──────────
+
+/** The artist-initiated branch: caller is the artist, venue looked up by slug. */
+function setupArtistPostDb() {
+  placementInserts = [];
+  fromMock.mockImplementation((table: string) => {
+    if (table === "artist_profiles") {
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({
+              data: { user_id: ARTIST, slug: "maya-chen", name: "Maya Chen", review_status: "approved" },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "venue_profiles") {
+      return {
+        select: () => ({
+          eq: () => ({
+            single: async () => ({
+              data: { user_id: VENUE, slug: "copper-kettle", name: "The Copper Kettle" },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "placements") {
+      return {
+        insert: async (rows: Record<string, unknown>[]) => {
+          placementInserts.push(rows);
+          return { error: null };
+        },
+      };
+    }
+    if (table === "messages") {
+      return {
+        select: () => ({
+          or: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: null }) }) }) }),
+        }),
+        insert: async () => ({ error: null }),
+      };
+    }
+    return {
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
+      insert: async () => ({ error: null }),
+    };
+  });
+}
+
+const PROPOSAL_PLACEMENT = {
+  id: CLIENT_ID,
+  venueSlug: "copper-kettle",
+  workTitle: "Harbour Light",
+  workImage: "https://images.example/harbour.jpg",
+  type: "revenue_share",
+  qrEnabled: true,
+  revenueSharePercent: 25,
+  message: "Hi, here's how it could look.",
+};
+
+describe("POST /api/placements carries the artist's wall proposal", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: ARTIST, email: "maya@example.com", user_metadata: {} }, error: null });
+    isFlagOnMock.mockReturnValue(false);
+    vi.mocked(checkArtistOutreachCap).mockResolvedValue({ ok: true } as never);
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "venue@example.com", user_metadata: {} } } });
+    verifyWallProposalLinkMock.mockReset();
+    venueNewPlacementRequestMock.mockClear();
+    artistPlacementRequestSentMock.mockClear();
+    setupArtistPostDb();
+  });
+
+  it("verifies the link against the caller, this placement id and the venue, then emails both parties the capture", async () => {
+    verifyWallProposalLinkMock.mockResolvedValue({
+      ok: true,
+      layout: { id: "lay-p1" },
+      wall: { id: "wall-1", name: "Front room" },
+      previewUrl: "https://cdn.example/wall-renders/u-artist/r1.webp",
+    });
+
+    const res = await post({
+      fromVenue: false,
+      placements: [{ ...PROPOSAL_PLACEMENT, wallProposalLayoutId: "lay-p1" }],
+    });
+
+    expect(res.status).toBe(200);
+    expect(verifyWallProposalLinkMock).toHaveBeenCalledWith({
+      layoutId: "lay-p1",
+      placementId: CLIENT_ID,
+      artistUserId: ARTIST,
+      venueUserId: VENUE,
+    });
+    // The placement row itself gains nothing: the link lives in the layout name.
+    expect(placementInserts).toHaveLength(1);
+    expect(placementInserts[0][0].id).toBe(CLIENT_ID);
+    expect(Object.keys(placementInserts[0][0])).not.toContain("wall_proposal_layout_id");
+    expect(JSON.stringify(placementInserts[0][0])).not.toContain("lay-p1");
+
+    expect(venueNewPlacementRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        venueName: "The Copper Kettle",
+        wallPreviewUrl: "https://cdn.example/wall-renders/u-artist/r1.webp",
+        wallName: "Front room",
+      }),
+    );
+    await vi.waitFor(() => expect(artistPlacementRequestSentMock).toHaveBeenCalled());
+    expect(artistPlacementRequestSentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        wallPreviewUrl: "https://cdn.example/wall-renders/u-artist/r1.webp",
+        wallName: "Front room",
+      }),
+    );
+  });
+
+  it("400s with the reason, and writes nothing, when the link does not hold", async () => {
+    verifyWallProposalLinkMock.mockResolvedValue({ ok: false, reason: "That wall proposal isn't yours." });
+
+    const res = await post({
+      fromVenue: false,
+      placements: [{ ...PROPOSAL_PLACEMENT, wallProposalLayoutId: "lay-someone-elses" }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: "That wall proposal isn't yours.",
+      reason: "wall_proposal_invalid",
+    });
+    expect(placementInserts).toHaveLength(0);
+    expect(venueNewPlacementRequestMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves a plain request alone: no verification, no wall on the emails", async () => {
+    const res = await post({ fromVenue: false, placements: [PROPOSAL_PLACEMENT] });
+
+    expect(res.status).toBe(200);
+    expect(verifyWallProposalLinkMock).not.toHaveBeenCalled();
+    expect(placementInserts).toHaveLength(1);
+    expect(venueNewPlacementRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ wallPreviewUrl: undefined, wallName: undefined }),
+    );
+  });
+});
+
+/** Generic read chain for the list: every table answers with its rows. */
+function setupGetDb(rows: Record<string, unknown>[]) {
+  fromMock.mockImplementation((table: string) => {
+    const data =
+      table === "artist_profiles"
+        ? [{ user_id: ARTIST, slug: "maya-chen", name: "Maya Chen" }]
+        : table === "placements"
+          ? rows
+          : [];
+    const chain: Record<string, unknown> = {};
+    for (const m of ["select", "eq", "in", "or", "order", "limit", "gte", "lte", "is", "contains", "update"]) {
+      chain[m] = () => chain;
+    }
+    chain.single = async () => ({ data: data[0] ?? null, error: data[0] ? null : { code: "PGRST116" } });
+    chain.maybeSingle = async () => ({ data: data[0] ?? null, error: null });
+    chain.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+      Promise.resolve({ data, error: null }).then(resolve, reject);
+    return chain;
+  });
+}
+
+describe("GET /api/placements attaches each row's wall proposal", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: ARTIST, email: "maya@example.com" }, error: null });
+    getWallProposalsForPlacementsMock.mockReset();
+    setupGetDb([
+      { id: "pl-1", artist_user_id: ARTIST, venue_user_id: VENUE, status: "pending", hidden_for_artist: false, proposed_by_user_id: ARTIST, created_at: "2026-09-03T10:00:00Z" },
+      { id: "pl-2", artist_user_id: ARTIST, venue_user_id: VENUE, status: "pending", hidden_for_artist: false, proposed_by_user_id: ARTIST, created_at: "2026-09-02T10:00:00Z" },
+    ]);
+  });
+
+  it("resolves proposals for the whole list at once and nulls the rows without one", async () => {
+    getWallProposalsForPlacementsMock.mockResolvedValue({
+      "pl-1": { layoutId: "lay-p1", wallId: "wall-1", wallName: "Front room", previewUrl: "https://cdn.example/r1.webp" },
+    });
+
+    const res = await GET(new Request("http://localhost/api/placements", { headers: { authorization: "Bearer valid" } }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(getWallProposalsForPlacementsMock).toHaveBeenCalledTimes(1);
+    expect(getWallProposalsForPlacementsMock).toHaveBeenCalledWith(["pl-1", "pl-2"], expect.anything());
+    expect(body.placements.map((p: { id: string }) => p.id)).toEqual(["pl-1", "pl-2"]);
+    expect(body.placements[0].wallProposal).toEqual({
+      wallId: "wall-1",
+      wallName: "Front room",
+      previewUrl: "https://cdn.example/r1.webp",
+    });
+    expect(body.placements[1].wallProposal).toBeNull();
+  });
+
+  it("still lists placements when the proposal lookup throws", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    getWallProposalsForPlacementsMock.mockRejectedValue(new Error("boom"));
+    const res = await GET(new Request("http://localhost/api/placements", { headers: { authorization: "Bearer valid" } }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.placements).toHaveLength(2);
+    expect(body.placements[0].wallProposal).toBeNull();
+    warn.mockRestore();
   });
 });

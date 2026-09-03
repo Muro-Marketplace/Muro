@@ -46,7 +46,36 @@ vi.mock("./Wall3DCanvas", async () => {
   return { default: Wall3DCanvasStub };
 });
 
-vi.mock("./WorksPanel", () => ({ default: () => null }));
+// The works panel is stubbed to one "Add" button per work, which is how the
+// artist mode tests get an item onto the wall (drag and drop needs Konva).
+vi.mock("./WorksPanel", async () => {
+  const React = await import("react");
+  function WorksPanelStub(props: {
+    works?: Array<{ id: string; title: string }>;
+    onSelect?: (w: unknown) => void;
+  }) {
+    return React.createElement(
+      "div",
+      { "data-testid": "works-panel" },
+      (props.works ?? []).map((w) =>
+        React.createElement(
+          "button",
+          { key: w.id, type: "button", onClick: () => props.onSelect?.(w) },
+          `Add ${w.title}`,
+        ),
+      ),
+    );
+  }
+  return { default: WorksPanelStub };
+});
+
+// `mutate` reads the session from the Supabase client, which cannot be built
+// without env; the real api-client is kept, only the session is stubbed.
+vi.mock("@/lib/supabase", () => ({
+  supabase: {
+    auth: { getSession: async () => ({ data: { session: { access_token: "tok-artist" } } }) },
+  },
+}));
 
 import WallVisualizer from "./WallVisualizer";
 import { isFeedbackBubbleHidden, _resetFeedbackBubbleVisibility } from "@/lib/ui/feedback-bubble-visibility";
@@ -130,6 +159,10 @@ function installFetch() {
       });
     }
     if (url.includes("/mockups") && method === "POST") return json({ ok: true });
+    if (url.endsWith("/proposals") && method === "POST") {
+      return json({ layoutId: "lay-p1", previewUrl: "https://cdn.example/wall-renders/u-artist/r1.webp" });
+    }
+    if (url === "/api/placements" && method === "POST") return json({ success: true });
     return json({ error: `unexpected ${method} ${url}` }, 500);
   });
 }
@@ -145,6 +178,7 @@ function calls(): Array<{ url: string; method: string; init?: RequestInit }> {
 beforeEach(() => {
   process.env.NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1 = "1";
   _resetFeedbackBubbleVisibility();
+  vi.stubGlobal("crypto", { randomUUID: () => "uuid-1" });
   captureImageMock.mockReset();
   capture3dMock.mockReset();
   fetchMock.mockReset();
@@ -388,5 +422,178 @@ describe("<WallVisualizer /> customer artwork sheet", () => {
     expect(calls().filter((c) => c.method !== "GET")).toEqual([]);
     // Download stays available to non-venue viewers, straight from the blob.
     expect(screen.getByRole("link", { name: "Download" }).getAttribute("href")).toBe("blob:mock-1");
+  });
+});
+
+// ── Artist on a venue's wall ───────────────────────────────────────────
+
+const VENUE = {
+  slug: "copper-kettle",
+  name: "The Copper Kettle",
+  interestedInRevenueShare: true,
+  interestedInFreeLoan: true,
+  interestedInDirectPurchase: true,
+};
+
+const VENUE_WALL: Wall = { ...WALL, id: "wall-9", name: "Front room", user_id: "", is_public_on_profile: true };
+
+const ARTIST_WORKS = [
+  { id: "work-1", title: "Harbour Light", image: "https://images.example/harbour.jpg", dimensions: "60 x 80 cm" },
+];
+
+/** The default API surface plus the artist's own works. */
+function installArtistFetch(overrides: (url: string, method: string) => Response | null = () => null) {
+  const base = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    const method = init?.method ?? "GET";
+    const override = overrides(url, method);
+    if (override) return override;
+    if (url.startsWith("/api/artist-works")) return json({ works: ARTIST_WORKS });
+    return base(input, init);
+  });
+}
+
+async function mountArtistOnVenueWall() {
+  const view = render(
+    <WallVisualizer
+      mode="artist_venue_wall"
+      wall={VENUE_WALL}
+      venue={VENUE}
+      bgImageUrl={null}
+      authToken="tok-artist"
+    />,
+  );
+  await screen.findByTestId("wall-canvas");
+  await screen.findByRole("button", { name: "Add Harbour Light" });
+  return view;
+}
+
+async function placeAndPreview() {
+  fireEvent.click(screen.getByRole("button", { name: "Add Harbour Light" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Preview" }));
+  return screen.findByRole("dialog", { name: "Wall preview" });
+}
+
+describe("<WallVisualizer /> artist on a venue wall", () => {
+  beforeEach(() => installArtistFetch());
+
+  it("locks the venue wall, loads the artist's own works, and persists nothing", async () => {
+    await mountArtistOnVenueWall();
+
+    expect(calls().some((c) => c.url.startsWith("/api/artist-works"))).toBe(true);
+    // No wall controls: the venue's wall is not the artist's to resize or recolour.
+    expect(document.querySelector('input[type="color"]')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Upload photo|All saved|Unsaved/);
+    // Nothing to preview until something is on the wall.
+    expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
+    expect(document.body.textContent).toMatch(/The Copper Kettle's wall/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Harbour Light" }));
+    expect(await screen.findByRole("button", { name: "Preview" })).toBeTruthy();
+    expect(calls().filter((c) => c.method !== "GET")).toEqual([]);
+  });
+
+  it("previews without saving and offers Send to the venue, not Save to wall", async () => {
+    await mountArtistOnVenueWall();
+    const dialog = await placeAndPreview();
+
+    expect(captureImageMock).toHaveBeenCalledTimes(1);
+    expect(dialog.querySelector("img")?.getAttribute("src")).toBe("blob:mock-1");
+    expect(screen.getByRole("button", { name: "Send to The Copper Kettle" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /save to wall/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /save to artwork/i })).toBeNull();
+    expect(calls().filter((c) => c.method !== "GET")).toEqual([]);
+  });
+
+  it("Send stores the proposal under a fresh placement id, then creates the placement carrying the layout id", async () => {
+    await mountArtistOnVenueWall();
+    await placeAndPreview();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send to The Copper Kettle" }));
+    expect(screen.getByRole("radio", { name: "Revenue share" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Paid loan" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Direct purchase" })).toBeTruthy();
+    expect((screen.getByLabelText("Revenue share to venue") as HTMLInputElement).value).toBe("25");
+    expect((screen.getByLabelText("Message to The Copper Kettle") as HTMLTextAreaElement).value).toBe(
+      'Hi The Copper Kettle, here\'s how my work could look on your "Front room" wall.',
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Sent to The Copper Kettle");
+
+    const writes = calls().filter((c) => c.method !== "GET");
+    expect(writes.map((c) => `${c.method} ${c.url}`)).toEqual([
+      "POST /api/venues/copper-kettle/walls/wall-9/proposals",
+      "POST /api/placements",
+    ]);
+
+    const upload = writes[0].init!;
+    expect((upload.headers as Record<string, string>).Authorization).toBe("Bearer tok-artist");
+    const form = upload.body as FormData;
+    const image = form.get("image") as File;
+    expect(image.name).toBe("wall-preview.webp");
+    expect(image.type).toBe("image/webp");
+    const items = JSON.parse(form.get("items") as string) as Array<{ work_id: string }>;
+    expect(items).toHaveLength(1);
+    expect(items[0].work_id).toBe("work-1");
+    expect(form.get("placementId")).toBe("uuid-1");
+
+    const placementCall = writes[1].init!;
+    const body = JSON.parse(placementCall.body as string);
+    expect(body.fromVenue).toBe(false);
+    expect(body.placements).toHaveLength(1);
+    expect(body.placements[0]).toMatchObject({
+      id: "uuid-1",
+      venueSlug: "copper-kettle",
+      workTitle: "Harbour Light",
+      workImage: "https://images.example/harbour.jpg",
+      type: "revenue_share",
+      qrEnabled: true,
+      revenueSharePercent: 25,
+      message: 'Hi The Copper Kettle, here\'s how my work could look on your "Front room" wall.',
+      wallProposalLayoutId: "lay-p1",
+    });
+    expect(typeof body.placements[0].requestedDimensions).toBe("string");
+    expect(body.placements[0].requestedDimensions.length).toBeGreaterThan(0);
+    expect(new Headers(placementCall.headers).get("Authorization")).toBe("Bearer tok-artist");
+
+    expect(screen.getByRole("link", { name: "View My Placements" }).getAttribute("href")).toBe("/artist-portal/placements");
+    expect(screen.getByRole("link", { name: "Back to The Copper Kettle" }).getAttribute("href")).toBe("/venues/copper-kettle");
+  });
+
+  it("shows the upload route's refusal word for word and never creates the placement", async () => {
+    const copy = "Your application is still under review. You'll be able to send placement requests once we've approved your profile.";
+    installArtistFetch((url, method) =>
+      url.endsWith("/proposals") && method === "POST"
+        ? json({ error: copy, reason: "application_pending" }, 403)
+        : null,
+    );
+    await mountArtistOnVenueWall();
+    await placeAndPreview();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send to The Copper Kettle" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe(copy);
+    expect(calls().some((c) => c.url === "/api/placements")).toBe(false);
+    expect(screen.queryByText("Sent to The Copper Kettle")).toBeNull();
+  });
+
+  it("surfaces the outreach cap from the placement step", async () => {
+    installArtistFetch((url, method) =>
+      url === "/api/placements" && method === "POST"
+        ? json({ error: "outreach_limit_reached", message: "You've reached your weekly limit of 3 new venue approaches." }, 429)
+        : null,
+    );
+    await mountArtistOnVenueWall();
+    await placeAndPreview();
+
+    fireEvent.click(screen.getByRole("button", { name: "Send to The Copper Kettle" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "You've reached your weekly limit of 3 new venue approaches.",
+    );
   });
 });

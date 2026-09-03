@@ -304,6 +304,17 @@ function EmptyTab({ tab, mode }: { tab: Tab | null; mode: VisualizerMode }) {
         </p>
       );
     }
+    if (mode === "artist_venue_wall") {
+      return (
+        <div className="px-2 py-3 space-y-1.5">
+          <p className="text-xs text-stone-600">No works in your portfolio yet.</p>
+          <p className="text-[11px] text-stone-500 leading-snug">
+            Add a work to your portfolio and it will appear here, ready to
+            drag onto the wall.
+          </p>
+        </div>
+      );
+    }
     return (
       <p className="text-xs text-stone-500 px-2 py-3">No works match.</p>
     );

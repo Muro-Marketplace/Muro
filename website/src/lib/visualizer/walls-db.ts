@@ -243,14 +243,22 @@ export async function deleteWall(
 
 // ── Layout queries ──────────────────────────────────────────────────────
 
+/**
+ * The wall owner's own layouts on a wall. `ownerUserId` is part of the
+ * query, not a courtesy: an artist's wall proposal is a wall_layouts row on
+ * the venue's wall too (see src/lib/placements/wall-proposals.ts), and it
+ * must never appear in the venue's editor.
+ */
 export async function listLayoutsByWall(
   wallId: string,
+  ownerUserId: string,
   client?: SupabaseClient,
 ): Promise<WallLayout[]> {
   const { data, error } = await db(client)
     .from("wall_layouts")
     .select("*")
     .eq("wall_id", wallId)
+    .eq("user_id", ownerUserId)
     .order("updated_at", { ascending: false });
   if (error) {
     console.error("[walls-db] listLayoutsByWall failed:", error.message);
@@ -259,14 +267,17 @@ export async function listLayoutsByWall(
   return (data as DbLayoutRow[]).map(rowToLayout);
 }
 
+/** The owner's own layouts on a wall; artist proposals never count against the cap. */
 export async function countLayoutsByWall(
   wallId: string,
+  ownerUserId: string,
   client?: SupabaseClient,
 ): Promise<number> {
   const { count, error } = await db(client)
     .from("wall_layouts")
     .select("id", { count: "exact", head: true })
-    .eq("wall_id", wallId);
+    .eq("wall_id", wallId)
+    .eq("user_id", ownerUserId);
   if (error) {
     console.error("[walls-db] countLayoutsByWall failed:", error.message);
     return 0;
@@ -375,35 +386,47 @@ export async function deleteLayout(
 // ── Saved previews ──────────────────────────────────────────────────────
 
 /**
- * Public URL of the saved preview for each wall in `wallIds`, keyed by
- * wall id. A wall's preview is the render its most recently updated
- * layout points at (`wall_layouts.last_render_id`); walls with no saved
- * preview are simply absent from the result.
+ * Public URL of the saved preview for each wall in `walls`, keyed by wall
+ * id. A wall's preview is the render its most recently updated layout
+ * points at (`wall_layouts.last_render_id`); walls with no saved preview
+ * are simply absent from the result.
+ *
+ * Only the wall OWNER's layouts are considered. An artist's wall proposal
+ * is a wall_layouts row on the venue's wall under the artist's user_id
+ * (src/lib/placements/wall-proposals.ts), and it is usually the newest
+ * layout there; without this filter it would replace the venue's own
+ * preview on My Walls and on the public profile. Callers pass the owner
+ * with each wall so the filter needs no extra query.
  *
  * Two queries for the whole set (layouts, then the renders they point
  * at), never one per wall: the list page and the public profile call this
  * for every wall they show.
  */
 export async function getWallPreviewUrls(
-  wallIds: string[],
+  walls: ReadonlyArray<{ id: string; user_id: string }>,
   client?: SupabaseClient,
 ): Promise<Record<string, string>> {
-  if (wallIds.length === 0) return {};
+  if (walls.length === 0) return {};
   const conn = db(client);
+  const ownerByWall = new Map(walls.map((w) => [w.id, w.user_id] as const));
 
   const { data: layouts, error: layoutsErr } = await conn
     .from("wall_layouts")
-    .select("wall_id, last_render_id, updated_at")
-    .in("wall_id", wallIds)
+    .select("wall_id, user_id, last_render_id, updated_at")
+    .in("wall_id", Array.from(ownerByWall.keys()))
     .order("updated_at", { ascending: false });
   if (layoutsErr || !layouts) {
     console.warn("[walls-db] getWallPreviewUrls layouts failed:", layoutsErr?.message);
     return {};
   }
 
-  // Newest layout with a render wins per wall (rows arrive newest first).
+  // Newest layout with a render wins per wall (rows arrive newest first),
+  // skipping every layout that is not the owner's.
   const renderIdByWall = new Map<string, string>();
-  for (const row of layouts as Array<{ wall_id: string; last_render_id: string | null }>) {
+  for (const row of layouts as Array<{
+    wall_id: string; user_id: string; last_render_id: string | null;
+  }>) {
+    if (row.user_id !== ownerByWall.get(row.wall_id)) continue;
     if (!row.last_render_id || renderIdByWall.has(row.wall_id)) continue;
     renderIdByWall.set(row.wall_id, row.last_render_id);
   }

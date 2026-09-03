@@ -142,7 +142,12 @@ describe("GET /api/walls", () => {
     );
     const json = await res.json();
     expect(getWallPreviewUrlsMock).toHaveBeenCalledTimes(1);
-    expect(getWallPreviewUrlsMock).toHaveBeenCalledWith(["w1", "w2"]);
+    // The walls go in whole (id + owner), so the lookup can skip layouts
+    // that are not the owner's, such as an artist's wall proposal.
+    expect(getWallPreviewUrlsMock).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "w1" }),
+      expect.objectContaining({ id: "w2" }),
+    ]);
     expect(json.walls[0].preview_image_url).toBeUndefined();
     expect(json.walls[1].preview_image_url).toBe(
       "https://cdn.example/wall-renders/u-real/r1.webp",

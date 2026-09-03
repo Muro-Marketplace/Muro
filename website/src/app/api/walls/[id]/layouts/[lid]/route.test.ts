@@ -246,3 +246,43 @@ describe("DELETE /api/walls/[id]/layouts/[lid]", () => {
     expect(deleteLayoutMock).not.toHaveBeenCalled();
   });
 });
+
+// An artist's wall proposal is a wall_layouts row on the venue's own wall
+// under the artist's user_id (src/lib/placements/wall-proposals.ts). Wall
+// ownership alone would let the venue open, edit or delete it through
+// ?lid=, so every route here also requires the layout to be the caller's.
+describe("an artist's proposal layout on the caller's own wall", () => {
+  const proposal = { ...layoutOwn, id: "lay-p", user_id: "u-artist", name: "proposal:pl-1" };
+  const req = (method: string, body?: unknown) =>
+    new Request("https://w.local/api/walls/wall-1/layouts/lay-p", {
+      method,
+      headers: { authorization: "Bearer valid", "content-type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+
+  it("cannot be read", async () => {
+    getWallByIdMock.mockResolvedValue(wallOwn);
+    getLayoutByIdMock.mockResolvedValue(proposal);
+    const { GET } = await import("./route");
+    const res = await GET(req("GET"), ctxFactory("wall-1", "lay-p"));
+    expect(res.status).toBe(404);
+  });
+
+  it("cannot be edited", async () => {
+    getWallByIdMock.mockResolvedValue(wallOwn);
+    getLayoutByIdMock.mockResolvedValue(proposal);
+    const { PATCH } = await import("./route");
+    const res = await PATCH(req("PATCH", { name: "Mine now" }), ctxFactory("wall-1", "lay-p"));
+    expect(res.status).toBe(404);
+    expect(updateLayoutMock).not.toHaveBeenCalled();
+  });
+
+  it("cannot be deleted", async () => {
+    getWallByIdMock.mockResolvedValue(wallOwn);
+    getLayoutByIdMock.mockResolvedValue(proposal);
+    const { DELETE } = await import("./route");
+    const res = await DELETE(req("DELETE"), ctxFactory("wall-1", "lay-p"));
+    expect(res.status).toBe(404);
+    expect(deleteLayoutMock).not.toHaveBeenCalled();
+  });
+});

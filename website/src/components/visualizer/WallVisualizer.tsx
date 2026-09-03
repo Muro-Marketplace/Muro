@@ -43,7 +43,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import dynamic from "next/dynamic";
+import { apiErrorMessage, mutate } from "@/lib/api-client";
 import { isFlagOn } from "@/lib/feature-flags";
+import {
+  buildProposalPlacement,
+  type ProposalTerms,
+  type ProposalVenue,
+} from "@/lib/placements/wall-proposal-client";
 import { hideFeedbackBubble } from "@/lib/ui/feedback-bubble-visibility";
 import { useMediaQuery } from "@/lib/use-media-query";
 import { CaptureError, captureErrorMessage } from "@/lib/visualizer/capture";
@@ -68,6 +74,7 @@ import type {
   WallLayout,
 } from "@/lib/visualizer/types";
 import ItemToolbar from "./ItemToolbar";
+import type { ProposalSendStatus } from "./ProposalSendPanel";
 import RenderPreview, { type SaveToWallStatus } from "./RenderPreview";
 import type { Wall3DCanvasHandle } from "./Wall3DCanvas";
 import type { WallCanvasHandle } from "./WallCanvas";
@@ -116,6 +123,11 @@ interface ExtendedProps extends VisualizerEditorProps {
    * Storage bucket is private so we can't use the path directly.
    */
   bgImageUrl?: string | null;
+  /**
+   * The venue whose wall this is, `artist_venue_wall` mode only. Drives the
+   * arrangement choices in the Send step and where the request goes.
+   */
+  venue?: ProposalVenue | null;
 }
 
 interface CapturedPreview {
@@ -212,7 +224,15 @@ function WallVisualizerInner(props: ExtendedProps) {
   );
   const [mockupError, setMockupError] = useState<string | null>(null);
 
+  // Wall proposal (artist_venue_wall): the Send step's progress. Reset on
+  // every new capture, a fresh preview is a fresh thing to send.
+  const [proposalStatus, setProposalStatus] = useState<ProposalSendStatus>("idle");
+  const [proposalError, setProposalError] = useState<string | null>(null);
+
   const canPersist = Boolean(props.wall && props.initialLayout);
+  // The venue's wall is not the artist's to change: no size, colour or
+  // photo controls, and nothing is saved until Send.
+  const wallLocked = props.mode === "artist_venue_wall";
 
   // ── Auto-save ─────────────────────────────────────────────────────
   // The value we save is the items array, the dimensions and, for preset
@@ -415,7 +435,11 @@ function WallVisualizerInner(props: ExtendedProps) {
       };
     }
 
-    if (props.mode === "artist_mockup" || props.mode === "artist_showroom") {
+    if (
+      props.mode === "artist_mockup" ||
+      props.mode === "artist_showroom" ||
+      props.mode === "artist_venue_wall"
+    ) {
       let cancelled = false;
       setWorksLoading(true);
       setWorksError(null);
@@ -701,6 +725,8 @@ function WallVisualizerInner(props: ExtendedProps) {
       setWallSaveError(null);
       setMockupSavedWorkId(null);
       setMockupError(null);
+      setProposalStatus("idle");
+      setProposalError(null);
       setPreviewOpen(true);
     } catch (err) {
       setPreviewError(captureErrorMessage(err, viewMode));
@@ -831,6 +857,82 @@ function WallVisualizerInner(props: ExtendedProps) {
     [preview, storePreview, props.authToken],
   );
 
+  /**
+   * Send the capture to the venue as a placement request (artist_venue_wall).
+   * In order: a placement id is minted, the capture and the items are stored
+   * as a wall proposal under that id (multipart, a plain fetch carrying the
+   * bearer token with `res.ok` checked, as the preview upload does), then
+   * the placement is created through `mutate` with the proposal's layout id
+   * on it. Server refusals are shown word for word: the under-review copy,
+   * the outreach cap, a validation failure.
+   */
+  const handleSendProposal = useCallback(
+    async (terms: ProposalTerms) => {
+      const venue = props.venue;
+      const wall = props.wall;
+      if (!preview || !venue || !wall) {
+        setProposalStatus("error");
+        setProposalError("Preview the wall first.");
+        return;
+      }
+      setProposalStatus("sending");
+      setProposalError(null);
+      try {
+        const placementId = crypto.randomUUID();
+
+        const format = previewFormatFromType(preview.blob.type);
+        const fd = new FormData();
+        fd.append("image", preview.blob, previewFileName(format));
+        fd.append("items", JSON.stringify(items));
+        fd.append("placementId", placementId);
+        const res = await fetch(
+          `/api/venues/${encodeURIComponent(venue.slug)}/walls/${encodeURIComponent(wall.id)}/proposals`,
+          {
+            method: "POST",
+            headers: props.authToken
+              ? { Authorization: `Bearer ${props.authToken}` }
+              : {},
+            body: fd,
+          },
+        );
+        if (res.status === 401) {
+          throw new Error("Session expired. Please sign in again.");
+        }
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+            message?: string;
+          };
+          throw new Error(body.message || body.error || `Upload failed (${res.status})`);
+        }
+        const { layoutId } = (await res.json()) as { layoutId: string };
+
+        const placement = buildProposalPlacement({
+          placementId,
+          venueSlug: venue.slug,
+          items,
+          workById,
+          terms,
+          layoutId,
+        });
+        if (!placement) {
+          throw new Error("Drag at least one of your works onto the wall.");
+        }
+        await mutate("/api/placements", {
+          method: "POST",
+          body: JSON.stringify({ fromVenue: false, placements: [placement] }),
+        });
+        setProposalStatus("sent");
+      } catch (err) {
+        setProposalStatus("error");
+        setProposalError(
+          apiErrorMessage(err, err instanceof Error ? err.message : "Could not send the proposal."),
+        );
+      }
+    },
+    [preview, props.venue, props.wall, props.authToken, items, workById],
+  );
+
   // ── Render ──────────────────────────────────────────────────────────
   // Common props for WorksPanel — used at two render points (the
   // desktop side rail, and the mobile bottom-sheet variant). Tap-to-
@@ -853,7 +955,8 @@ function WallVisualizerInner(props: ExtendedProps) {
   // Whether the floating Preview button should be shown at all. Same
   // gate the desktop branch used; reused for the mobile toolbar.
   const previewButtonVisible =
-    canPersist || (props.mode === "customer_artwork_page" && items.length > 0);
+    canPersist ||
+    ((props.mode === "customer_artwork_page" || wallLocked) && items.length > 0);
 
   return (
     <div className="flex h-full w-full bg-stone-50">
@@ -902,11 +1005,16 @@ function WallVisualizerInner(props: ExtendedProps) {
           >
             <div className="bg-white/85 backdrop-blur-sm border border-border rounded-sm px-4 py-3 text-center max-w-xs shadow-sm">
               <p className="text-sm font-medium text-foreground">
-                {viewMode === "3d" ? "Your wall, in 3D" : "Your blank wall"}
+                {wallLocked && props.venue
+                  ? `${props.venue.name}'s wall`
+                  : viewMode === "3d"
+                    ? "Your wall, in 3D"
+                    : "Your blank wall"}
               </p>
               <p className="text-xs text-muted mt-1">
-                Drag a work from the sidebar onto the wall to see how it
-                would look in this space.
+                {wallLocked
+                  ? "Drag one of your works onto the wall to show the venue how it would look, then press Preview to send it."
+                  : "Drag a work from the sidebar onto the wall to see how it would look in this space."}
               </p>
             </div>
           </div>
@@ -972,7 +1080,7 @@ function WallVisualizerInner(props: ExtendedProps) {
             visible at bottom-right we narrow the strip's right
             boundary so the bar can't drift under it on tighter
             viewports. */}
-        {!isMobile && (
+        {!isMobile && !wallLocked && (
           <div
             className={`pointer-events-none absolute bottom-3 flex justify-center ${
               previewButtonVisible
@@ -1071,6 +1179,7 @@ function WallVisualizerInner(props: ExtendedProps) {
 
               <MobileActionBar
                 wallActive={mobileSheet === "wall"}
+                wallSettingsVisible={!wallLocked}
                 onToggleWall={() =>
                   setMobileSheet((prev) => (prev === "wall" ? null : "wall"))
                 }
@@ -1096,7 +1205,7 @@ function WallVisualizerInner(props: ExtendedProps) {
               </MobileSheet>
             )}
 
-            {mobileSheet === "wall" && (
+            {mobileSheet === "wall" && !wallLocked && (
               <MobileSheet
                 title="Wall settings"
                 onClose={() => setMobileSheet(null)}
@@ -1186,6 +1295,20 @@ function WallVisualizerInner(props: ExtendedProps) {
                 saving: mockupSaving,
                 savedWorkId: mockupSavedWorkId,
                 error: mockupError,
+              }
+            : undefined
+        }
+        // The artist's Send step, only when laying out on a venue's wall.
+        proposal={
+          wallLocked && props.venue && props.wall
+            ? {
+                venue: props.venue,
+                wallName: props.wall.name,
+                status: proposalStatus,
+                error: proposalError,
+                onSend: (terms) => {
+                  void handleSendProposal(terms);
+                },
               }
             : undefined
         }
@@ -1701,12 +1824,15 @@ function MobileWorksStrip({
  */
 function MobileActionBar({
   wallActive,
+  wallSettingsVisible,
   onToggleWall,
   previewVisible,
   previewInFlight,
   onPreview,
 }: {
   wallActive: boolean;
+  /** False when the wall is not the user's to change (a venue's wall). */
+  wallSettingsVisible: boolean;
   onToggleWall: () => void;
   previewVisible: boolean;
   previewInFlight: boolean;
@@ -1714,6 +1840,7 @@ function MobileActionBar({
 }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-t border-black/5">
+      {wallSettingsVisible && (
       <button
         type="button"
         onClick={onToggleWall}
@@ -1740,6 +1867,7 @@ function MobileActionBar({
           <line x1="9" y1="21" x2="9" y2="9" />
         </svg>
       </button>
+      )}
 
       {previewVisible ? (
         <button

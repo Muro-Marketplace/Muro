@@ -49,10 +49,11 @@ export async function GET(request: Request) {
   // Every wall also carries `preview_image_url` when the owner has saved
   // a preview from the editor, resolved for the whole list in one go so
   // the cards can show the built wall rather than the bare photo or
-  // swatch.
+  // swatch. The walls go in with their owner so an artist's proposal
+  // layout on a venue wall can never be picked as the preview.
   const db = getSupabaseAdmin();
   const [previews, enriched] = await Promise.all([
-    getWallPreviewUrls(walls.map((w) => w.id)),
+    getWallPreviewUrls(walls),
     Promise.all(
       walls.map(async (w) => {
         if (w.kind !== "uploaded" || !w.source_image_path) return w;

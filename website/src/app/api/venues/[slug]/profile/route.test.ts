@@ -158,7 +158,7 @@ describe("GET /api/venues/[slug]/profile carries the wall's saved preview", () =
   it("attaches preview_image_url from the layout's last render", async () => {
     installDb([WALL], {
       wall_layouts: [
-        { wall_id: "w1", last_render_id: "r1", updated_at: "2026-09-03T10:00:00Z" },
+        { user_id: "u-venue", wall_id: "w1", last_render_id: "r1", updated_at: "2026-09-03T10:00:00Z" },
       ],
       wall_renders: [{ id: "r1", output_path: "u-venue/r1.webp" }],
     });
