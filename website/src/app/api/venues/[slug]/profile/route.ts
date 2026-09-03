@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { venueAcceptsArtistOutreach } from "@/lib/venues/outreach-preference";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { venues as staticVenues } from "@/data/venues";
 import { getOptionalUser } from "@/lib/api-auth";
@@ -246,5 +247,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ slug: string }>
   };
   void _pc;
   void _uid;
-  return NextResponse.json({ locked: false, venue: safeVenue, walls, openRequests });
+  // Whether artists may approach this venue first (settings opt-out).
+  const acceptsArtistOutreach = await venueAcceptsArtistOutreach(db, userId);
+  return NextResponse.json({
+    locked: false,
+    venue: { ...safeVenue, acceptsArtistOutreach },
+    walls,
+    openRequests,
+  });
 }

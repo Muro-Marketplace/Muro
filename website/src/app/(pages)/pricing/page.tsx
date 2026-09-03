@@ -3,6 +3,7 @@ import Link from "next/link";
 import Button from "@/components/Button";
 import Accordion from "@/components/Accordion";
 import ArtistPricingCards from "@/components/ArtistPricingCards";
+import { OUTREACH_WEEKLY_LIMIT } from "@/lib/outreach-cap";
 import { gbp, CURATION_TIERS, PROGRAMME_PIECE_RENT_TARGET_GBP, PROGRAMME_PIECE_STINT_MONTHS } from "@/lib/curation-tiers";
 import { FOUNDING_OFFER_SHORT, foundingOfferLine } from "@/lib/pricing";
 
@@ -89,7 +90,7 @@ const faqItems = [
   {
     question: "How many venues can I approach?",
     answer:
-      "Core covers 3 new venue approaches a week, Premium 6, and Pro 15. The allowance is shared: placement requests, the first message you send a venue, and artwork request responses all draw on the same pool, so you can spend it however suits you. It runs on a rolling 7 days rather than resetting on a fixed day, so an approach you made last Tuesday comes back to you this Tuesday. Replying to a venue that has already replied to you is always free and never counts. You can see what you have left on any venue's request form.",
+      `Core covers ${OUTREACH_WEEKLY_LIMIT.core} new venue approaches a week, Premium ${OUTREACH_WEEKLY_LIMIT.premium}, and Pro ${OUTREACH_WEEKLY_LIMIT.pro}. The allowance is shared: placement requests, the first message you send a venue, and artwork request responses all draw on the same pool, so you can spend it however suits you. It runs on a rolling 7 days rather than resetting on a fixed day, so an approach you made last Tuesday comes back to you this Tuesday. Replying to a venue that has already replied to you is always free and never counts. You can see what you have left on any venue's request form.`,
   },
   {
     question: "Is the first month really free?",

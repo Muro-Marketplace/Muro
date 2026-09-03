@@ -6,6 +6,7 @@ import { getOptionalUser } from "@/lib/api-auth";
 import { resolveSubscription } from "@/lib/subscriptions";
 import { canSeeVenueIdentity, redactDemandVenue } from "@/lib/venue-visibility";
 import { isFlagOn } from "@/lib/feature-flags";
+import { venueOutreachFlagsForUsers } from "@/lib/venues/outreach-preference";
 
 // Varies by viewer: venue identity (name, description, images, display
 // needs) is paywalled, so the response can't be a single cached payload.
@@ -47,10 +48,11 @@ export async function GET(request: Request) {
     // the card ("View walls"). Counted server-side so user_id never leaves
     // this route; skipped when the visualiser is off, mirroring the profile
     // route's kill switch. A failed count is zero, never an error.
-    const publicWallCounts = await countPublicWalls(
-      db,
-      (dbVenues || []).map((v) => v.user_id).filter((id): id is string => typeof id === "string"),
-    );
+    const venueUserIds = (dbVenues || []).map((v) => v.user_id).filter((id): id is string => typeof id === "string");
+    const [publicWallCounts, outreachFlags] = await Promise.all([
+      countPublicWalls(db, venueUserIds),
+      venueOutreachFlagsForUsers(db, venueUserIds),
+    ]);
     const asString = (v: unknown) => (typeof v === "string" ? v : "");
     const asStringArray = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
@@ -69,6 +71,7 @@ export async function GET(request: Request) {
         slug: v.slug as string,
         name: v.name as string,
         publicWallCount: publicWallCounts[v.user_id as string] ?? 0,
+        acceptsArtistOutreach: outreachFlags[v.user_id as string] ?? true,
         type: (v.type as string) || "Venue",
         location: (v.city as string) || (v.location as string) || "",
         coordinates: null as { lat: number; lng: number } | null, // DB venues don't have coords yet
@@ -93,6 +96,7 @@ export async function GET(request: Request) {
       ...staticOnly.map((v) => ({
         slug: v.slug,
         publicWallCount: 0,
+        acceptsArtistOutreach: true,
         name: v.name,
         type: v.type,
         location: v.location,

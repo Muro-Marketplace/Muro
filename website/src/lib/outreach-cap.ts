@@ -5,9 +5,9 @@
 // don't count.
 //
 // Plans:
-//   core    → 3 per rolling week
-//   premium → 6 per rolling week
-//   pro     → 15 per rolling week
+//   core    → 7 per rolling week
+//   premium → 15 per rolling week
+//   pro     → 30 per rolling week (owner decision 2026-09-03: raised from 3/6/15)
 //   (`-1` sentinel = unlimited, reserved for staff)
 //
 // Why rolling, not per calendar day or per calendar week: artists do outreach
@@ -31,9 +31,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * `ACTIVE_PLACEMENT_CAP` in `@/lib/pricing`.
  */
 export const OUTREACH_WEEKLY_LIMIT: Record<string, number> = {
-  core: 3,
-  premium: 6,
-  pro: 15,
+  core: 7,
+  premium: 15,
+  pro: 30,
 };
 
 const WEEKLY_LIMITS = OUTREACH_WEEKLY_LIMIT;

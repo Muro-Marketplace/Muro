@@ -128,3 +128,30 @@ export async function findAllUsersByEmail(
   }
   return matches;
 }
+
+/**
+ * Auth users for a set of ids, in one paged scan (the admin API has no
+ * bulk by-id read). Missing ids are simply absent from the map; a failed
+ * page stops the scan and returns what was found so far. Used for venue
+ * preferences that live in user metadata (src/lib/venues/outreach-preference.ts).
+ */
+export async function findUsersByIds(
+  db: SupabaseClient,
+  ids: Iterable<string>,
+): Promise<Map<string, User>> {
+  const wanted = new Set(ids);
+  const found = new Map<string, User>();
+  if (wanted.size === 0) return found;
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: PER_PAGE });
+    if (error) {
+      console.error("[find-user-by-email] listUsers failed:", error.message);
+      break;
+    }
+    for (const u of data.users) {
+      if (wanted.has(u.id)) found.set(u.id, u);
+    }
+    if (found.size === wanted.size || data.users.length < PER_PAGE) break;
+  }
+  return found;
+}

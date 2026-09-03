@@ -1866,3 +1866,27 @@ describe("GET /api/placements attaches each row's wall proposal", () => {
     warn.mockRestore();
   });
 });
+
+describe("POST /api/placements honours a venue's opt-out from first contact", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: ARTIST, email: "maya@example.com", user_metadata: {} }, error: null });
+    isFlagOnMock.mockReturnValue(false);
+    vi.mocked(checkArtistOutreachCap).mockResolvedValue({ ok: true } as never);
+    setupArtistPostDb();
+  });
+
+  it("refuses an artist-initiated request when the venue prefers to make the first move", async () => {
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "venue@example.com", user_metadata: { accepts_artist_outreach: false } } } });
+    const res = await post({ fromVenue: false, placements: [PROPOSAL_PLACEMENT] });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.reason).toBe("venue_opted_out");
+    expect(body.error).toMatch(/prefers to make the first move/);
+  });
+
+  it("lets it through when the venue has not opted out", async () => {
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "venue@example.com", user_metadata: {} } } });
+    const res = await post({ fromVenue: false, placements: [PROPOSAL_PLACEMENT] });
+    expect(res.status).not.toBe(403);
+  });
+});

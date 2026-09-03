@@ -49,6 +49,8 @@ interface DemandVenue {
   displayRotationFrequency?: string;
   /** Walls the venue has measured up and made public (0 when none). */
   publicWallCount?: number;
+  /** False when the venue chose not to be approached first by artists. */
+  acceptsArtistOutreach?: boolean;
 }
 
 interface DemandStats {
@@ -604,6 +606,12 @@ function SpacesPageContent() {
                           </span>
                         </>
                       )}
+                      {venue.acceptsArtistOutreach === false && (
+                        <>
+                          <span className="w-0.5 h-0.5 rounded-full bg-muted" />
+                          <span>Prefers to make the first move</span>
+                        </>
+                      )}
                     </div>
 
                     {/* Description + display needs, only shown to subscribers
@@ -709,9 +717,12 @@ function SpacesPageContent() {
                               {canRequestPlacement && (
                                 <button
                                   type="button"
+                                  disabled={venue.acceptsArtistOutreach === false}
+                                  title={venue.acceptsArtistOutreach === false ? "This venue prefers to make the first move." : undefined}
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
+                                    if (venue.acceptsArtistOutreach === false) return;
                                     setRequestOpenSlug(venue.slug);
                                   }}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors"
@@ -726,10 +737,13 @@ function SpacesPageContent() {
                               {canOpenVenueThread && (
                                 <button
                                   type="button"
+                                  disabled={venue.acceptsArtistOutreach === false}
+                                  title={venue.acceptsArtistOutreach === false ? "This venue prefers to make the first move." : undefined}
                                   onClick={() => {
+                                    if (venue.acceptsArtistOutreach === false) return;
                                     router.push(`/artist-portal/messages?artist=${encodeURIComponent(venue.slug)}&artistName=${encodeURIComponent(venue.name)}`);
                                   }}
-                                  className="text-xs font-medium text-muted hover:text-foreground transition-colors"
+                                  className="text-xs font-medium text-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Message
                                 </button>

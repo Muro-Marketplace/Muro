@@ -230,7 +230,7 @@ export default function VenueProfileBody({ slug }: { slug: string }) {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {walls.map((w) => (
-                  <VenueWallCard key={w.id} wall={w} venue={{ slug: venue.slug, name: venue.name || "" }} />
+                  <VenueWallCard key={w.id} wall={w} venue={{ slug: venue.slug, name: venue.name || "", acceptsArtistOutreach: (venue as { acceptsArtistOutreach?: boolean }).acceptsArtistOutreach }} />
                 ))}
               </div>
             </section>

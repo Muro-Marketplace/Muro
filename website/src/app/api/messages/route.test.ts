@@ -1033,3 +1033,26 @@ describe("a BLOCKED message leaves a moderation trace (3.8)", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("POST /api/messages honours a venue's opt-out from first contact", () => {
+  it("refuses an artist's first message to a venue that prefers to make the first move", async () => {
+    isFlagOnMock.mockReturnValue(false);
+    let artistLookups = 0;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_profiles") {
+        // First call resolves the sender, second (the recipient) finds no artist.
+        artistLookups += 1;
+        return chainSelectMaybe(artistLookups === 1 ? { slug: "alice", name: "Alice", user_id: "u-art-a" } : null);
+      }
+      if (table === "venue_profiles") return chainSelectMaybe({ slug: "kettle", name: "The Kettle", user_id: "u-venue" });
+      return chainSelectMaybe(null);
+    });
+    getUserByIdMock.mockResolvedValue({ data: { user: { email: "venue@example.com", user_metadata: { accepts_artist_outreach: false } } } } as never);
+
+    const res = await POST(req({ conversationId: null, senderName: "alice", senderType: "artist", recipientSlug: "kettle", content: "Hi" }));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.reason).toBe("venue_opted_out");
+    expect(body.error).toMatch(/prefers to make the first move/);
+  });
+});

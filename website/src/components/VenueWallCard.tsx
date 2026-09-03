@@ -59,6 +59,8 @@ export interface VenueWallCardProps {
   venue: {
     slug: string;
     name: string;
+    /** False when the venue chose not to be approached first by artists. */
+    acceptsArtistOutreach?: boolean;
   };
 }
 
@@ -219,6 +221,11 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
               </p>
 
               {userType === "artist" ? (
+                venue.acceptsArtistOutreach === false ? (
+                  <p className="text-xs text-muted max-w-xs" data-testid="first-move-note">
+                    {venue.name} prefers to make the first move. If they message you or invite you, you can propose work for this wall from there.
+                  </p>
+                ) : (
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-1">
                   <Link
                     href={proposeHref}
@@ -230,6 +237,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
                     Drag your work onto the wall, preview it, and send the picture with your request.
                   </span>
                 </div>
+              )
               ) : userType === "venue" ? (
                 <p className="text-[11px] text-muted/80">
                   Venues view-only. Artists can place their work on this

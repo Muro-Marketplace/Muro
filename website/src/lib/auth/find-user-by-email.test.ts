@@ -1,11 +1,13 @@
 // Both bugs this replaces were in three separate copies of four lines.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   findUserByEmail,
   findUserIdByEmail,
   findUserIdsByEmails,
   findAllUsersByEmail,
+  findUsersByIds,
 } from "./find-user-by-email";
 
 const listUsers = vi.fn();
@@ -218,3 +220,33 @@ describe("findAllUsersByEmail", () => {
     expect(await findAllUsersByEmail(db, "a@x.com")).toEqual([]);
   });
 });
+
+describe("findUsersByIds", () => {
+  function pagedDb(pages: Array<Array<{ id: string }>>) {
+    const listUsers = vi.fn(async ({ page }: { page: number; perPage: number }) => ({
+      data: { users: pages[page - 1] ?? [] },
+      error: null,
+    }));
+    return { db: { auth: { admin: { listUsers } } } as unknown as SupabaseClient, listUsers };
+  }
+
+  it("finds the requested ids across pages and stops once it has them all", async () => {
+    const page1 = Array.from({ length: 200 }, (_, i) => ({ id: `p1-${i}` }));
+    const page2 = [{ id: "venue-a" }, { id: "venue-b" }];
+    const { db, listUsers } = pagedDb([page1, page2, [{ id: "never-read" }]]);
+    const found = await findUsersByIds(db, ["venue-a", "venue-b"]);
+    expect(Array.from(found.keys()).sort()).toEqual(["venue-a", "venue-b"]);
+    expect(listUsers).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns an empty map for no ids without calling the API, and partial results when a page fails", async () => {
+    const { db, listUsers } = pagedDb([[{ id: "x" }]]);
+    expect((await findUsersByIds(db, [])).size).toBe(0);
+    expect(listUsers).not.toHaveBeenCalled();
+    const failing = { auth: { admin: { listUsers: vi.fn(async () => ({ data: { users: [] }, error: { message: "down" } })) } } } as unknown as SupabaseClient;
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await findUsersByIds(failing, ["x"])).size).toBe(0);
+    warn.mockRestore();
+  });
+});
+

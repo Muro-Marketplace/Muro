@@ -2,7 +2,7 @@
 // getArtistOutreachUsage).
 //
 // Covers:
-//  - plan limits: Core 3 / Premium 6 / Pro 15 per rolling 7 days.
+//  - plan limits: Core / Premium / Pro per rolling 7 days, read from OUTREACH_WEEKLY_LIMIT.
 //  - the rolling window: units older than 7 days don't count, units inside do.
 //  - the counting column: placements are counted by created_by_user_id
 //    (migration 122), NOT proposed_by_user_id, which counters and stage
@@ -20,6 +20,7 @@ import {
   getArtistOutreachUsage,
   outreachCapPayload,
   OUTREACH_WINDOW_DAYS,
+  OUTREACH_WEEKLY_LIMIT,
 } from "./outreach-cap";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -140,36 +141,36 @@ describe("checkArtistOutreachCap — plan limits", () => {
     expect((await checkArtistOutreachCap(db, "u-1")).ok).toBe(true);
   });
 
-  it("blocks the 4th approach on Core (limit 3)", async () => {
-    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+  it("blocks the approach past the Core limit", async () => {
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.core) });
     const result = await checkArtistOutreachCap(db, "u-1");
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.result.limit).toBe(3);
-      expect(result.result.used).toBe(3);
+      expect(result.result.limit).toBe(OUTREACH_WEEKLY_LIMIT.core);
+      expect(result.result.used).toBe(OUTREACH_WEEKLY_LIMIT.core);
       expect(result.result.remaining).toBe(0);
     }
   });
 
-  it("Premium allows 6 and blocks the 7th", async () => {
-    expect((await checkArtistOutreachCap(makeDb({ plan: "premium", placementsAt: recentPlacements(5) }), "u-1")).ok).toBe(true);
-    expect((await checkArtistOutreachCap(makeDb({ plan: "premium", placementsAt: recentPlacements(6) }), "u-1")).ok).toBe(false);
+  it("Premium allows up to its limit and blocks the next", async () => {
+    expect((await checkArtistOutreachCap(makeDb({ plan: "premium", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.premium - 1) }), "u-1")).ok).toBe(true);
+    expect((await checkArtistOutreachCap(makeDb({ plan: "premium", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.premium) }), "u-1")).ok).toBe(false);
   });
 
-  it("Pro allows 15 and blocks the 16th", async () => {
-    expect((await checkArtistOutreachCap(makeDb({ plan: "pro", placementsAt: recentPlacements(14) }), "u-1")).ok).toBe(true);
-    expect((await checkArtistOutreachCap(makeDb({ plan: "pro", placementsAt: recentPlacements(15) }), "u-1")).ok).toBe(false);
+  it("Pro allows up to its limit and blocks the next", async () => {
+    expect((await checkArtistOutreachCap(makeDb({ plan: "pro", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.pro - 1) }), "u-1")).ok).toBe(true);
+    expect((await checkArtistOutreachCap(makeDb({ plan: "pro", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.pro) }), "u-1")).ok).toBe(false);
   });
 
   it("falls back to Core for an unknown plan key rather than crashing", async () => {
     const db = makeDb({ plan: "enterprise", placementsAt: recentPlacements(100) });
     const result = await checkArtistOutreachCap(db, "u-1");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.result.limit).toBe(3);
+    if (!result.ok) expect(result.result.limit).toBe(OUTREACH_WEEKLY_LIMIT.core);
   });
 
   it("treats a null subscription_plan as Core", async () => {
-    const db = makeDb({ plan: "", placementsAt: recentPlacements(3) });
+    const db = makeDb({ plan: "", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.core) });
     const result = await checkArtistOutreachCap(db, "u-1");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.result.plan).toBe("core");
@@ -187,11 +188,11 @@ describe("checkArtistOutreachCap — rolling 7-day window", () => {
     const db = makeDb({ plan: "core", placementsAt: [daysAgo(8), daysAgo(9), daysAgo(30)] });
     const usage = await getArtistOutreachUsage(db, "u-1");
     expect(usage.used).toBe(0);
-    expect(usage.remaining).toBe(3);
+    expect(usage.remaining).toBe(OUTREACH_WEEKLY_LIMIT.core);
   });
 
   it("counts units from six days ago, which a calendar-week reset would have dropped", async () => {
-    const db = makeDb({ plan: "core", placementsAt: [daysAgo(6), daysAgo(5), daysAgo(1)] });
+    const db = makeDb({ plan: "core", placementsAt: [daysAgo(6), daysAgo(5), ...recentPlacements(OUTREACH_WEEKLY_LIMIT.core - 2)] });
     const result = await checkArtistOutreachCap(db, "u-1");
     expect(result.ok).toBe(false);
   });
@@ -205,7 +206,7 @@ describe("checkArtistOutreachCap — rolling 7-day window", () => {
 
   it("reports nextSlotAt as the oldest counted unit plus the window", async () => {
     const oldest = daysAgo(2);
-    const db = makeDb({ plan: "core", placementsAt: [oldest, daysAgo(1), daysAgo(0.5)] });
+    const db = makeDb({ plan: "core", placementsAt: [oldest, ...Array.from({ length: OUTREACH_WEEKLY_LIMIT.core - 1 }, () => daysAgo(0.5))] });
     const result = await checkArtistOutreachCap(db, "u-1");
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -216,8 +217,8 @@ describe("checkArtistOutreachCap — rolling 7-day window", () => {
 
   it("nextSlotAt for a 2-unit request is when the SECOND-oldest unit expires", async () => {
     const second = daysAgo(2);
-    const db = makeDb({ plan: "core", placementsAt: [daysAgo(3), second, daysAgo(1)] });
-    // used 3, limit 3, asking for 2 → 2 units must expire → the 2nd oldest.
+    const db = makeDb({ plan: "core", placementsAt: [daysAgo(3), second, ...Array.from({ length: OUTREACH_WEEKLY_LIMIT.core - 2 }, () => daysAgo(1))] });
+    // at the limit, asking for 2: two units must expire, so the 2nd oldest.
     const result = await checkArtistOutreachCap(db, "u-1", 2);
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -239,7 +240,7 @@ describe("checkArtistOutreachCap — rolling 7-day window", () => {
 
 describe("checkArtistOutreachCap — counts created_by_user_id, not proposed_by_user_id", () => {
   it("counts placements the artist created", async () => {
-    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.core) });
     expect((await checkArtistOutreachCap(db, "u-art")).ok).toBe(false);
   });
 
@@ -260,31 +261,31 @@ describe("checkArtistOutreachCap — counts created_by_user_id, not proposed_by_
 
 describe("checkArtistOutreachCap — cross-surface aggregation (1.6 / 1.7)", () => {
   it("blocks a first-contact message when the week's placements are spent", async () => {
-    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.core) });
     const result = await checkArtistOutreachCap(db, "u-art");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.result.used).toBe(3);
+    if (!result.ok) expect(result.result.used).toBe(OUTREACH_WEEKLY_LIMIT.core);
   });
 
   it("blocks a placement when the week's messages are spent", async () => {
     const db = makeDb({
       plan: "core",
-      messagesAt: [["cid-a", daysAgo(1)], ["cid-b", daysAgo(2)], ["cid-c", daysAgo(3)]],
+      messagesAt: Array.from({ length: OUTREACH_WEEKLY_LIMIT.core }, (_, i) => [`cid-${i}`, daysAgo(1 + i * 0.1)] as [string, string]),
     });
     const result = await checkArtistOutreachCap(db, "u-art");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.result.used).toBe(3);
+    if (!result.ok) expect(result.result.used).toBe(OUTREACH_WEEKLY_LIMIT.core);
   });
 
   it("adds the three surfaces together", async () => {
     const db = makeDb({
       plan: "core",
-      placementsAt: [daysAgo(1)],
+      placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.core - 2),
       messagesAt: [["cid-a", daysAgo(2)]],
       responsesAt: [daysAgo(3)],
     });
     const usage = await getArtistOutreachUsage(db, "u-art");
-    expect(usage.used).toBe(3);
+    expect(usage.used).toBe(OUTREACH_WEEKLY_LIMIT.core);
     expect((await checkArtistOutreachCap(db, "u-art")).ok).toBe(false);
   });
 
@@ -312,10 +313,10 @@ describe("checkArtistOutreachCap — cross-surface aggregation (1.6 / 1.7)", () 
   });
 
   it("counts artwork_request_responses as outreach units", async () => {
-    const db = makeDb({ plan: "core", responsesAt: [daysAgo(1), daysAgo(2), daysAgo(3)] });
+    const db = makeDb({ plan: "core", responsesAt: Array.from({ length: OUTREACH_WEEKLY_LIMIT.core }, (_, i) => daysAgo(1 + i * 0.1)) });
     const result = await checkArtistOutreachCap(db, "u-art");
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.result.used).toBe(3);
+    if (!result.ok) expect(result.result.used).toBe(OUTREACH_WEEKLY_LIMIT.core);
   });
 });
 
@@ -339,7 +340,7 @@ describe("checkArtistOutreachCap — exemptConversationId", () => {
   it("blocks a NEW conversation at cap even when an exempt id is passed", async () => {
     const db = makeDb({
       plan: "core",
-      messagesAt: [["cid-a", daysAgo(1)], ["cid-b", daysAgo(2)], ["cid-c", daysAgo(3)]],
+      messagesAt: Array.from({ length: OUTREACH_WEEKLY_LIMIT.core }, (_, i) => [`cid-${i}`, daysAgo(1 + i * 0.1)] as [string, string]),
     });
     const result = await checkArtistOutreachCap(db, "u-art", 1, {
       exemptConversationId: "cid-new",
@@ -350,7 +351,7 @@ describe("checkArtistOutreachCap — exemptConversationId", () => {
   it("does not exempt a thread whose only message has aged out of the window", async () => {
     const db = makeDb({
       plan: "core",
-      placementsAt: recentPlacements(3),
+      placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.core),
       messagesAt: [["cid-stale", daysAgo(20)]],
     });
     const result = await checkArtistOutreachCap(db, "u-art", 1, {
@@ -360,7 +361,7 @@ describe("checkArtistOutreachCap — exemptConversationId", () => {
   });
 
   it("enforces the cap when no opts are passed", async () => {
-    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.core) });
     expect((await checkArtistOutreachCap(db, "u-art")).ok).toBe(false);
   });
 });
@@ -372,10 +373,10 @@ describe("checkArtistOutreachCap — exemptConversationId", () => {
 describe("checkArtistOutreachCap — units (multi-row placement request)", () => {
   it("blocks when used + units > limit", async () => {
     const db = makeDb({ plan: "core", placementsAt: recentPlacements(1) });
-    const result = await checkArtistOutreachCap(db, "u-art", 3);
+    const result = await checkArtistOutreachCap(db, "u-art", OUTREACH_WEEKLY_LIMIT.core);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.result.limit).toBe(3);
+      expect(result.result.limit).toBe(OUTREACH_WEEKLY_LIMIT.core);
       expect(result.result.used).toBe(1);
     }
   });
@@ -385,8 +386,8 @@ describe("checkArtistOutreachCap — units (multi-row placement request)", () =>
     expect((await checkArtistOutreachCap(db, "u-art", 2)).ok).toBe(true);
   });
 
-  it("Premium: 4 used + 3 units is blocked", async () => {
-    const db = makeDb({ plan: "premium", placementsAt: recentPlacements(4) });
+  it("Premium: two short of the limit plus 3 units is blocked", async () => {
+    const db = makeDb({ plan: "premium", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.premium - 2) });
     expect((await checkArtistOutreachCap(db, "u-art", 3)).ok).toBe(false);
   });
 });
@@ -397,7 +398,7 @@ describe("checkArtistOutreachCap — units (multi-row placement request)", () =>
 
 describe("outreachCapPayload", () => {
   it("carries the machine code in `error` and the sentence in `message`", async () => {
-    const db = makeDb({ plan: "core", placementsAt: recentPlacements(3) });
+    const db = makeDb({ plan: "core", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.core) });
     const result = await checkArtistOutreachCap(db, "u-art");
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -405,15 +406,15 @@ describe("outreachCapPayload", () => {
     const payload = outreachCapPayload(result.result);
     expect(payload.error).toBe("outreach_limit_reached");
     expect(payload.message).toContain("Core");
-    expect(payload.message).toContain("3 new venue approaches a week");
-    expect(payload.limit).toBe(3);
-    expect(payload.used).toBe(3);
+    expect(payload.message).toContain(`${OUTREACH_WEEKLY_LIMIT.core} new venue approaches a week`);
+    expect(payload.limit).toBe(OUTREACH_WEEKLY_LIMIT.core);
+    expect(payload.used).toBe(OUTREACH_WEEKLY_LIMIT.core);
     expect(payload.remaining).toBe(0);
     expect(payload.nextSlotAt).toBeTruthy();
   });
 
   it("keeps the user-facing message free of dashes (public-copy rule)", async () => {
-    const db = makeDb({ plan: "pro", placementsAt: recentPlacements(15) });
+    const db = makeDb({ plan: "pro", placementsAt: recentPlacements(OUTREACH_WEEKLY_LIMIT.pro) });
     const result = await checkArtistOutreachCap(db, "u-art");
     expect(result.ok).toBe(false);
     if (result.ok) return;

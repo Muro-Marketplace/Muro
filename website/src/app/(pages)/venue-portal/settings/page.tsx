@@ -8,6 +8,7 @@ import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { supabase } from "@/lib/supabase";
 import {
   useNotificationPrefs,
   type NotificationPrefField,
@@ -114,6 +115,28 @@ export default function VenueSettingsPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const { prefs, togglePref, error: prefsError } = useNotificationPrefs(user);
+  // Venue opt-out from first contact. Lives in the auth user's metadata
+  // (see src/lib/venues/outreach-preference.ts), which the venue updates on
+  // their own record; absent means artists may approach.
+  const [acceptsOutreach, setAcceptsOutreach] = useState<boolean>(
+    () => (user?.user_metadata as Record<string, unknown> | undefined)?.accepts_artist_outreach !== false,
+  );
+  const [savingOutreach, setSavingOutreach] = useState(false);
+  async function toggleOutreach() {
+    const next = !acceptsOutreach;
+    setAcceptsOutreach(next);
+    setSavingOutreach(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ data: { accepts_artist_outreach: next } });
+      if (error) throw error;
+      showToast(next ? "Artists can approach you first again." : "Artists can no longer contact you first.");
+    } catch {
+      setAcceptsOutreach(!next);
+      showToast("Could not save that setting. Try again.", { variant: "error" });
+    } finally {
+      setSavingOutreach(false);
+    }
+  }
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [connectLoading, setConnectLoading] = useState(true);
   const [connectRedirecting, setConnectRedirecting] = useState(false);
@@ -350,6 +373,29 @@ export default function VenueSettingsPage() {
         </SectionCard>
 
         {/* Notification preferences */}
+        <SectionCard title="Who can contact you">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Let artists approach me first</p>
+              <p className="text-xs text-muted mt-0.5 max-w-md">
+                When this is off, artists can&rsquo;t send you a first message or a placement request. You can still
+                message or invite any artist, and once you have, they can reply and request from there.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={acceptsOutreach}
+              aria-label="Let artists approach me first"
+              disabled={savingOutreach}
+              onClick={() => void toggleOutreach()}
+              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-50 ${acceptsOutreach ? "bg-accent" : "bg-stone-300"}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${acceptsOutreach ? "translate-x-5" : ""}`} />
+            </button>
+          </div>
+        </SectionCard>
+
         <SectionCard title="Notification Preferences">
           <div className="space-y-4">
             {NOTIF_ROWS.map((notif) => (

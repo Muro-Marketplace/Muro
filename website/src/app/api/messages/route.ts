@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { artistMayApproachVenue, VENUE_PREFERS_FIRST_MOVE } from "@/lib/venues/outreach-preference";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { isAdminRequest } from "@/lib/admin-auth";
@@ -397,6 +398,21 @@ export async function POST(request: Request) {
       ? await db.from("venue_profiles").select("user_id").eq("slug", recipientSlug).maybeSingle()
       : { data: null };
     const recipientUserId = recipArtist?.user_id || recipVenue?.user_id || null;
+    // Venue opt-out (owner instruction, 3 September 2026): a venue that
+    // prefers to make the first move cannot be messaged first by an artist.
+    // Once the venue has written to them, or holds a placement with them,
+    // the artist can reply freely.
+    if (resolvedSenderType === "artist" && recipVenue?.user_id) {
+      const mayApproach = await artistMayApproachVenue(db, {
+        venueSlug: recipientSlug,
+        venueUserId: recipVenue.user_id as string,
+        artistSlug: resolvedSenderSlug,
+        artistUserId: auth.user!.id,
+      });
+      if (!mayApproach) {
+        return NextResponse.json({ error: VENUE_PREFERS_FIRST_MOVE, reason: "venue_opted_out" }, { status: 403 });
+      }
+    }
     if (!recipArtist && !recipVenue) {
       return NextResponse.json(
         { error: "We couldn't find that recipient on Wallplace. They may not have an account yet. If you want us to invite them, reply with their email and we'll send them an onboarding link." },

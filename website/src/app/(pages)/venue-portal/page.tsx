@@ -99,6 +99,9 @@ export default function VenueDashboardPage() {
   const [onboardingItems, setOnboardingItems] = useState<OnboardingItem[]>([]);
   const [onboardingDismissed, setOnboardingDismissed] = useState(true);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
+  // null until /api/walls answers, so the prompt never flashes for a venue
+  // that has walls.
+  const [wallSummary, setWallSummary] = useState<{ total: number; publicCount: number } | null>(null);
 
   useEffect(() => {
     const dismissed = typeof window !== "undefined" && localStorage.getItem("wallplace-venue-onboarding-complete") === "true";
@@ -120,7 +123,13 @@ export default function VenueDashboardPage() {
       authFetch("/api/stripe-connect/status")
         .then((r) => r.json())
         .catch(() => ({} as { onboardingComplete?: boolean })),
-    ]).then(([dashboardData, placementsData, analyticsData, connectData]) => {
+      // Walls the venue has measured up, for the "add a wall" prompt.
+      authFetch("/api/walls")
+        .then((r) => (r.ok ? r.json() : { walls: [] }))
+        .catch(() => ({ walls: [] })),
+    ]).then(([dashboardData, placementsData, analyticsData, connectData, wallsData]) => {
+      const wallRows = Array.isArray(wallsData?.walls) ? (wallsData.walls as Array<{ is_public_on_profile?: boolean }>) : [];
+      setWallSummary({ total: wallRows.length, publicCount: wallRows.filter((w) => !!w.is_public_on_profile).length });
       const orders = dashboardData.orders || [];
       // E2: /api/dashboard's venue branch returns orders matched by
       // venue_slug OR buyer_email, so it includes customer QR sales AT the
@@ -399,6 +408,45 @@ export default function VenueDashboardPage() {
           this card used to sell Curated; Programmes is the product venues
           are here for). Single-row card, priced from the same ladder the
           /programmes page renders. */}
+      {/* Walls prompt (owner instruction, 3 September 2026): venues had to
+          find My Walls on their own. A venue with no walls is asked to
+          photograph one; a venue whose walls are all private is nudged to
+          show them, since artists can lay work out on a public wall before
+          they ask. */}
+      {wallSummary && wallSummary.total === 0 && (
+        <div className="mb-8 bg-white border border-accent/40 rounded-sm p-5 flex flex-col sm:flex-row sm:items-center gap-4" data-testid="walls-prompt">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-1.5">Your walls</p>
+            <p className="text-sm font-medium text-foreground">Show artists your walls.</p>
+            <p className="text-xs text-muted mt-0.5">
+              Upload a photo of a wall and its size. Artists can then lay their work out on it and send you the picture with their request.
+            </p>
+          </div>
+          <Link
+            href="/venue-portal/walls/new"
+            className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
+          >
+            Add a wall photo
+          </Link>
+        </div>
+      )}
+      {wallSummary && wallSummary.total > 0 && wallSummary.publicCount === 0 && (
+        <div className="mb-8 bg-white border border-border rounded-sm p-5 flex flex-col sm:flex-row sm:items-center gap-4" data-testid="walls-nudge">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-1.5">Your walls</p>
+            <p className="text-sm font-medium text-foreground">Your walls aren&rsquo;t on your profile yet.</p>
+            <p className="text-xs text-muted mt-0.5">
+              Tick &ldquo;Show on public profile&rdquo; on a wall and artists can picture their work on it before they ask.
+            </p>
+          </div>
+          <Link
+            href="/venue-portal/walls"
+            className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-foreground border border-border hover:border-accent/50 rounded-sm transition-colors"
+          >
+            Open My Walls
+          </Link>
+        </div>
+      )}
       <div className="mb-8 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent border border-accent/30 rounded-sm p-5 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1 min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-1.5">Wallplace Programmes</p>

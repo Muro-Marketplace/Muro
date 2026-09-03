@@ -14,6 +14,7 @@ import { checkArtistOutreachCap, outreachCapPayload } from "@/lib/outreach-cap";
 import { createNotification } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email/send";
 import { VenueNewPlacementRequest } from "@/emails/templates/placements/VenueNewPlacementRequest";
+import { artistMayApproachVenue, VENUE_PREFERS_FIRST_MOVE } from "@/lib/venues/outreach-preference";
 import { ArtistPlacementAccepted } from "@/emails/templates/placements/ArtistPlacementAccepted";
 import { ArtistPlacementDeclined } from "@/emails/templates/placements/ArtistPlacementDeclined";
 import { ArtistPlacementRequestSent } from "@/emails/templates/placements/ArtistPlacementRequestSent";
@@ -472,6 +473,18 @@ export async function POST(request: Request) {
 
       const { data: vp } = await db.from("venue_profiles").select("user_id, slug, name").eq("slug", venueSlug).single();
       if (!vp) return NextResponse.json({ error: "Venue not found" }, { status: 400 });
+      // Venue opt-out (owner instruction, 3 September 2026): a venue that
+      // prefers to make the first move only takes requests from artists it
+      // has already engaged (a message from the venue, or a placement).
+      const mayApproach = await artistMayApproachVenue(db, {
+        venueSlug: (vp as { slug: string }).slug,
+        venueUserId: (vp as { user_id: string }).user_id,
+        artistSlug: (ap as { slug: string }).slug,
+        artistUserId: auth.user!.id,
+      });
+      if (!mayApproach) {
+        return NextResponse.json({ error: VENUE_PREFERS_FIRST_MOVE, reason: "venue_opted_out" }, { status: 403 });
+      }
 
       artistProfile = ap;
       venueProfile = vp;

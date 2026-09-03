@@ -5,9 +5,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { fromMock, isFlagOnMock } = vi.hoisted(() => ({
+const { fromMock, isFlagOnMock, listUsersMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
   isFlagOnMock: vi.fn((_flag: string) => true),
+  listUsersMock: vi.fn(async (): Promise<{ data: { users: Array<{ id: string; user_metadata?: Record<string, unknown> }> }; error: null }> => ({ data: { users: [] }, error: null })),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn(async () => null) }));
@@ -19,7 +20,7 @@ vi.mock("@/lib/venue-visibility", () => ({
   canSeeVenueIdentity: () => false,
 }));
 vi.mock("@/data/venues", () => ({ venues: [] }));
-vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock }) }));
+vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => ({ from: fromMock, auth: { admin: { listUsers: listUsersMock } } }) }));
 
 import { GET } from "./route";
 
@@ -76,5 +77,14 @@ describe("GET /api/venues/demand publicWallCount", () => {
     const body = await (await GET(new Request("http://localhost/api/venues/demand"))).json();
     expect(body.venues.map((v: { publicWallCount: number }) => v.publicWallCount)).toEqual([0, 0]);
     expect(fromMock.mock.calls.map((c) => c[0])).not.toContain("walls");
+  });
+
+  it("marks venues that opted out of being approached first, everyone else open", async () => {
+    wireDb([]);
+    listUsersMock.mockResolvedValueOnce({ data: { users: [{ id: "u-a", user_metadata: { accepts_artist_outreach: false } }] }, error: null });
+    const body = await (await GET(new Request("http://localhost/api/venues/demand"))).json();
+    const bySlug = Object.fromEntries(body.venues.map((v: { slug: string }) => [v.slug, v]));
+    expect(bySlug["venue-a"].acceptsArtistOutreach).toBe(false);
+    expect(bySlug["venue-b"].acceptsArtistOutreach).toBe(true);
   });
 });
