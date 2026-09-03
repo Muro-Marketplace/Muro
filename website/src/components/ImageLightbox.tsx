@@ -1,10 +1,11 @@
 "use client";
 /**
- * Full-size viewer for a saved wall picture: the image at its full
- * resolution, a Fullscreen button, Esc or the backdrop to close.
+ * Full-size viewer for a saved wall picture: drag to move around it, pinch
+ * or scroll to zoom, a Fullscreen button, Esc or the backdrop to close.
  */
 import { useEffect, useRef } from "react";
 import { toggleFullscreen } from "@/lib/ui/fullscreen";
+import PanZoomImage from "./PanZoomImage";
 
 interface Props {
   open: boolean;
@@ -43,9 +44,8 @@ export default function ImageLightbox({ open, onClose, src, alt, title, subtitle
     >
       <div className="min-h-full grid place-items-center" onClick={onClose}>
         <div className="w-full max-w-6xl flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-          <div ref={boxRef} className="wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-2xl grid place-items-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={alt} className="block mx-auto w-auto max-w-full h-auto max-h-[80vh]" />
+          <div ref={boxRef} className="wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-2xl">
+            <PanZoomImage src={src} alt={alt} heightClassName="h-[78vh]" />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 px-2 text-white">
             <div className="min-w-0">

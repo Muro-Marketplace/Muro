@@ -205,7 +205,7 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    router.push(`/browse/${artist.slug}#showroom`);
+                    router.push(`/browse/${artist.slug}/showroom`);
                   }}
                   className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium text-accent px-1.5 py-0.5 rounded-sm border border-accent/50 hover:bg-accent/5 transition-colors"
                 >

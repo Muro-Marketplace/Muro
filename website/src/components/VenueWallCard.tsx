@@ -26,6 +26,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { toggleFullscreen } from "@/lib/ui/fullscreen";
+import PanZoomImage from "@/components/PanZoomImage";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -189,8 +190,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
                   >
                     Fullscreen
                   </button>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imageUrl} alt={imageAlt} className="absolute inset-0 w-full h-full object-contain" />
+                  <PanZoomImage src={imageUrl} alt={imageAlt} heightClassName="h-full min-h-[40vh]" />
                 </div>
               ) : (
                 <div

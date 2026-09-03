@@ -247,3 +247,13 @@ img {
   width: auto;
   height: auto;
 }
+.wp-fullscreen-box:fullscreen [data-testid="pan-zoom"] {
+  height: 100vh;
+  width: 100vw;
+}
+.wp-fullscreen-box:fullscreen [data-testid="pan-zoom"] img {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}

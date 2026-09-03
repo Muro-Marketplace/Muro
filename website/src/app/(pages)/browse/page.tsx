@@ -2479,28 +2479,32 @@ function BrowsePortfoliosPageInner() {
                                 imageClassName="group-hover:scale-[1.03] transition-transform duration-700"
                               />
                             </a>
-                            {!work.available && (
-                              <span className="absolute top-3 left-3 z-10 px-2 py-0.5 bg-black/70 text-white text-[10px] rounded-sm backdrop-blur-sm">
-                                Sold
-                              </span>
-                            )}
-                            {work.artistIsSeed && !(!work.available) && (
-                              <SamplePill className="absolute top-3 left-3 z-10 shadow-sm" />
-                            )}
+                            {/* Badges stack at the top-left; the save heart lives
+                                top-right so it never covers them. */}
+                            <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-1.5 pointer-events-none">
+                              {!work.available && (
+                                <span className="px-2 py-0.5 bg-black/70 text-white text-[10px] rounded-sm backdrop-blur-sm">
+                                  Sold
+                                </span>
+                              )}
+                              {work.artistIsSeed && !(!work.available) && (
+                                <SamplePill className="shadow-sm" />
+                              )}
+                              {isArtworkOfTheWeek(work.featuredUntil, now) && (
+                                <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium tracking-wide text-white shadow-sm">
+                                  Artwork of the week
+                                </span>
+                              )}
+                            </div>
                             {/* Hover action buttons */}
                             {/* Plan G #11: hover-revealed save heart on
                                 desktop, always-visible on mobile (since
                                 hover doesn't fire on touch). SaveButton
                                 handles the auth gate + toast. */}
-                            <div className="absolute top-3 left-3 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity duration-200">
+                            <div className="absolute top-3 right-3 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity duration-200">
                               <SaveButton type="work" itemId={work.id} size="sm" />
                             </div>
-                            {isArtworkOfTheWeek(work.featuredUntil, now) && (
-                              <span className="absolute top-3 left-12 z-10 inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium tracking-wide text-white shadow-sm pointer-events-none">
-                                Artwork of the week
-                              </span>
-                            )}
-                            <div className="absolute top-3 right-3 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            <div className="absolute top-3 right-12 z-10 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                               <Link
                                 href={quickLookHref}
                                 aria-label="Quick look"
@@ -2536,7 +2540,7 @@ function BrowsePortfoliosPageInner() {
                           <div className="px-4 py-3 flex-1 flex flex-col relative">
                             <DistanceBadge distance={workDistance} corner="top-right" />
                             <a href={fullPageHref} target="_blank" rel="noopener noreferrer" className="block group/title min-w-0">
-                              <h3 className="text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors line-clamp-2 pr-16">
+                              <h3 className={`text-[13px] font-medium text-foreground leading-tight group-hover/title:text-accent transition-colors line-clamp-2 min-h-[2.1rem] ${workDistance != null ? "pr-16" : ""}`}>
                                 {work.title}
                               </h3>
                             </a>

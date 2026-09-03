@@ -15,6 +15,8 @@ import { useState, type FormEvent } from "react";
 import { usePathname } from "next/navigation";
 import { useFeedbackBubbleHidden } from "@/lib/ui/feedback-bubble-visibility";
 
+const MINIMISED_KEY = "wallplace.feedback.minimised";
+
 type Tab = "feature" | "feedback";
 
 // Routes where the bubble should NOT render (legal copy etc.). The
@@ -37,6 +39,23 @@ export default function FeedbackBubble() {
   const hiddenByEditor = useFeedbackBubbleHidden();
 
   const [open, setOpen] = useState(false);
+  // Minimised to a small dot; remembered per browser so it stays out of the
+  // way once dismissed. Reads and writes are guarded: storage can be absent.
+  const [minimised, setMinimised] = useState<boolean>(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem(MINIMISED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  function persistMinimised(next: boolean) {
+    setMinimised(next);
+    try {
+      window.localStorage.setItem(MINIMISED_KEY, next ? "1" : "0");
+    } catch {
+      // storage unavailable, the choice lasts for this page only
+    }
+  }
   const [tab, setTab] = useState<Tab>("feature");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -100,8 +119,37 @@ export default function FeedbackBubble() {
     }
   }
 
+  if (minimised) {
+    return (
+      <button
+        type="button"
+        onClick={() => persistMinimised(false)}
+        aria-label="Show feedback button"
+        title="Feedback"
+        className="fixed bottom-3 right-3 z-40 w-9 h-9 rounded-full bg-accent-text/80 text-white shadow-md hover:bg-accent-text grid place-items-center"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+        </svg>
+      </button>
+    );
+  }
   return (
     <>
+      {/* Hide control: a small minus beside the pill (owner instruction,
+          3 September 2026) so the pill can be got out of the way. */}
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(false);
+          persistMinimised(true);
+        }}
+        aria-label="Hide feedback button"
+        title="Hide"
+        className="fixed bottom-3 right-[7.25rem] z-40 w-6 h-6 rounded-full bg-white/90 border border-border text-stone-600 text-sm leading-none shadow hover:bg-white grid place-items-center"
+      >
+        −
+      </button>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

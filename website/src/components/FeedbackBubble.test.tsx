@@ -3,7 +3,7 @@
 // bottom-right. An editor that is mounted holds the bubble hidden so it
 // can never sit on top of the button the editor exists for.
 
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { pathnameMock } = vi.hoisted(() => ({ pathnameMock: vi.fn(() => "/browse") }));
@@ -61,5 +61,29 @@ describe("<FeedbackBubble />", () => {
     expect(bubble()).toBeNull();
     act(() => releaseB());
     expect(bubble()).not.toBeNull();
+  });
+});
+
+describe("<FeedbackBubble /> minimise", () => {
+  it("hides to a small dot on the minus control, remembers it, and comes back on the dot", () => {
+    const store = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => { store.set(k, v); },
+        removeItem: (k: string) => { store.delete(k); },
+        clear: () => store.clear(),
+        key: () => null,
+        length: 0,
+      },
+    });
+    render(<FeedbackBubble />);
+    fireEvent.click(screen.getByRole("button", { name: "Hide feedback button" }));
+    expect(screen.queryByRole("button", { name: "Feedback and feature requests" })).toBeNull();
+    expect(store.get("wallplace.feedback.minimised")).toBe("1");
+    fireEvent.click(screen.getByRole("button", { name: "Show feedback button" }));
+    expect(screen.getByRole("button", { name: "Feedback and feature requests" })).toBeTruthy();
+    expect(store.get("wallplace.feedback.minimised")).toBe("0");
   });
 });

@@ -765,8 +765,19 @@ export default function ArtistProfileClient({
       {showroomWalls.length > 0 && (
         <section id="showroom" className="py-10 lg:py-14 border-t border-border scroll-mt-24">
           <div className="max-w-[1200px] mx-auto px-6">
-            <h2 className="text-2xl mb-1">Showroom</h2>
-            <p className="text-sm text-muted mb-6">How {artistName}&rsquo;s work looks on a wall, laid out by the artist.</p>
+            <div className="flex items-end justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl mb-1">Showroom</h2>
+                <p className="text-sm text-muted">How {artistName}&rsquo;s work looks on a wall, laid out by the artist.</p>
+              </div>
+              <Link
+                href={`/browse/${artistSlug}/showroom`}
+                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
+              >
+                Enter showroom
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
+              </Link>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {showroomWalls.map((wall) => {
                 const picture = wall.preview_image_url ?? wall.source_image_url;

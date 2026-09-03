@@ -105,7 +105,7 @@ describe("View showroom", () => {
     render(<BrowseArtistCard artist={artist} distance={null} />);
     const button = screen.getByRole("button", { name: "View showroom" });
     fireEvent.click(button);
-    expect(pushMock).toHaveBeenCalledWith(`/browse/${baseArtist.slug}#showroom`);
+    expect(pushMock).toHaveBeenCalledWith(`/browse/${baseArtist.slug}/showroom`);
   });
 
   it("shows nothing when the artist has no public showroom walls", () => {
