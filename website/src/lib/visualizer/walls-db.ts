@@ -355,6 +355,9 @@ export async function updateLayout(
     return getLayoutById(layoutId, client);
   }
 
+  // Bumped here rather than trusting a trigger: the wall's picture is the
+  // newest layout's render, so a save must make this layout the newest.
+  update.updated_at = new Date().toISOString();
   const { data, error } = await db(client)
     .from("wall_layouts")
     .update(update)
