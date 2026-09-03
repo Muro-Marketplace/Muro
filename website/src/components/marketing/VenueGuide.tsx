@@ -246,6 +246,22 @@ export default function VenueGuide() {
         </div>
       </section>
 
+      {/* Venues on Wallplace. Moved here from the homepage (owner
+          instruction, 2 September): a venue reading this page wants to
+          see who else is already on the platform. */}
+      <section className="py-16 lg:py-20 bg-foreground text-white">
+        <div className="max-w-[1200px] mx-auto px-6 text-center">
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Venues</p>
+          <h2 className="font-serif text-3xl md:text-4xl mb-4">See the venues on Wallplace</h2>
+          <p className="text-white/60 max-w-lg mx-auto mb-8">
+            Caf&eacute;s, restaurants, hotels and offices, and what each one is open to. See who is near you.
+          </p>
+          <Link href="/spaces" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+            See Venues
+          </Link>
+        </div>
+      </section>
+
       {/* Venue Photos */}
       <section className="py-20 lg:py-28">
         <div className="max-w-[1200px] mx-auto px-6">

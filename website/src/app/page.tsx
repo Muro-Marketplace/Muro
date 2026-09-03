@@ -458,33 +458,6 @@ export default function Home() {
               cannot appear as genuine reviews. Reinstate only with real,
               consented quotes. */}
 
-          {/* ─── VENUE DEMAND ─── */}
-          <section className="py-20 lg:py-28 relative overflow-hidden">
-            <div className="absolute inset-0">
-              <img src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=1920&h=1200&fit=crop&crop=center" alt="" className="w-full h-full min-h-full object-cover" />
-              <div className="absolute inset-0 bg-black/75" />
-            </div>
-            <div className="max-w-[1000px] mx-auto px-6 lg:px-10 text-center relative z-10">
-              <AnimateIn>
-              <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">Venues</p>
-              <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white mb-4">
-                See the venues on Wallplace
-              </h2>
-              <p className="text-lg text-white/50 max-w-lg mx-auto mb-10">
-                Caf&eacute;s, restaurants, hotels and offices, and what each one is open to. See who is near you.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Link href="/spaces" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
-                  See Venues
-                </Link>
-                <Link href="/apply" className="inline-flex items-center justify-center min-w-[220px] px-7 py-3 sm:py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
-                  Apply to Join
-                </Link>
-              </div>
-              </AnimateIn>
-            </div>
-          </section>
-
           {/* ─── FINAL CTA ─── */}
           <section className="py-24 lg:py-32">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10 text-center">
