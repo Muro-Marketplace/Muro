@@ -24,7 +24,16 @@ export const CAPTURE_TARGET_LONG_EDGE_PX = 3200;
 /** Never ask Konva for more than this, memory on phones is the limit. */
 export const CAPTURE_MAX_PIXEL_RATIO = 4;
 export const CAPTURE_MIME = "image/webp";
-export const CAPTURE_QUALITY = 1;
+export const CAPTURE_QUALITY = 0.95;
+/**
+ * Upload budget. The preview and proposal routes cap uploads at 4.5 MB, and
+ * so does the hosting platform's request body limit, so the encoder aims
+ * under 4 MB: the highest quality that fits, then a smaller bitmap.
+ */
+export const CAPTURE_MAX_BYTES = 4 * 1024 * 1024;
+export const CAPTURE_QUALITY_STEPS = [0.95, 0.92, 0.88, 0.84, 0.8] as const;
+export const CAPTURE_DOWNSCALE = 0.8;
+export const CAPTURE_MAX_DOWNSCALES = 3;
 /**
  * Colour behind the wall in the editor (Tailwind stone-100). The stage
  * itself is transparent outside the wall rect, so the capture is filled
@@ -192,6 +201,54 @@ export function canvasToBlob(
   });
 }
 
+/**
+ * Draw a canvas onto a smaller one. Returns the source untouched when a 2D
+ * context is unavailable (jsdom, or an exhausted GPU), so callers never
+ * lose the picture they already have.
+ */
+function downscaleCanvas(source: HTMLCanvasElement, factor: number): HTMLCanvasElement {
+  const width = Math.max(1, Math.round(source.width * factor));
+  const height = Math.max(1, Math.round(source.height * factor));
+  const out = document.createElement("canvas");
+  out.width = width;
+  out.height = height;
+  const ctx = out.getContext("2d");
+  if (!ctx) return source;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(source, 0, 0, width, height);
+  return out;
+}
+
+/**
+ * Encode at the best quality that fits the upload budget. WebP is tried at
+ * each of CAPTURE_QUALITY_STEPS; if none fits, the bitmap is scaled down by
+ * CAPTURE_DOWNSCALE and the steps run again, up to CAPTURE_MAX_DOWNSCALES
+ * times. A browser that only gives PNG (quality has no effect) goes
+ * straight to scaling. If nothing ever fits, the smallest result is
+ * returned and the server's own cap has the final say.
+ */
+export async function encodeWithinBudget(
+  canvas: HTMLCanvasElement,
+  opts: { budgetBytes?: number; type?: string } = {},
+): Promise<Blob> {
+  const budget = opts.budgetBytes ?? CAPTURE_MAX_BYTES;
+  let current = canvas;
+  let smallest: Blob | null = null;
+  for (let round = 0; round <= CAPTURE_MAX_DOWNSCALES; round++) {
+    for (const quality of CAPTURE_QUALITY_STEPS) {
+      const blob = await canvasToBlob(current, { type: opts.type, quality });
+      if (!smallest || blob.size < smallest.size) smallest = blob;
+      if (blob.size <= budget) return blob;
+      if (blob.type === "image/png") break; // quality has no effect on PNG
+    }
+    const next = downscaleCanvas(current, CAPTURE_DOWNSCALE);
+    if (next === current) break; // cannot scale here; stop rather than loop
+    current = next;
+  }
+  return smallest as Blob;
+}
+
 // ── Konva stage capture ─────────────────────────────────────────────────
 
 interface HideableNode {
@@ -259,7 +316,7 @@ export async function captureStage(
     throw toCaptureError(err);
   }
   const opaque = withOpaqueBackground(raw, opts.background);
-  return canvasToBlob(opaque);
+  return encodeWithinBudget(opaque);
 }
 
 // ── three.js scene capture ──────────────────────────────────────────────
@@ -317,5 +374,5 @@ export async function captureScene(
   } catch (err) {
     throw toCaptureError(err);
   }
-  return canvasToBlob(renderer.domElement);
+  return encodeWithinBudget(renderer.domElement);
 }

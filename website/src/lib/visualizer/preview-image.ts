@@ -9,7 +9,8 @@
  * magic bytes are what count.
  */
 
-export const PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
+/** Matches the hosting platform's request body limit, so a refusal is ours and readable. */
+export const PREVIEW_MAX_BYTES = Math.floor(4.5 * 1024 * 1024);
 
 export type PreviewImageFormat = "webp" | "png";
 

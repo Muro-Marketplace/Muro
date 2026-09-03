@@ -234,3 +234,16 @@ img {
   -webkit-user-drag: none;
   user-select: none;
 }
+
+/* Saved wall pictures in fullscreen: fill the screen, keep the aspect. */
+.wp-fullscreen-box:fullscreen {
+  display: grid;
+  place-items: center;
+  background: #0c0a09;
+}
+.wp-fullscreen-box:fullscreen img {
+  max-width: 100vw;
+  max-height: 100vh;
+  width: auto;
+  height: auto;
+}

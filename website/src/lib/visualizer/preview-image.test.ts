@@ -62,7 +62,7 @@ describe("naming", () => {
     expect(PREVIEW_CONTENT_TYPES.png).toBe("image/png");
   });
 
-  it("caps uploads at 8 MB", () => {
-    expect(PREVIEW_MAX_BYTES).toBe(8 * 1024 * 1024);
+  it("caps uploads at 4.5 MB, the hosting platform's own request limit", () => {
+    expect(PREVIEW_MAX_BYTES).toBe(Math.floor(4.5 * 1024 * 1024));
   });
 });

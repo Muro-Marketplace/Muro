@@ -144,7 +144,7 @@ export default function RenderPreview({
             layer, not DRM. */}
         <div
           ref={imageBoxRef}
-          className="rounded-xl overflow-hidden bg-stone-900 shadow-2xl relative select-none"
+          className="wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-2xl relative select-none"
           onContextMenu={venueViewer ? (e) => e.preventDefault() : undefined}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}

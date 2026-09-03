@@ -181,7 +181,7 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
             {/* Wall image, the saved preview at full size when there is one. */}
             <div className="relative bg-stone-100 flex-1 min-h-0">
               {imageUrl ? (
-                <div ref={imageBoxRef} className="relative w-full h-full min-h-[40vh] bg-stone-900">
+                <div ref={imageBoxRef} className="wp-fullscreen-box relative w-full h-full min-h-[40vh] bg-stone-900">
                   <button
                     type="button"
                     onClick={() => void toggleFullscreen(imageBoxRef.current)}

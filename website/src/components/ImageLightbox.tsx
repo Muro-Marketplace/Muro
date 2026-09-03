@@ -43,7 +43,7 @@ export default function ImageLightbox({ open, onClose, src, alt, title, subtitle
     >
       <div className="min-h-full grid place-items-center" onClick={onClose}>
         <div className="w-full max-w-6xl flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-          <div ref={boxRef} className="rounded-xl overflow-hidden bg-stone-900 shadow-2xl grid place-items-center">
+          <div ref={boxRef} className="wp-fullscreen-box rounded-xl overflow-hidden bg-stone-900 shadow-2xl grid place-items-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={src} alt={alt} className="block mx-auto w-auto max-w-full h-auto max-h-[80vh]" />
           </div>

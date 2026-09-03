@@ -26,6 +26,10 @@ import {
   withSceneChromeHidden,
   CAPTURE_TARGET_LONG_EDGE_PX,
   CAPTURE_QUALITY,
+  encodeWithinBudget,
+  CAPTURE_QUALITY_STEPS,
+  CAPTURE_MAX_BYTES,
+  CAPTURE_MAX_DOWNSCALES,
 } from "./capture";
 
 // jsdom has no canvas backend: getContext() returns null and toBlob() is
@@ -409,5 +413,53 @@ describe("captureScene", () => {
       name: "CaptureError",
       message: "context lost",
     });
+  });
+});
+
+describe("encodeWithinBudget", () => {
+  const mb = (n: number) => new Blob([new Uint8Array(Math.round(n * 1024 * 1024))], { type: "image/webp" });
+
+  it("steps the quality down until the file fits the budget", async () => {
+    const asked: number[] = [];
+    toBlobImpl = (cb, _type, quality) => {
+      asked.push(quality ?? -1);
+      cb(quality !== undefined && quality <= 0.88 ? mb(3) : mb(6));
+    };
+    const blob = await encodeWithinBudget(document.createElement("canvas"));
+    expect(blob.size).toBe(3 * 1024 * 1024);
+    expect(asked).toEqual([0.95, 0.92, 0.88]);
+  });
+
+  it("returns the first result when it already fits", async () => {
+    const asked: number[] = [];
+    toBlobImpl = (cb, _type, quality) => {
+      asked.push(quality ?? -1);
+      cb(mb(1));
+    };
+    await encodeWithinBudget(document.createElement("canvas"));
+    expect(asked).toEqual([CAPTURE_QUALITY_STEPS[0]]);
+  });
+
+  it("hands back the smallest result when nothing fits even after scaling down", async () => {
+    let calls = 0;
+    toBlobImpl = (cb, _type, quality) => {
+      calls += 1;
+      cb(mb(quality === 0.8 ? 5 : 7));
+    };
+    const blob = await encodeWithinBudget(document.createElement("canvas"), { budgetBytes: CAPTURE_MAX_BYTES });
+    // Every quality step on the original and on each of the smaller bitmaps.
+    expect(calls).toBe(CAPTURE_QUALITY_STEPS.length * (CAPTURE_MAX_DOWNSCALES + 1));
+    expect(blob.size).toBe(5 * 1024 * 1024);
+  });
+
+  it("goes straight to scaling when the browser only encodes PNG", async () => {
+    let calls = 0;
+    toBlobImpl = (cb) => {
+      calls += 1;
+      cb(new Blob([new Uint8Array(6 * 1024 * 1024)], { type: "image/png" }));
+    };
+    await encodeWithinBudget(document.createElement("canvas"));
+    // One PNG per bitmap size: no quality steps, only the downscale rounds.
+    expect(calls).toBe(CAPTURE_MAX_DOWNSCALES + 1);
   });
 });
