@@ -146,9 +146,12 @@ export default function FeedbackBubble() {
         }}
         aria-label="Hide feedback button"
         title="Hide"
-        className="fixed bottom-3 right-[7.25rem] z-40 w-6 h-6 rounded-full bg-white/90 border border-border text-stone-600 text-sm leading-none shadow hover:bg-white grid place-items-center"
+        className="fixed bottom-3 right-[6.6rem] z-40 w-11 h-11 grid place-items-center"
       >
-        −
+        {/* 44 px hit area (tap-target audit), 24 px disc drawn inside it. */}
+        <span aria-hidden className="w-6 h-6 rounded-full bg-white/90 border border-border text-stone-600 text-sm leading-none shadow grid place-items-center">
+          −
+        </span>
       </button>
       <button
         type="button"

@@ -137,10 +137,10 @@ export default function PanZoomImage({ src, alt, className = "", heightClassName
         />
       </div>
       <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
-        <button type="button" onClick={() => { const c = centre(); zoomAt(ZOOM_STEP, c.x, c.y); }} aria-label="Zoom in" className="w-9 h-9 rounded-full bg-white/90 text-stone-800 text-base font-medium shadow hover:bg-white">+</button>
-        <button type="button" onClick={() => { const c = centre(); zoomAt(1 / ZOOM_STEP, c.x, c.y); }} aria-label="Zoom out" className="w-9 h-9 rounded-full bg-white/90 text-stone-800 text-base font-medium shadow hover:bg-white">−</button>
+        <button type="button" onClick={() => { const c = centre(); zoomAt(ZOOM_STEP, c.x, c.y); }} aria-label="Zoom in" className="w-11 h-11 rounded-full bg-white/90 text-stone-800 text-base font-medium shadow hover:bg-white">+</button>
+        <button type="button" onClick={() => { const c = centre(); zoomAt(1 / ZOOM_STEP, c.x, c.y); }} aria-label="Zoom out" className="w-11 h-11 rounded-full bg-white/90 text-stone-800 text-base font-medium shadow hover:bg-white">−</button>
         {view.scale !== 1 && (
-          <button type="button" onClick={reset} aria-label="Reset view" className="px-3 h-9 rounded-full bg-white/90 text-stone-800 text-xs font-medium shadow hover:bg-white">Reset</button>
+          <button type="button" onClick={reset} aria-label="Reset view" className="px-4 h-11 rounded-full bg-white/90 text-stone-800 text-xs font-medium shadow hover:bg-white">Reset</button>
         )}
       </div>
       <p className="absolute bottom-3 right-3 text-[11px] text-white/70 pointer-events-none">Drag to move, pinch or scroll to zoom</p>
