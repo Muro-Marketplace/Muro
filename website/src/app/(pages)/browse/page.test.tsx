@@ -6,14 +6,16 @@
 // They mount the real /browse page (a large client component wrapped in a
 // Suspense boundary for useSearchParams) and assert the three behaviours the
 // sync must guarantee:
-//   (a) changing a synced filter writes the expected param via router.replace,
+//   (a) changing a synced filter writes the expected param to the live URL
+//       (window.history.replaceState, never a router navigation),
 //   (b) mounting with those params in the URL hydrates the matching control,
-//   (c) a clean mount (default state, empty URL) does NOT call router.replace
+//   (c) a clean mount (default state, empty URL) does NOT write the URL
 //       — the loop guard short-circuits the no-op write.
 //
-// next/navigation is mocked with a mutable `replace` spy and a controllable
-// `currentParams`, so each test drives the "URL" by swapping that object
-// before render. fetch is stubbed to reject so the page keeps its static seed
+// next/navigation is mocked with a controllable `currentParams` (what
+// useSearchParams reports) and the live URL is set with replaceState, so each
+// test drives both views of the "URL" before render. Writes are observed via a
+// spy on window.history.replaceState. fetch is stubbed to reject so the page keeps its static seed
 // data and the test stays deterministic (no network, same as the other page
 // tests in this repo).
 
@@ -23,6 +25,14 @@ import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/re
 // --- controllable URL state -------------------------------------------------
 let currentParams = new URLSearchParams("");
 const replace = vi.fn();
+let replaceState: ReturnType<typeof vi.spyOn>;
+/** Every URL the page wrote, in order. */
+function writtenUrls(): string[] {
+  return replaceState.mock.calls.map((c) => String(c[2]));
+}
+function setLiveUrl(qs: string) {
+  window.history.replaceState(null, "", `/browse${qs ? `?${qs}` : ""}`);
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn(), prefetch: vi.fn() }),
@@ -78,6 +88,8 @@ vi.mock("@/context/AuthContext", () => ({
 import BrowsePortfoliosPage from "./page";
 
 beforeEach(() => {
+  setLiveUrl("");
+  replaceState = vi.spyOn(window.history, "replaceState");
   replace.mockReset();
   currentParams = new URLSearchParams("");
   // Static-data fallback path: reject all fetches so result data stays the
@@ -89,6 +101,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  replaceState.mockRestore();
+  setLiveUrl("");
   cleanup();
   vi.unstubAllGlobals();
 });
@@ -104,7 +118,7 @@ function getGallerySortSelect(): HTMLSelectElement {
 }
 
 describe("browse page — sidebar filter URL sync (Bug 20)", () => {
-  it("(a) writes the expected param via router.replace when a synced filter changes", async () => {
+  it("(a) writes the expected param to the live URL when a synced filter changes", async () => {
     render(<BrowsePortfoliosPage />);
 
     const sortSelect = getGallerySortSelect();
@@ -113,22 +127,26 @@ describe("browse page — sidebar filter URL sync (Bug 20)", () => {
 
     fireEvent.change(sortSelect, { target: { value: "price_low" } });
 
-    // The write is debounced (~200ms); wait for the replace to land.
+    // The write is debounced (~200ms); wait for it to land. (Mount-time
+    // hydration may write the unchanged URL first, so wait for the param.)
     await waitFor(
       () => {
-        expect(replace).toHaveBeenCalled();
+        expect(writtenUrls().some((u) => u.includes("gsort=price_low"))).toBe(true);
       },
       { timeout: 1500 },
     );
 
-    const urls = replace.mock.calls.map((c) => String(c[0]));
-    expect(urls.some((u) => u.includes("gsort=price_low"))).toBe(true);
+    const urls = writtenUrls();
+    // Never a router navigation: that is what let an in-flight write
+    // clobber the distance slider.
+    expect(replace).not.toHaveBeenCalled();
     // It must NOT clobber the path or invent unrelated params.
     expect(urls.every((u) => u.startsWith("/browse"))).toBe(true);
   });
 
   it("(b) hydrates a control from URL params present on mount", async () => {
     currentParams = new URLSearchParams("gsort=price_low");
+    setLiveUrl("gsort=price_low");
     render(<BrowsePortfoliosPage />);
 
     // After the one-time hydration effect runs, the gallery-sort select
@@ -143,6 +161,7 @@ describe("browse page — sidebar filter URL sync (Bug 20)", () => {
 
   it("(b2) hydrates a boolean filter (Originals) from the URL", async () => {
     currentParams = new URLSearchParams("gorig=1");
+    setLiveUrl("gorig=1");
     render(<BrowsePortfoliosPage />);
 
     // The Originals CheckPill renders its label; when checked the page wires
@@ -159,17 +178,17 @@ describe("browse page — sidebar filter URL sync (Bug 20)", () => {
     // matches the hydrated state, the loop guard should keep replace at zero
     // (or, if it fires, the query must still contain gorig).
     await new Promise((r) => setTimeout(r, 350));
-    if (replace.mock.calls.length > 0) {
-      const urls = replace.mock.calls.map((c) => String(c[0]));
-      expect(urls.every((u) => u.includes("gorig=1"))).toBe(true);
+    if (writtenUrls().length > 0) {
+      expect(writtenUrls().every((u) => u.includes("gorig=1"))).toBe(true);
     }
   });
 
-  it("(c) does NOT call router.replace on a clean default mount (loop guard)", async () => {
+  it("(c) does NOT write the URL on a clean default mount (loop guard)", async () => {
     render(<BrowsePortfoliosPage />);
 
     // Wait past the debounce window; a no-op render must not write.
     await new Promise((r) => setTimeout(r, 400));
+    expect(writtenUrls()).toEqual([]);
     expect(replace).not.toHaveBeenCalled();
   });
 
@@ -177,6 +196,7 @@ describe("browse page — sidebar filter URL sync (Bug 20)", () => {
     // Keep the gallery view (so the gallery-sort control is on screen) while
     // carrying a non-filter primary param the merge must not drop.
     currentParams = new URLSearchParams("view=gallery&discipline=photography");
+    setLiveUrl("view=gallery&discipline=photography");
     render(<BrowsePortfoliosPage />);
 
     const sortSelect = getGallerySortSelect();
@@ -184,11 +204,11 @@ describe("browse page — sidebar filter URL sync (Bug 20)", () => {
 
     await waitFor(
       () => {
-        expect(replace).toHaveBeenCalled();
+        expect(writtenUrls().some((u) => u.includes("gsort=az"))).toBe(true);
       },
       { timeout: 1500 },
     );
-    const urls = replace.mock.calls.map((c) => String(c[0]));
+    const urls = writtenUrls();
     // The new filter param AND the pre-existing primary params both survive.
     expect(
       urls.some(
@@ -213,6 +233,7 @@ describe("browse page — artist filter badge count (B2)", () => {
     // ?view=portfolios puts the page in the artists view, where the
     // sidebar badge lives.
     currentParams = new URLSearchParams("view=portfolios");
+    setLiveUrl("view=portfolios");
     render(<BrowsePortfoliosPage />);
 
     const themeSelect = await waitFor(() => getArtistThemeSelect(), { timeout: 1500 });
@@ -241,6 +262,7 @@ describe("browse page — empty artist grid guidance (B3)", () => {
     // "local"), so this told the visitor to enter a postcode even though the
     // distance filter never ran.
     currentParams = new URLSearchParams("view=portfolios&q=zzzznosuchartistanywhere");
+    setLiveUrl("view=portfolios&q=zzzznosuchartistanywhere");
     render(<BrowsePortfoliosPage />);
 
     await waitFor(
@@ -258,6 +280,7 @@ describe("browse page — empty artist grid guidance (B3)", () => {
     // Same empty grid, but reached with no filters and no search: here the
     // postcode hint is the right advice, so the fix must not remove it.
     currentParams = new URLSearchParams("view=portfolios&discipline=");
+    setLiveUrl("view=portfolios&discipline=");
     render(<BrowsePortfoliosPage />);
 
     // Seed data has artists, so assert on the branch condition rather than
@@ -278,6 +301,7 @@ describe("browse page — gallery Clear all keeps location filtering on (B4)", (
     // Land in the gallery view with one gallery filter set so the sidebar's
     // "Clear all" button renders.
     currentParams = new URLSearchParams("gorig=1");
+    setLiveUrl("gorig=1");
     render(<BrowsePortfoliosPage />);
 
     const clearBtn = await waitFor(
@@ -313,6 +337,7 @@ describe("browse page — seed artists carry the Sample pill from first paint (F
     // the pill can only appear if the useState initialiser stamped
     // isSeedArtist onto the imported @/data/artists rows itself.
     currentParams = new URLSearchParams("view=portfolios");
+    setLiveUrl("view=portfolios");
     render(<BrowsePortfoliosPage />);
 
     const pills = await screen.findAllByText("Sample");

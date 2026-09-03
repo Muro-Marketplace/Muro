@@ -113,7 +113,7 @@ describe("location writes avoid a router navigation (owner-reported flicker + st
   const src = readFileSync(join(process.cwd(), "src/app/(pages)/browse/page.tsx"), "utf8");
   it("setLocation writes the URL with the native History API", () => {
     const setLocation = src.slice(src.indexOf("const setLocation = useCallback("), src.indexOf("const updateLocationCoords"));
-    expect(setLocation).toContain("window.history.replaceState(");
+    expect(setLocation).toContain("writeBrowseQuery(");
     expect(setLocation).not.toContain("router.replace(");
   });
   it("the slider keeps its draft until the parent shows the committed value", () => {

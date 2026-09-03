@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef, Suspense, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { liveBrowseQuery, writeBrowseQuery } from "./browseUrl";
 import Link from "next/link";
 import Image from "next/image";
 import { artists as staticArtists, type Artist } from "@/data/artists";
@@ -334,7 +335,6 @@ function BrowsePortfoliosPageInner() {
   // window.location.hash because Next.js Link same-page hash changes use
   // pushState, which doesn't fire hashchange, so the page wouldn't react.
   const searchParams = useSearchParams();
-  const router = useRouter();
   const viewParam = searchParams?.get("view") || "";
   const disciplineParam = searchParams?.get("discipline") || "";
   const subParam = searchParams?.get("sub") || "";
@@ -358,16 +358,12 @@ function BrowsePortfoliosPageInner() {
   // "1", "true", and "yes" so the link is forgiving.
   const featuredParam = searchParams?.get("featured") || "";
   const featuredFilter = ["1", "true", "yes"].includes(featuredParam.toLowerCase());
-  const setSearchQuery = useCallback(
-    (next: string) => {
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
+  const setSearchQuery = useCallback((next: string) => {
+    writeBrowseQuery((params) => {
       if (next) params.set("q", next);
       else params.delete("q");
-      const qs = params.toString();
-      router.replace(`/browse${qs ? `?${qs}` : ""}`, { scroll: false });
-    },
-    [router, searchParams],
-  );
+    });
+  }, []);
 
   const switchView = useCallback((target: "gallery" | "portfolios" | "collections") => {
     if (target === "gallery") {
@@ -379,13 +375,11 @@ function BrowsePortfoliosPageInner() {
     } else {
       setActiveDiscipline("collections");
     }
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    if (target === "gallery") params.delete("view");
-    else params.set("view", target);
-    const qs = params.toString();
-    // replace (not push) so toggling doesn't bloat the back-stack.
-    router.replace(`/browse${qs ? `?${qs}` : ""}`, { scroll: false });
-  }, [router, searchParams]);
+    writeBrowseQuery((params) => {
+      if (target === "gallery") params.delete("view");
+      else params.set("view", target);
+    });
+  }, []);
   // Reset pagination when switching views / categories so users don't land
   // on an empty grid if they scroll back to a narrow filter.
   useEffect(() => {
@@ -433,23 +427,22 @@ function BrowsePortfoliosPageInner() {
   }, [subParam]);
 
   // Push the current discipline + sub-style picks into the URL. Kept
-  // as `router.replace` so toggling pills doesn't fill the back stack
+  // as an in-place URL rewrite so toggling pills doesn't fill the back stack
   // with intermediate filter states.
   const pushFilterParams = useCallback(
     (nextDiscipline: string, nextSubStyles: Set<string>) => {
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
-      if (nextDiscipline && nextDiscipline !== "collections") {
-        params.set("discipline", nextDiscipline);
-      } else {
-        params.delete("discipline");
-      }
-      const subs = Array.from(nextSubStyles).filter(Boolean);
-      if (subs.length > 0) params.set("sub", subs.join(","));
-      else params.delete("sub");
-      const qs = params.toString();
-      router.replace(`/browse${qs ? `?${qs}` : ""}`, { scroll: false });
+      writeBrowseQuery((params) => {
+        if (nextDiscipline && nextDiscipline !== "collections") {
+          params.set("discipline", nextDiscipline);
+        } else {
+          params.delete("discipline");
+        }
+        const subs = Array.from(nextSubStyles).filter(Boolean);
+        if (subs.length > 0) params.set("sub", subs.join(","));
+        else params.delete("sub");
+      });
     },
-    [router, searchParams],
+    [],
   );
   const [artistSort, setArtistSort] = useState<"featured" | "name" | "revenue_share" | "distance">("featured");
   const [gallerySort, setGallerySort] = useState<"featured" | "recent" | "az" | "price_low" | "price_high" | "revenue_share" | "distance">("featured");
@@ -505,22 +498,13 @@ function BrowsePortfoliosPageInner() {
 
   /** Write the desired location into the URL, merging with any
    *  non-location params already there (`view`, etc.). */
-  const setLocation = useCallback(
-    (next: ParsedLocation) => {
-      const params = new URLSearchParams(searchParams?.toString() ?? "");
-      const merged = serializeLocationParams(next, params);
-      const qs = merged.toString();
-      // Owner-reported 2 September: the distance slider flickered, and after
-      // a deploy a stale tab could get stuck on its old distance. Both came
-      // from router.replace: a full soft navigation per change (re-rendering
-      // the whole page a beat after the thumb moved) that a stale router
-      // could also refuse. The native History API integrates with
-      // useSearchParams in this Next version, so the URL updates in place,
-      // synchronously, with no navigation.
-      window.history.replaceState(null, "", qs ? `/browse?${qs}` : "/browse");
-    },
-    [searchParams],
-  );
+  const setLocation = useCallback((next: ParsedLocation) => {
+    // Rewrites the live URL in place (see browseUrl.ts): no soft
+    // navigation, so a drag can't be undone by a navigation that was
+    // already in flight, and no snapshot, so it can't drop what another
+    // control just wrote.
+    writeBrowseQuery((params) => serializeLocationParams(next, params));
+  }, []);
 
   // Helper for the common "user just resolved a location" path
   // (postcode geocode or geolocation success). Keeps maxDistance
@@ -658,7 +642,7 @@ function BrowsePortfoliosPageInner() {
   // Architecture (deliberate, see the DistanceSliderControl note on the
   // slider-thumb lag bug): LOCAL STATE STAYS THE OWNER. We only
   //   (a) HYDRATE the URL -> state ONCE on mount, and
-  //   (b) MIRROR state -> URL via router.replace, loop-guarded.
+  //   (b) MIRROR state -> URL via an in-place rewrite of the live URL, loop-guarded.
   // No refinement filter is ever a URL-controlled-every-render value, so the
   // price/range sliders keep reading their local-state value and never snap
   // back mid-drag.
@@ -773,20 +757,20 @@ function BrowsePortfoliosPageInner() {
   // were about to read on mount. The guard `nextQs === searchParams.toString()`
   // is the hard stop against a replace-loop: a no-op render (or a render where
   // only an unsynced bit of state changed) produces the same query string, so
-  // router.replace is never called. mergeFilterParams preserves every
+  // nothing is written. mergeFilterParams preserves every
   // non-filter param (view/discipline/sub/q/featured/loc_*) so this never
   // fights the existing primary-filter sync. The 200ms debounce keeps a slider
   // drag from spamming history; the trailing call still writes the final value.
   useEffect(() => {
     if (!hydratedRef.current) return;
     const handle = setTimeout(() => {
-      const currentQs = searchParams?.toString() ?? "";
+      const currentQs = liveBrowseQuery();
       const nextQs = mergeFilterParams(filterState, new URLSearchParams(currentQs));
       if (nextQs === currentQs) return; // loop guard: nothing to write
-      router.replace(`/browse${nextQs ? `?${nextQs}` : ""}`, { scroll: false });
+      writeBrowseQuery(() => new URLSearchParams(nextQs));
     }, 200);
     return () => clearTimeout(handle);
-  }, [filterState, searchParams, router]);
+  }, [filterState, searchParams]);
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
