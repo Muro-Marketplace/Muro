@@ -189,14 +189,8 @@ export default function VenueWallCard({ wall, venue }: VenueWallCardProps) {
                   >
                     Fullscreen
                   </button>
-                  <Image
-                    src={imageUrl}
-                    alt={imageAlt}
-                    fill
-                    className="object-contain"
-                    sizes="(max-width: 768px) 100vw, 768px"
-                    quality={92}
-                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imageUrl} alt={imageAlt} className="absolute inset-0 w-full h-full object-contain" />
                 </div>
               ) : (
                 <div

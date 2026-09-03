@@ -1164,12 +1164,12 @@ function WallVisualizerInner(props: ExtendedProps) {
               {previewInFlight ? (
                 <>
                   <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-                  Previewing…
+                  Capturing…
                 </>
               ) : (
                 <>
-                  <PreviewIcon />
-                  Preview
+                  <NextIcon />
+                  Next
                 </>
               )}
             </button>
@@ -1357,9 +1357,9 @@ function WallVisualizerInner(props: ExtendedProps) {
   );
 }
 
-// ── Preview icon ────────────────────────────────────────────────────────
+// ── Next icon: a right arrow ─────────────────────────────────────────
 
-function PreviewIcon() {
+function NextIcon() {
   return (
     <svg
       width="14"
@@ -1367,13 +1367,13 @@ function PreviewIcon() {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="2.5"
       strokeLinecap="round"
       strokeLinejoin="round"
-      aria-hidden="true"
+      aria-hidden
     >
-      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" />
-      <circle cx="12" cy="12" r="3" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="12 5 19 12 12 19" />
     </svg>
   );
 }
@@ -1919,12 +1919,12 @@ function MobileActionBar({
           {previewInFlight ? (
             <>
               <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-              Previewing…
+              Capturing…
             </>
           ) : (
             <>
-              <PreviewIcon />
-              Preview
+              <NextIcon />
+              Next
             </>
           )}
         </button>

@@ -24,7 +24,7 @@ export const CAPTURE_TARGET_LONG_EDGE_PX = 3200;
 /** Never ask Konva for more than this, memory on phones is the limit. */
 export const CAPTURE_MAX_PIXEL_RATIO = 4;
 export const CAPTURE_MIME = "image/webp";
-export const CAPTURE_QUALITY = 0.92;
+export const CAPTURE_QUALITY = 1;
 /**
  * Colour behind the wall in the editor (Tailwind stone-100). The stage
  * itself is transparent outside the wall rect, so the capture is filled

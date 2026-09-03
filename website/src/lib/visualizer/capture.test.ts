@@ -25,6 +25,7 @@ import {
   withOpaqueBackground,
   withSceneChromeHidden,
   CAPTURE_TARGET_LONG_EDGE_PX,
+  CAPTURE_QUALITY,
 } from "./capture";
 
 // jsdom has no canvas backend: getContext() returns null and toBlob() is
@@ -161,7 +162,7 @@ describe("canvasToBlob", () => {
     };
     const blob = await canvasToBlob(document.createElement("canvas"));
     expect(blob.type).toBe("image/webp");
-    expect(seen).toEqual([["image/webp", 0.92]]);
+    expect(seen).toEqual([["image/webp", CAPTURE_QUALITY]]);
   });
 
   it("accepts the browser's own PNG fallback for an unsupported type", async () => {

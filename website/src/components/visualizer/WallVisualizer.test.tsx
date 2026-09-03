@@ -215,7 +215,7 @@ describe("<WallVisualizer /> Preview", () => {
   it("offers Preview, never Render, and no quota chip", async () => {
     await mountVenueEditor();
 
-    expect(screen.getByRole("button", { name: "Preview" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Next" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /render/i })).toBeNull();
     expect(document.body.textContent).not.toMatch(/daily renders|render unit/i);
     expect(calls().some((c) => c.url.startsWith("/api/walls/quota"))).toBe(false);
@@ -225,7 +225,7 @@ describe("<WallVisualizer /> Preview", () => {
     await mountVenueEditor();
     const before = calls().length;
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Wall preview" });
     expect(captureImageMock).toHaveBeenCalledTimes(1);
@@ -244,7 +244,7 @@ describe("<WallVisualizer /> Preview", () => {
       expect(screen.getByTestId("wall-canvas").getAttribute("data-selected")).toBe("");
       return new Blob(["x"], { type: "image/webp" });
     });
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByRole("dialog", { name: "Wall preview" });
     expect(captureImageMock).toHaveBeenCalledTimes(1);
   });
@@ -259,10 +259,10 @@ describe("<WallVisualizer /> Preview", () => {
 
   it("revokes the object URL when a new capture replaces it and on unmount", async () => {
     const view = await mountVenueEditor();
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByRole("dialog", { name: "Wall preview" });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await waitFor(() => expect(captureImageMock).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock-1"));
     view.unmount();
@@ -275,7 +275,7 @@ describe("<WallVisualizer /> Preview", () => {
     err.name = "SecurityError";
     captureImageMock.mockRejectedValue(err);
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe(TAINTED_MESSAGE);
@@ -298,7 +298,7 @@ describe("<WallVisualizer /> Preview", () => {
     await screen.findByTestId("wall-3d-canvas");
     capture3dMock.mockRejectedValue(new Error("drawing buffer unavailable"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toBe(UNSUPPORTED_3D_MESSAGE);
@@ -315,7 +315,7 @@ describe("<WallVisualizer /> Preview", () => {
       />,
     );
     await screen.findByTestId("wall-canvas");
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/drag at least one artwork/i);
     expect(captureImageMock).not.toHaveBeenCalled();
@@ -325,7 +325,7 @@ describe("<WallVisualizer /> Preview", () => {
 describe("<WallVisualizer /> Save this preview to my wall", () => {
   it("flushes the layout save, uploads the capture with the bearer token, then reads Saved", async () => {
     await mountVenueEditor();
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByRole("dialog", { name: "Wall preview" });
 
     fireEvent.click(screen.getByRole("button", { name: "Save this preview to my wall" }));
@@ -359,7 +359,7 @@ describe("<WallVisualizer /> Save this preview to my wall", () => {
       return json({ works: [], artists: [] });
     });
     await mountVenueEditor();
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByRole("dialog", { name: "Wall preview" });
 
     fireEvent.click(screen.getByRole("button", { name: "Save this preview to my wall" }));
@@ -378,7 +378,7 @@ describe("<WallVisualizer /> Save this preview to my wall", () => {
       return json({ works: [], artists: [] });
     });
     await mountVenueEditor();
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByRole("dialog", { name: "Wall preview" });
 
     fireEvent.click(screen.getByRole("button", { name: "Save this preview to my wall" }));
@@ -398,7 +398,7 @@ describe("<WallVisualizer /> Save this preview to my wall", () => {
       />,
     );
     await screen.findByTestId("wall-canvas");
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByRole("dialog", { name: "Wall preview" });
 
     fireEvent.click(screen.getByRole("button", { name: "Save to wall" }));
@@ -424,7 +424,7 @@ describe("<WallVisualizer /> customer artwork sheet", () => {
     await screen.findByTestId("wall-canvas");
 
     await act(async () => {
-      fireEvent.click(await screen.findByRole("button", { name: "Preview" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Next" }));
     });
 
     await screen.findByRole("dialog", { name: "Wall preview" });
@@ -482,7 +482,7 @@ async function mountArtistOnVenueWall() {
 
 async function placeAndPreview() {
   fireEvent.click(screen.getByRole("button", { name: "Add Harbour Light" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Preview" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Next" }));
   return screen.findByRole("dialog", { name: "Wall preview" });
 }
 
@@ -497,11 +497,11 @@ describe("<WallVisualizer /> artist on a venue wall", () => {
     expect(document.querySelector('input[type="color"]')).toBeNull();
     expect(document.body.textContent).not.toMatch(/Upload photo|All saved|Unsaved/);
     // Nothing to preview until something is on the wall.
-    expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
     expect(document.body.textContent).toMatch(/The Copper Kettle's wall/);
 
     fireEvent.click(screen.getByRole("button", { name: "Add Harbour Light" }));
-    expect(await screen.findByRole("button", { name: "Preview" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Next" })).toBeTruthy();
     expect(calls().filter((c) => c.method !== "GET")).toEqual([]);
   });
 

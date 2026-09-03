@@ -158,11 +158,11 @@ export default function FrameOptionsEditor({
                 {isCustom ? (
                   <div className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0">
                     <label
-                      className="absolute inset-0 border border-dashed border-border rounded-sm flex items-center justify-center overflow-hidden bg-surface cursor-pointer hover:border-accent/60 transition-colors"
+                      className="absolute inset-0 border border-dashed border-border flex items-center justify-center overflow-hidden bg-surface cursor-pointer hover:border-accent/60 transition-colors"
                       title={f.imageUrl ? "Replace image" : "Add image"}
                     >
                       {f.imageUrl ? (
-                        <Image src={f.imageUrl} alt={f.label || "Frame preview"} fill sizes="56px" className="object-cover" />
+                        <Image src={f.imageUrl} alt={f.label || "Frame preview"} fill sizes="84px" className="object-contain" />
                       ) : (
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted">
                           <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -195,9 +195,9 @@ export default function FrameOptionsEditor({
                     )}
                   </div>
                 ) : (
-                  <div className="relative w-12 h-12 sm:w-14 sm:h-14 shrink-0 rounded-sm overflow-hidden bg-surface border border-border">
+                  <div className="relative w-[72px] h-12 sm:w-[84px] sm:h-14 shrink-0 overflow-hidden bg-surface border border-border">
                     {f.imageUrl && (
-                      <Image src={f.imageUrl} alt={f.label || "Frame preview"} fill sizes="56px" className="object-cover" />
+                      <Image src={f.imageUrl} alt={f.label || "Frame preview"} fill sizes="84px" className="object-contain" />
                     )}
                   </div>
                 )}

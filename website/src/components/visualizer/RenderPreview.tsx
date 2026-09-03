@@ -267,9 +267,7 @@ export default function RenderPreview({
 
         {/* Footer bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-2 text-white">
-          <p className="text-xs text-white/70">
-            Exactly as laid out in the editor.
-          </p>
+          <span aria-hidden />
           <div className="flex items-center gap-2">
             {/* Open-in-new-tab + Download are hidden for venues,
                 they shouldn't be one-clicking the artist's render

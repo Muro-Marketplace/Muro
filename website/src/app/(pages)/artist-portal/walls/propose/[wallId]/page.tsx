@@ -170,7 +170,7 @@ function ProposeOnWall() {
           </h1>
         </div>
         <p className="text-xs text-muted max-w-md">
-          Drag your works onto {state.venue.name}&rsquo;s wall, press Preview, then send the
+          Drag your works onto {state.venue.name}&rsquo;s wall, press Next, then send the
           picture with your placement request.
         </p>
       </div>

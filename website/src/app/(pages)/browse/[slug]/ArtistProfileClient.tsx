@@ -1060,12 +1060,12 @@ export default function ArtistProfileClient({
                     })}
                   </select>
                   {currentWork.frameOptions[selectedFrameIdx]?.imageUrl && (
-                    <div className="mt-2 relative aspect-video rounded-sm overflow-hidden border border-border/60 bg-surface select-none" onContextMenu={(e) => e.preventDefault()}>
+                    <div className="mt-2 relative aspect-[3/2] overflow-hidden border border-border/60 bg-surface select-none" onContextMenu={(e) => e.preventDefault()}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={currentWork.frameOptions[selectedFrameIdx].imageUrl}
                         alt={`${currentWork.frameOptions[selectedFrameIdx].label} preview`}
-                        className="w-full h-full object-cover pointer-events-none select-none"
+                        className="w-full h-full object-contain pointer-events-none select-none"
                         draggable={false}
                         onContextMenu={(e) => e.preventDefault()}
                       />
