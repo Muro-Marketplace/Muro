@@ -210,58 +210,6 @@ export default function Home() {
       {/* ─── CONTENT SECTIONS ─── */}
       <div ref={contentRef} className="bg-background">
 
-          {/* ─── HOW IT WORKS ─── */}
-          <section className="py-20 lg:py-28 bg-foreground">
-            <div className="max-w-[1100px] mx-auto px-6 lg:px-10">
-              <AnimateIn>
-              <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white text-center mb-16">
-                How Wallplace works
-              </h2>
-              <div className="grid md:grid-cols-3 gap-14 lg:gap-20">
-                <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Venues</p>
-                  <div className="space-y-9 flex-1">
-                    <Step dark number="01" title="Browse &amp; Filter" description="Search curated artists by style, theme, and location. Free." />
-                    <Step dark number="02" title="Enquire" description="Contact artists directly. Discuss terms and fit." />
-                    <Step dark number="03" title="Arrange" description="Display for free with optional revenue share, pay a monthly loan fee for one piece, or have the whole space handled on a Programme." />
-                  </div>
-                  <div className="mt-10">
-                    <Link href="/signup/venue" className="inline-flex w-full max-w-[280px] items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
-                      Register Your Venue
-                    </Link>
-                  </div>
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Artists</p>
-                  <div className="space-y-9 flex-1">
-                    <Step dark number="01" title="Apply" description="Submit your portfolio. We respond within 5 business days." />
-                    <Step dark number="02" title="Get Accepted" description={`Pass our curation review. ${FOUNDING_OFFER_SHORT}.`} />
-                    <Step dark number="03" title="Get Discovered" description="Your profile goes live. Venues enquire directly." />
-                  </div>
-                  <div className="mt-10">
-                    <Link href="/apply" className="inline-flex w-full max-w-[280px] items-center justify-center px-7 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
-                      Apply to Join
-                    </Link>
-                  </div>
-                </div>
-                <div className="flex flex-col">
-                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Customers</p>
-                  <div className="space-y-9 flex-1">
-                    <Step dark number="01" title="Browse" description="Explore original work from independent artists, online or on a wall near you." />
-                    <Step dark number="02" title="Buy" description="Scan the QR card beside the piece, or buy from the artist&rsquo;s page. Originals and prints." />
-                    <Step dark number="03" title="Receive" description="Delivered to your door, or collect it from the venue where it hangs." />
-                  </div>
-                  <div className="mt-10">
-                    <Link href="/browse" className="inline-flex w-full max-w-[280px] items-center justify-center px-7 py-3.5 border border-white/30 text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white hover:text-foreground transition-colors">
-                      Discover Art
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              </AnimateIn>
-            </div>
-          </section>
-
           {/* ─── FOR ARTISTS ─── */}
           <section className="py-12 lg:py-28">
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
@@ -446,6 +394,58 @@ export default function Home() {
                   <p className="text-xs text-muted mt-3">
                     A guide to how pricing scales. Every site is quoted individually. Prices exclusive of VAT.
                   </p>
+                </div>
+              </div>
+              </AnimateIn>
+            </div>
+          </section>
+
+          {/* ─── HOW IT WORKS ─── */}
+          <section className="py-20 lg:py-28 bg-foreground">
+            <div className="max-w-[1100px] mx-auto px-6 lg:px-10">
+              <AnimateIn>
+              <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-white text-center mb-16">
+                How Wallplace works
+              </h2>
+              <div className="grid md:grid-cols-3 gap-14 lg:gap-20">
+                <div className="flex flex-col">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Venues</p>
+                  <div className="space-y-9 flex-1">
+                    <Step dark number="01" title="Browse &amp; Filter" description="Search curated artists by style, theme, and location. Free." />
+                    <Step dark number="02" title="Enquire" description="Contact artists directly. Discuss terms and fit." />
+                    <Step dark number="03" title="Arrange" description="Display for free with optional revenue share, pay a monthly loan fee for one piece, or have the whole space handled on a Programme." />
+                  </div>
+                  <div className="mt-10">
+                    <Link href="/signup/venue" className="inline-flex w-full max-w-[280px] items-center justify-center px-7 py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
+                      Register Your Venue
+                    </Link>
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Artists</p>
+                  <div className="space-y-9 flex-1">
+                    <Step dark number="01" title="Apply" description="Submit your portfolio. We respond within 5 business days." />
+                    <Step dark number="02" title="Get Accepted" description={`Pass our curation review. ${FOUNDING_OFFER_SHORT}.`} />
+                    <Step dark number="03" title="Get Discovered" description="Your profile goes live. Venues enquire directly." />
+                  </div>
+                  <div className="mt-10">
+                    <Link href="/apply" className="inline-flex w-full max-w-[280px] items-center justify-center px-7 py-3.5 bg-white text-foreground text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white/90 transition-colors">
+                      Apply to Join
+                    </Link>
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent border-b border-white/10 pb-4 mb-8">For Customers</p>
+                  <div className="space-y-9 flex-1">
+                    <Step dark number="01" title="Browse" description="Explore original work from independent artists, online or on a wall near you." />
+                    <Step dark number="02" title="Buy" description="Scan the QR card beside the piece, or buy from the artist&rsquo;s page. Originals and prints." />
+                    <Step dark number="03" title="Receive" description="Delivered to your door, or collect it from the venue where it hangs." />
+                  </div>
+                  <div className="mt-10">
+                    <Link href="/browse" className="inline-flex w-full max-w-[280px] items-center justify-center px-7 py-3.5 border border-white/30 text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-white hover:text-foreground transition-colors">
+                      Discover Art
+                    </Link>
+                  </div>
                 </div>
               </div>
               </AnimateIn>
