@@ -174,3 +174,32 @@ describe("an artist under review is told so, not sold a subscription (owner inst
     expect(await screen.findByText(/Subscribe to see full venue details/)).toBeTruthy();
   });
 });
+
+
+describe("venues with public walls", () => {
+  it("advertises the walls on the card and links an artist straight to them", async () => {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith("/api/venues/demand")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ venues: [{ ...VENUE, publicWallCount: 2 }], stats: null }),
+        } as unknown as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) } as unknown as Response);
+    });
+    signedInAs("artist", "active");
+    currentArtistState.artist = { isVerified: true };
+    await renderSpaces();
+    expect(screen.getByText("2 walls measured up")).toBeTruthy();
+    const link = screen.getByRole("link", { name: "View walls" });
+    expect(link.getAttribute("href")).toBe("/venues/copper-kettle#walls");
+  });
+
+  it("says nothing about walls when the venue has none", async () => {
+    signedInAs("artist", "active");
+    currentArtistState.artist = { isVerified: true };
+    await renderSpaces();
+    expect(screen.queryByText(/measured up/)).toBeNull();
+    expect(screen.queryByRole("link", { name: /View walls?/ })).toBeNull();
+  });
+});

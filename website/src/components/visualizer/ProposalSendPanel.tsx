@@ -31,6 +31,7 @@ import {
   type ProposalArrangement,
   type ProposalTerms,
   type ProposalVenue,
+  DEFAULT_QR_REVENUE_SHARE_PERCENT,
 } from "@/lib/placements/wall-proposal-client";
 
 export type ProposalSendStatus = "idle" | "sending" | "sent" | "error";
@@ -66,6 +67,8 @@ export default function ProposalSendPanel({
   );
   const [revenueShare, setRevenueShare] = useState(DEFAULT_REVENUE_SHARE_PERCENT);
   const [monthlyFee, setMonthlyFee] = useState(DEFAULT_MONTHLY_FEE_GBP);
+  const [qrEnabled, setQrEnabled] = useState(true);
+  const [qrRevenueShare, setQrRevenueShare] = useState(DEFAULT_QR_REVENUE_SHARE_PERCENT);
   const [message, setMessage] = useState(() => defaultProposalMessage(venue.name, wallName));
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -77,6 +80,8 @@ export default function ProposalSendPanel({
       arrangement,
       revenueSharePercent: revenueShare,
       monthlyFeeGbp: monthlyFee,
+      qrEnabled,
+      qrRevenueSharePercent: qrRevenueShare,
       message,
     };
     const next = proposalTermsProblem(terms);
@@ -226,6 +231,40 @@ export default function ProposalSendPanel({
                 />
                 <span>per month</span>
               </label>
+              {/* Same optional QR-driven share the /spaces form offers on a
+                  loan: on top of the fee, a cut of sales from QR scans. */}
+              <label className="flex items-start gap-2 text-xs text-stone-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 accent-accent"
+                  checked={qrEnabled}
+                  onChange={(e) => setQrEnabled(e.target.checked)}
+                  disabled={sending}
+                  aria-label="Also offer a QR-driven revenue share"
+                />
+                <span>
+                  <span className="font-medium text-stone-900">Also offer a QR-driven revenue share</span>
+                  <span className="block text-stone-500">
+                    On top of the monthly fee, give the venue a share of any sales from QR scans on the work.
+                  </span>
+                </span>
+              </label>
+              {qrEnabled && (
+                <label className="flex items-center gap-2 text-xs text-stone-600 ml-6">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={qrRevenueShare}
+                    onChange={(e) => setQrRevenueShare(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                    disabled={sending}
+                    className="w-16 rounded-md border border-stone-300 px-2 py-1 text-sm"
+                    aria-label="QR revenue share to venue"
+                  />
+                  % of QR sales to the venue
+                </label>
+              )}
               <p className="text-[11px] text-stone-500">
                 Monthly loan fees start at &pound;{PAID_LOAN_MIN_GBP}. Set 0 for a free loan.
               </p>

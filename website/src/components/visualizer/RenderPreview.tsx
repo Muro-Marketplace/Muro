@@ -116,9 +116,17 @@ export default function RenderPreview({
       role="dialog"
       aria-modal="true"
       aria-label="Wall preview"
-      className="fixed inset-0 z-[60] grid place-items-center bg-black/70 backdrop-blur-sm p-4 sm:p-8"
+      // Scrolls when the column is taller than the viewport, and the image is
+      // capped at a fraction of it, so the strip under the picture (Save to
+      // wall, Send to the venue) is always reachable. It used to sit below
+      // the fold on shorter screens with no way to scroll to it.
+      className="fixed inset-0 z-[60] overflow-y-auto bg-black/70 backdrop-blur-sm p-4 sm:p-8"
       onClick={onClose}
     >
+      <div
+        className="min-h-full grid place-items-center"
+        onClick={onClose}
+      >
       <div
         className="w-full max-w-5xl flex flex-col gap-3"
         onClick={(e) => e.stopPropagation()}
@@ -139,7 +147,7 @@ export default function RenderPreview({
           <img
             src={imageUrl}
             alt="Wall preview"
-            className={`w-full h-auto block ${venueViewer ? "pointer-events-none select-none" : ""}`}
+            className={`block mx-auto w-auto max-w-full h-auto max-h-[62vh] ${venueViewer ? "pointer-events-none select-none" : ""}`}
             draggable={venueViewer ? false : undefined}
             onContextMenu={venueViewer ? (e) => e.preventDefault() : undefined}
           />
@@ -291,6 +299,7 @@ export default function RenderPreview({
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

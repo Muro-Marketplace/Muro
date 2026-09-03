@@ -79,8 +79,16 @@ export interface ProposalTerms {
   arrangement: ProposalArrangement;
   revenueSharePercent: number;
   monthlyFeeGbp: number;
+  /**
+   * Loans only: also offer the venue a share of QR-driven sales, on top of
+   * the fee they pay. Same option, defaults and payload rules as the
+   * placement request form on /spaces (qrEnabled true, 20%).
+   */
+  qrEnabled: boolean;
+  qrRevenueSharePercent: number;
   message: string;
 }
+export const DEFAULT_QR_REVENUE_SHARE_PERCENT = 20;
 
 /**
  * Why the terms cannot be sent yet, or null when they can. The server
@@ -99,6 +107,12 @@ export function proposalTermsProblem(terms: ProposalTerms): string | null {
     const share = terms.revenueSharePercent;
     if (!Number.isFinite(share) || share < 0 || share > 100) {
       return "Revenue share must be between 0 and 100%.";
+    }
+  }
+  if (terms.arrangement === "loan" && terms.qrEnabled) {
+    const share = terms.qrRevenueSharePercent;
+    if (!Number.isFinite(share) || share < 0 || share > 100) {
+      return "The QR revenue share must be between 0 and 100%.";
     }
   }
   if (terms.message.length > PROPOSAL_MESSAGE_MAX) {
@@ -165,7 +179,14 @@ export function buildProposalPlacement(
     workTitle: first.work.title,
     workImage: first.work.imageUrl,
     type,
-    qrEnabled: terms.arrangement === "revenue_share",
+    // QR is implicit on revenue share, opt-in on loans, off on purchase,
+    // exactly as the /spaces request form sends it.
+    qrEnabled:
+      terms.arrangement === "revenue_share"
+        ? true
+        : terms.arrangement === "loan"
+          ? terms.qrEnabled
+          : false,
     requestedDimensions: placedSizeLabel(first.item),
     wallProposalLayoutId: input.layoutId,
   };
@@ -184,6 +205,9 @@ export function buildProposalPlacement(
     payload.revenueSharePercent = clampRevenueShare(terms.revenueSharePercent);
   } else if (terms.arrangement === "loan") {
     payload.monthlyFeeGbp = Math.max(0, terms.monthlyFeeGbp);
+    if (terms.qrEnabled && terms.qrRevenueSharePercent > 0) {
+      payload.revenueSharePercent = clampRevenueShare(terms.qrRevenueSharePercent);
+    }
   }
   return payload;
 }

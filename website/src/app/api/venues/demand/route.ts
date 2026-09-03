@@ -30,12 +30,12 @@ export async function GET(request: Request) {
     {
       const { data, error } = await db
         .from("venue_profiles")
-        .select("slug, name, type, location, city, postcode, wall_space, description, image, images, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes, display_wall_space, display_lighting, display_install_notes, display_rotation_frequency")
+        .select("user_id, slug, name, type, location, city, postcode, wall_space, description, image, images, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes, display_wall_space, display_lighting, display_install_notes, display_rotation_frequency")
         .order("created_at", { ascending: false });
       if (error) {
         const fallback = await db
           .from("venue_profiles")
-          .select("slug, name, type, location, city, postcode, wall_space, description, image, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes")
+          .select("user_id, slug, name, type, location, city, postcode, wall_space, description, image, approximate_footfall, audience_type, interested_in_free_loan, interested_in_revenue_share, interested_in_direct_purchase, interested_in_collections, preferred_styles, preferred_themes")
           .order("created_at", { ascending: false });
         dbVenues = (fallback.data as Array<Record<string, unknown>> | null) || null;
       } else {
@@ -43,6 +43,14 @@ export async function GET(request: Request) {
       }
     }
 
+    // Walls each venue has measured up and made public: a selling point on
+    // the card ("View walls"). Counted server-side so user_id never leaves
+    // this route; skipped when the visualiser is off, mirroring the profile
+    // route's kill switch. A failed count is zero, never an error.
+    const publicWallCounts = await countPublicWalls(
+      db,
+      (dbVenues || []).map((v) => v.user_id).filter((id): id is string => typeof id === "string"),
+    );
     const asString = (v: unknown) => (typeof v === "string" ? v : "");
     const asStringArray = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
@@ -60,6 +68,7 @@ export async function GET(request: Request) {
       ...(dbVenues || []).map((v) => ({
         slug: v.slug as string,
         name: v.name as string,
+        publicWallCount: publicWallCounts[v.user_id as string] ?? 0,
         type: (v.type as string) || "Venue",
         location: (v.city as string) || (v.location as string) || "",
         coordinates: null as { lat: number; lng: number } | null, // DB venues don't have coords yet
@@ -83,6 +92,7 @@ export async function GET(request: Request) {
       })),
       ...staticOnly.map((v) => ({
         slug: v.slug,
+        publicWallCount: 0,
         name: v.name,
         type: v.type,
         location: v.location,
@@ -134,5 +144,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ venues, stats });
   } catch {
     return NextResponse.json({ venues: [], stats: { total: 0, openToDisplay: 0, openToPurchase: 0, openToRevenueShare: 0, byType: {} } });
+  }
+}
+
+/** Public walls per venue user id. Empty when the visualiser is off or the lookup fails. */
+async function countPublicWalls(
+  db: { from: (table: string) => any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+  userIds: string[],
+): Promise<Record<string, number>> {
+  if (userIds.length === 0 || !isFlagOn("WALL_VISUALIZER_V1")) return {};
+  try {
+    const { data, error } = await db
+      .from("walls")
+      .select("user_id")
+      .eq("is_public_on_profile", true)
+      .in("user_id", userIds);
+    if (error || !Array.isArray(data)) return {};
+    const out: Record<string, number> = {};
+    for (const row of data as Array<{ user_id?: string | null }>) {
+      if (typeof row.user_id !== "string") continue;
+      out[row.user_id] = (out[row.user_id] ?? 0) + 1;
+    }
+    return out;
+  } catch {
+    return {};
   }
 }

@@ -68,6 +68,8 @@ describe("<ProposalSendPanel />", () => {
       arrangement: "revenue_share",
       revenueSharePercent: 30,
       monthlyFeeGbp: 25,
+      qrEnabled: true,
+      qrRevenueSharePercent: 20,
       message: 'Hi The Copper Kettle, here\'s how my work could look on your "Front room" wall.',
     });
   });

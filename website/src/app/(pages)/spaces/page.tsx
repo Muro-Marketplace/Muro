@@ -47,6 +47,8 @@ interface DemandVenue {
   displayLighting?: string;
   displayInstallNotes?: string;
   displayRotationFrequency?: string;
+  /** Walls the venue has measured up and made public (0 when none). */
+  publicWallCount?: number;
 }
 
 interface DemandStats {
@@ -594,6 +596,14 @@ function SpacesPageContent() {
                     <div className="flex items-center gap-3 text-[10px] text-muted flex-wrap">
                       {venue.wallSpace && <span>{venue.wallSpace}</span>}
                       {venue.approximateFootfall && <><span className="w-0.5 h-0.5 rounded-full bg-muted" /><span>{venue.approximateFootfall}</span></>}
+                      {(venue.publicWallCount ?? 0) > 0 && (
+                        <>
+                          <span className="w-0.5 h-0.5 rounded-full bg-muted" />
+                          <span className="text-accent font-medium">
+                            {venue.publicWallCount === 1 ? "1 wall measured up" : `${venue.publicWallCount} walls measured up`}
+                          </span>
+                        </>
+                      )}
                     </div>
 
                     {/* Description + display needs, only shown to subscribers
@@ -725,9 +735,19 @@ function SpacesPageContent() {
                                 </button>
                               )}
                             </div>
-                            <Link href={`/venues/${venue.slug}`} className="text-xs text-muted hover:text-foreground transition-colors">
-                              View full profile
-                            </Link>
+                            <div className="flex items-center gap-3">
+                              {(venue.publicWallCount ?? 0) > 0 && (
+                                <Link
+                                  href={`/venues/${venue.slug}#walls`}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-accent/40 text-accent text-xs font-medium hover:bg-accent/5 transition-colors"
+                                >
+                                  {venue.publicWallCount === 1 ? "View wall" : "View walls"}
+                                </Link>
+                              )}
+                              <Link href={`/venues/${venue.slug}`} className="text-xs text-muted hover:text-foreground transition-colors">
+                                View full profile
+                              </Link>
+                            </div>
                           </div>
                         )}
                       </>
@@ -737,9 +757,19 @@ function SpacesPageContent() {
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
                           Upgrade to Premium to message venues
                         </Link>
-                        <Link href={`/venues/${venue.slug}`} className="text-xs text-muted hover:text-foreground transition-colors">
-                          View full profile
-                        </Link>
+                        <div className="flex items-center gap-3">
+                          {(venue.publicWallCount ?? 0) > 0 && (
+                            <Link
+                              href={`/venues/${venue.slug}#walls`}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-accent/40 text-accent text-xs font-medium hover:bg-accent/5 transition-colors"
+                            >
+                              {venue.publicWallCount === 1 ? "View wall" : "View walls"}
+                            </Link>
+                          )}
+                          <Link href={`/venues/${venue.slug}`} className="text-xs text-muted hover:text-foreground transition-colors">
+                            View full profile
+                          </Link>
+                        </div>
                       </div>
                     ) : (
                       <div className="mt-3 pt-3 border-t border-border">

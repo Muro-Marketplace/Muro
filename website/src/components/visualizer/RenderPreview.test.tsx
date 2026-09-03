@@ -180,3 +180,28 @@ describe("<RenderPreview />", () => {
     });
   });
 });
+
+
+describe("<RenderPreview /> stays reachable on short screens", () => {
+  it("scrolls the overlay and caps the image height so the strip under it is never below the fold", () => {
+    render(
+      <RenderPreview
+        open
+        onClose={() => {}}
+        imageUrl={URL_}
+        proposal={{
+          venue: { slug: "v", name: "Testing Venue", interestedInRevenueShare: true, interestedInFreeLoan: false, interestedInDirectPurchase: false },
+          wallName: "Photo Rail Wall",
+          status: "idle",
+          error: null,
+          onSend: () => {},
+        }}
+      />,
+    );
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("overflow-y-auto");
+    const img = screen.getByAltText("Wall preview");
+    expect(img.className).toContain("max-h-[62vh]");
+    expect(screen.getByRole("button", { name: "Send to Testing Venue" })).toBeTruthy();
+  });
+});

@@ -222,7 +222,7 @@ export default function VenueProfileBody({ slug }: { slug: string }) {
               the data still loads so the parking is a render change only. */}
 
           {walls.length > 0 && (
-            <section>
+            <section id="walls" className="scroll-mt-24">
               <h2 className="font-serif text-lg text-foreground mb-1">Available walls</h2>
               <p className="text-xs text-muted mb-3">
                 Walls this venue has measured up. Tap a card to view it

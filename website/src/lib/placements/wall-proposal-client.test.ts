@@ -45,6 +45,8 @@ const WORKS = {
 };
 
 const TERMS: ProposalTerms = {
+  qrEnabled: false,
+  qrRevenueSharePercent: 20,
   arrangement: "revenue_share",
   revenueSharePercent: 25,
   monthlyFeeGbp: 25,
@@ -229,5 +231,27 @@ describe("venueWallForVisualizer", () => {
       source_image_path: null,
       is_public_on_profile: true,
     });
+  });
+});
+
+
+describe("buildProposalPlacement: loans with the QR option on", () => {
+  it("sends qrEnabled with the QR share as the revenue share, like the /spaces form", () => {
+    const item = { id: "i1", work_id: "w1", x_cm: 0, y_cm: 0, width_cm: 60, height_cm: 40, rotation_deg: 0, z_index: 0, frame: { style: "none" } } as unknown as import("@/lib/visualizer/types").WallItem;
+    const payload = buildProposalPlacement({
+      placementId: "pl-qr",
+      venueSlug: "v",
+      items: [item],
+      workById: { w1: { id: "w1", title: "One", imageUrl: "https://img/1.jpg" } },
+      terms: { arrangement: "loan", revenueSharePercent: 25, monthlyFeeGbp: 40, qrEnabled: true, qrRevenueSharePercent: 20, message: "" },
+      layoutId: "lay-1",
+    });
+    expect(payload).toMatchObject({ type: "free_loan", qrEnabled: true, monthlyFeeGbp: 40, revenueSharePercent: 20 });
+  });
+
+  it("rejects an out-of-range QR share only when the option is on", () => {
+    const base = { arrangement: "loan" as const, revenueSharePercent: 25, monthlyFeeGbp: 40, message: "" };
+    expect(proposalTermsProblem({ ...base, qrEnabled: true, qrRevenueSharePercent: 140 })).toMatch(/QR revenue share/);
+    expect(proposalTermsProblem({ ...base, qrEnabled: false, qrRevenueSharePercent: 140 })).toBeNull();
   });
 });
