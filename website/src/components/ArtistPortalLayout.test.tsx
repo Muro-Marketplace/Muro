@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// The artist sidebar groups its pages: My Portfolio (Works, Collections),
+// The artist sidebar groups its pages: My Portfolio (Works, Collections, Showroom),
 // Venues & Buyers (Messages, Enquiries, Placements, Offers, Orders) and Social
 // (Posts, Blogs). These tests pin how a group row behaves, how a group
 // remembers being expanded, the tab strip a grouped page carries above its
@@ -194,6 +194,7 @@ describe("<ArtistPortalLayout /> sidebar groups", () => {
     expect(children).toEqual([
       ["Works", "/artist-portal/portfolio"],
       ["Collections", "/artist-portal/collections"],
+      ["Showroom", "/artist-portal/showroom"],
     ]);
 
     fireEvent.click(toggle);
@@ -359,7 +360,7 @@ describe("<ArtistPortalLayout /> section tabs", () => {
   it("gives the portfolio pages a Works and Collections strip", async () => {
     await renderAt("/artist-portal/collections");
     const strip = screen.getByRole("navigation", { name: "My Portfolio sections" });
-    expect(within(strip).getAllByRole("link").map((a) => a.textContent)).toEqual(["Works", "Collections"]);
+    expect(within(strip).getAllByRole("link").map((a) => a.textContent)).toEqual(["Works", "Collections", "Showroom"]);
     expect(within(strip).getByRole("link", { name: "Collections" }).getAttribute("aria-current")).toBe("page");
   });
 
@@ -391,6 +392,8 @@ describe("<ArtistPortalLayout /> document title", () => {
     ["/artist-portal", "Dashboard"],
     ["/artist-portal/portfolio", "My Portfolio"],
     ["/artist-portal/collections", "Collections"],
+    ["/artist-portal/showroom", "Showroom"],
+    ["/artist-portal/showroom/wall_1", "Showroom"],
     ["/artist-portal/offers", "My Offers"],
     ["/artist-portal/orders", "Orders"],
     ["/artist-portal/orders/ord_123", "Orders"],

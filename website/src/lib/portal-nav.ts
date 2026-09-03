@@ -64,6 +64,7 @@ export function artistPortalNav(): PortalNav {
       group("My Portfolio", [
         { label: "Works", flatLabel: "My Portfolio", href: "/artist-portal/portfolio" },
         { label: "Collections", href: "/artist-portal/collections" },
+        { label: "Showroom", href: "/artist-portal/showroom" },
       ]),
       // Everything that is the artist dealing with a venue or a buyer.
       group("Venues & Buyers", [
