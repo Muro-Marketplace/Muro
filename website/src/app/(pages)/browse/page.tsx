@@ -1334,7 +1334,7 @@ function BrowsePortfoliosPageInner() {
             </svg>
             <div>
               <p className="text-sm font-medium">Revenue Share</p>
-              <p className="text-[10px] text-muted">Free on wall, venue shares in sales from it</p>
+              <p className="text-[10px] text-muted whitespace-nowrap">Free on wall, venue shares in sales</p>
             </div>
           </button>
           {filters.revenueShare && (
@@ -2013,7 +2013,7 @@ function BrowsePortfoliosPageInner() {
                         </svg>
                         <div>
                           <p className="text-sm font-medium">Revenue Share</p>
-                          <p className="text-[10px] text-muted">Free on wall, venue shares in sales from it</p>
+                          <p className="text-[10px] text-muted whitespace-nowrap">Free on wall, venue shares in sales</p>
                         </div>
                       </button>
                       {galleryRevenueShare && (
@@ -2267,7 +2267,7 @@ function BrowsePortfoliosPageInner() {
                           </svg>
                           <div>
                             <p className="text-xs font-medium">Revenue Share</p>
-                            <p className="text-[10px] text-muted">Free on wall, venue shares in sales from it</p>
+                            <p className="text-[10px] text-muted whitespace-nowrap">Free on wall, venue shares in sales</p>
                           </div>
                         </button>
                         {galleryRevenueShare && (
@@ -2670,7 +2670,7 @@ function BrowsePortfoliosPageInner() {
                   </svg>
                   <div>
                     <p className="text-sm font-medium">Revenue Share</p>
-                    <p className="text-[10px] text-muted">Free on wall, venue shares in sales from it</p>
+                    <p className="text-[10px] text-muted whitespace-nowrap">Free on wall, venue shares in sales</p>
                   </div>
                 </button>
                 <button
