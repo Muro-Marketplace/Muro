@@ -13,6 +13,7 @@ import { slugify } from "@/lib/slugify";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { formatPriceRange } from "@/lib/format-currency";
 import { isFlagOn } from "@/lib/feature-flags";
+import { useStickySidebarHeight } from "@/hooks/useStickySidebarHeight";
 import { isArtworkOfTheWeek, isFeaturedArtistPlan } from "@/lib/tier-features";
 import { artistTierWeight, workFeaturedWeight } from "@/lib/marketplace-featured-sort";
 import { geocodePostcode } from "@/lib/geocode";
@@ -448,6 +449,8 @@ function BrowsePortfoliosPageInner() {
   // right, top-to-bottom (CSS `columns-*` alone gives the masonry look but
   // fills top-to-bottom per column, which breaks the sort). We track the
   // viewport-based column count in state and recompute on resize.
+  // Sticky filter sidebar: fit its scroll height to what is visible.
+  const { ref: sidebarRef, style: sidebarStyle } = useStickySidebarHeight();
   const [galleryColCount, setGalleryColCount] = useState(2);
   useEffect(() => {
     function compute() {
@@ -1611,7 +1614,7 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-60 shrink-0 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">
+              <aside ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">
                     Filters
@@ -1937,7 +1940,7 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-60 shrink-0 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">
+              <aside ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasGalleryFilters && (
@@ -2733,7 +2736,7 @@ function BrowsePortfoliosPageInner() {
             </div>
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside className="hidden lg:block w-60 shrink-0 sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto pr-2 -mr-2">
+              <aside ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">Filters</span>
                   {hasCollectionsFilters && (
