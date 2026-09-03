@@ -489,3 +489,15 @@ describe("Artwork of the Week control (owner decision 2 September)", () => {
     ).toBeNull();
   });
 });
+
+describe("Add work jumps to the top of the page (owner-reported 2 September)", () => {
+  it("scrolls to the top when the add form opens", async () => {
+    artistState.works = [WORK];
+    const scrollTo = vi.fn();
+    Object.defineProperty(window, "scrollTo", { value: scrollTo, writable: true, configurable: true });
+    render(<PortfolioPage />);
+    const [addButton] = await screen.findAllByRole("button", { name: /add new work|add your first work/i });
+    fireEvent.click(addButton);
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+  });
+});

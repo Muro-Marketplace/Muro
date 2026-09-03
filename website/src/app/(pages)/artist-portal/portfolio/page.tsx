@@ -1454,6 +1454,9 @@ export default function PortfolioPage() {
     initialFormJson.current = JSON.stringify(fresh);
     setEditingIndex(null);
     setShowForm(true);
+    // The form renders at the top of the page; from a long grid the
+    // artist could not see it open (owner-reported 2 September).
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   /**
