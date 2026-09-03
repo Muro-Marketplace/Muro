@@ -9,6 +9,7 @@ import { useSaved } from "@/context/SavedContext";
 import { authFetch } from "@/lib/api-client";
 import { venueRevenueEarned } from "@/lib/finance/venue-earnings";
 import { formatPounds } from "@/lib/format-currency";
+import { PROGRAMME_LADDER } from "@/lib/curation-tiers";
 
 interface OnboardingItem {
   key: string;
@@ -75,6 +76,13 @@ function formatName(raw: string): string {
   if (!raw) return "";
   if (raw.includes(" ")) return raw;
   return raw.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/** "£79.99 a month for 3 pieces", from the first rung of the programme ladder. */
+function formatProgrammeEntry(): string {
+  const entry = PROGRAMME_LADDER[0];
+  const price = Number.isInteger(entry.monthlyGbp) ? String(entry.monthlyGbp) : entry.monthlyGbp.toFixed(2);
+  return `\u00a3${price} a month for ${entry.pieces} pieces`;
 }
 
 export default function VenueDashboardPage() {
@@ -387,20 +395,23 @@ export default function VenueDashboardPage() {
       {/* Placement Action Items */}
       <PlacementActionItems userId={user?.id} role="venue" />
 
-      {/* Wallplace Curated promo, a tasteful, single-row card giving
-          the curated service a consistent presence in the venue dashboard
-          without becoming noise. */}
+      {/* Wallplace Programmes promo (owner instruction, 3 September 2026:
+          this card used to sell Curated; Programmes is the product venues
+          are here for). Single-row card, priced from the same ladder the
+          /programmes page renders. */}
       <div className="mb-8 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent border border-accent/30 rounded-sm p-5 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-1.5">Wallplace Curated</p>
-          <p className="text-sm font-medium text-foreground">Want a shortlist picked for you?</p>
-          <p className="text-xs text-muted mt-0.5">Our curators hand-pick works that fit your space, from &pound;49.</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-accent mb-1.5">Wallplace Programmes</p>
+          <p className="text-sm font-medium text-foreground">Original art on rotation, handled for you.</p>
+          <p className="text-xs text-muted mt-0.5">
+            We curate, install and rotate the work for a monthly fee, from {formatProgrammeEntry()}. The artists get paid every month their work is up.
+          </p>
         </div>
         <Link
-          href="/curated"
+          href="/programmes"
           className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
         >
-          Explore Curated
+          Explore Programmes
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
         </Link>
       </div>
