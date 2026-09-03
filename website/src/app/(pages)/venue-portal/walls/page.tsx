@@ -124,19 +124,16 @@ export default function VenueWallsPage() {
               title={
                 notAllowed
                   ? "Saving walls isn't included on your plan."
-                  : `You've reached your ${cap} wall limit.`
+                  : `You've reached the ${cap} wall limit.`
               }
             >
               + New Wall
             </button>
-            <Link
-              href="/pricing"
-              className="text-xs text-accent hover:underline"
-            >
+            <p className="text-xs text-muted">
               {notAllowed
-                ? "Upgrade your plan to save walls"
-                : `Upgrade to add more than ${cap} wall${cap === 1 ? "" : "s"}`}
-            </Link>
+                ? "Saving walls isn't available on this account."
+                : `Venues can save up to ${cap} walls.`}
+            </p>
           </div>
         ) : (
           <Link

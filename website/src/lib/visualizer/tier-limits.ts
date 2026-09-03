@@ -84,7 +84,7 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     daily: 5,
     monthly: 100,
     wall_uploads_daily: 2,
-    saved_walls: 3,
+    saved_walls: 6,
     saved_layouts_per_wall: 10,
     can_publish_showroom: false,
   },

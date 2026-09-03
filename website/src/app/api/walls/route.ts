@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     if (existing >= limits.saved_walls) {
       return NextResponse.json(
         {
-          error: `You've used all ${limits.saved_walls} saved wall${limits.saved_walls === 1 ? "" : "s"} on your plan.`,
+          error: `You've reached the limit of ${limits.saved_walls} saved wall${limits.saved_walls === 1 ? "" : "s"}.`,
           reason: "saved_walls_cap",
           tier,
           cap: limits.saved_walls,

@@ -64,7 +64,7 @@ describe("getTierLimits, approved values", () => {
     const l = getTierLimits("venue_standard");
     expect(l.daily).toBe(5);
     expect(l.monthly).toBe(100);
-    expect(l.saved_walls).toBe(3);
+    expect(l.saved_walls).toBe(6);
   });
 
   it("venue_premium = unlimited daily/monthly + walls (no showroom)", () => {
