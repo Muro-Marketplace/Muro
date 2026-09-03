@@ -171,7 +171,7 @@ const initialState: FormState = {
   sampleWorkUrls: ["", "", ""],
 };
 
-export default function ApplicationForm() {
+export default function ApplicationForm({ onSubmitted }: { onSubmitted?: () => void } = {}) {
   const { user, displayName } = useAuth();
   const [form, setForm] = useState<FormState>(initialState);
   const [submitted, setSubmitted] = useState(false);
@@ -321,6 +321,7 @@ export default function ApplicationForm() {
       }).catch(() => {});
 
       setSubmitted(true);
+      onSubmitted?.();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       setError("Network error. Please try again.");

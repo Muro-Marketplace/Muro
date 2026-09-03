@@ -31,7 +31,7 @@ import { useRouter } from "next/navigation";
 import ApplicationForm from "@/components/ApplicationForm";
 import { useAuth } from "@/context/AuthContext";
 
-export default function ApplicationGate() {
+export default function ApplicationGate({ onSubmitted }: { onSubmitted?: () => void } = {}) {
   const router = useRouter();
   const { user, userType, loading, signOut } = useAuth();
   const [redirected, setRedirected] = useState(false);
@@ -108,5 +108,5 @@ export default function ApplicationGate() {
     );
   }
 
-  return <ApplicationForm />;
+  return <ApplicationForm onSubmitted={onSubmitted} />;
 }
