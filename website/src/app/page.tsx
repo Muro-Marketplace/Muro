@@ -46,7 +46,7 @@ export default function Home() {
 
   // Launch audit, blocker 1. This grid used to render six seed artists from
   // src/data/artists.ts: fictional people linking to fictional portfolios.
-  // It now shows the first six real, approved artists from the endpoint
+  // It now shows the first twelve real, approved artists from the endpoint
   // /browse uses. Empty until the fetch lands, and empty if the catalogue
   // is: no tile is better than a made-up one.
   useEffect(() => {
@@ -55,7 +55,7 @@ export default function Home() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { artists?: FeaturedArtist[] } | null) => {
         if (cancelled || !data || !Array.isArray(data.artists)) return;
-        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image && !a.isSeedArtist).slice(0, 6));
+        setFeatured(data.artists.filter((a) => a.slug && a.name && a.image && !a.isSeedArtist).slice(0, 12));
       })
       .catch(() => {
         /* No tiles is the honest fallback. */
@@ -265,10 +265,10 @@ export default function Home() {
             <div className="max-w-[1200px] mx-auto px-6 lg:px-10">
               <AnimateIn>
               <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-                <div className={`order-2 lg:order-1 grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2 ${featured.length === 0 ? "hidden" : ""}`}>
+                <div className={`order-2 lg:order-1 grid grid-cols-3 sm:grid-cols-4 gap-1.5 sm:gap-2 ${featured.length === 0 ? "hidden" : ""}`}>
                   {featured.map((a) => (
                     <Link key={a.slug} href={`/browse/${a.slug}`} className="aspect-[4/5] relative rounded-sm overflow-hidden group">
-                      <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="20vw" />
+                      <Image src={a.image} alt={a.name} fill className="object-cover group-hover:scale-[1.03] transition-transform duration-500" sizes="(max-width: 640px) 33vw, 12vw" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                       <p className="absolute bottom-2 left-2 text-white text-xs font-medium">{a.name}</p>
                     </Link>
