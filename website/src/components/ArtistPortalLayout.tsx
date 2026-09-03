@@ -6,36 +6,145 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
-import { artistPortalNav } from "@/lib/portal-nav";
+import {
+  artistPortalNav,
+  activeGroupFor,
+  navGroupKey,
+  navItemOwnsPath,
+  navPageFor,
+  sectionTabsFor,
+  type PortalNavItem,
+} from "@/lib/portal-nav";
+import PortalSectionTabs from "./PortalSectionTabs";
 
 // H6: the nav lists moved to src/lib/portal-nav.ts. The header's portal
 // dropdown kept a second hand-written copy of them and had silently drifted
 // (it was missing Enquiries, My Offers, Social Posts and Blogs). Both read the
-// same module now. Ordering and the reasoning behind each entry live there.
-const { primary: navItems, secondary: secondaryItems } = artistPortalNav();
+// same module now. Ordering, grouping and the reasoning behind each entry live
+// there.
+const NAV = artistPortalNav();
+const { primary: navItems, secondary: secondaryItems } = NAV;
 
-// All navigable artist-portal pages: used for the document.title sync
-// below so every page reads as "<Section> | Artist Portal | Wallplace"
-// instead of inheriting the default "Wallplace | Curated Art for
-// Commercial Spaces". Includes the dynamic sub-routes (showroom/[id],
-// orders/[id]) by suffix, since those pages reuse this layout with the
-// parent activePath.
-const allNav = [...navItems, ...secondaryItems];
-
+// Every page reads as "<Section> | Artist Portal | Wallplace" instead of
+// inheriting the default "Wallplace | Curated Art for Commercial Spaces".
+// navPageFor resolves the dynamic sub-routes (orders/[id]) by prefix, since
+// those pages reuse this layout with the parent activePath, and names a
+// grouped page by its own label ("Orders", "My Portfolio"), never by its group.
 function titleFor(activePath: string): string {
-  // Strip query strings / trailing slashes before matching.
-  const cleanPath = activePath.replace(/[?#].*$/, "").replace(/\/$/, "") || "/";
-  // Exact match first.
-  const exact = allNav.find((n) => n.href === cleanPath);
-  if (exact) return exact.label;
-  // Sub-route match: longest matching prefix wins ("/artist-portal/orders/123"
-  // → "Orders").
-  const sorted = [...allNav].sort((a, b) => b.href.length - a.href.length);
-  const prefix = sorted.find(
-    (n) => n.href !== "/artist-portal" && cleanPath.startsWith(`${n.href}/`),
+  return navPageFor(NAV, activePath)?.label ?? "Artist Portal";
+}
+
+const ROW_BASE = "text-sm rounded-sm transition-colors duration-150";
+const ROW_ACTIVE = "text-accent font-medium bg-accent/8";
+const ROW_IDLE = "text-foreground/70 hover:text-foreground hover:bg-white/60";
+
+function rowClass(active: boolean): string {
+  return `${ROW_BASE} ${active ? ROW_ACTIVE : ROW_IDLE}`;
+}
+
+// A group remembers whether it is expanded under this prefix, one key per
+// group. Every read and write is wrapped: the accessor itself throws where
+// site data is blocked (some private windows, some embedded contexts), and
+// setItem throws when the quota is full. Collapsed is the answer in every
+// failure case.
+const STORAGE_PREFIX = "wallplace.artistNav.";
+
+function readStoredExpanded(key: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(STORAGE_PREFIX + key) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeStoredExpanded(key: string, expanded: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_PREFIX + key, expanded ? "1" : "0");
+  } catch {
+    // Nothing to do: the state still holds for this visit.
+  }
+}
+
+interface SidebarGroupProps {
+  group: PortalNavItem;
+  activePath: string;
+  onNavigate: () => void;
+}
+
+// One sidebar group: a row whose label navigates to the first child and whose
+// chevron shows or hides the child list. The group holding the active route is
+// always expanded, so its chevron is disabled rather than left looking like it
+// does something. Every other group starts collapsed and remembers its state
+// in localStorage. Defined at module level so React keeps one component
+// identity across the layout's renders (react-hooks/static-components).
+function SidebarGroup({ group, activePath, onNavigate }: SidebarGroupProps) {
+  const key = navGroupKey(group);
+  const children = group.children ?? [];
+  const isActive = children.some((child) => navItemOwnsPath(child, activePath));
+  // Read once, in the initialiser rather than an effect. The sidebar is never
+  // server-rendered (the layout shows its loader until the client knows who is
+  // signed in), so the stored value can safely be the first rendered value.
+  const [storedExpanded, setStoredExpanded] = useState(() => readStoredExpanded(key));
+  const expanded = isActive || storedExpanded;
+  const listId = `artist-nav-group-${key}`;
+
+  function toggle() {
+    const next = !expanded;
+    setStoredExpanded(next);
+    writeStoredExpanded(key, next);
+  }
+
+  return (
+    <li>
+      <div className={`flex items-center ${rowClass(isActive)}`}>
+        <Link href={group.href} onClick={onNavigate} className="flex-1 min-w-0 truncate py-2 pl-3 pr-1">
+          {group.label}
+        </Link>
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={isActive}
+          aria-expanded={expanded}
+          aria-controls={listId}
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${group.label}`}
+          className="shrink-0 p-2 mr-0.5 rounded-sm text-current disabled:cursor-default"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className={`transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+      </div>
+      {/* Always in the DOM so aria-controls has something to point at, hidden
+          when collapsed. No display class on the list, or it would override
+          the [hidden] rule. */}
+      <ul id={listId} hidden={!expanded} className="mt-0.5 space-y-0.5">
+        {children.map((child) => (
+          <li key={child.href}>
+            <Link
+              href={child.href}
+              onClick={onNavigate}
+              className={`block py-1.5 pl-7 pr-3 ${rowClass(navItemOwnsPath(child, activePath))}`}
+            >
+              {child.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </li>
   );
-  if (prefix) return prefix.label;
-  return "Artist Portal";
 }
 
 interface ArtistPortalLayoutProps {
@@ -145,13 +254,20 @@ export default function ArtistPortalLayout({
 
   if (!user || userType !== "artist" || profileCheck !== "present") return null;
 
+  const closeSidebar = () => setSidebarOpen(false);
+  // A grouped page (anything under My Portfolio, Venues & Buyers or Social)
+  // carries its siblings as a tab strip above the page; a standalone page
+  // carries nothing.
+  const activeGroup = activeGroupFor(NAV, activePath);
+  const sectionTabs = sectionTabsFor(NAV, activePath);
+
   return (
     <div className="bg-background flex flex-1">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-20 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
+          onClick={closeSidebar}
         />
       )}
 
@@ -165,29 +281,23 @@ export default function ArtistPortalLayout({
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
-        <nav className="flex-1 py-4 overflow-y-auto min-h-0">
+        <nav aria-label="Artist portal" className="flex-1 py-4 overflow-y-auto min-h-0">
           <ul className="space-y-0.5 px-2">
-            {navItems.map((item) => {
-              const isActive = activePath === item.href;
-              return (
+            {navItems.map((item) =>
+              item.children ? (
+                <SidebarGroup key={item.href} group={item} activePath={activePath} onNavigate={closeSidebar} />
+              ) : (
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`
-                      block text-sm py-2 px-3 rounded-sm transition-colors duration-150
-                      ${
-                        isActive
-                          ? "text-accent font-medium bg-accent/8"
-                          : "text-foreground/70 hover:text-foreground hover:bg-white/60"
-                      }
-                    `}
+                    onClick={closeSidebar}
+                    className={`block py-2 px-3 ${rowClass(navItemOwnsPath(item, activePath))}`}
                   >
                     {item.label}
                   </Link>
                 </li>
-              );
-            })}
+              ),
+            )}
           </ul>
 
           <div className="my-4 mx-4 border-t border-border" />
@@ -197,7 +307,7 @@ export default function ArtistPortalLayout({
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  onClick={() => setSidebarOpen(false)}
+                  onClick={closeSidebar}
                   className="block text-sm py-2 px-3 rounded-sm text-muted hover:text-foreground hover:bg-white/60 transition-colors duration-150"
                 >
                   {item.label}
@@ -255,6 +365,9 @@ export default function ArtistPortalLayout({
         </div>
 
         <main className="px-4 sm:px-6 lg:px-8 pt-4 pb-6 lg:pb-8">
+          {activeGroup && (
+            <PortalSectionTabs tabs={sectionTabs} activePath={activePath} label={activeGroup.label} />
+          )}
           {children}
         </main>
       </div>
