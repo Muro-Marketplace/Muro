@@ -230,10 +230,16 @@ function DistanceSliderControl({
     if (draft == null) return;
     const t = setTimeout(() => {
       onCommitRef.current(draft);
-      setDraft(null);
     }, 250);
     return () => clearTimeout(t);
   }, [draft]);
+  // Owner-reported 2 September: the thumb flickered because the draft was
+  // dropped the instant the commit fired, a beat before the parent's value
+  // caught up, so the slider briefly showed the old distance. The draft now
+  // stays until the committed value is what the parent renders.
+  useEffect(() => {
+    if (draft != null && value === draft) setDraft(null);
+  }, [value, draft]);
 
   const slider = (
     <input
@@ -501,9 +507,16 @@ function BrowsePortfoliosPageInner() {
       const params = new URLSearchParams(searchParams?.toString() ?? "");
       const merged = serializeLocationParams(next, params);
       const qs = merged.toString();
-      router.replace(qs ? `?${qs}` : "/browse", { scroll: false });
+      // Owner-reported 2 September: the distance slider flickered, and after
+      // a deploy a stale tab could get stuck on its old distance. Both came
+      // from router.replace: a full soft navigation per change (re-rendering
+      // the whole page a beat after the thumb moved) that a stale router
+      // could also refuse. The native History API integrates with
+      // useSearchParams in this Next version, so the URL updates in place,
+      // synchronously, with no navigation.
+      window.history.replaceState(null, "", qs ? `/browse?${qs}` : "/browse");
     },
-    [searchParams, router],
+    [searchParams],
   );
 
   // Helper for the common "user just resolved a location" path

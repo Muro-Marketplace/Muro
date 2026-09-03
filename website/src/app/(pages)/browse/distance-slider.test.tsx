@@ -38,9 +38,14 @@ function Slider({ value, onCommit }: { value: number; onCommit: (n: number) => v
   useEffect(() => { ref.current = onCommit; }, [onCommit]);
   useEffect(() => {
     if (draft == null) return;
-    const t = setTimeout(() => { ref.current(draft); setDraft(null); }, 250);
+    const t = setTimeout(() => { ref.current(draft); }, 250);
     return () => clearTimeout(t);
   }, [draft]);
+  // The draft stays until the parent renders the committed value, so the
+  // thumb never snaps back to the old distance for a frame.
+  useEffect(() => {
+    if (draft != null && value === draft) setDraft(null);
+  }, [value, draft]);
   return (
     <input aria-label="distance" type="range" min={0} max={200} value={display}
       onChange={(e) => setDraft(Number(e.target.value))} />
@@ -66,6 +71,25 @@ describe("distance slider commit contract", () => {
   });
 });
 
+describe("distance slider does not flicker while the parent catches up (owner-reported 2 September)", () => {
+  it("keeps showing the dragged value after commit until the parent renders it, then follows the parent", async () => {
+    const committed: number[] = [];
+    const { rerender, container } = render(<Slider value={13} onCommit={(v) => committed.push(v)} />);
+    // Scoped to this render: the file does not auto-clean earlier renders.
+    const input = container.querySelector('input[aria-label="distance"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "40" } });
+    await act(async () => { vi.advanceTimersByTime(300); });
+    expect(committed).toEqual([40]);
+    // Parent has not re-rendered with the new value yet: no snap back to 13.
+    expect(input.value).toBe("40");
+    rerender(<Slider value={40} onCommit={(v) => committed.push(v)} />);
+    expect(input.value).toBe("40");
+    // A later external change (e.g. a URL edit) is honoured once the draft is cleared.
+    rerender(<Slider value={25} onCommit={(v) => committed.push(v)} />);
+    expect(input.value).toBe("25");
+  });
+});
+
 // Source-level regression pins on the real component, so the mirror above
 // cannot drift silently: the page must keep the controlled input and must
 // not put onCommit back in the debounce effect's dependency array.
@@ -81,5 +105,18 @@ describe("DistanceSliderControl source invariants", () => {
   it("keeps the debounce independent of onCommit identity", () => {
     expect(src).toContain("onCommitRef.current(draft)");
     expect(src).not.toMatch(/\[draft, onCommit\]/);
+  });
+});
+
+describe("location writes avoid a router navigation (owner-reported flicker + stale-tab stuck state)", () => {
+  const src = readFileSync(join(process.cwd(), "src/app/(pages)/browse/page.tsx"), "utf8");
+  it("setLocation writes the URL with the native History API", () => {
+    const setLocation = src.slice(src.indexOf("const setLocation = useCallback("), src.indexOf("const updateLocationCoords"));
+    expect(setLocation).toContain("window.history.replaceState(");
+    expect(setLocation).not.toContain("router.replace(");
+  });
+  it("the slider keeps its draft until the parent shows the committed value", () => {
+    expect(src).toContain("if (draft != null && value === draft) setDraft(null);");
+    expect(src).not.toMatch(/onCommitRef\.current\(draft\);\s*setDraft\(null\);/);
   });
 });
