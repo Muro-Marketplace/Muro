@@ -2484,6 +2484,9 @@ function BrowsePortfoliosPageInner() {
                                 Sold
                               </span>
                             )}
+                            {work.artistIsSeed && !(!work.available) && (
+                              <SamplePill className="absolute top-3 left-3 z-10 shadow-sm" />
+                            )}
                             {/* Hover action buttons */}
                             {/* Plan G #11: hover-revealed save heart on
                                 desktop, always-visible on mobile (since
@@ -2545,7 +2548,6 @@ function BrowsePortfoliosPageInner() {
                               >
                                 {work.artistName}
                               </Link>
-                              {work.artistIsSeed && <SamplePill className="ml-1.5 align-middle" />}
                               {" · "}
                               {work.medium}
                             </p>
