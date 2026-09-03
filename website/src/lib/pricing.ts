@@ -87,3 +87,28 @@ export function foundingOfferLine(): string {
 }
 
 export const STANDARD_TRIAL_DAYS = 30;
+
+/**
+ * The trial offer as the artist should read it, in one place. Founding
+ * artists (flagged by an admin within FOUNDING_ARTIST_LIMIT) get the long
+ * trial; everyone else gets the standard month. Both can cancel before
+ * billing starts at no cost, and the copy says so.
+ */
+export function trialOffer(isFounding: boolean): {
+  headline: string;
+  detail: string;
+  short: string;
+} {
+  if (isFounding) {
+    return {
+      headline: `Founding artist offer: ${FOUNDING_TRIAL_MONTHS} months free`,
+      detail: `You're one of the first ${FOUNDING_ARTIST_LIMIT} artists on Wallplace. Billing starts after your ${FOUNDING_TRIAL_MONTHS} free months, and you can cancel at any time before then at no cost.`,
+      short: `${FOUNDING_TRIAL_MONTHS} months free, then billing starts. Cancel anytime.`,
+    };
+  }
+  return {
+    headline: "Your first month is free",
+    detail: "Every new artist gets their first month free. Billing starts only once that month is complete, and you can cancel at any time before then at no cost.",
+    short: "First month free, then billing starts. Cancel anytime.",
+  };
+}

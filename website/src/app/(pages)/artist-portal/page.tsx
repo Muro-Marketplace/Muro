@@ -442,8 +442,11 @@ export default function ArtistPortalPage() {
       </div>
 
       {/* Venue approaches left this week (renders nothing on an unlimited
-          plan, or before the lookup resolves). */}
-      <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-8" />
+          plan, or before the lookup resolves). Hidden until a plan is live:
+          before that the artist is not on the marketplace yet. */}
+      {(subscriptionStatus === "active" || subscriptionStatus === "trialing") && (
+        <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-8" />
+      )}
 
       {/* Placement Action Items */}
       <PlacementActionItems userId={user?.id} role="artist" />

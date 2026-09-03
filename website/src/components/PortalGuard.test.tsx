@@ -163,7 +163,7 @@ describe("<PortalGuard /> artist onboarding gating", () => {
     // Soft banner, not a paywall, points the artist at billing without
     // blocking the rest of the page.
     expect(screen.queryByText(/Choose Your Plan/i)).toBeNull();
-    expect(screen.getByText(/Pick a plan to go live/i)).toBeTruthy();
+    expect(screen.getByText(/Set up billing to go live/i)).toBeTruthy();
   });
 
   it("lets a pending artist into the portal with the under-review banner", async () => {
@@ -185,7 +185,7 @@ describe("<PortalGuard /> artist onboarding gating", () => {
     expect(screen.getByText(/under review/i)).toBeTruthy();
     // No paywall, no go-live banner, just the under-review notice.
     expect(screen.queryByText(/Choose Your Plan/i)).toBeNull();
-    expect(screen.queryByText(/Pick a plan to go live/i)).toBeNull();
+    expect(screen.queryByText(/Set up billing to go live/i)).toBeNull();
   });
 
   it("keeps the lapsed-subscription paywall for past_due artists", async () => {

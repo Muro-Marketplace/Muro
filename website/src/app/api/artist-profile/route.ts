@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { handleAuthzError } from "@/lib/authz";
 import { getArtistProfileByUserId, upsertArtistProfile } from "@/lib/db/artist-profiles";
+import { getAppliedPlanByEmail } from "@/lib/db/artist-applications";
 import { getWorksByArtistProfileId } from "@/lib/db/artist-works";
 import { geocodePostcode } from "@/lib/geocode";
 import { pickWritable, ARTIST_PROFILE_WRITABLE } from "@/lib/db/writable-fields";
@@ -17,9 +18,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ profile: null, works: [] });
   }
 
+  // The plan chosen on the application form, so billing can open with it
+  // preselected. Only looked up while there is no live subscription.
+  const status = (result.profile as { subscription_status?: string | null })
+    .subscription_status;
+  const appliedPlan =
+    status === "active" || status === "trialing"
+      ? null
+      : await getAppliedPlanByEmail(auth.user!.email ?? null);
   return NextResponse.json({
     profile: result.profile,
     works: result.works,
+    appliedPlan,
   });
 }
 

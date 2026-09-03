@@ -7,7 +7,7 @@ import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
-import { PLAN_PRICES, PLATFORM_FEE_PERCENT } from "@/lib/pricing";
+import { PLAN_PRICES, PLATFORM_FEE_PERCENT, trialOffer } from "@/lib/pricing";
 import { OUTREACH_WEEKLY_LIMIT } from "@/lib/outreach-cap";
 import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 
@@ -18,6 +18,8 @@ interface ProfileSubscription {
   trial_end: string | null;
   is_founding_artist: boolean;
   referral_code?: string | null;
+  /** Plan picked on the application form, preselected until they subscribe. */
+  applied_plan: "core" | "premium" | "pro" | null;
 }
 
 // Monthly prices; annual saves ~17% (10 months' equivalent).
@@ -138,6 +140,10 @@ export default function BillingPage() {
         subscription_period_end: data.profile.subscription_period_end || null,
         trial_end: data.profile.trial_end || null,
         is_founding_artist: data.profile.is_founding_artist || false,
+        applied_plan:
+          data.appliedPlan === "core" || data.appliedPlan === "premium" || data.appliedPlan === "pro"
+            ? data.appliedPlan
+            : null,
         // D9 (QA 2026-08-28): this field was never copied into state, so the
         // referral panel below could not render for anyone. The code is
         // auto-generated on the profile; redemption is real (the referred
@@ -297,6 +303,8 @@ export default function BillingPage() {
 
   const status = sub?.subscription_status || "none";
   const plan = sub?.subscription_plan || "none";
+  const appliedPlan = sub?.applied_plan ?? null;
+  const offer = trialOffer(!!sub?.is_founding_artist);
   const details = PLAN_DETAILS[plan] || PLAN_DETAILS.none;
   const hasSubscription = status === "active" || status === "trialing";
   const trialDaysLeft = status === "trialing" ? daysUntil(sub?.trial_end ?? null) : 0;
@@ -329,8 +337,12 @@ export default function BillingPage() {
       )}
 
       {/* What the plan is actually buying this week. Renders nothing while the
-          lookup is in flight, for a venue, or on an unlimited plan. */}
-      <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-5" />
+          lookup is in flight, for a venue, or on an unlimited plan. Only
+          shown once there is a plan: before that the artist is not on the
+          marketplace and the number would be a phantom allowance. */}
+      {(status === "active" || status === "trialing") && (
+        <OutreachAllowanceBadge allowance={allowance} variant="card" className="mb-5" />
+      )}
 
       {/* Referral code (D9, QA 2026-08-28). Was dead: fetchSub never copied
           referral_code into state, so `sub?.referral_code` was always
@@ -436,8 +448,25 @@ export default function BillingPage() {
             </div>
           )}
 
+          {/* The offer, stated once and matched by /api/subscribe: founding
+              artists get FOUNDING_TRIAL_DAYS, everyone else STANDARD_TRIAL_DAYS,
+              and only on a first subscription. */}
+          {status === "none" && (
+            <div className="bg-accent/5 border border-accent/20 rounded-sm px-5 py-4 mb-5" data-testid="trial-offer">
+              <p className="text-sm font-medium text-foreground">{offer.headline}</p>
+              <p className="text-sm text-muted mt-1">{offer.detail}</p>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-            <h2 className="text-lg font-medium">Choose a plan</h2>
+            <div>
+              <h2 className="text-lg font-medium">{appliedPlan ? "Set up billing" : "Choose a plan"}</h2>
+              {appliedPlan && (
+                <p className="text-xs text-muted mt-0.5">
+                  You chose {PLAN_DETAILS[appliedPlan].name} when you applied. Carry on with it, or pick another plan.
+                </p>
+              )}
+            </div>
             <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -445,8 +474,16 @@ export default function BillingPage() {
               const d = PLAN_DETAILS[p];
               const isAnnual = billingCycle === "annual";
               const saves = annualSavingsPercent(d.priceMonthly, d.priceAnnual);
+              const isApplied = appliedPlan === p;
               return (
-                <div key={p} className="bg-surface border border-border rounded-sm p-5 flex flex-col">
+                <div
+                  key={p}
+                  className={`bg-surface border rounded-sm p-5 flex flex-col ${isApplied ? "border-accent ring-1 ring-accent/40" : "border-border"}`}
+                  data-applied={isApplied ? "true" : undefined}
+                >
+                  {isApplied && (
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-accent mb-1">Your choice at application</p>
+                  )}
                   <h3 className="text-base font-medium mb-1">{d.name}</h3>
                   <p className="text-lg font-semibold mb-0.5">
                     {isAnnual ? `\u00a3${d.priceAnnual}/yr` : `\u00a3${d.priceMonthly}/mo`}
@@ -466,7 +503,7 @@ export default function BillingPage() {
                     disabled={redirecting}
                     className="mt-auto w-full py-2.5 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {redirecting ? "Redirecting..." : `Start with ${d.name}`}
+                    {redirecting ? "Redirecting..." : isApplied ? `Continue with ${d.name}` : `Start with ${d.name}`}
                   </button>
                 </div>
               );
@@ -478,7 +515,7 @@ export default function BillingPage() {
                 incomplete profiles are charged from day one, so they
                 must not be promised a free month here. */}
             {status === "none"
-              ? "Every plan starts with a free trial. Annual plans save ~17%."
+              ? `${offer.short} Annual plans save ~17%.`
               : "Billing starts as soon as you subscribe. Annual plans save ~17%."}
           </p>
         </div>

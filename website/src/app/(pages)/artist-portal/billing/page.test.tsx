@@ -102,3 +102,58 @@ describe("billing referral panel (D9)", () => {
     expect(screen.queryByText(/your referral code/i)).toBeNull();
   });
 });
+
+
+describe("billing page: the offer and the plan chosen at application", () => {
+  function profileResponse(profile: Record<string, unknown>, appliedPlan: string | null) {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/artist-profile") {
+        return Promise.resolve(new Response(JSON.stringify({ profile, appliedPlan }), { status: 200 }));
+      }
+      if (url.startsWith("/api/outreach/allowance")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ applicable: true, limit: 3, used: 0, remaining: 3, unlimited: false, planName: "Core", nextSlotAt: null, windowDays: 7 }),
+            { status: 200 },
+          ),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 200 }));
+    });
+  }
+
+  it("opens on Set up billing with the applied plan preselected and no allowance card", async () => {
+    profileResponse({ subscription_status: "none", subscription_plan: null, is_founding_artist: false }, "core");
+    render(<BillingPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Set up billing")).toBeTruthy();
+    });
+    expect(screen.getByText("Continue with Core")).toBeTruthy();
+    expect(screen.getByText("Start with Premium")).toBeTruthy();
+    expect(screen.getByText("Your choice at application")).toBeTruthy();
+    expect(document.querySelector('[data-applied="true"]')).not.toBeNull();
+    expect(screen.queryByText(/Venue approaches this week/i)).toBeNull();
+    expect(screen.getByText("Your first month is free")).toBeTruthy();
+    expect(screen.getByText(/First month free, then billing starts\. Cancel anytime\./)).toBeTruthy();
+  });
+
+  it("states the founding offer for a founding artist", async () => {
+    profileResponse({ subscription_status: "none", subscription_plan: null, is_founding_artist: true }, null);
+    render(<BillingPage />);
+    await waitFor(() => {
+      expect(screen.getByText("Choose a plan")).toBeTruthy();
+    });
+    expect(screen.getByText(/Founding artist offer: 6 months free/)).toBeTruthy();
+    expect(screen.getByText(/6 months free, then billing starts\. Cancel anytime\./)).toBeTruthy();
+    expect(screen.queryByText("Continue with Core")).toBeNull();
+  });
+
+  it("keeps the allowance card once a plan is live", async () => {
+    profileResponse({ subscription_status: "trialing", subscription_plan: "core", is_founding_artist: false, trial_end: null }, null);
+    render(<BillingPage />);
+    await waitFor(() => {
+      expect(screen.getByText(/Venue approaches this week/i)).toBeTruthy();
+    });
+    expect(screen.queryByTestId("trial-offer")).toBeNull();
+  });
+});

@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 import { portalPathForRole, parseRole } from "@/lib/auth-roles";
+import { trialOffer } from "@/lib/pricing";
 
 interface PortalGuardProps {
   allowedType: "artist" | "venue" | "admin" | "customer";
@@ -29,6 +30,9 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
   const [subscriptionOk, setSubscriptionOk] = useState(true);
   const [reviewStatus, setReviewStatus] = useState<"approved" | "pending" | "rejected" | null>(null);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  // Drives the offer wording in the approval banner (six months for the
+  // founding cohort, otherwise the first month).
+  const [isFounding, setIsFounding] = useState(false);
   // C1: resend state for the verify-email screen below. Same idiom as the
   // login page's resend block: "sent" regardless of outcome, because the
   // endpoint deliberately answers the same either way.
@@ -148,6 +152,7 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
 
         const status = profile.subscription_status || "none";
         setSubscriptionStatus(status);
+        setIsFounding(!!profile.is_founding_artist);
 
         // Pending artists haven't finished review yet, don't force them
         // to subscribe. Billing flow opens once they're approved.
@@ -331,10 +336,10 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
             </svg>
             <p className="text-xs sm:text-sm text-foreground flex-1 min-w-0">
               <span className="font-medium">You&rsquo;re approved.</span>{" "}
-              Pick a plan to go live on the marketplace and start sending placement requests. Every plan starts with a free trial.
+              Set up billing to go live on the marketplace and start sending placement requests. {trialOffer(isFounding).short}
             </p>
             <Link href="/artist-portal/billing" className="hidden sm:inline-flex shrink-0 text-xs font-medium text-accent underline hover:no-underline">
-              Choose plan
+              Set up billing
             </Link>
           </div>
         </div>
