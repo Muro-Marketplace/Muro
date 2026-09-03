@@ -44,10 +44,10 @@ test.describe("wall visualiser — customer artwork sheet", () => {
       timeout: 10_000,
     });
 
-    // The locked artwork auto-spawns, so the Preview action is offered
+    // The locked artwork auto-spawns, so the Next (capture) action is offered
     // straight away. It is a capture of the editor itself, no sign-in
     // or quota involved, and there is no Render button any more.
-    await expect(dialog.getByRole("button", { name: /^preview$/i }).first())
+    await expect(dialog.getByRole("button", { name: /^next$/i }).first())
       .toBeVisible({ timeout: 5_000 });
     await expect(dialog.getByRole("button", { name: /^render$/i })).toHaveCount(0);
   });
