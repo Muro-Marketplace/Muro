@@ -43,6 +43,7 @@ import { supabase } from "@/lib/supabase";
 import { signupDestination } from "@/lib/signup-destination";
 import { isFlagOn } from "@/lib/feature-flags";
 import { safeRedirect } from "@/lib/safe-redirect";
+import { FOUNDING_OFFER_SHORT } from "@/lib/pricing";
 import { TERMS_VERSION } from "@/lib/terms-version";
 import TermsCheckbox from "@/components/TermsCheckbox";
 import RedirectIfLoggedIn from "@/components/RedirectIfLoggedIn";
@@ -155,6 +156,7 @@ export default function ArtistSignUpPage() {
             Create your account and the application form is your next
             stop
           </p>
+          <p className="text-accent text-sm font-medium mt-3">{FOUNDING_OFFER_SHORT}</p>
         </div>
 
         <div className="bg-white/95 backdrop-blur-sm rounded-sm p-6 sm:p-8">

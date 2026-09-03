@@ -127,3 +127,11 @@ describe("homepage sells Programmes (launch audit, section 02)", () => {
     }
   });
 });
+
+describe("homepage hero bar carries the founding offer (owner instruction, 2 September)", () => {
+  it("shows the offer where the platform numbers used to be, linking to /apply", () => {
+    render(<Home />);
+    expect(screen.getAllByText(/First 20 artists: 6 months free/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Curated Artists/)).toBeNull();
+  });
+});

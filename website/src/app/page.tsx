@@ -13,24 +13,6 @@ import { useAuth } from "@/context/AuthContext";
 import { CURATION_TIERS, PROGRAMME_LADDER, gbp } from "@/lib/curation-tiers";
 import { FOUNDING_OFFER_SHORT } from "@/lib/pricing";
 
-// Row A L123. The trust bar used to floor the STATIC seed
-// (`data/artists.ts`, `data/venues.ts`) into "confident estimate" buckets and
-// render "30+ Curated Artists, 230+ Original Artworks, 20+ Active Venues".
-// Live production holds 11 approved artists, 32 of their works and 9 venues, so
-// the three claims overstated by roughly 3x, 7x and 2x. The admin dashboard
-// already separated "REGISTERED ARTISTS (DB)" from "LISTED (MARKETPLACE)", so
-// the gap was known internally and shown to visitors anyway.
-//
-// The numbers come from /api/stats/public now, which counts what a visitor can
-// actually browse. No bucketing: at this scale "9" is more credible than "5+",
-// and it removes the question of which way a bucket was rounded. Until the
-// figures arrive, or if the request fails, the numeric half of the bar renders
-// nothing rather than a stale claim.
-interface PublicStats {
-  total_artists: number;
-  total_artworks: number;
-  total_venues: number;
-}
 
 interface FeaturedArtist {
   slug: string;
@@ -42,7 +24,6 @@ interface FeaturedArtist {
 export default function Home() {
   const contentRef = useRef<HTMLDivElement>(null);
   const { user, userType } = useAuth();
-  const [stats, setStats] = useState<PublicStats | null>(null);
   const [featured, setFeatured] = useState<FeaturedArtist[]>([]);
 
   // Launch audit, blocker 1, revised 2 September (owner: "more artist
@@ -61,21 +42,6 @@ export default function Home() {
       })
       .catch(() => {
         /* No tiles is the honest fallback. */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/stats/public")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: PublicStats | null) => {
-        if (!cancelled && data && typeof data.total_artists === "number") setStats(data);
-      })
-      .catch(() => {
-        /* No numbers is the honest fallback; a stale claim is not. */
       });
     return () => {
       cancelled = true;
@@ -187,15 +153,12 @@ export default function Home() {
           <div className="hidden sm:block border-t border-white/10 bg-black/50 backdrop-blur-sm">
             <div className="max-w-[1400px] mx-auto px-6 lg:px-10 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-4 text-sm">
-                {stats && (
-                  <>
-                    <span className="text-white/60"><span className="text-white/90 font-medium">{stats.total_artists}</span> Curated Artists</span>
-                    <span className="w-1 h-1 rounded-full bg-white/30" />
-                    <span className="text-white/60"><span className="text-white/90 font-medium">{stats.total_artworks}</span> Original Artworks</span>
-                    <span className="w-1 h-1 rounded-full bg-white/30" />
-                    <span className="text-white/60"><span className="text-white/90 font-medium">{stats.total_venues}</span> Active Venues</span>
-                  </>
-                )}
+                <span className="text-[10px] font-medium tracking-[0.2em] uppercase text-accent">Founding artist offer</span>
+                <span className="w-1 h-1 rounded-full bg-white/30" />
+                <span className="text-white/80">{FOUNDING_OFFER_SHORT}</span>
+                <Link href="/apply" className="text-white/60 hover:text-white underline underline-offset-4 decoration-white/30">
+                  Apply
+                </Link>
               </div>
               <div className="hidden sm:flex items-center gap-4 text-xs text-white/40 tracking-widest uppercase">
                 <span>No AI art</span>
@@ -247,6 +210,8 @@ export default function Home() {
                     <BulletPoint text="Sell directly online, every QR scan leads to your store" />
                     <BulletPoint text="Flat 15% platform fee. No gallery taking 50%." />
                   </ul>
+
+                  <p className="text-sm font-medium text-accent mb-6">{FOUNDING_OFFER_SHORT}. Places confirmed at acceptance.</p>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     <Link href="/apply" className="inline-flex items-center justify-center px-5 sm:px-7 py-3 sm:py-3.5 bg-accent text-white text-sm font-semibold tracking-wider uppercase rounded-sm hover:bg-accent-hover transition-colors">
