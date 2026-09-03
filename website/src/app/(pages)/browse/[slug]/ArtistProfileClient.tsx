@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { PublicShowroomWall } from "@/lib/artists/showroom";
+import { safeHexBackground } from "@/lib/hex-color";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -32,6 +34,8 @@ interface ArtistProfileClientProps {
   profileTheme?: string;
   /** Subscription tier, drives the Premium+ theming gate. */
   subscriptionPlan?: string;
+  /** Walls from the artist's Showroom that they chose to show here. */
+  showroomWalls?: PublicShowroomWall[];
 }
 
 export default function ArtistProfileClient({
@@ -42,6 +46,7 @@ export default function ArtistProfileClient({
   works,
   profileTheme,
   subscriptionPlan,
+  showroomWalls = [],
 }: ArtistProfileClientProps) {
   const router = useRouter();
   const { addItem } = useCart();
@@ -752,6 +757,39 @@ export default function ArtistProfileClient({
       </section>
 
       {/* Extended bio */}
+      {/* Showroom: walls the artist built and chose to show, each with the
+          picture they saved from Preview, so it reads exactly as their
+          editor did. Anchored so the browse card's View showroom lands here. */}
+      {showroomWalls.length > 0 && (
+        <section id="showroom" className="py-10 lg:py-14 border-t border-border scroll-mt-24">
+          <div className="max-w-[1200px] mx-auto px-6">
+            <h2 className="text-2xl mb-1">Showroom</h2>
+            <p className="text-sm text-muted mb-6">How {artistName}&rsquo;s work looks on a wall, laid out by the artist.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {showroomWalls.map((wall) => {
+                const picture = wall.preview_image_url ?? wall.source_image_url;
+                return (
+                  <figure key={wall.id} className="rounded-sm overflow-hidden border border-border bg-white">
+                    <div className="aspect-[4/3] bg-stone-100 relative">
+                      {picture ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={picture} alt={`${wall.name}, ${wall.width_cm} by ${wall.height_cm} cm`} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="absolute inset-0" style={{ backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA") }} />
+                      )}
+                    </div>
+                    <figcaption className="px-4 py-3 flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-medium text-foreground truncate">{wall.name}</span>
+                      <span className="text-xs text-muted tabular-nums shrink-0">{wall.width_cm} × {wall.height_cm} cm</span>
+                    </figcaption>
+                  </figure>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="py-10 lg:py-14 border-t border-border">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-2xl">

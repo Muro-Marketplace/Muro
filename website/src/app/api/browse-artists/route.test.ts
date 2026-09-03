@@ -10,6 +10,8 @@ const { getAllArtistsMock, rateLimitMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/db/merged-data", () => ({ getAllArtists: getAllArtistsMock }));
+const { showroomCountsMock } = vi.hoisted(() => ({ showroomCountsMock: vi.fn(async () => ({}) as Record<string, number>) }));
+vi.mock("@/lib/artists/showroom", () => ({ getShowroomWallCountsBySlug: showroomCountsMock }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: rateLimitMock }));
 
 import { GET } from "./route";
@@ -66,5 +68,19 @@ describe("GET /api/browse-artists (Bug 1)", () => {
     const res = await get();
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({ artists: [] });
+  });
+});
+
+
+describe("showroomWallCount", () => {
+  it("carries each artist's public showroom wall count, zero when they have none", async () => {
+    showroomCountsMock.mockResolvedValueOnce({ [ARTIST.slug]: 3 });
+    let res = await GET(new Request("http://localhost/api/browse-artists"));
+    let body = await res.json();
+    expect(body.artists[0].showroomWallCount).toBe(3);
+    showroomCountsMock.mockResolvedValueOnce({});
+    res = await GET(new Request("http://localhost/api/browse-artists"));
+    body = await res.json();
+    expect(body.artists[0].showroomWallCount).toBe(0);
   });
 });

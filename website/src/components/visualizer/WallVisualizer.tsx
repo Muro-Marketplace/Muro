@@ -1268,12 +1268,16 @@ function WallVisualizerInner(props: ExtendedProps) {
                 label:
                   props.mode === "venue_my_walls"
                     ? "Save this preview to my wall"
-                    : "Save to wall",
+                    : props.mode === "artist_showroom"
+                      ? "Save this preview to my showroom"
+                      : "Save to wall",
                 savedLabel: "Saved",
                 hint:
                   props.mode === "venue_my_walls"
                     ? "It becomes this wall's picture on My Walls and, when the wall is shown on your public profile, there too."
-                    : "It becomes this wall's picture in your wall list.",
+                    : props.mode === "artist_showroom"
+                      ? "It becomes this wall's picture in your Showroom and, when the wall is shown on your profile, there too."
+                      : "It becomes this wall's picture in your wall list.",
               }
             : undefined
         }

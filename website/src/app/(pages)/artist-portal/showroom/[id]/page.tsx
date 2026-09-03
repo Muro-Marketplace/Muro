@@ -246,7 +246,45 @@ export default function ArtistShowroomEditorPage() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Show on my profile: the saved preview of this wall appears in the
+              Showroom section of the artist's public page. Optimistic flip,
+              PATCH, revert on failure, same as a venue's wall. */}
+          {ready && (
+            <label
+              className="inline-flex items-center gap-1.5 text-xs text-stone-600 cursor-pointer select-none"
+              title="When ticked, this wall and the picture you saved from Preview show in the Showroom section of your public profile."
+            >
+              <input
+                type="checkbox"
+                className="accent-accent w-3.5 h-3.5"
+                checked={!!state.wall.is_public_on_profile}
+                onChange={async (e) => {
+                  const next = e.target.checked;
+                  setState((prev) =>
+                    prev.kind === "ready" ? { ...prev, wall: { ...prev.wall, is_public_on_profile: next } } : prev,
+                  );
+                  try {
+                    const res = await fetch(`/api/walls/${encodeURIComponent(state.wall.id)}`, {
+                      method: "PATCH",
+                      headers: {
+                        "content-type": "application/json",
+                        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+                      },
+                      body: JSON.stringify({ is_public_on_profile: next }),
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  } catch {
+                    setState((prev) =>
+                      prev.kind === "ready" ? { ...prev, wall: { ...prev.wall, is_public_on_profile: !next } } : prev,
+                    );
+                    showToast("Could not update your profile setting. Try again.", { variant: "error" });
+                  }
+                }}
+              />
+              Show on my profile
+            </label>
+          )}
           <button
             type="button"
             onClick={() => setDeleteOpen(true)}

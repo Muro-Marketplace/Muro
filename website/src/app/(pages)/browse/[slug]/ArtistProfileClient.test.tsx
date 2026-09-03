@@ -315,3 +315,33 @@ describe("ArtistProfileClient portfolio theme filter (B6)", () => {
     expect(cardIds(container)).toEqual(["work-last-light"]);
   });
 });
+
+
+describe("Showroom section", () => {
+  it("renders the artist's public showroom walls with their saved pictures, anchored for the browse card", () => {
+    render(
+      <ArtistProfileClient
+        artistName="Maya Chen"
+        artistSlug="maya-chen"
+        extendedBio=""
+        themes={[]}
+        works={[]}
+        showroomWalls={[
+          { id: "w1", name: "Studio wall", width_cm: 300, height_cm: 240, kind: "uploaded", wall_color_hex: "F5F1EB", preview_image_url: "https://public/r1.webp", source_image_url: null },
+          { id: "w2", name: "Hallway", width_cm: 200, height_cm: 150, kind: "preset", wall_color_hex: "FFFFFF", preview_image_url: null, source_image_url: null },
+        ]}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Showroom" })).toBeTruthy();
+    expect(document.getElementById("showroom")).not.toBeNull();
+    const img = screen.getByAltText("Studio wall, 300 by 240 cm") as HTMLImageElement;
+    expect(img.getAttribute("src")).toBe("https://public/r1.webp");
+    expect(screen.getByText("Hallway")).toBeTruthy();
+  });
+
+  it("renders no Showroom section when there are no public walls", () => {
+    render(<ArtistProfileClient artistName="Maya Chen" artistSlug="maya-chen" extendedBio="" themes={[]} works={[]} />);
+    expect(screen.queryByRole("heading", { name: "Showroom" })).toBeNull();
+    expect(document.getElementById("showroom")).toBeNull();
+  });
+});

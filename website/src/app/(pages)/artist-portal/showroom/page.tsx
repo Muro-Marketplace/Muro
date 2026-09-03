@@ -137,7 +137,9 @@ function WallCard({ wall }: { wall: Wall }) {
   // URL minted server-side by GET /api/walls). Preset walls: show
   // the colour swatch, there's no image asset for a preset, the
   // wall is just a colour.
-  const photoUrl = wall.kind === "uploaded" ? wall.source_image_url : null;
+  // The saved preview (the wall with the work on it) wins; then the bare
+  // photo for uploaded walls; presets fall back to the colour swatch.
+  const photoUrl = wall.preview_image_url ?? (wall.kind === "uploaded" ? wall.source_image_url : null);
 
   return (
     <Link

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import Link from "next/link";
@@ -42,6 +43,8 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
   if (artist.offersOriginals) formats.push("Originals");
   if (artist.offersPrints) formats.push("Prints");
   if (artist.offersFramed) formats.push("Framed");
+  const hasShowroom = (artist.showroomWallCount ?? 0) > 0;
+  const router = useRouter();
 
   return (
     <Link href={`/browse/${artist.slug}`} className="group block">
@@ -182,16 +185,33 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               {artist.revenueSharePercent}% Revenue Share
             </p>
           )}
-          {formats.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2.5">
-              {formats.map((f) => (
-                <span
-                  key={f}
-                  className="text-[10px] text-muted/80 px-1.5 py-0.5 border border-border/70 rounded-sm"
+          {(formats.length > 0 || hasShowroom) && (
+            <div className="flex items-center justify-between gap-2 mt-2.5">
+              <div className="flex flex-wrap gap-1">
+                {formats.map((f) => (
+                  <span
+                    key={f}
+                    className="text-[10px] text-muted/80 px-1.5 py-0.5 border border-border/70 rounded-sm"
+                  >
+                    {f}
+                  </span>
+                ))}
+              </div>
+              {hasShowroom && (
+                // The card is one link, so this is a button that navigates:
+                // a nested anchor is not valid HTML.
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    router.push(`/browse/${artist.slug}#showroom`);
+                  }}
+                  className="shrink-0 text-[11px] font-medium text-accent px-2.5 py-1 rounded-full border border-accent/40 hover:bg-accent/5 transition-colors"
                 >
-                  {f}
-                </span>
-              ))}
+                  View showroom
+                </button>
+              )}
             </div>
           )}
         </div>

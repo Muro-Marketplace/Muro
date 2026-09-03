@@ -5,7 +5,7 @@
  * the visualiser in artist_showroom mode; a missing wall says so.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("@/lib/feature-flags", () => ({ isFlagOn: () => true }));
 vi.mock("@/context/AuthContext", () => ({
@@ -64,5 +64,27 @@ describe("/artist-portal/showroom/[id]", () => {
     fetchMock.mockImplementation(async () => new Response("{}", { status: 404 }));
     render(<ArtistShowroomEditorPage />);
     expect(await screen.findByText("Scene not found")).toBeTruthy();
+  });
+
+  it("lets the artist show the wall on their profile, patching the wall with the bearer token", async () => {
+    const calls: Array<[string, RequestInit]> = [];
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        calls.push([url, init]);
+        return new Response(JSON.stringify({ wall: { ...WALL, is_public_on_profile: true } }), { status: 200 });
+      }
+      if (url === "/api/walls/w1") return new Response(JSON.stringify({ wall: WALL, sourceImageUrl: null }), { status: 200 });
+      if (url === "/api/walls/w1/layouts") return new Response(JSON.stringify({ layouts: [LAYOUT] }), { status: 200 });
+      return new Response("{}", { status: 404 });
+    });
+    render(<ArtistShowroomEditorPage />);
+    const box = (await screen.findByLabelText("Show on my profile")) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    expect(box.checked).toBe(true);
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0][0]).toBe("/api/walls/w1");
+    expect(JSON.parse(String(calls[0][1].body))).toEqual({ is_public_on_profile: true });
+    expect((calls[0][1].headers as Record<string, string>).Authorization).toBe("Bearer tok-artist");
   });
 });
