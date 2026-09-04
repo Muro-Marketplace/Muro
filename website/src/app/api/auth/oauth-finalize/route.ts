@@ -24,6 +24,7 @@ import { verifyOAuthState } from "@/lib/oauth-state";
 import { isSignupRole, type SignupRole } from "@/lib/auth-roles";
 import { getClientIp, UNKNOWN_IP } from "@/lib/client-ip";
 import { TERMS_VERSION } from "@/lib/terms-version";
+import { chooseArtistSlug } from "@/lib/artist-slug";
 
 // H15: the terms type the email/password signup pages send to
 // /api/terms/accept. Keep in lockstep with signup/{artist,customer,venue}
@@ -139,23 +140,20 @@ export async function POST(request: Request) {
 
     if (!existing) {
       const name = pickName();
-      const baseSlug =
-        name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "") || "artist";
-
-      // Find a free slug. Cap iterations so a pathological clash can't loop forever.
-      let slug = baseSlug;
-      for (let i = 1; i < 100; i++) {
+      // Was an inline slugify here, which replaced any non-[a-z0-9] run with a
+      // hyphen without decomposing first, so "Søren Kjær" signed up through
+      // OAuth as "s-ren-kj-r" and through /apply as "soren-kjaer". Now that a
+      // slug is a public URL at /{slug} as well as /browse/{slug}, the three
+      // signup paths share one implementation, which also keeps artists off
+      // top-level route names.
+      const slug = await chooseArtistSlug(name, async (candidate) => {
         const { data: clash } = await db
           .from("artist_profiles")
           .select("id")
-          .eq("slug", slug)
+          .eq("slug", candidate)
           .maybeSingle();
-        if (!clash) break;
-        slug = `${baseSlug}-${i + 1}`;
-      }
+        return clash !== null;
+      });
 
       const { error: insertError } = await db.from("artist_profiles").insert({
         user_id: user.id,

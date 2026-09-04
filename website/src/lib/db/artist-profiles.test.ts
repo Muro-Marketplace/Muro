@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // `artist-profiles.ts` imports `@/lib/supabase` which calls
 // `createClient(undefined, undefined)` at module load if env vars are
@@ -7,13 +7,34 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/supabase", () => ({
   supabase: { from: () => ({ select: () => ({ eq: () => ({ data: [] }) }) }) },
 }));
+// Slugs the stubbed `artist_profiles` table holds. Mutable so the
+// artistProfileSlugExists tests below can decide what the table contains
+// without rebuilding the mock; the mapper tests above never read it.
+const dbSlugs = new Set<string>();
+
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ data: [], single: () => ({ data: null }) }) }) }),
+    from: () => ({
+      select: () => ({
+        eq: (_column: string, value: string) => ({
+          data: [],
+          single: () => ({ data: null }),
+          maybeSingle: async () => ({
+            data: dbSlugs.has(value) ? { slug: value } : null,
+            error: null,
+          }),
+        }),
+      }),
+    }),
   }),
 }));
 
-import { dbProfileToArtist, type DbArtistProfile, type DbArtistWork } from "./artist-profiles";
+import {
+  artistProfileSlugExists,
+  dbProfileToArtist,
+  type DbArtistProfile,
+  type DbArtistWork,
+} from "./artist-profiles";
 
 // Minimal profile shape, every test below shares this so the assertions
 // can focus on the `works[]` mapping. Anything not set defaults sensibly
@@ -119,5 +140,30 @@ describe("dbProfileToArtist", () => {
     ]);
 
     expect(artist.works[0].inStorePrice).toBeUndefined();
+  });
+});
+
+// The vanity URL (`/{slug}` → `/browse/{slug}`) needs to know whether a slug is
+// taken before it redirects. `getArtistProfileBySlug` answers that question but
+// pays for the whole profile row, every work, and a placements read to do it,
+// which is the right shape for rendering a page and the wrong shape for a
+// yes/no on a catch-all route that also fields every mistyped URL on the site.
+describe("artistProfileSlugExists()", () => {
+  beforeEach(() => {
+    dbSlugs.clear();
+  });
+
+  it("is true for a slug the table holds", async () => {
+    dbSlugs.add("fin-coles");
+    expect(await artistProfileSlugExists("fin-coles")).toBe(true);
+  });
+
+  it("is false for a slug the table does not hold", async () => {
+    dbSlugs.add("fin-coles");
+    expect(await artistProfileSlugExists("nobody-here")).toBe(false);
+  });
+
+  it("is false rather than throwing on an empty slug", async () => {
+    expect(await artistProfileSlugExists("")).toBe(false);
   });
 });

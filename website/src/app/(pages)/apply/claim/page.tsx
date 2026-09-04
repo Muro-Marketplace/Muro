@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { artistSlugBase } from "@/lib/artist-slug";
 
 /**
  * /apply/claim, lightweight follow-up to the artist application.
@@ -22,16 +23,6 @@ import { useAuth } from "@/context/AuthContext";
  *   3. Create a minimal artist_profile row
  *   4. Send them into /artist-portal/profile where they can add more
  */
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
 
 function ClaimForm() {
   const router = useRouter();
@@ -71,7 +62,12 @@ function ClaimForm() {
     setError(null);
     setSubmitting(true);
     try {
-      const slug = slugify(name) || `artist-${Date.now()}`;
+      // Shared with the /apply and OAuth signup paths. This one is only the
+      // hint stored on user_metadata (the real profile slug is chosen
+      // server-side with a uniqueness check), but it is shown to the artist as
+      // their URL on the profile page, so it has to agree with the others and
+      // must not be a top-level route name.
+      const slug = artistSlugBase(name);
       // 1. Create auth user
       const { error: authError } = await supabase.auth.signUp({
         email,

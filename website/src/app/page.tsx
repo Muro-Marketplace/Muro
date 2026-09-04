@@ -199,15 +199,24 @@ export default function Home() {
                   <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl text-foreground mb-6 leading-tight">
                     Your art, in the spaces people love.
                   </h2>
+                  {/* The storefront used to appear here only as a QR
+                      destination ("every QR scan leads to your store"), which
+                      made it sound like something you get once a venue takes
+                      you. It is a working shop from day one, and the artists
+                      who benefit most are the ones who already have people
+                      following them. Hence one bullet for the wall, one for the
+                      link, one for the economics, with the QR demoted into the
+                      paragraph as one route among several. */}
                   <p className="text-lg text-muted leading-relaxed mb-8">
-                    Showcase, get discovered, and sell, all in one place.
-                    Your Wallplace profile is your portfolio, your storefront,
-                    and your route into the best commercial venues.
+                    Showcase, get discovered, and sell, all in one place. Your
+                    Wallplace page is a working shop with checkout built in, and
+                    every route leads to it: the wall you are placed on, the QR
+                    label beside it, and the link you post yourself.
                   </p>
 
                   <ul className="space-y-3 mb-10">
                     <BulletPoint text="Get displayed in cafés, restaurants, hotels, and offices" />
-                    <BulletPoint text="Sell directly online, every QR scan leads to your store" />
+                    <BulletPoint text="Sell from your own shop link, share it anywhere you already post" />
                     <BulletPoint text="Flat 15% platform fee. No gallery taking 50%." />
                   </ul>
 

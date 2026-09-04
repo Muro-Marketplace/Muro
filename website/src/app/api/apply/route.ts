@@ -7,7 +7,7 @@ import { sendEmail } from "@/lib/email/send";
 import { ArtistApplicationSubmitted } from "@/emails/templates/artist-additions/ArtistApplicationSubmitted";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { afterResponse } from "@/lib/after-response";
-import { slugify } from "@/lib/slugify";
+import { chooseArtistSlug } from "@/lib/artist-slug";
 import { sendAdminAlert } from "@/lib/email/admin-alert";
 import { triggerWelcomeIfNeeded } from "@/lib/email/welcome";
 
@@ -169,20 +169,19 @@ export async function POST(request: Request) {
           .maybeSingle();
 
         if (!existingProfile) {
-          // Slug is derived from the application name. Collide-and-retry
-          // with a numeric suffix because the table enforces UNIQUE(slug)
-          // and the marketplace deep-links on the slug.
-          const baseSlug = slugify(d.name) || "artist";
-          let candidateSlug = baseSlug;
-          for (let attempt = 2; attempt < 50; attempt++) {
+          // The slug is the artist's public URL: /browse/{slug}, and since the
+          // vanity route also /{slug}. So it has to be unique against the
+          // table AND must not be a top-level route name. chooseArtistSlug
+          // owns both rules and the collide-and-retry, shared with the OAuth
+          // and claim signup paths which each used to do this differently.
+          const candidateSlug = await chooseArtistSlug(d.name, async (slug) => {
             const { data: clash } = await db
               .from("artist_profiles")
               .select("id")
-              .eq("slug", candidateSlug)
+              .eq("slug", slug)
               .maybeSingle();
-            if (!clash) break;
-            candidateSlug = `${baseSlug}-${attempt}`;
-          }
+            return clash !== null;
+          });
 
           await db.from("artist_profiles").insert({
             user_id: authedUser.id,
