@@ -14,9 +14,9 @@
 -- the worst outcome is a venue enquiry they turn down. A programme is a
 -- commitment: rent is around GBP 10 per piece per month, Wallplace chooses
 -- which pieces hang and when (artist agreement 9A), and a piece cannot sell
--- elsewhere while it is up. Copying the true default would enrol all 54
--- existing artists in terms none of them has been shown, so consent here has to
--- be given rather than inherited.
+-- elsewhere while it is up. Copying the true default would enrol all 16
+-- existing artist_profiles rows in terms none of them has been shown, so
+-- consent here has to be given rather than inherited.
 --
 -- NOT NULL, matching offers_pickup (migration 055), the other explicit opt-in
 -- on this table. Unlike migration 126's cooling-off pair there is no third
