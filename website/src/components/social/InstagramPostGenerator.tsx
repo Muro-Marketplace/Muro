@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { shopUrlDisplay } from "@/lib/shop-url";
 
 type Tab = "post" | "story" | "reel";
 
@@ -27,19 +28,51 @@ const SIZES: Record<Tab, { w: number; h: number; label: string }> = {
   reel: { w: 1080, h: 1920, label: "Reel cover · 9:16" },
 };
 
-function buildCaption(p: Props, tab: Tab): string {
-  const venueLine = p.showingAtVenueName ? `Now showing at ${p.showingAtVenueName}.\n` : "";
+/**
+ * Which story the post tells.
+ *
+ * `venue` is the original: this piece is hanging somewhere, go and see it. It
+ * needs an active placement, so it is unavailable to an artist who has just
+ * been accepted.
+ *
+ * `shop` is the artist promoting their own shop to their own following. It
+ * needs nothing but a work, so it is available from day one, and it is the mode
+ * that matters for an artist who arrived with an audience and no checkout.
+ */
+export type PostMode = "venue" | "shop";
+
+/** Venue mode is only real when there is a venue. */
+function resolveMode(p: Props, mode: PostMode): PostMode {
+  return mode === "venue" && p.showingAtVenueName ? "venue" : "shop";
+}
+
+export function buildCaption(p: Props, tab: Tab, mode: PostMode): string {
+  const resolved = resolveMode(p, mode);
+  // Every caption carries the link now. Before, only "story" did: the post
+  // caption said "Discover more on Wallplace" and named no URL, so a follower
+  // who wanted to buy had nowhere to go.
+  const link = shopUrlDisplay(p.artistSlug);
+  const venueLine =
+    resolved === "venue" ? `Now showing at ${p.showingAtVenueName}.\n` : "";
+  const tags = `#Wallplace #${slugifyTag(p.artistName)} #OriginalArt${p.workMedium ? ` #${slugifyTag(p.workMedium)}` : ""}`;
+
   if (tab === "story") {
-    return `${venueLine}"${p.workTitle}" by ${p.artistName}\n\nSwipe up to view → wallplace.co.uk/${p.artistSlug}`;
+    return `${venueLine}"${p.workTitle}" by ${p.artistName}\n\nTap through to buy → ${link}`;
   }
+
   if (tab === "reel") {
-    return `Reel idea: show ${p.workTitle} from three angles, hold on the QR label.\n\nCaption:\n${venueLine}"${p.workTitle}" by ${p.artistName}. Real art, real spaces. Find it on Wallplace.`;
+    const idea =
+      resolved === "venue"
+        ? `Reel idea: show ${p.workTitle} from three angles, hold on the QR label.`
+        : `Reel idea: show ${p.workTitle} from three angles, then the finished piece on a wall.`;
+    return `${idea}\n\nCaption:\n${venueLine}"${p.workTitle}" by ${p.artistName}. Original work, ready to buy at ${link}`;
   }
+
   // post (default)
-  const tagline = p.showingAtVenueName
-    ? `${venueLine}"${p.workTitle}" by ${p.artistName}, captured in real space.`
-    : `"${p.workTitle}" by ${p.artistName}.`;
-  return `${tagline}\n\nOriginal art. Real spaces.\nDiscover more on Wallplace.\n\n#Wallplace #${slugifyTag(p.artistName)} #ArtInSpaces #OriginalArt${p.workMedium ? ` #${slugifyTag(p.workMedium)}` : ""}`;
+  if (resolved === "venue") {
+    return `${venueLine}"${p.workTitle}" by ${p.artistName}, captured in real space.\n\nOriginal art, real spaces.\nBuy it at ${link}\n\n${tags} #ArtInSpaces`;
+  }
+  return `"${p.workTitle}" by ${p.artistName}.\n\nOriginal work, available now in my shop.\n${link}\n\n${tags}`;
 }
 
 function slugifyTag(s: string): string {
@@ -56,7 +89,7 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-async function renderCanvas(canvas: HTMLCanvasElement, p: Props, tab: Tab) {
+async function renderCanvas(canvas: HTMLCanvasElement, p: Props, tab: Tab, mode: PostMode) {
   const { w, h } = SIZES[tab];
   canvas.width = w;
   canvas.height = h;
@@ -138,13 +171,13 @@ async function renderCanvas(canvas: HTMLCanvasElement, p: Props, tab: Tab) {
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
 
-  if (p.showingAtVenueName) {
+  if (resolveMode(p, mode) === "venue") {
     ctx.font = "300 22px system-ui, -apple-system, Helvetica, sans-serif";
     ctx.globalAlpha = 0.7;
     ctx.fillText("NOW SHOWING AT", w / 2, captionY);
     ctx.globalAlpha = 1;
     ctx.font = "600 56px serif";
-    ctx.fillText(p.showingAtVenueName.toUpperCase(), w / 2, captionY + 60);
+    ctx.fillText((p.showingAtVenueName || "").toUpperCase(), w / 2, captionY + 60);
     ctx.font = "300 24px system-ui, -apple-system, Helvetica, sans-serif";
     ctx.globalAlpha = 0.65;
     ctx.fillText(`A ${p.workMedium || "work"} by ${p.artistName}`, w / 2, captionY + 110);
@@ -158,16 +191,27 @@ async function renderCanvas(canvas: HTMLCanvasElement, p: Props, tab: Tab) {
     ctx.globalAlpha = 1;
   }
 
-  // wallplace.co.uk footer.
+  // Footer. In shop mode this is the artist's own URL, so anyone who sees the
+  // image knows where to buy without reading the caption.
   ctx.font = "300 20px system-ui";
   ctx.globalAlpha = 0.5;
-  ctx.fillText("wallplace.co.uk", w / 2, h - 40);
+  ctx.fillText(
+    resolveMode(p, mode) === "venue" ? "wallplace.co.uk" : shopUrlDisplay(p.artistSlug),
+    w / 2,
+    h - 40,
+  );
   ctx.globalAlpha = 1;
 }
 
 export default function InstagramPostGenerator(props: Props) {
   const [tab, setTab] = useState<Tab>("post");
-  const [caption, setCaption] = useState<string>(buildCaption(props, "post"));
+  // Venue mode needs an active placement, so a newly accepted artist starts in
+  // shop mode rather than staring at a tool that has nothing to say to them.
+  const canUseVenueMode = Boolean(props.showingAtVenueName);
+  const [mode, setMode] = useState<PostMode>(canUseVenueMode ? "venue" : "shop");
+  const [caption, setCaption] = useState<string>(
+    buildCaption(props, "post", canUseVenueMode ? "venue" : "shop"),
+  );
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [rendering, setRendering] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -177,13 +221,13 @@ export default function InstagramPostGenerator(props: Props) {
 
   // Re-render preview on tab change.
   useEffect(() => {
-    setCaption(buildCaption(props, tab));
+    setCaption(buildCaption(props, tab, mode));
     let cancelled = false;
     async function run() {
       if (!canvasRef.current) return;
       setRendering(true);
       try {
-        await renderCanvas(canvasRef.current, props, tab);
+        await renderCanvas(canvasRef.current, props, tab, mode);
         if (!cancelled) {
           const url = canvasRef.current.toDataURL("image/png");
           setPreviewUrl(url);
@@ -196,7 +240,13 @@ export default function InstagramPostGenerator(props: Props) {
     }
     run();
     return () => { cancelled = true; };
-  }, [tab, props]);
+  }, [tab, mode, props]);
+
+  // Switching to a work that is not on a wall drops venue mode, so the tool
+  // never sits in a state it cannot render.
+  useEffect(() => {
+    if (!canUseVenueMode) setMode("shop");
+  }, [canUseVenueMode]);
 
   function handleDownload() {
     if (!previewUrl) return;
@@ -225,6 +275,44 @@ export default function InstagramPostGenerator(props: Props) {
           <h2 className="text-base font-medium">Generate Instagram Post</h2>
           <p className="text-xs text-muted mt-0.5">Create a post to promote this artwork.</p>
         </div>
+      </div>
+
+      {/* What the post is about, chosen before the format. Shop mode is always
+          available; venue mode needs the piece to actually be on a wall, and
+          says so rather than silently producing "Now showing at null". */}
+      <div className="px-5 pt-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {([
+            { id: "shop" as const, label: "Share my shop" },
+            { id: "venue" as const, label: "Now showing at" },
+          ]).map((m) => {
+            const disabled = m.id === "venue" && !canUseVenueMode;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => setMode(m.id)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-sm border transition-colors ${
+                  mode === m.id
+                    ? "bg-foreground text-white border-foreground"
+                    : disabled
+                      ? "border-border text-muted/50 cursor-not-allowed"
+                      : "border-border text-muted hover:border-foreground/30 hover:text-foreground"
+                }`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-muted mt-2 leading-relaxed">
+          {mode === "venue"
+            ? "Leads with the venue this piece is hanging in. Your shop link is still in the caption."
+            : canUseVenueMode
+              ? "Leads with the work and sends people to your shop. Good for your own followers."
+              : "Leads with the work and sends people to your shop. Once this piece is on a venue wall you will be able to lead with that instead."}
+        </p>
       </div>
 
       <div className="px-5 pt-4">

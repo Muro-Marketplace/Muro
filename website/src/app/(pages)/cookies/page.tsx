@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Cookie Policy",
@@ -240,12 +241,12 @@ export default function CookiesPage() {
                         privacy@wallplace.co.uk
                       </a>{" "}
                       and we will investigate and respond in line with our{" "}
-                      <a
+                      <Link
                         href="/privacy"
                         className="text-accent-text underline"
                       >
                         Privacy Policy
-                      </a>
+                      </Link>
                       .
                     </p>
                   </div>
@@ -278,9 +279,9 @@ export default function CookiesPage() {
                   </a>
                   . For more information about how we handle your personal data,
                   please read our{" "}
-                  <a href="/privacy" className="text-accent-text underline">
+                  <Link href="/privacy" className="text-accent-text underline">
                     Privacy Policy
-                  </a>
+                  </Link>
                   .
                 </p>
               </div>

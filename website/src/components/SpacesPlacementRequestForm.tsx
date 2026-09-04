@@ -522,12 +522,12 @@ export default function SpacesPlacementRequestForm({
               ? "Quoting a price needs an existing work attached. Upload one and you'll be able to send a quote."
               : "Placement requests need a work attached. Once you've uploaded something, you'll be able to send venues a proper proposal."}
           </p>
-          <a
+          <Link
             href="/artist-portal/portfolio"
             className="inline-flex items-center justify-center px-3 py-1.5 text-[11px] font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
           >
             Add a work
-          </a>
+          </Link>
         </div>
       )}
 

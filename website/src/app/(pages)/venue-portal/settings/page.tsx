@@ -294,9 +294,9 @@ export default function VenueSettingsPage() {
                   <p className="text-sm text-foreground">{venue?.name || "Your Venue"}</p>
                   <p className="text-[11px] text-muted mt-1">
                     Change your venue name on the{" "}
-                    <a href="/venue-portal/profile" className="text-accent hover:underline">
+                    <Link href="/venue-portal/profile" className="text-accent hover:underline">
                       Venue Profile
-                    </a>{" "}
+                    </Link>{" "}
                     page.
                   </p>
                 </div>
@@ -361,12 +361,12 @@ export default function VenueSettingsPage() {
                   <label className="block text-xs font-medium text-muted mb-1">
                     Password
                   </label>
-                  <a
+                  <Link
                     href="/forgot-password"
                     className="text-sm text-accent hover:underline cursor-pointer"
                   >
                     Change password
-                  </a>
+                  </Link>
                 </div>
               </>
             )}

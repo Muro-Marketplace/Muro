@@ -119,9 +119,18 @@ export default function CustomerGuide() {
       <section className="py-20 lg:py-28">
         <div className="max-w-[1200px] mx-auto px-6">
           <AnimateIn>
+            {/* The benefits below all open on scanning a QR card in a venue,
+                which reads as a non-sequitur to the growing share of visitors
+                who arrive from an artist's own link rather than off a wall.
+                One line so they know where they have landed. */}
             <div className="mb-10">
               <span className="text-xs font-medium text-accent uppercase tracking-wider">Why Wallplace</span>
               <h2 className="text-3xl md:text-4xl mt-2">Buy art the way it should work</h2>
+              <p className="text-muted leading-relaxed mt-4 max-w-2xl">
+                If an artist sent you here, their page is their shop. Everything on
+                it is an original you can buy from them directly, and the same work
+                may be hanging in a venue near you.
+              </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
               {benefits.map((b) => (

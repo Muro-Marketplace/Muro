@@ -7,6 +7,7 @@ import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/Outre
 import Button from "@/components/Button";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import ShareYourShop from "@/components/ShareYourShop";
 import { authFetch } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
 import { artistPayoutPounds } from "@/lib/finance/order-money";
@@ -100,6 +101,9 @@ export default function ArtistPortalPage() {
   const allowance = useOutreachAllowance();
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("none");
+  // Drives the "Share your shop" block. Empty until the profile lands, which
+  // is what ShareYourShop renders nothing on.
+  const [shopSlug, setShopSlug] = useState("");
   const [onboardingItems, setOnboardingItems] = useState<OnboardingItem[]>([]);
   const [onboardingDismissed, setOnboardingDismissed] = useState(true);
 
@@ -176,6 +180,7 @@ export default function ArtistPortalPage() {
       const refundRequests = data.refundRequests || [];
 
       const mySlug = profile.slug || "";
+      setShopSlug(mySlug);
       const myUserId = profile.user_id || "";
 
       // Refund requests. Each pending request is an action item the
@@ -439,6 +444,14 @@ export default function ArtistPortalPage() {
             <p className="text-2xl font-medium text-foreground">{stat.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* The artist's own shop link. New here: nothing in the portal used to
+          surface it, so an artist who wanted to point their own following at
+          their work had to copy it out of the address bar. The QR and the rest
+          live on the profile page; this is the link and a way through. */}
+      <div className="mb-8">
+        <ShareYourShop slug={shopSlug} />
       </div>
 
       {/* Venue approaches left this week (renders nothing on an unlimited

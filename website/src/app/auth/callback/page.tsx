@@ -18,6 +18,7 @@
 // drop-in client component without a Suspense boundary.
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { mutate } from "@/lib/api-client";
 import { safeRedirect } from "@/lib/safe-redirect";
@@ -85,12 +86,12 @@ export default function AuthCallbackPage() {
       {error ? (
         <div className="text-center max-w-sm">
           <p className="text-red-500 mb-4">{error}</p>
-          <a
+          <Link
             href="/login"
             className="inline-block px-4 py-2 border border-border rounded-sm text-sm hover:bg-background transition-colors"
           >
             Back to login
-          </a>
+          </Link>
         </div>
       ) : (
         <p className="text-muted text-sm">Signing you in…</p>

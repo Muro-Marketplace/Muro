@@ -402,7 +402,7 @@ export default function AnalyticsPage() {
         </div>
         {placements.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-muted">
-            No placements logged yet. Go to <a href="/artist-portal/placements" className="text-accent hover:underline">Placements</a> to log your first.
+            No placements logged yet. Go to <Link href="/artist-portal/placements" className="text-accent hover:underline">Placements</Link> to log your first.
           </div>
         ) : (
           <div className="overflow-x-auto">

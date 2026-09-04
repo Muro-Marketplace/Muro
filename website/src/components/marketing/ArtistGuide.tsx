@@ -41,7 +41,7 @@ const valueBlocks = [
       </svg>
     ),
     title: "Your own online storefront",
-    description: "Your Wallplace page is your shop. QR codes at venues drive customers straight to your store to browse and buy.",
+    description: "Your Wallplace page is a real shop with checkout built in. You get a short link to put in your bio, so the people already following you have somewhere to buy.",
   },
   {
     icon: (
@@ -51,7 +51,7 @@ const valueBlocks = [
       </svg>
     ),
     title: "Venue + online visibility",
-    description: "Venues find you by style and medium. Customers find you via QR codes in the venues you're placed in.",
+    description: "Two ways in. Venues find you by style and medium, and you send your own audience straight to your shop.",
   },
   {
     icon: (
@@ -69,7 +69,7 @@ const valueBlocks = [
       </svg>
     ),
     title: "QR to checkout in seconds",
-    description: "Customers scan, browse, and buy, right from the venue wall. Every scan is a sale opportunity with your name on it.",
+    description: "Customers scan the label beside your work, browse your whole shop, and buy. Every scan lands on the same page your link does.",
   },
 ];
 
@@ -97,6 +97,13 @@ const comparisonData = [
     wallplace: "Yes",
   },
   {
+    category: "Takes payment",
+    gallery: "Yes",
+    marketplace: "Yes",
+    instagram: "Not in the UK",
+    wallplace: "Yes",
+  },
+  {
     category: "Logistics",
     gallery: "You handle it",
     marketplace: "You handle it",
@@ -115,7 +122,7 @@ const comparisonData = [
     gallery: "Gallery visitors",
     marketplace: "Online browsers",
     instagram: "Followers",
-    wallplace: "Daily venue footfall",
+    wallplace: "Venue footfall and your own followers",
   },
   {
     category: "Curation",
@@ -127,6 +134,11 @@ const comparisonData = [
 ];
 
 const faqItems = [
+  {
+    question: "I already have an Instagram following. What does Wallplace add?",
+    answer:
+      "Somewhere for them to buy. Instagram has no checkout in the UK, so a follower who wants a piece has to message you, and you handle the payment, the invoice and the paperwork yourself. Your Wallplace page is a real shop with a short link you can put in your bio, and it takes the payment, produces the invoice and sets the shipping options. We are not bringing you that audience, you already earned it. The venue side is what brings you people who have never heard of you.",
+  },
   {
     question: "Will my work actually sell?",
     answer:
@@ -199,6 +211,91 @@ export default function ArtistGuide() {
             <p className="mt-8 text-sm text-muted max-w-2xl">
               We review every application for quality, consistency, and commercial viability. No AI-generated work. This is how we maintain venue trust and ensure your work reaches spaces that genuinely want it.
             </p>
+          </AnimateIn>
+        </div>
+      </section>
+
+      {/* Sell to your own audience. The storefront used to be described only
+          as somewhere a venue QR code lands, so an artist arriving with an
+          existing following was never told the one thing that would matter
+          most to them. Server-rendered and static: no fabricated QR image,
+          because a decorative code that does not scan is worse than none. */}
+      <section className="py-20 lg:py-28 bg-surface border-y border-border">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <AnimateIn>
+            <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+              <div>
+                <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-4">
+                  Sell to the people you already have
+                </p>
+                <h2 className="text-3xl md:text-4xl mb-6 leading-tight">
+                  Instagram cannot take the money. Your shop can.
+                </h2>
+                <p className="text-muted leading-relaxed mb-4">
+                  If someone already follows your work, they are the easiest sale
+                  you will ever make. The bit that is missing is a checkout. Right
+                  now that sale happens in your DMs, and you handle the payment,
+                  the invoice and the chasing.
+                </p>
+                <p className="text-muted leading-relaxed mb-8">
+                  Your Wallplace page is a real shop, and it works the day you are
+                  accepted, with or without a placement. We are not claiming to
+                  bring you that audience. You already earned it. The venues are
+                  what bring you people who have never heard of you.
+                </p>
+                <ul className="space-y-3">
+                  <li className="flex gap-3 text-sm">
+                    <span className="text-accent mt-0.5">1.</span>
+                    <span className="text-muted">
+                      <span className="text-foreground font-medium">A short link.</span>{" "}
+                      One line for your bio, and it goes straight to your work.
+                    </span>
+                  </li>
+                  <li className="flex gap-3 text-sm">
+                    <span className="text-accent mt-0.5">2.</span>
+                    <span className="text-muted">
+                      <span className="text-foreground font-medium">A QR code for your shop.</span>{" "}
+                      Download it for a stall, a fair, or a story.
+                    </span>
+                  </li>
+                  <li className="flex gap-3 text-sm">
+                    <span className="text-accent mt-0.5">3.</span>
+                    <span className="text-muted">
+                      <span className="text-foreground font-medium">Ready-made posts.</span>{" "}
+                      Pick a piece and the portal builds the image and the caption.
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* A picture of the toolkit, drawn rather than screenshotted so it
+                  cannot go stale against the portal. */}
+              <div className="bg-background border border-border rounded-sm p-5 sm:p-6">
+                <p className="text-[11px] font-medium tracking-wider uppercase text-muted mb-3">
+                  In your artist portal
+                </p>
+                <div className="flex items-center gap-2 mb-5">
+                  <code className="flex-1 min-w-0 truncate bg-surface border border-border rounded-sm px-3 py-2 text-sm text-foreground">
+                    wallplace.co.uk/your-name
+                  </code>
+                  <span className="shrink-0 px-3 py-2 text-xs font-medium text-white bg-foreground rounded-sm">
+                    Copy link
+                  </span>
+                </div>
+                <p className="text-[11px] font-medium tracking-wider uppercase text-muted mb-2">
+                  Caption, written for you
+                </p>
+                <div className="bg-surface border border-border rounded-sm p-4">
+                  <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">
+                    {'"Low Tide" by your name.\n\nOriginal work, available now in my shop.\nwallplace.co.uk/your-name'}
+                  </p>
+                </div>
+                <p className="text-xs text-muted mt-4 leading-relaxed">
+                  Plus a downloadable QR code for the same page, and a post image
+                  sized for a feed, a story or a reel cover.
+                </p>
+              </div>
+            </div>
           </AnimateIn>
         </div>
       </section>

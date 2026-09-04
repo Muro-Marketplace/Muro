@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Returns and Refunds",
@@ -61,7 +62,7 @@ export default function ReturnsPage() {
                   <ul className="list-disc pl-6 space-y-2">
                     <li>Refund requests are typically reviewed within 5 business days</li>
                     <li>Approved refunds are processed via Stripe and appear on your statement within 5 to 10 business days</li>
-                    <li>If a refund request is rejected, you will receive a reason and can escalate via our <a href="/complaints" className="text-accent hover:underline">dispute resolution process</a></li>
+                    <li>If a refund request is rejected, you will receive a reason and can escalate via our <Link href="/complaints" className="text-accent hover:underline">dispute resolution process</Link></li>
                   </ul>
                 </div>
               </div>
@@ -77,7 +78,7 @@ export default function ReturnsPage() {
                   If we cannot resolve your complaint directly, you may refer it to the Centre for Effective Dispute Resolution (<a href="https://www.cedr.com" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">cedr.com</a>), a certified alternative dispute resolution (ADR) provider. Wallplace is not currently a member of CEDR; we are naming it here as an available ADR body in accordance with the Alternative Dispute Resolution for Consumer Disputes Regulations 2015. You retain all statutory consumer rights and may also take legal action through the courts of England and Wales.
                 </p>
                 <p className="text-muted leading-relaxed mt-3">
-                  Our full formal process is set out in our <a href="/complaints" className="text-accent hover:underline">Complaints Policy</a>.
+                  Our full formal process is set out in our <Link href="/complaints" className="text-accent hover:underline">Complaints Policy</Link>.
                 </p>
               </div>
 

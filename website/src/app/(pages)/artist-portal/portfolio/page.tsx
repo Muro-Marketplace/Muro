@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import Image from "next/image";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
@@ -1945,7 +1946,7 @@ export default function PortfolioPage() {
             return atLimit ? (
               <div className="text-right">
                 <p className="text-xs text-muted">{works.length}/{limit} works</p>
-                <a href="/pricing" className="text-xs text-accent hover:text-accent-hover">Upgrade for more</a>
+                <Link href="/pricing" className="text-xs text-accent hover:text-accent-hover">Upgrade for more</Link>
               </div>
             ) : (
               <div className="flex items-center gap-3">
@@ -2243,7 +2244,7 @@ export default function PortfolioPage() {
                         {used + 1}/{totalLimit} <span className="uppercase tracking-wider">({plan})</span>
                       </p>
                       {atLimit && plan !== "pro" && (
-                        <a href="/pricing" className="text-[10px] text-accent hover:text-accent-hover">Upgrade for more</a>
+                        <Link href="/pricing" className="text-[10px] text-accent hover:text-accent-hover">Upgrade for more</Link>
                       )}
                     </div>
                   </div>
@@ -2257,7 +2258,7 @@ export default function PortfolioPage() {
                   />
                   {extrasAllowed === 0 ? (
                     <p className="text-[11px] text-muted">
-                      Your {plan} plan includes 1 image per artwork. <a href="/pricing" className="text-accent hover:text-accent-hover">Upgrade</a> to add more.
+                      Your {plan} plan includes 1 image per artwork. <Link href="/pricing" className="text-accent hover:text-accent-hover">Upgrade</Link> to add more.
                     </p>
                   ) : (
                     <div
