@@ -84,7 +84,12 @@ export async function persistRender(
       kind: input.kind,
       output_path: path,
       layout_hash: input.layoutHash,
-      cost_units: input.costUnits,
+      // Migration 035 constrains this column to 1..10, because every render
+      // cost a quota unit when the table was designed. A client capture costs
+      // nothing, and 0 is rejected outright, so a free render records the
+      // minimum. Nothing is charged by this: quota is summed from the
+      // visualizer_usage ledger, and a free capture writes no row there.
+      cost_units: Math.max(1, Math.min(10, Math.round(input.costUnits))),
       provider: input.provider ?? null,
       prompt_seed: input.promptSeed ?? null,
     })
