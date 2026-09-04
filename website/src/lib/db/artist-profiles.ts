@@ -36,6 +36,32 @@ export async function getArtistProfileByUserId(userId: string) {
   return { profile: profile as DbArtistProfile, works: (works || []) as DbArtistWork[] };
 }
 
+/**
+ * Whether `artist_profiles` holds this slug, without loading the profile.
+ *
+ * The vanity URL (`/{slug}` → `/browse/{slug}`) only needs a yes or no, and it
+ * sits on a catch-all route, so it also fields every mistyped URL on the site.
+ * `getArtistProfileBySlug` would answer the same question at the cost of the
+ * full profile row, every work, and a placements read, which is the right shape
+ * for rendering a page and the wrong shape for this.
+ *
+ * `slug` is UNIQUE on the table, so this is a single indexed lookup.
+ *
+ * Callers that need the seed catalogue too want `artistSlugExists` in
+ * `merged-data.ts`, which composes this with the static fallback.
+ */
+export async function artistProfileSlugExists(slug: string): Promise<boolean> {
+  if (!slug) return false;
+  const db = getSupabaseAdmin();
+  const { data } = await db
+    .from("artist_profiles")
+    .select("slug")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  return data !== null;
+}
+
 export async function getArtistProfileBySlug(slug: string) {
   const db = getSupabaseAdmin();
   const { data: profile } = await db

@@ -13,7 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
-import { slugify } from "@/lib/slugify";
+import { artistSlugBase } from "@/lib/artist-slug";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   PROFILE_THEMES,
@@ -360,10 +360,13 @@ export default function ProfileEditorPage() {
     if (artist?.slug) return artist.slug;
     const metaSlug = (user?.user_metadata?.artist_slug as string | undefined) || "";
     if (metaSlug) return metaSlug;
+    // artistSlugBase is what the signup paths use, so the URL previewed here
+    // matches the one the artist will actually get, and never previews a
+    // top-level route name the reserved guard would have refused.
     const displayName = (user?.user_metadata?.display_name as string | undefined) || "";
-    if (displayName) return slugify(displayName) || `artist-${fallbackTimestamp}`;
+    if (displayName) return artistSlugBase(displayName);
     const emailPrefix = (user?.email || "").split("@")[0];
-    return slugify(emailPrefix) || `artist-${fallbackTimestamp}`;
+    return emailPrefix ? artistSlugBase(emailPrefix) : `artist-${fallbackTimestamp}`;
   }, [artist?.slug, user?.user_metadata, user?.email, fallbackTimestamp]);
   const [saved, setSaved] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);

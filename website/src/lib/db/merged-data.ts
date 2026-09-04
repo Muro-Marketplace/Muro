@@ -1,6 +1,11 @@
 import { artists as staticArtists } from "@/data/artists";
 import type { Artist } from "@/data/artists";
-import { getAllDatabaseArtists, getArtistProfileBySlug, dbProfileToArtist } from "./artist-profiles";
+import {
+  artistProfileSlugExists,
+  getAllDatabaseArtists,
+  getArtistProfileBySlug,
+  dbProfileToArtist,
+} from "./artist-profiles";
 import { isFlagOn } from "@/lib/feature-flags";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
@@ -57,4 +62,27 @@ export async function getArtistBySlug(slug: string): Promise<Artist | null> {
   const staticArtist = staticArtists.find((a) => a.slug === slug);
   if (!staticArtist) return null;
   return { ...staticArtist, isVerified: staticArtist.isVerified ?? true, isSeedArtist: true };
+}
+
+/**
+ * Whether `slug` belongs to an artist, without loading the artist.
+ *
+ * Used by the vanity URL (`src/app/(pages)/[artistSlug]/page.tsx`) to decide
+ * between a redirect to `/browse/{slug}` and a 404. That route is a catch-all,
+ * so it fields every mistyped URL on the site as well as every real shop link,
+ * and `getArtistBySlug` would make each of those a full profile read plus every
+ * work plus a placements read.
+ *
+ * **This must resolve the same slugs as `getArtistBySlug` above**, seed
+ * catalogue included. A version that checked only `artist_profiles` would 404
+ * `/{seed-slug}` while `/browse/{seed-slug}` rendered the page, which is the
+ * inconsistency the vanity route exists to remove. The two functions sit
+ * adjacent for that reason, and `merged-data.test.ts` asserts they agree across
+ * a database slug, a seed slug with SEED_CATALOG on, the same seed slug with it
+ * off, and an unknown slug. Change one, and that test tells you about the other.
+ */
+export async function artistSlugExists(slug: string): Promise<boolean> {
+  if (await artistProfileSlugExists(slug)) return true;
+  if (!isFlagOn("SEED_CATALOG")) return false;
+  return staticArtists.some((a) => a.slug === slug);
 }
