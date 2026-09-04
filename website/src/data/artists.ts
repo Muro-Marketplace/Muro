@@ -114,6 +114,12 @@ export interface Artist {
   openToRevenueShare: boolean;
   revenueSharePercent?: number;
   openToOutrightPurchase: boolean;
+  /** Migration 135: artist has opted in to Wallplace Programmes, where a venue
+   *  rents curated work for twelve months and Wallplace chooses which pieces
+   *  hang (artist agreement 9A). Optional and absent-means-no: the seed
+   *  fixtures and every row written before the column existed predate the
+   *  choice, and none of them consented to it. */
+  openToProgramme?: boolean;
   /** Artist has opted in to letting buyers collect orders in person.
    *  Drives the "Collect from artist" fulfilment option at checkout. */
   offersPickup?: boolean;

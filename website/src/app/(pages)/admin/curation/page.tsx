@@ -100,10 +100,15 @@ function describeRefund(venueName: string, res: RefundOutcome): string {
   return `No money moved. ${venueName} is now marked ${res.status || "cancelled"}.`;
 }
 
+// Short badge labels, one per CURATION_TIERS key. Not the tier's own `label`
+// (that reads "Bespoke project" and "Programmes"), because a badge names one
+// request rather than the product it was bought from. Add a key here whenever a
+// tier is added, or the row renders the raw enum string at an admin.
 const TIER_LABELS: Record<string, string> = {
   single_wall: "Single wall",
   full_space: "Full space",
   bespoke: "Bespoke",
+  programme: "Programme",
 };
 
 function statusBadge(status: string): string {

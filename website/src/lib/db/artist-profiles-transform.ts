@@ -33,6 +33,10 @@ export interface DbArtistProfile {
   open_to_revenue_share: boolean;
   revenue_share_percent: number;
   open_to_outright_purchase: boolean;
+  /** Migration 135: opt-in to the Wallplace Programmes supply pool. NOT NULL
+   *  DEFAULT false in the DB; typed optional here so a partial row cannot
+   *  make this read as anything but "not opted in". */
+  open_to_programme?: boolean | null;
   /** Migration 055: artist has opted in to in-person collection.
    *  Drives the "Collect from artist" fulfilment option at checkout. */
   offers_pickup?: boolean | null;
@@ -171,6 +175,13 @@ export function dbProfileToArtist(profile: DbArtistProfile, works: DbArtistWork[
     openToRevenueShare: profile.open_to_revenue_share ?? true,
     revenueSharePercent: profile.revenue_share_percent,
     openToOutrightPurchase: profile.open_to_outright_purchase ?? true,
+    // Deliberately NOT the `?? true` of the three above. Those three cost the
+    // artist nothing to leave open, so an unset legacy row is better shown
+    // than hidden. A programme is a commitment: about GBP 10 a piece a month,
+    // Wallplace picks the pieces, and the piece is off the market elsewhere
+    // while it hangs. Consent to that has to be given, not assumed, so an
+    // unset row is out of the pool.
+    openToProgramme: profile.open_to_programme ?? false,
     offersPickup: profile.offers_pickup ?? false,
     canProvideFrames: profile.can_provide_frames,
     canArrangeFraming: profile.can_arrange_framing,

@@ -168,3 +168,85 @@ describe("profile theme picker — label colour moved off this page (owner decis
     expect(screen.queryByText("Classic (white)")).toBeNull();
   });
 });
+
+describe("Programmes opt-in (Wallplace Programmes phase 1)", () => {
+  const PROGRAMME_LABEL = "Programmes (about £10 a month per piece, chosen by Wallplace)";
+
+  function programmeToggle(): HTMLButtonElement {
+    const label = screen.getByText(PROGRAMME_LABEL).closest("label");
+    if (!label) throw new Error("Programmes label is not inside a toggle row");
+    const button = label.querySelector("button");
+    if (!button) throw new Error("Programmes row has no toggle button");
+    return button as HTMLButtonElement;
+  }
+
+  /** The tick is an inline SVG rendered only while the flag is on. */
+  const isTicked = (b: HTMLButtonElement) => b.querySelector("svg") !== null;
+
+  function savedBody(): Record<string, unknown> {
+    const call = mutateMock.mock.calls.at(-1);
+    return JSON.parse((call?.[1] as { body: string }).body);
+  }
+
+  it("offers the opt-in beside the other deal types, and says what is being agreed to", async () => {
+    render(<ProfileEditorPage />);
+    await screen.findByText("Deal types");
+
+    // The rent and who chooses the pieces sit on the control itself, because
+    // that is the sentence the artist is ticking. Artist agreement 9A.
+    expect(screen.getByText(PROGRAMME_LABEL)).toBeTruthy();
+    expect(
+      screen.getByText(/not for sale anywhere else until it comes down/i),
+    ).toBeTruthy();
+  });
+
+  it("starts off for an artist who has never chosen", async () => {
+    // artists[0] is a fixture from before the flag existed, which is exactly
+    // the case that must not be opted in by accident.
+    render(<ProfileEditorPage />);
+    await screen.findByText("Deal types");
+
+    expect(isTicked(programmeToggle())).toBe(false);
+  });
+
+  it("does not opt an artist in as a side effect of an unrelated edit", async () => {
+    // Save is disabled until something changes, so dirty the form the way the
+    // rest of this file does. The point is that editing a location and saving
+    // must not carry an opt-in the artist never gave.
+    render(<ProfileEditorPage />);
+    await screen.findByText("Deal types");
+    fireEvent.change(screen.getByPlaceholderText("e.g. Hackney, London"), {
+      target: { value: "Peckham, London" },
+    });
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    expect(savedBody().open_to_programme).toBe(false);
+  });
+
+  it("sends the opt-in once the artist ticks it", async () => {
+    render(<ProfileEditorPage />);
+    await screen.findByText("Deal types");
+
+    fireEvent.click(programmeToggle());
+    expect(isTicked(programmeToggle())).toBe(true);
+
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    expect(savedBody().open_to_programme).toBe(true);
+  });
+
+  it("shows an existing opt-in as already ticked, and can be withdrawn", async () => {
+    artistState.artist = { ...artists[0], openToProgramme: true, works: [] };
+    render(<ProfileEditorPage />);
+    await screen.findByText("Deal types");
+
+    expect(isTicked(programmeToggle())).toBe(true);
+
+    fireEvent.click(programmeToggle());
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    expect(savedBody().open_to_programme).toBe(false);
+  });
+});

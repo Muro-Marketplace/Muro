@@ -50,6 +50,10 @@ export const ARTIST_PROFILE_WRITABLE = Object.freeze([
   "open_to_revenue_share",
   "revenue_share_percent",
   "open_to_outright_purchase",
+  // Migration 135. The artist's own consent to programme work, so it is theirs
+  // to set and theirs to withdraw. The money that follows from it is not:
+  // programme_rent_gbp stays on PLACEMENT_SERVER_OWNED below.
+  "open_to_programme",
   "offers_pickup",
   "can_provide_frames",
   "can_arrange_framing",
