@@ -855,3 +855,51 @@ describe("PUT /api/admin/applications/[id] founding offer in the approval email"
     expect(html).not.toContain("Founding artist offer");
   });
 });
+
+describe("PUT /api/admin/applications/[id] invite names its own destination", () => {
+  beforeEach(() => {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_applications") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: { id: "123", status: "pending", name: "Finlay Coles", email: "finlay@example.com", location: "London" },
+                error: null,
+              }),
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => {
+            applicationsUpdateMock(payload);
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+          insert: async () => ({ error: null }),
+          update: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      return {};
+    });
+    listUsersMock.mockResolvedValue({ data: { users: [] }, error: null });
+    inviteMock.mockResolvedValue({ data: { user: { id: "new-user-id" } }, error: null });
+    vi.mocked(sendEmail).mockClear();
+  });
+
+  it("sends the invite with a redirect to the password page, not the dashboard's Site URL fallback", async () => {
+    const res = await PUT(req({ action: "accept" }), { params: Promise.resolve({ id: "123" }) });
+    expect(res.status).toBe(200);
+    expect(inviteMock).toHaveBeenCalledTimes(1);
+    const [email, options] = inviteMock.mock.calls[0] as unknown as [
+      string,
+      { redirectTo?: string },
+    ];
+    expect(email).toBe("finlay@example.com");
+    // Without this, Supabase falls back to the dashboard Site URL, which has
+    // been localhost in production, and the accepted artist cannot get in.
+    expect(options.redirectTo).toBe("https://wallplace.co.uk/reset-password");
+  });
+});

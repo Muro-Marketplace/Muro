@@ -150,6 +150,12 @@ export async function PUT(
       // New user, send invite email
       const { data: inviteData, error: inviteError } =
         await db.auth.admin.inviteUserByEmail(app.email, {
+          // Without redirectTo, Supabase falls back to the dashboard's Site
+          // URL, which has been wrong in production. Naming the destination
+          // here keeps an accepted artist's only way in off that setting.
+          // /reset-password consumes the session the invite link opens and
+          // asks for a password, which is exactly what an invite needs.
+          redirectTo: `${SITE}/reset-password`,
           data: {
             user_type: "artist",
             display_name: app.name,
