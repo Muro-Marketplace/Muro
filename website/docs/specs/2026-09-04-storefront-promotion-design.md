@@ -157,15 +157,21 @@ New file `src/app/(pages)/[artistSlug]/page.tsx`, a server component:
 
 ### 5.4 New helper
 
-`artistSlugExists(slug: string): Promise<boolean>` in `src/lib/db/artist-profiles.ts`. A single `select("slug").eq("slug", slug).maybeSingle()`.
+`artistSlugExists(slug: string): Promise<boolean>`, placed in `src/lib/db/merged-data.ts` directly beside `getArtistBySlug`.
 
-Explicitly **not** `getArtistProfileBySlug`, which pulls the entire profile row plus every work plus a placements read. That is the right shape for rendering a profile and the wrong shape for deciding whether to redirect.
+Explicitly **not** `getArtistProfileBySlug`, which pulls the entire profile row plus every work plus a placements read. That is the right shape for rendering a profile and the wrong shape for deciding whether to redirect. The new helper is a single `select("slug").eq("slug", slug).maybeSingle()`.
+
+**It must mirror `getArtistBySlug`'s full resolution order, not just the database.** [`getArtistBySlug`](../../src/lib/db/merged-data.ts) falls back to the static seed catalogue when the `SEED_CATALOG` flag is on. A helper that checked only `artist_profiles` would 404 `/{seed-slug}` while `/browse/{seed-slug}` rendered the page, which is the exact inconsistency the vanity route exists to remove.
+
+The two functions therefore live adjacent in the same file, and a test asserts they agree (section 10). Placing them together and locking the agreement with a test is the guard against drift, since the alternative, one function calling the other, would reintroduce the heavy read this helper exists to avoid.
 
 ### 5.5 Visibility
 
-The vanity route redirects on slug existence alone and lets `/browse/[slug]` make the visibility call, which it already does at [`page.tsx:154`](../../src/app/(pages)/browse/[slug]/page.tsx). This keeps one owner for "should this profile be visible" rather than two that can drift apart.
+`/{slug}` and `/browse/{slug}` resolve identically: same lookup, same seed fallback, same answer. There is no visibility differential between the two paths and nothing is disclosed by one that the other does not already disclose.
 
-Accepted consequence: for a slug that exists but is delisted, a visitor gets a 404 at `/browse/{slug}` rather than at `/{slug}`, which distinguishes "delisted artist" from "no such artist" to anyone probing. The information disclosed is that a slug is taken, which the signup uniqueness check already reveals. Not worth a second visibility implementation to close.
+Note for the reader, because the surrounding code implies otherwise: **neither path gates on `review_status`.** `getArtistBySlug` returns any profile whose slug matches, whatever its approval state, and the `notFound()` at [`browse/[slug]/page.tsx:154`](../../src/app/(pages)/browse/[slug]/page.tsx) fires on non-existence alone. `review_status` controls the `/browse` **listing** only. The `finlay-coles` comment in `next.config.ts` describes setting a profile to `pending` as delisting it, which is true of the listing and not of the profile page, which still renders to anyone holding the URL.
+
+That is a pre-existing behaviour, unchanged by this work and not created by it. It is recorded here because the vanity URL makes those slugs marginally easier to guess, and because a future reader of section 5 will otherwise assume a gate exists. Deciding whether unapproved profiles should render at all is an owner call and a separate change.
 
 ### 5.6 Fix the caption
 
@@ -250,6 +256,7 @@ One section added to `ArtistGuide.tsx`, below the value blocks: the shop link, t
 |---|---|
 | Reserved slugs | Unit tests for `isReservedSlug`. The derivation test in 6.1 that walks the route tree and fails when a route is missing from the set. |
 | Vanity route | Existing slug redirects to `/browse/{slug}` with a 307. Unknown slug returns 404. Malformed segment returns 404 without a database call. A reserved name still renders its real page. |
+| Resolver agreement | `artistSlugExists` and `getArtistBySlug` return consistent answers across four cases: a live database slug, a seed-catalogue slug with `SEED_CATALOG` on, the same seed slug with the flag off, and an unknown slug. This is the test that stops the two resolvers drifting (5.4). |
 | Slug assignment | Each of the four paths in 6.2 refuses a reserved slug and suffixes instead. |
 | Redirect targets | Extend [`tests/integration/redirect-targets.test.ts`](../../tests/integration/redirect-targets.test.ts), which already holds the `finlay-coles` pairing. |
 | Share block | Renders the correct URL for a given slug, copy button writes to the clipboard, QR download produces a data URL. |
@@ -269,6 +276,7 @@ Gates: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, all gre
 | Catch-all route becomes a database probe surface | Format guard before the lookup, and a single indexed `maybeSingle()` on a UNIQUE column (5.2, 5.4) |
 | The shop story dilutes "seen on real walls" | Positioning fixed in section 2: no new route, no nav change, the shop gains sentences inside the existing artist story rather than a pitch of its own |
 | An existing artist already holds a reserved slug | Read-only check first, surfaced for an owner decision rather than renamed automatically (6.3) |
+| The two slug resolvers drift, so `/{slug}` and `/browse/{slug}` disagree | Adjacent placement in one file plus the agreement test in section 10 (5.4) |
 
 ---
 
