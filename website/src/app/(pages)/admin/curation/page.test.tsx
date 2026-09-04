@@ -32,6 +32,7 @@ vi.mock("@/components/AdminPortalLayout", () => ({
 }));
 
 import AdminCurationPage from "./page";
+import { CURATION_TIER_KEYS } from "@/lib/curation-tiers";
 
 function row(over: Record<string, unknown> = {}) {
   return {
@@ -176,5 +177,28 @@ describe("G12: the refund outcome says whether money moved", () => {
 
     // One load on mount, one after the refund.
     await waitFor(() => expect(authFetchMock).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("every curation tier gets a human label", () => {
+  // The map that renders these badges is a hand-written mirror of
+  // CURATION_TIERS, so it drifts silently: `programme` shipped in the tier
+  // config without a label here, and programme rows rendered the raw enum
+  // string at an admin. Driving the cases off CURATION_TIER_KEYS means the
+  // next tier added cannot repeat it.
+  it.each(CURATION_TIER_KEYS)("does not render the raw key for %s", async (tier) => {
+    authFetchMock.mockResolvedValue(listReply([row({ tier })]));
+    render(<AdminCurationPage />);
+    await screen.findByText("Copper Kettle");
+
+    expect(screen.queryByText(tier)).toBeNull();
+  });
+
+  it("labels a programme row Programme", async () => {
+    authFetchMock.mockResolvedValue(listReply([row({ tier: "programme" })]));
+    render(<AdminCurationPage />);
+    await screen.findByText("Copper Kettle");
+
+    expect(screen.getByText("Programme")).toBeTruthy();
   });
 });

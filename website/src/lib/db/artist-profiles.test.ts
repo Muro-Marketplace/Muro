@@ -121,3 +121,36 @@ describe("dbProfileToArtist", () => {
     expect(artist.works[0].inStorePrice).toBeUndefined();
   });
 });
+
+describe("open_to_programme, the Programmes supply pool (phase 1)", () => {
+  it("leaves a legacy row OUT of the programme pool while keeping the other three open", () => {
+    // The contrast is the point, not an oversight. The three flags beside this
+    // one default to open for rows that predate them, because being shown to a
+    // venue costs the artist nothing. Programme rent is a different bargain:
+    // roughly GBP 10 per piece per month, Wallplace picks the pieces, and the
+    // piece cannot sell elsewhere while it hangs. Defaulting that to true would
+    // enrol every existing artist in terms they have never read, so consent has
+    // to be explicit and absence has to mean no.
+    const artist = dbProfileToArtist(makeProfile(), []);
+
+    expect(artist.openToProgramme).toBe(false);
+    expect(artist.openToFreeLoan).toBe(true);
+    expect(artist.openToRevenueShare).toBe(true);
+    expect(artist.openToOutrightPurchase).toBe(true);
+  });
+
+  it("reads an explicit null as not opted in", () => {
+    const artist = dbProfileToArtist(makeProfile({ open_to_programme: null }), []);
+    expect(artist.openToProgramme).toBe(false);
+  });
+
+  it("reads an explicit false as not opted in", () => {
+    const artist = dbProfileToArtist(makeProfile({ open_to_programme: false }), []);
+    expect(artist.openToProgramme).toBe(false);
+  });
+
+  it("carries a real opt-in through to the artist shape", () => {
+    const artist = dbProfileToArtist(makeProfile({ open_to_programme: true }), []);
+    expect(artist.openToProgramme).toBe(true);
+  });
+});

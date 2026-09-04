@@ -182,6 +182,20 @@ describe("allowlist integrity", () => {
     ).toThrow(/programme_request_id/);
   });
 
+  it("lets an artist own their own open_to_programme choice (Programmes phase 1)", () => {
+    // Migration 135. This is the artist's consent to rent work to a venue at
+    // roughly GBP 10 a piece a month, with Wallplace choosing the pieces
+    // (artist agreement 9A). It is theirs to give and theirs to withdraw, so it
+    // belongs on the writable list and nowhere near the server-owned one. The
+    // rent that follows from it is a different matter: programme_rent_gbp stays
+    // denied on placements, see the Task 6 case above.
+    expect(ARTIST_PROFILE_WRITABLE).toContain("open_to_programme");
+    expect(ARTIST_PROFILE_SERVER_OWNED).not.toContain("open_to_programme");
+    expect(pickWritable({ open_to_programme: true }, ARTIST_PROFILE_WRITABLE)).toEqual({
+      open_to_programme: true,
+    });
+  });
+
   it("allowlists the two shipping-scope columns that migration 081 created", () => {
     // These were on the list above until 2026-07-30 for the same reason as
     // in_store_price. Migration 081 created them, so the reason expired: the

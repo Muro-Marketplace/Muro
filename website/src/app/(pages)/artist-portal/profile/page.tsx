@@ -229,6 +229,11 @@ interface ProfileState {
   openToRevenueShare: boolean;
   revenueSharePercent: number;
   openToOutrightPurchase: boolean;
+  /** Migration 135: opt-in to the Wallplace Programmes supply pool. Default
+   *  false, and NOT hydrated to true for legacy rows the way the deal-type
+   *  flags above are: a programme commits the artist's piece to a wall at a
+   *  rent Wallplace sets, so the tick has to be theirs. */
+  openToProgramme: boolean;
   /** Migration 055: opt-in to "Collect from artist" at checkout. Default
    *  false so existing artists don't start receiving pickup requests
    *  until they've explicitly enabled it. */
@@ -278,6 +283,7 @@ function emptyProfile(nameSeed: string): ProfileState {
     openToRevenueShare: false,
     revenueSharePercent: 10,
     openToOutrightPurchase: false,
+    openToProgramme: false,
     offersPickup: false,
     canProvideFraming: false,
     availableSizes: [],
@@ -325,6 +331,7 @@ function initProfile(a: Artist): ProfileState {
     openToRevenueShare: a.openToRevenueShare,
     revenueSharePercent: a.revenueSharePercent || 10,
     openToOutrightPurchase: a.openToOutrightPurchase,
+    openToProgramme: a.openToProgramme ?? false,
     offersPickup: a.offersPickup ?? false,
     // Treat the legacy pair as "either provides framing", collapse to
     // the new single flag.
@@ -524,6 +531,7 @@ export default function ProfileEditorPage() {
           open_to_revenue_share: profile.openToRevenueShare,
           revenue_share_percent: profile.revenueSharePercent,
           open_to_outright_purchase: profile.openToOutrightPurchase,
+          open_to_programme: profile.openToProgramme,
           offers_pickup: profile.offersPickup,
           // Single framing flag drives both legacy columns so existing
           // search filters keep matching.
@@ -919,10 +927,16 @@ export default function ProfileEditorPage() {
             <label className={labelClass}>Deal types</label>
             <div className="grid grid-cols-2 gap-3">
               {([
-                { key: "openToFreeLoan" as const, label: "Display (with optional revenue share)" },
-                { key: "openToOutrightPurchase" as const, label: "Purchase" },
-              ]).map(({ key, label }) => (
-                <label key={key} className="flex items-center gap-2.5 cursor-pointer group">
+                { key: "openToFreeLoan" as const, label: "Display (with optional revenue share)", wide: false },
+                { key: "openToOutrightPurchase" as const, label: "Purchase", wide: false },
+                // The rent and who picks the pieces sit in the label itself,
+                // because that sentence is what the artist is agreeing to; the
+                // rest of the terms are in the note below the group. It takes
+                // the whole row rather than half of one so it reads as a
+                // sentence instead of wrapping three times in a narrow cell.
+                { key: "openToProgramme" as const, label: "Programmes (about £10 a month per piece, chosen by Wallplace)", wide: true },
+              ]).map(({ key, label, wide }) => (
+                <label key={key} className={`flex items-center gap-2.5 cursor-pointer group${wide ? " col-span-2" : ""}`}>
                   <button
                     type="button"
                     onClick={() => update(key, !profile[key])}
@@ -936,6 +950,15 @@ export default function ProfileEditorPage() {
                 </label>
               ))}
             </div>
+            <p className="text-xs text-muted mt-2 leading-relaxed">
+              A Programme places curated work in a venue for twelve months and
+              rotates it through the year. Tick the box and you join the pool we pick
+              from: Wallplace chooses which of your pieces go up and when, and pays
+              you around £10 a month for each one while it hangs. A piece usually
+              stays up for about six months, and it is not for sale anywhere else
+              until it comes down. Section 9A of the artist agreement has the full
+              terms. Leave the box unticked and nothing changes.
+            </p>
           </div>
 
           {/* Revenue share % */}
