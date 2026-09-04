@@ -169,3 +169,11 @@ describe("venue settings Account Details contact form (E10/E12)", () => {
     expect(screen.queryByText("Saved")).toBeNull();
   });
 });
+
+describe("finding the full email controls", () => {
+  it("links the per-category hub, so the weekly digest is not the only email that can be turned off here", async () => {
+    render(<VenueSettingsPage />);
+    const link = await screen.findByRole("link", { name: "Manage every email category" });
+    expect(link.getAttribute("href")).toBe("/account/email");
+  });
+});

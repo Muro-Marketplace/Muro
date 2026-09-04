@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import AccountDangerZone from "@/components/AccountDangerZone";
 import Button from "@/components/Button";
@@ -195,6 +196,17 @@ export default function SettingsPage() {
           <p className="text-xs text-red-500 mt-4">{prefsError}</p>
         )}
         <p className="text-xs text-muted mt-4">Changes save automatically.</p>
+        {/* The seven-category hub at /account/email was reachable only from
+            the footer of an email we had already sent. Customers got an
+            in-product route to it (C23); artists and venues did not. */}
+        <p className="text-xs text-muted mt-2">
+          Want to choose every kind of email, including the weekly digest and
+          recommendations?{" "}
+          <Link href="/account/email" className="text-accent hover:underline">
+            Manage every email category
+          </Link>
+          .
+        </p>
       </div>
 
       {/* Password Change */}
