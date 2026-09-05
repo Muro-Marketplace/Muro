@@ -267,9 +267,12 @@ would need. Tracked as a follow-up, not built here.
 
 ## Migration numbering
 
-Renumbered to 137 on merge: main landed `136_placements_end_date.sql` while this
-branch was in flight, and `tests/integration/migration-numbering.test.ts` caught
-the collision. Original note follows.
+Renumbered twice, ending at 138. Main landed `136_placements_end_date.sql` while
+this branch was in flight, which `tests/integration/migration-numbering.test.ts`
+caught. 137 then turned out to be taken as well, by
+`137_work_thumbnails_on_enquiries_and_notifications`, which is applied to
+production but whose `.sql` file is in no branch here, so only `list_migrations`
+showed it. Original note follows.
 
 Local migrations end at 135. Production has run ahead of the branches before, so
 check `list_migrations` against the live project before fixing the number on the
@@ -283,7 +286,7 @@ Recorded 2026-09-06, after the work landed, so the spec matches the code.
 
 **`bundle_price` is synced by a database trigger, not by the API.** The spec had
 the route doing it. AGENTS.md bans a derived column written only by application
-code, so migration 137 carries a `BEFORE INSERT OR UPDATE` trigger instead. That
+code, so migration 138 carries a `BEFORE INSERT OR UPDATE` trigger instead. That
 also covers the seed script and any direct SQL, and the route was left with one
 less thing to get wrong.
 
@@ -307,7 +310,7 @@ was completed, which also changes that case for untiered collections.
 
 ## Still outstanding
 
-- **Migration 137 is not applied to production.** The schema snapshot is updated
+- **Migration 138 is not applied to production.** The schema snapshot is updated
   on the branch per the convention in `phantom-columns.test.ts`, so the guard
   reads as if it were. Applying the migration is an owner action, and the
   snapshot should be regenerated properly with `npm run schema:snapshot` once

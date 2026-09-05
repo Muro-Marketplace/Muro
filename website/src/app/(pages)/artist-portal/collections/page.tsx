@@ -238,7 +238,7 @@ export default function CollectionsPage() {
       name: form.name,
       description: form.description,
       // A tiered collection has no single price to send: the trigger in
-      // migration 137 sets bundle_price from the cheapest tier.
+      // migration 138 sets bundle_price from the cheapest tier.
       bundlePrice: tiered ? "" : form.bundlePrice,
       workIds: form.workIds,
       workSizes: workSizesArr,

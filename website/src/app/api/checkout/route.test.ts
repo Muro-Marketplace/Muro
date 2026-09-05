@@ -1992,7 +1992,7 @@ describe("POST /api/checkout carries the buyer's identity to the order", () => {
 //
 // The rule this block exists to pin: a tiered collection NEVER falls back to
 // bundle_price. bundle_price on a tiered row is the CHEAPEST tier, kept in sync
-// by the migration 137 trigger so cards can show "From £120". Falling back to
+// by the migration 138 trigger so cards can show "From £120". Falling back to
 // it would let a buyer select the £480 tier, send a label the server cannot
 // match, and be charged £120.
 describe("POST /api/checkout collection size tiers", () => {

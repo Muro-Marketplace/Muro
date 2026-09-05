@@ -1,5 +1,5 @@
 -- ============================================
--- Migration 137: Collection size tiers
+-- Migration 138: Collection size tiers
 --
 -- A collection was a fixed set of works at one bundle_price, with one size
 -- pinned per work in work_sizes (migration 006). An artist selling a print
@@ -33,8 +33,15 @@ ALTER TABLE artist_collections
 --
 -- bundle_price stays the artist's own number on an untiered collection: with no
 -- tiers there is nothing to derive it from, so the trigger leaves it alone.
-CREATE OR REPLACE FUNCTION artist_collections_sync_bundle_price()
-  RETURNS TRIGGER LANGUAGE plpgsql AS $$
+-- search_path is pinned empty and EXECUTE is revoked, matching every other
+-- trigger function here (qa44_h_function_search_path and migration 125). The
+-- body only calls built-ins, which live in pg_catalog and are reachable
+-- regardless, and it names no table, so an empty search_path costs it nothing.
+CREATE OR REPLACE FUNCTION public.artist_collections_sync_bundle_price()
+  RETURNS TRIGGER
+  LANGUAGE plpgsql
+  SET search_path = ''
+  AS $$
 DECLARE
   cheapest NUMERIC;
 BEGIN
@@ -56,9 +63,15 @@ BEGIN
 END;
 $$;
 
+-- Firing a trigger does not check the invoker's EXECUTE privilege, so this
+-- cannot stop the trigger working. It closes the /rest/v1/rpc/ grant that
+-- migration 125 revoked across the other six.
+REVOKE EXECUTE ON FUNCTION public.artist_collections_sync_bundle_price()
+  FROM PUBLIC, anon, authenticated;
+
 DROP TRIGGER IF EXISTS artist_collections_sync_bundle_price ON artist_collections;
 CREATE TRIGGER artist_collections_sync_bundle_price
   BEFORE INSERT OR UPDATE ON artist_collections
-  FOR EACH ROW EXECUTE FUNCTION artist_collections_sync_bundle_price();
+  FOR EACH ROW EXECUTE FUNCTION public.artist_collections_sync_bundle_price();
 
 NOTIFY pgrst, 'reload schema';
