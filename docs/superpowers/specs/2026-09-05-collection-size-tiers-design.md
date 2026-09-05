@@ -270,3 +270,43 @@ would need. Tracked as a follow-up, not built here.
 Local migrations end at 135. Production has run ahead of the branches before, so
 check `list_migrations` against the live project before fixing the number on the
 new file.
+
+---
+
+## What changed during implementation
+
+Recorded 2026-09-06, after the work landed, so the spec matches the code.
+
+**`bundle_price` is synced by a database trigger, not by the API.** The spec had
+the route doing it. AGENTS.md bans a derived column written only by application
+code, so migration 136 carries a `BEFORE INSERT OR UPDATE` trigger instead. That
+also covers the seed script and any direct SQL, and the route was left with one
+less thing to get wrong.
+
+**The offer floor had to follow the tier.** Not anticipated by the spec. The 60%
+floor in `api/offers` pinned to `bundle_price`, which was correct when that was a
+collection's only price. As the cheapest tier it let a buyer looking at the £480
+set anchor on £120 and open at £72, the same class of hole as the checkout
+fallback. Fixed by reading the tier the offer names, passed through the offer
+modal's existing `sizeLabel` field. An offer naming no size still falls back to
+`bundle_price` rather than being refused, because the artist sees the number and
+no money moves without them accepting.
+
+**The stale-label fallback was a fix, not a mirror.** The spec said the detail
+route already fell back to a work's first size when a pinned label no longer
+matched. It did not: it fell back only when nothing was pinned, and otherwise
+rendered a size the work does not sell with no price beside it. The missing half
+was completed, which also changes that case for untiered collections.
+
+**A tier's own price band.** One tier renders as a plain price rather than "From
+£X", since a single tier is a named price and not a range.
+
+## Still outstanding
+
+- **Migration 136 is not applied to production.** The schema snapshot is updated
+  on the branch per the convention in `phantom-columns.test.ts`, so the guard
+  reads as if it were. Applying the migration is an owner action, and the
+  snapshot should be regenerated properly with `npm run schema:snapshot` once
+  `SUPABASE_ACCESS_TOKEN` is available.
+- **Collection sales still decrement no stock**, as scoped. See "Known gap left
+  open" above.
