@@ -1,0 +1,12 @@
+/api/cron/weekly-artist-digest  0 9 * * 2
+/api/cron/weekly-venue-digest  0 9 * * 3
+/api/cron/placement-ending-soon  0 10 * * *
+/api/cron/placement-review-request  0 11 * * *
+/api/cron/inactive-users  0 10 * * *
+/api/cron/onboarding-nudges  0 10 * * *
+/api/cron/qr-scan-digest  0 9 * * *
+/api/stripe-connect/process-pending  0 8 * * *
+/api/cron/order-delivery-followup  0 12 * * *
+/api/cron/referral-window  30 10 * * *
+/api/cron/subscription-reconcile  30 7 * * *
+/api/cron/programme-rent-settlement  0 9 1 * *
