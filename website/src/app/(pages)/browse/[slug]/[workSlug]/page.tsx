@@ -9,6 +9,7 @@ import ArtworkImageViewer from "@/components/ArtworkImageViewer";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import type { Metadata } from "next";
 import { isFlagOn } from "@/lib/feature-flags";
+import { artworkMetaDescription } from "@/lib/artwork-meta";
 
 // Static params for seed artists, database artists use dynamic fallback
 export async function generateStaticParams() {
@@ -48,9 +49,7 @@ export async function generateMetadata({
     return { title: "Artwork not found" };
   }
 
-  const description = work.description && work.description.trim()
-    ? work.description.slice(0, 160)
-    : `${work.title}, ${work.medium}, ${work.dimensions}. ${work.available ? "Available" : "Sold"}. By ${artist.name} on Wallplace.`;
+  const description = artworkMetaDescription(work, artist.name);
 
   return {
     title: `${work.title} by ${artist.name} | Wallplace`,
