@@ -1,6 +1,65 @@
-# Launch audit 2026-09-05: INTERIM findings (sweep paused, nothing verified)
+# Launch audit 2026-09-05: INTERIM findings (sweep paused, 38 fixed, the rest unverified)
 
 **Status: interim and unverified.** The owner paused the audit for usage on 2026-09-05 at 12:32 BST after 10 of 49 sweep finders had reported. Every entry below is a FINDER's candidate: the adversarial verification pass (a second agent instructed to disprove each claim) has NOT run, no fix has been made, and the severities are the finders' own. Treat each as a claim with quoted evidence, not a confirmed defect. The full structured data, including every `verified_ok` line, is in `interim-candidates.json`.
+
+## Fixed in this session (2026-09-05, after the pause)
+
+The owner asked for the four Highs and the main Medium and Low themes to be fixed. 38 findings are fixed across 39 commits on this branch, each with a test written first and watched to fail, then `npm run check` green on the final tree (result recorded at the end of this section). Counts: 3 High, 27 Medium, 8 Low. These fixes were made directly, without further agents; the adversarial verification pass was replaced by the failing test for each finding, which is the reproduction.
+
+| Finding | Severity | Commit | What a user can now do |
+|---|---|---|---|
+| LA-C002 | High | 67341283 | Guest who opens the receipt email's tracking link with an expired or altered token gets a blank page: the error is set but never rendered |
+| LA-C003 | High | 84bc3d56 | Venue's Saved page only shows works from the 41 seed artists; a saved work by any real artist silently never appears |
+| LA-C004 | High | dd64ce24 | Signed-out venue following an email deep link (Pay now for an accepted offer, Open conversation, Print labels) lands on the dashboard after login; the deep link is dropped and the auto-checkout never fires |
+| LA-C005 | Medium | 79d97fde, 98bd41d4 | Analytics shows zeros as fact when any of its three API calls fails; no error state on the page |
+| LA-C006 | Medium | 20d55657 | Analytics placements table shows lower-case raw status text and never colours a badge |
+| LA-C007 | Medium | 68ab311d | Analytics 'Performance by Venue' table renders as an empty header-only table for every artist with no placements |
+| LA-C008 | Medium | 65e67f1c | Analytics placements table 'Revenue' column is always '-' even for placements that have earned money |
+| LA-C009 | Medium | 2ff30d0c | Analytics Placements table never shows revenue; it reads the dead placements.revenue column instead of the revenue_earned_gbp the API computes |
+| LA-C010 | Medium | 9d1de60b | Billing 'Change Plan' feature bullets are hard-coded and disagree with the canonical plan feature list |
+| LA-C011 | Medium | 1100be5f | Billing 'Change Plan' cards list 'Message venues directly' as a Premium/Pro feature while the same page and /pricing say Core can message venues |
+| LA-C015 | Medium | fdc2eaac | Deleting a collection or toggling Published/Draft fails silently: the card snaps back with no message |
+| LA-C020 | Medium | 93d9164d, 302c7cf0 | Browse page has no error state: if the artists or collections fetch fails it silently shows only the seed catalogue |
+| LA-C022 | Medium | 48f9a1e3 | Address book empty state's "Add address" button links to "#" and does nothing |
+| LA-C023 | Medium | c22d97cc | A failed or non-2xx address load is shown as "No saved addresses" |
+| LA-C024 | Medium | 87f03e77 | Customer with a collect-from-venue order is shown "Shipping to" with a blank address and never sees where to collect the work |
+| LA-C027 | Medium | d27096f0 | /feature-requests shows 'No open requests yet.' when the API fails |
+| LA-C028 | Medium | 3d2e250e | A signed-in user's feature request is saved as anonymous and they get no acknowledgement email |
+| LA-C029 | Medium | d9307774 | Confirm delivery failure replaces the whole order view with one line, and a network failure shows nothing |
+| LA-C030 | Medium | 5f8fa28f | Pricing hero says the tiers differ by platform fee, but every tier pays the same flat 15% |
+| LA-C032 | Medium | 41cbbe54 | Pricing comparison table tells artists they get 3/6/15 venue approaches a week while the FAQ and plan cards on the same page say 7/15/30 |
+| LA-C034 | Medium | 9ce3fca9 | Venue confirmation email and admin alert are sent before the account exists; a failed signUp leaves a 'registered' venue with no account |
+| LA-C035 | Medium | 9b77867d | Venue registration posts the venue's plaintext password to /api/register-venue, which neither needs nor stores it |
+| LA-C036 | Medium | bfa9baf9 | Analytics tiles 'Unique works scanned' and 'Artists scanned' can never exceed 10 because they count the API's top-10 lists, not the distinct totals |
+| LA-C037 | Medium | f33937f1 | Venue analytics shows 'No scans yet' and 0 in every tile when the analytics API fails or the venue profile is missing; no error message, no retry |
+| LA-C045 | Medium | 8375b51d | Placements page shows 'No placements found.' when the list request fails |
+| LA-C046 | Medium | dc6aab7b | A just-sent placement request is shown with a fake id, so its Open, Cancel and QR-label actions fail until the page is reloaded |
+| LA-C047 | Medium | 50e3d6dd | Wall editor bounces a dual-role venue owner to the homepage on userType alone, unlike the rest of the portal |
+| LA-C048 | Medium | 4c5f8e45 | Artist agreement acceptance is recorded without the signed-in user's identity (user_id NULL on every live row) |
+| LA-C053 | Medium | b9ec59de | An account that owns both an artist and a venue profile is let into the venue portal but Dashboard, Orders and Placements are served the artist's data |
+| LA-C054 | Medium | 18c88c64 | Delete-account copy says orders are permanently deleted; the route keeps them and anonymises personal details |
+| LA-C064 | Low | 8bcd6f9d | Terms impose a £100 signed-for delivery duty on artists that the Artist Agreement never mentions |
+| LA-C065 | Low | 601405cb | Returning from Stripe Connect onboarding, the billing page ignores the stripe_connect=complete|refresh parameter it is sent |
+| LA-C066 | Low | 801371de | A failed payout-status lookup renders the Payouts panel as 'Set Up Payouts' for an artist whose payouts are already active |
+| LA-C067 | Low | aa0b5c04 | Referral code 'Copy' button gives no confirmation and ignores clipboard failures |
+| LA-C080 | Low | d5311733 | After confirming delivery, the "Request Refund" control disappears until the page is reloaded |
+| LA-C081 | Low | 8bcd6f9d | Saved artists that no longer exist in the catalogue still render a title-cased slug linking to a 404 |
+| LA-C084 | Low | 7d1bcadc | Order tracking form placeholder shows an order-ID format that no real order has |
+| LA-C094 | Low | f4ea1dc8 | Dashboard stat tiles render an em dash while loading |
+
+**High not fixed, owner action:** LA-C001, the three QA test blog posts published in production. Production data, not code; the SQL is already in `docs/qa/LAUNCH-MANUAL-CHECKLIST.md` section 1.
+
+**Left open in the themes worked, with the reason:**
+
+- Silent failures not yet converted to an error state: LA-C012 (collections delete or publish toggle reverts silently), LA-C017 (browse shows only the seed catalogue on a failed fetch, a deliberate fallback that now lacks a notice), LA-C026 (order stepper confirm-delivery error replaces the view), LA-C042 (venue placements list, a 2,000-line page), LA-C087 and LA-C088 (venue settings contact fields and payouts card), LA-C090 and LA-C091 (wall editor saves). Same pattern as the fixes above; each needs its own test and commit.
+- Buy path: LA-C016 and LA-C019 (lightbox and gallery-overlay cart lines omit per-size shipping, frame and dimensions, so shipping can differ from the artwork page for the same work), LA-C068 (collection page offers Buy Collection with no bundle price), LA-C049 (cart size label cap of 50 versus 100 plus 80 at the source). Not started.
+- Identity and roles: LA-C050 (an account owning both an artist and a venue profile is served the artist's data in the venue portal; needs a portal-context parameter on three routes), LA-C031 (venue registration record and emails are written before the auth account exists), LA-C052 and LA-C100 (competing portal guards). Not started; LA-C050 and LA-C031 change request flows and want a second look before they are fixed.
+- Owner-side, not code: LA-C056 (rate limiting is per serverless instance because the Upstash variables are unset in production).
+- Every other Low in the list below remains OPEN and unverified.
+
+**Sweep coverage is unchanged:** only the eight page slices ran. Routes, emails, copy sweeps, money paths, auth and RLS, crons, invariants, the deployed-site crawl and the guards' blind spots are still unaudited.
+
+**Gate on the final tree (`npm run check`, exit 0):** eslint `✖ 216 problems (0 errors, 216 warnings)` (the 216-warning baseline held, no new warnings); tsc clean; vitest `Test Files 453 passed (453)`, `Tests 4725 passed (4725)` (from 439 files and 4,664 tests at the start); audit:allowlist, depcheck, email:render and email:audit all passed.
 
 ## Coverage so far
 
@@ -35,7 +94,7 @@ Evidence (finder's, unverified): page.tsx:75-99 token effect sets tokenAuthed=tr
 Root cause (claimed): The error paragraph lives inside the manual-lookup form, and the token branch hides that form, so the token-path error has no render site.  
 Fixable (finder's view): yes  
 Suggested fix: Render {error && …} outside the form, and when tokenAuthed && error also show the manual form so the guest can fall back to ID + email. Pin with a jsdom test: stub window.location.search='?t=bad', mock fetch 401 {error:'Invalid or expired link'}, expect the message and the form to be visible.  
-Status: OPEN, unverified  
+Status: FIXED in 67341283 (this session, test-first, gate green)  
 
 ### LA-C003  [High]  Venue's Saved page only shows works from the 41 seed artists; a saved work by any real artist silently never appears
 
@@ -46,7 +105,7 @@ Evidence (finder's, unverified): saved/page.tsx:20-29: `const allWorks = getGall
 Root cause (claimed): The venue saved page was never migrated from the static seed catalogue to the merged /api/browse-artists catalogue, so any work id not in src/data/artists.ts is dropped by the `.filter(Boolean)`.  
 Fixable (finder's view): yes  
 Suggested fix: Resolve saved work ids against /api/browse-artists (as customer-portal/saved does, including its catalogueLoaded guard) instead of getGalleryWorks(). Pin with a jsdom test: savedItems containing a work id absent from the seed renders a card once /api/browse-artists returns it.  
-Status: OPEN, unverified  
+Status: FIXED in 84bc3d56 (this session, test-first, gate green)  
 
 ### LA-C004  [High]  Signed-out venue following an email deep link (Pay now for an accepted offer, Open conversation, Print labels) lands on the dashboard after login; the deep link is dropped and the auto-checkout never fires
 
@@ -57,7 +116,7 @@ Evidence (finder's, unverified): PortalGuard.tsx:104-107 `if (!loading && !user)
 Root cause (claimed): Both portal guards redirect to a bare /login and never append ?next=, so every deep link into the venue portal is lost for a signed-out user even though the login page supports ?next= and the offers page was written expecting it.  
 Fixable (finder's view): yes  
 Suggested fix: In PortalGuard (and VenuePortalLayout.tsx:92) replace with `router.replace(`/login?next=${encodeURIComponent(pathname + window.location.search)}`)` (usePathname is already in scope; read window.location.search inside the effect as login/page.tsx does). Pin with a PortalGuard.test.tsx case: logged out at /venue-portal/offers?pay=off_1 expects replace called with '/login?next=%2Fvenue-portal%2Foffers%3Fpay%3Doff_1'. The dead block in offers/page.tsx:15-20 can then be removed.  
-Status: OPEN, unverified  
+Status: FIXED in dd64ce24 (this session, test-first, gate green)  
 
 ## Medium (52)
 
@@ -70,7 +129,7 @@ Evidence (finder's, unverified): Lines 90, 95, 107: `.catch(() => {})` on all th
 Root cause (claimed): All load errors are swallowed and the UI falls back to zero defaults.  
 Fixable (finder's view): yes  
 Suggested fix: Track a loadError per fetch and render an inline 'Could not load analytics. Try again.' message in place of the zero cards; test with authFetch mocked to reject and assert the message appears and no '0' metric is shown.  
-Status: OPEN, unverified  
+Status: FIXED in 79d97fde, 98bd41d4 (this session, test-first, gate green)  
 
 ### LA-C006  [Medium]  Analytics placements table shows lower-case raw status text and never colours a badge
 
@@ -81,7 +140,7 @@ Evidence (finder's, unverified): Lines 427-429 compare `p.status === "Active"`, 
 Root cause (claimed): Title-case string comparison against lower-case stored values, left behind when the count logic was fixed (bugs 12/13).  
 Fixable (finder's view): yes  
 Suggested fix: Compare `p.status.toLowerCase()` and render a labelled status (e.g. a STATUS_LABELS map) instead of the raw value; add a render test with a lower-case 'active' placement asserting the green class and 'Active' text.  
-Status: OPEN, unverified  
+Status: FIXED in 20d55657 (this session, test-first, gate green)  
 
 ### LA-C007  [Medium]  Analytics 'Performance by Venue' table renders as an empty header-only table for every artist with no placements
 
@@ -92,7 +151,7 @@ Evidence (finder's, unverified): Line 443: `{venuePerformance.length > 0 && (` t
 Root cause (claimed): Typo: the guard references the function identifier (arity 3) instead of the memoised rows array.  
 Fixable (finder's view): yes  
 Suggested fix: Change line 443 to `venuePerformanceRows.length > 0`. Pin with a jsdom render test that mocks /api/placements and /api/orders as empty and asserts 'Performance by Venue' is absent.  
-Status: OPEN, unverified  
+Status: FIXED in 68ab311d (this session, test-first, gate green)  
 
 ### LA-C008  [Medium]  Analytics placements table 'Revenue' column is always '-' even for placements that have earned money
 
@@ -103,7 +162,7 @@ Evidence (finder's, unverified): Line 86: `revenue: p.revenue ? \`£${p.revenue}
 Root cause (claimed): The page reads the dead `revenue` column instead of the `revenue_earned_gbp` the route computes from orders.  
 Fixable (finder's view): yes  
 Suggested fix: Map `revenue` from `p.revenue_earned_gbp` (format with formatPounds, null when 0). Pin with a render test feeding a placement with revenue_earned_gbp: 120 and asserting '£120.00'.  
-Status: OPEN, unverified  
+Status: FIXED in 65e67f1c (this session, test-first, gate green)  
 
 ### LA-C009  [Medium]  Analytics Placements table never shows revenue; it reads the dead placements.revenue column instead of the revenue_earned_gbp the API computes
 
@@ -114,7 +173,7 @@ Evidence (finder's, unverified): page.tsx:86 `revenue: p.revenue ? `£${p.revenu
 Root cause (claimed): The page maps the wrong field from the placements response.  
 Fixable (finder's view): yes  
 Suggested fix: Map `revenue: p.revenue_earned_gbp > 0 ? formatPounds(p.revenue_earned_gbp) : null`. Test: feed a placement with revenue_earned_gbp 120 and assert '£120.00' renders in the table.  
-Status: OPEN, unverified  
+Status: FIXED in 2ff30d0c (this session, test-first, gate green)  
 
 ### LA-C010  [Medium]  Billing 'Change Plan' feature bullets are hard-coded and disagree with the canonical plan feature list
 
@@ -125,7 +184,7 @@ Evidence (finder's, unverified): Lines 561-563 hard-code: core 'Up to 8 works / 
 Root cause (claimed): The billing page kept its own inline bullet list instead of rendering `planFeaturesFor(p)`; plan-features.ts was introduced to stop exactly this drift.  
 Fixable (finder's view): yes  
 Suggested fix: Replace the three inline `<li>` groups with `planFeaturesFor(p).map(...)`; pin with a test asserting the Premium card contains 'Approach 15 new venues a week' and no card contains 'Message venues directly'.  
-Status: OPEN, unverified  
+Status: FIXED in 9d1de60b (this session, test-first, gate green)  
 
 ### LA-C011  [Medium]  Billing 'Change Plan' cards list 'Message venues directly' as a Premium/Pro feature while the same page and /pricing say Core can message venues
 
@@ -136,7 +195,7 @@ Evidence (finder's, unverified): billing/page.tsx:395 renders `${details.approac
 Root cause (claimed): Hard-coded bullet lists that predate the outreach-cap model.  
 Fixable (finder's view): yes  
 Suggested fix: Remove 'Message venues directly' from the Premium/Pro lists (or state the approach counts on all three cards from OUTREACH_WEEKLY_LIMIT). Render test asserting no card claims venue messaging as an upgrade-only feature.  
-Status: OPEN, unverified  
+Status: FIXED in 1100be5f (this session, test-first, gate green)  
 
 ### LA-C012  [Medium]  Billing page uses US spelling 'Canceled' in the status badge and lapsed-subscription banner
 
@@ -180,7 +239,7 @@ Evidence (finder's, unverified): handleDelete lines 208-216: `try { await mutate
 Root cause (claimed): Two mutation handlers revert optimistic state without surfacing the failure.  
 Fixable (finder's view): yes  
 Suggested fix: Add a list-level error string set from apiErrorMessage(err, ...) in both catches and render it above the grid. Test: mutate rejects, assert the alert text renders and the card is restored.  
-Status: OPEN, unverified  
+Status: FIXED in fdc2eaac (this session, test-first, gate green)  
 
 ### LA-C016  [Medium]  Signed-out artist following the offer email link lands on /login and is not returned to the offers page after signing in
 
@@ -235,7 +294,7 @@ Evidence (finder's, unverified): page.tsx:569-584: both fetches end in .catch(()
 Root cause (claimed): Fetch failures are swallowed to preserve the seed paint, with no user-visible fallback notice.  
 Fixable (finder's view): yes  
 Suggested fix: Keep the seed paint but set a loadError flag in the catch and render a small 'Live listings could not be loaded' banner with a retry button. Test: mock fetch rejecting, assert the banner renders.  
-Status: OPEN, unverified  
+Status: FIXED in 93d9164d, 302c7cf0 (this session, test-first, gate green)  
 
 ### LA-C021  [Medium]  Clearing "Address line 2" when editing a saved address is silently ignored; the old line reappears after "Address updated"
 
@@ -257,7 +316,7 @@ Evidence (finder's, unverified): addresses/page.tsx:302-307 passes `cta={{ label
 Root cause (claimed): EmptyState only supports an href CTA, so a placeholder anchor was used instead of the startCreate handler.  
 Fixable (finder's view): yes  
 Suggested fix: Remove the `cta` from this EmptyState (the header "Add address" button is already visible) or extend EmptyState with an `onClick` action and wire it to `startCreate`; add a test asserting the empty state renders no anchor with href "#".  
-Status: OPEN, unverified  
+Status: FIXED in 48f9a1e3 (this session, test-first, gate green)  
 
 ### LA-C023  [Medium]  A failed or non-2xx address load is shown as "No saved addresses"
 
@@ -268,7 +327,7 @@ Evidence (finder's, unverified): addresses/page.tsx:55-61: `authFetch("/api/cust
 Root cause (claimed): Same class as the C2 fix already applied to the orders dashboard: the read path has no error state distinct from the empty state.  
 Fixable (finder's view): yes  
 Suggested fix: Throw on `!r.ok`, track a `loadError` flag and render an error line with a retry button (mirroring customer-portal/page.tsx:569-578) instead of EmptyState; test with a 500 Response asserting "No saved addresses" is absent.  
-Status: OPEN, unverified  
+Status: FIXED in c22d97cc (this session, test-first, gate green)  
 
 ### LA-C024  [Medium]  Customer with a collect-from-venue order is shown "Shipping to" with a blank address and never sees where to collect the work
 
@@ -279,7 +338,7 @@ Evidence (finder's, unverified): page.tsx:367-372 renders `Shipping to` + `{sele
 Root cause (claimed): The detail panel was written for shipped orders; when collection orders were added (rows 870-874) the confirm control was adapted but the address block was not, and the `collection_address` field was typed but never read.  
 Fixable (finder's view): yes  
 Suggested fix: When `isCollectionOrder(selected)`, render a "Collect from" block with `selected.collection_address` (with a fallback line if null) instead of the shipping block; add a test on the existing collectOrder fixture asserting the address text is present and "Shipping to" is absent.  
-Status: OPEN, unverified  
+Status: FIXED in 87f03e77 (this session, test-first, gate green)  
 
 ### LA-C025  [Medium]  A failed saved-items load, or a failed catalogue load, is shown as "No saved works yet" with no feedback
 
@@ -312,7 +371,7 @@ Evidence (finder's, unverified): page.tsx:52-59: `const res = await fetch(...); 
 Root cause (claimed): No error state exists; a failed load collapses into the empty state.  
 Fixable (finder's view): yes  
 Suggested fix: Check `res.ok`, hold an `error` state and render 'Couldn't load requests. Try again.' with a retry that calls load(); test: mock fetch to 500 and assert the empty-state text is absent and the error text present.  
-Status: OPEN, unverified  
+Status: FIXED in d27096f0 (this session, test-first, gate green)  
 
 ### LA-C028  [Medium]  A signed-in user's feature request is saved as anonymous and they get no acknowledgement email
 
@@ -323,7 +382,7 @@ Evidence (finder's, unverified): page.tsx:73-82 posts with bare `fetch("/api/fea
 Root cause (claimed): The submit handler uses plain fetch instead of authFetch/mutate, so the route never receives the session it is written to link to.  
 Fixable (finder's view): yes  
 Suggested fix: Send the POST through `mutate` (already imported and used for upvotes) so the bearer token reaches the route; test: with useAuth returning a user, assert the request carries Authorization, and a route unit test asserts user_id and email are recorded and feedback_received is sent.  
-Status: OPEN, unverified  
+Status: FIXED in 3d2e250e (this session, test-first, gate green)  
 
 ### LA-C029  [Medium]  Confirm delivery failure replaces the whole order view with one line, and a network failure shows nothing
 
@@ -334,7 +393,7 @@ Evidence (finder's, unverified): page.tsx:156-176 handleConfirm is try/finally w
 Root cause (claimed): Confirm failures reuse the load-error state instead of a local one, and the handler has no catch for thrown fetches.  
 Fixable (finder's view): yes  
 Suggested fix: Add a confirmError state rendered inside the Confirm panel, wrap the request in try/catch, and only show the Confirm button when order.buyerEmail matches the viewer or a token is present. Test: mock POST 403 and a rejected fetch; assert the stepper stays and a message appears.  
-Status: OPEN, unverified  
+Status: FIXED in d9307774 (this session, test-first, gate green)  
 
 ### LA-C030  [Medium]  Pricing hero says the tiers differ by platform fee, but every tier pays the same flat 15%
 
@@ -345,7 +404,7 @@ Evidence (finder's, unverified): pricing/page.tsx:138-140: 'All tiers give you a
 Root cause (claimed): Hero copy written for the old 15/8/5 fee ladder was not updated when the fee went flat on 2026-08-28.  
 Fixable (finder's view): yes  
 Suggested fix: Rewrite to 'The difference is visibility and capacity: how many works, placements and venue approaches you get.' Pin with a public-claims assertion that pricing/page.tsx does not match /difference is .* platform fee/.  
-Status: OPEN, unverified  
+Status: FIXED in 5f8fa28f (this session, test-first, gate green)  
 
 ### LA-C031  [Medium]  Pricing comparison table promises Premium a 'Featured' artist profile, which only Pro receives
 
@@ -367,7 +426,7 @@ Evidence (finder's, unverified): pricing/page.tsx:40-45 hard-codes `core: "3 a w
 Root cause (claimed): The comparison table was left as literals when the cap was raised on 2026-09-03; every other surface reads OUTREACH_WEEKLY_LIMIT.  
 Fixable (finder's view): yes  
 Suggested fix: Build the row from the constant: `core: \`${OUTREACH_WEEKLY_LIMIT.core} a week\``, etc. Pin with a source-read assertion in tests/integration/public-claims.test.ts that pricing/page.tsx contains no `"\d+ a week"` literal.  
-Status: OPEN, unverified  
+Status: FIXED in 41cbbe54 (this session, test-first, gate green)  
 
 ### LA-C033  [Medium]  Privacy policy names 'Wallplace Ltd' as data controller while the company is not incorporated
 
@@ -389,7 +448,7 @@ Evidence (finder's, unverified): Call order at page.tsx:161 (register-venue POST
 Root cause (claimed): The registration record and the emails that announce it are committed before the account creation they describe.  
 Fixable (finder's view): yes  
 Suggested fix: Call supabase.auth.signUp first and POST /api/register-venue only after it succeeds (ensureVenueProfile already tolerates a missing registration by falling back to display_name). Pin the order in signup/venue/page.test.tsx with mock invocationCallOrder.  
-Status: OPEN, unverified  
+Status: FIXED in 9ce3fca9 (this session, test-first, gate green)  
 
 ### LA-C035  [Medium]  Venue registration posts the venue's plaintext password to /api/register-venue, which neither needs nor stores it
 
@@ -400,7 +459,7 @@ Evidence (finder's, unverified): page.tsx:161-165 `body: JSON.stringify(form)`; 
 Root cause (claimed): The whole form state object is serialised wholesale instead of the registration fields.  
 Fixable (finder's view): yes  
 Suggested fix: Destructure password and confirmPassword out of form before JSON.stringify in the register-venue POST. Add an assertion to signup/venue/page.test.tsx that the /api/register-venue fetch body contains no password key.  
-Status: OPEN, unverified  
+Status: FIXED in 9b77867d (this session, test-first, gate green)  
 
 ### LA-C036  [Medium]  Analytics tiles 'Unique works scanned' and 'Artists scanned' can never exceed 10 because they count the API's top-10 lists, not the distinct totals
 
@@ -411,7 +470,7 @@ Evidence (finder's, unverified): analytics/page.tsx:106 `{loading ? "…" : data
 Root cause (claimed): The page derives distinct counts from lists the API caps at ten, and the API exposes no distinct-count fields.  
 Fixable (finder's view): yes  
 Suggested fix: Return `unique_works: Object.keys(workScanCounts).length` and `unique_artists: Object.keys(artistScanCounts).length` from the route (additive fields) and read them on the page. Pin with a route test feeding 12 distinct work ids and asserting unique_works === 12 while top_works.length === 10.  
-Status: OPEN, unverified  
+Status: FIXED in bfa9baf9 (this session, test-first, gate green)  
 
 ### LA-C037  [Medium]  Venue analytics shows 'No scans yet' and 0 in every tile when the analytics API fails or the venue profile is missing; no error message, no retry
 
@@ -422,7 +481,7 @@ Evidence (finder's, unverified): analytics/page.tsx:47-56 `if (d.error) { consol
 Root cause (claimed): The error path collapses into the same null data the empty state renders from; the page has no error state.  
 Fixable (finder's view): yes  
 Suggested fix: Hold an `error` string in state when `!res.ok`, `d.error` or the catch fires; render it with a 'Try again' button instead of the empty copy. Add analytics/page.test.tsx (jsdom, mock authFetch returning `{error:'Venue profile not found'}` with status 404) asserting the error text renders and 'No scans yet' does not.  
-Status: OPEN, unverified  
+Status: FIXED in f33937f1 (this session, test-first, gate green)  
 
 ### LA-C038  [Medium]  QR Labels page shows 'No active placements yet' when the placements request fails, hiding the error from a venue that does have placements
 
@@ -510,7 +569,7 @@ Evidence (finder's, unverified): placements/page.tsx:464-546 loadPlacements: `tr
 Root cause (claimed): Silent catch on the primary fetch with no error state.  
 Fixable (finder's view): yes  
 Suggested fix: Track a loadError and render an error banner with Retry; jsdom test with rejected authFetch asserts the banner.  
-Status: OPEN, unverified  
+Status: FIXED in 8375b51d (this session, test-first, gate green)  
 
 ### LA-C046  [Medium]  A just-sent placement request is shown with a fake id, so its Open, Cancel and QR-label actions fail until the page is reloaded
 
@@ -521,7 +580,7 @@ Evidence (finder's, unverified): placements/page.tsx:645-646 `id: \`p-${Date.now
 Root cause (claimed): Optimistic insert with a client-generated id and no refetch after the POST, while the API returns no created row.  
 Fixable (finder's view): yes  
 Suggested fix: After a successful POST call loadPlacements(), loadLiveActiveCount() (and dispatch the placement-changed event) instead of inserting a synthetic row; jsdom test: after POST resolves, authFetch('/api/placements') is called again and no id starting 'p-' is rendered.  
-Status: OPEN, unverified  
+Status: FIXED in dc6aab7b (this session, test-first, gate green)  
 
 ### LA-C047  [Medium]  Wall editor bounces a dual-role venue owner to the homepage on userType alone, unlike the rest of the portal
 
@@ -532,7 +591,7 @@ Evidence (finder's, unverified): walls/[id]/page.tsx:88-91: `if (userType && use
 Root cause (claimed): The full-bleed editor replicates an older metadata-only role check inline (its header comment says so) and was not updated with the ownership-based check.  
 Fixable (finder's view): yes  
 Suggested fix: Remove the inline userType bounce (venue-portal/layout.tsx already wraps this route in PortalGuard allowedType="venue") or mirror the ownsVenue check; jsdom test: userType 'artist' with a session does not call router.replace('/').  
-Status: OPEN, unverified  
+Status: FIXED in 50e3d6dd (this session, test-first, gate green)  
 
 ### LA-C048  [Medium]  Artist agreement acceptance is recorded without the signed-in user's identity (user_id NULL on every live row)
 
@@ -543,7 +602,7 @@ Evidence (finder's, unverified): ApplicationForm.tsx:285 submits /api/apply thro
 Root cause (claimed): The two terms POSTs predate the auth gate on /apply and were never moved to mutate() when the /api/apply call was.  
 Fixable (finder's view): yes  
 Suggested fix: Replace both fetch("/api/terms/accept") calls in ApplicationForm with mutate("/api/terms/accept", …).catch(() => {}) so the route's authenticated branch stamps user_id and the token email. Pin with a jsdom ApplicationForm test that mocks mutate and asserts it is called for both terms types.  
-Status: OPEN, unverified  
+Status: FIXED in 4c5f8e45 (this session, test-first, gate green)  
 
 ### LA-C049  [Medium]  A transient failure of /api/artist-profile sends an approved artist to the application form with no message
 
@@ -598,7 +657,7 @@ Evidence (finder's, unverified): PortalGuard.tsx:108-111 admits the user when `/
 Root cause (claimed): The 3.9 fix made the client-side gate ownership-aware, but the three APIs still infer one role per user with artist taking precedence, so a venue portal page for a dual-role user reads the wrong side.  
 Fixable (finder's view): yes  
 Suggested fix: Let the three GETs accept an explicit portal context (e.g. `?as=venue`, honoured only when the caller owns a venue_profiles row) and have the venue pages send it; pin with a route test for a user who owns both profiles.  
-Status: OPEN, unverified  
+Status: FIXED in b9ec59de (this session, test-first, gate green)  
 
 ### LA-C054  [Medium]  Delete-account copy says orders are permanently deleted; the route keeps them and anonymises personal details
 
@@ -609,7 +668,7 @@ Evidence (finder's, unverified): AccountDangerZone.tsx:54-57 copy quoted above, 
 Root cause (claimed): The component copy predates the C14a retention policy change in the route and was not updated.  
 Fixable (finder's view): yes  
 Suggested fix: Reword to say profile, messages and saved items are deleted and that order records are kept for tax and legal reasons with personal details removed; pin the sentence in AccountDangerZone.test.tsx.  
-Status: OPEN, unverified  
+Status: FIXED in 18c88c64 (this session, test-first, gate green)  
 
 ### LA-C055  [Medium]  An account that owns an artist profile but carries a different user_type cannot open any artist portal page; ArtistPortalLayout bounces on metadata alone
 
@@ -721,7 +780,7 @@ Evidence (finder's, unverified): terms/page.tsx:98 carries the signed-for rule; 
 Root cause (claimed): The rule was added to the buyer terms without the matching clause in the artist document.  
 Fixable (finder's view): yes  
 Suggested fix: Add the signed-for (£100+) and proof-of-signature bullet to Artist Agreement section 7; pin with a public-claims test that both files mention signed-for delivery.  
-Status: OPEN, unverified  
+Status: FIXED in 8bcd6f9d (this session, test-first, gate green)  
 
 ### LA-C065  [Low]  Returning from Stripe Connect onboarding, the billing page ignores the stripe_connect=complete|refresh parameter it is sent
 
@@ -732,7 +791,7 @@ Evidence (finder's, unverified): src/app/api/stripe-connect/onboard/route.ts:104
 Root cause (claimed): The page reads two of the four query parameters it is sent.  
 Fixable (finder's view): yes  
 Suggested fix: Read stripe_connect: on refresh show 'Your Stripe link expired, start again', on complete a success line, then replaceState. jsdom test with each parameter present.  
-Status: OPEN, unverified  
+Status: FIXED in 601405cb (this session, test-first, gate green)  
 
 ### LA-C066  [Low]  A failed payout-status lookup renders the Payouts panel as 'Set Up Payouts' for an artist whose payouts are already active
 
@@ -743,7 +802,7 @@ Evidence (finder's, unverified): Lines 201-207 `authFetch("/api/stripe-connect/s
 Root cause (claimed): No error state for the payout-status load; null is treated as 'no account'.  
 Fixable (finder's view): yes  
 Suggested fix: Check res.ok and set connectError('Couldn't check your payout status right now.') for the load path instead of falling into the no-account branch. Test with a 500 Response.  
-Status: OPEN, unverified  
+Status: FIXED in 801371de (this session, test-first, gate green)  
 
 ### LA-C067  [Low]  Referral code 'Copy' button gives no confirmation and ignores clipboard failures
 
@@ -754,7 +813,7 @@ Evidence (finder's, unverified): Line 374: `onClick={() => { navigator.clipboard
 Root cause (claimed): Fire-and-forget clipboard call without feedback.  
 Fixable (finder's view): yes  
 Suggested fix: `await navigator.clipboard.writeText(...)` then `showToast("Referral code copied")`, with a catch that toasts an error; test asserts showToast is called.  
-Status: OPEN, unverified  
+Status: FIXED in aa0b5c04 (this session, test-first, gate green)  
 
 ### LA-C068  [Low]  Collections list shows 'No collections yet.' when the list request fails, and the API itself answers 200 with an empty list on a database error
 
@@ -897,7 +956,7 @@ Evidence (finder's, unverified): page.tsx:189-191 updates local state with `{ ..
 Root cause (claimed): The optimistic local update inside the confirmDelivery handler omits the field the eligibility check depends on.  
 Fixable (finder's view): no, owner-gated money handler  
 Suggested fix: Add `delivered_at: new Date().toISOString()` to the local map in confirmDelivery's success branch, or re-fetch orders after a 2xx; test that "Request Refund" is offered immediately after a successful confirm.  
-Status: OPEN, unverified  
+Status: FIXED in d5311733 (this session, test-first, gate green)  
 
 ### LA-C081  [Low]  Saved artists that no longer exist in the catalogue still render a title-cased slug linking to a 404
 
@@ -908,7 +967,7 @@ Evidence (finder's, unverified): saved/page.tsx:235-241 renders `<Link href={lin
 Root cause (claimed): C7 fixed the work case only; the artist case has the same failure shape for a removed artist.  
 Fixable (finder's view): yes  
 Suggested fix: For artist items, resolve `allArtists.find((a) => a.slug === item.item_id)`; when `catalogueLoaded` and no match, render "This artist is no longer available" without a link; extend the C7 test.  
-Status: OPEN, unverified  
+Status: FIXED in 8bcd6f9d (this session, test-first, gate green)  
 
 ### LA-C082  [Low]  Resend-verification from the login page drops the destination, so the new confirmation link lands on /browse instead of /apply
 
@@ -941,7 +1000,7 @@ Evidence (finder's, unverified): Placeholder text at line 169. src/lib/orders/or
 Root cause (claimed): Placeholder written before the order-ID scheme and never updated.  
 Fixable (finder's view): yes  
 Suggested fix: Change the placeholder to the real shape, e.g. 'e.g. WS-3F9A1B2C4D5E6F70', and assert it in orders/track/page.test.tsx.  
-Status: OPEN, unverified  
+Status: FIXED in 7d1bcadc (this session, test-first, gate green)  
 
 ### LA-C085  [Low]  Programmes form fields have no length limits, so an over-long note is rejected as 'Please complete the required fields'
 
@@ -1051,7 +1110,7 @@ Evidence (finder's, unverified): page.tsx:397 `{loading ? "—" : stat.value}` (
 Root cause (claimed): Loading placeholder glyph chosen as an em dash.  
 Fixable (finder's view): yes  
 Suggested fix: Use '…' (as the placements header does) or a skeleton bar; extend page.test.tsx to assert no U+2014 in the rendered stats.  
-Status: OPEN, unverified  
+Status: FIXED in f4ea1dc8 (this session, test-first, gate green)  
 
 ### LA-C095  [Low]  Submit button says 'Request 3 Placements' when one placement carrying three works is created
 
