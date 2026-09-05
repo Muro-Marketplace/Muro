@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
@@ -64,9 +63,9 @@ export default function ArtistOrdersPage() {
   return (
     <Suspense
       fallback={
-        <ArtistPortalLayout activePath="/artist-portal/orders">
+        <>
           <p className="text-muted text-sm py-12 text-center">Loading orders...</p>
-        </ArtistPortalLayout>
+        </>
       }
     >
       <ArtistOrdersContent />
@@ -294,7 +293,7 @@ function ArtistOrdersContent() {
   const pendingCount = orders.filter((o) => o.status === "confirmed" || o.status === "processing").length;
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/orders">
+    <>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl lg:text-3xl">Orders</h1>
@@ -757,6 +756,6 @@ function ArtistOrdersContent() {
           ))}
         </div>
       )}
-    </ArtistPortalLayout>
+    </>
   );
 }

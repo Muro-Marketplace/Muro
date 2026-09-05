@@ -28,9 +28,14 @@ vi.mock("@/lib/api-client", () => ({
 
 import PortalGuard from "./PortalGuard";
 
+// A Response always carries `ok`. The guard's profile read goes through
+// lib/artist-profile-source.ts, which distinguishes a failed check from a
+// genuinely absent profile (LA-C046) and so reads the status.
 function mockProfile(profile: Record<string, unknown> | null) {
   authFetchMock.mockImplementation(async () => ({
-    json: async () => ({ profile }),
+    ok: true,
+    status: 200,
+    json: async () => ({ profile, works: [] }),
   }));
 }
 

@@ -21,7 +21,6 @@
 import { useEffect, useState } from "react";
 import ImageLightbox from "@/components/ImageLightbox";
 import Link from "next/link";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
@@ -69,7 +68,7 @@ export default function ArtistShowroomPage() {
 
   if (!flagOn) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/showroom">
+      <>
         <div className="py-16 text-center">
           <h1 className="font-serif text-2xl text-foreground mb-2">
             Showroom coming soon
@@ -78,12 +77,12 @@ export default function ArtistShowroomPage() {
             The wall visualiser is in private beta.
           </p>
         </div>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/showroom">
+    <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-1">
@@ -124,7 +123,7 @@ export default function ArtistShowroomPage() {
           ))}
         </div>
       )}
-    </ArtistPortalLayout>
+    </>
   );
 }
 

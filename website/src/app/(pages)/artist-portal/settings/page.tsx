@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import AccountDangerZone from "@/components/AccountDangerZone";
 import Button from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
@@ -123,7 +122,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/settings">
+    <>
       <div className="mb-8">
         <h1 className="text-2xl lg:text-3xl">Settings</h1>
       </div>
@@ -237,6 +236,6 @@ export default function SettingsPage() {
       </div>
 
       <AccountDangerZone />
-    </ArtistPortalLayout>
+    </>
   );
 }

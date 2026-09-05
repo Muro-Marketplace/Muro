@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
 import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useAuth } from "@/context/AuthContext";
@@ -296,9 +295,9 @@ export default function BillingPage() {
 
   if (loading) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/billing">
+      <>
         <div className="py-12 text-center"><p className="text-muted text-sm">Loading billing...</p></div>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -311,7 +310,7 @@ export default function BillingPage() {
   const trialDaysLeft = status === "trialing" ? daysUntil(sub?.trial_end ?? null) : 0;
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/billing">
+    <>
       <div className="mb-8">
         <h1 className="text-2xl lg:text-3xl">Billing</h1>
       </div>
@@ -681,7 +680,7 @@ export default function BillingPage() {
         userId={user?.id}
         active={!!connectStatus?.onboardingComplete}
       />
-    </ArtistPortalLayout>
+    </>
   );
 }
 

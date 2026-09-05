@@ -6,7 +6,6 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import InstagramPostGenerator from "@/components/social/InstagramPostGenerator";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch } from "@/lib/api-client";
@@ -39,9 +38,9 @@ export default function ArtistPostsPage() {
 
   if (loading || !artist) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/posts">
+      <>
         <p className="text-muted text-sm py-12 text-center">{loading ? "Loading…" : "No artist profile found."}</p>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -55,7 +54,7 @@ export default function ArtistPostsPage() {
     : null;
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/posts">
+    <>
       <div className="max-w-5xl px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-serif">Social posts</h1>
@@ -112,6 +111,6 @@ export default function ArtistPostsPage() {
           </div>
         )}
       </div>
-    </ArtistPortalLayout>
+    </>
   );
 }

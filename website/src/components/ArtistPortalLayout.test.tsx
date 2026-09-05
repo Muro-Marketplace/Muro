@@ -20,7 +20,10 @@ const { replace, push, router, authFetchMock, useAuthMock } = vi.hoisted(() => {
   return { replace, push, router: { replace, push }, authFetchMock: vi.fn(), useAuthMock: vi.fn() };
 });
 
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+// The chrome now reads the route itself (it is rendered once by
+// artist-portal/layout.tsx, which passes no activePath). These tests still
+// pass activePath explicitly, so usePathname only has to exist.
+vi.mock("next/navigation", () => ({ useRouter: () => router, usePathname: () => "/artist-portal" }));
 // A bare anchor. jsdom cannot navigate, so the click is swallowed after the
 // component's own handler has run.
 vi.mock("next/link", () => ({

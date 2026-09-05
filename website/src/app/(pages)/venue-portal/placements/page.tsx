@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import PlacementStepper, { type PlacementStepperData } from "@/components/PlacementStepper";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import PlacementActionItems from "@/components/PlacementActionItems";
@@ -60,6 +59,9 @@ interface PlacementRequest {
   installedAt?: string | null;
   liveFrom?: string | null;
   collectedAt?: string | null;
+  /** Migration 136. The planned end of the placement, YYYY-MM-DD, or null
+   *  for an open-ended arrangement. Drives reminders only. */
+  endDate?: string | null;
   requesterUserId?: string | null;
   artistUserId?: string | null;
   venueUserId?: string | null;
@@ -507,6 +509,7 @@ export default function VenuePlacementsPage() {
         liveFrom: (p.live_from as string | null) ?? null,
         subscriptionStatus: (p.subscription_status as string | null) ?? null,
         collectedAt: (p.collected_at as string | null) ?? null,
+        endDate: (p.end_date as string | null) ?? null,
         // F24/F51: the list API emits the resolved requester as
         // proposed_by_user_id; requester_user_id is a phantom the rows never
         // carry. Read both so Accept/Decline, "Awaiting response" chips and
@@ -909,7 +912,7 @@ export default function VenuePlacementsPage() {
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
 
   return (
-    <VenuePortalLayout>
+    <>
       {/* Row 2187 / production pass 2, P4. The payment setup's success_url
           returns here as ?payment=setup-complete and nothing on the page
           acknowledged it, so a venue who had just entered card details landed
@@ -1623,6 +1626,7 @@ export default function VenuePlacementsPage() {
                               installedAt: p.installedAt,
                               liveFrom: p.liveFrom,
                               collectedAt: p.collectedAt,
+                              endDate: p.endDate,
                             }}
                             canAdvance={p.status === "Active"}
                             currentUserId={user?.id}
@@ -1634,6 +1638,10 @@ export default function VenuePlacementsPage() {
                               installedAt: next.installedAt ?? x.installedAt,
                               liveFrom: next.liveFrom ?? x.liveFrom,
                               collectedAt: next.collectedAt ?? x.collectedAt,
+                              // Not `?? x.endDate`: null here means the user
+                              // cleared it, and coalescing would put the old
+                              // date straight back on screen.
+                              endDate: next.endDate ?? null,
                             } : x))}
                           />
 
@@ -1941,6 +1949,7 @@ export default function VenuePlacementsPage() {
                         installedAt: p.installedAt,
                         liveFrom: p.liveFrom,
                         collectedAt: p.collectedAt,
+                        endDate: p.endDate,
                       }}
                       canAdvance={p.status === "Active"}
                       onChange={(next) => setPlacements((prev) => prev.map((x) => x.id === p.id ? {
@@ -1951,6 +1960,7 @@ export default function VenuePlacementsPage() {
                         installedAt: next.installedAt ?? x.installedAt,
                         liveFrom: next.liveFrom ?? x.liveFrom,
                         collectedAt: next.collectedAt ?? x.collectedAt,
+                        endDate: next.endDate ?? null,
                       } : x))}
                     />
                     {/* Paid-loan payment status, only shown once the
@@ -2124,6 +2134,6 @@ export default function VenuePlacementsPage() {
         }}
         onClose={() => setPendingCancelId(null)}
       />
-    </VenuePortalLayout>
+    </>
   );
 }

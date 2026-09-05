@@ -23,7 +23,6 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import { resizeImage } from "@/lib/image";
@@ -65,7 +64,7 @@ export default function NewVenueWallPage() {
 
   if (!flagOn) {
     return (
-      <VenuePortalLayout>
+      <>
         <div className="py-16 text-center">
           <h1 className="font-serif text-2xl text-foreground mb-2">
             Walls coming soon
@@ -74,7 +73,7 @@ export default function NewVenueWallPage() {
             The wall visualiser is in private beta.
           </p>
         </div>
-      </VenuePortalLayout>
+      </>
     );
   }
 
@@ -252,7 +251,7 @@ export default function NewVenueWallPage() {
   }
 
   return (
-    <VenuePortalLayout>
+    <>
       <div className="max-w-2xl">
         <div className="mb-6">
           <Link
@@ -549,7 +548,7 @@ export default function NewVenueWallPage() {
           </div>
         </form>
       </div>
-    </VenuePortalLayout>
+    </>
   );
 }
 

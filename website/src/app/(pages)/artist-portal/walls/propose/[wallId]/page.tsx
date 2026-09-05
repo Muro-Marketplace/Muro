@@ -18,7 +18,6 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useParams, useSearchParams } from "next/navigation";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { useAuth } from "@/context/AuthContext";
 import { isFlagOn } from "@/lib/feature-flags";
 import {
@@ -50,12 +49,12 @@ type LoadState =
 
 export default function ProposeOnWallPage() {
   return (
-    <ArtistPortalLayout activePath="/artist-portal/placements">
+    <>
       {/* useSearchParams must sit under Suspense so the shell can still prerender. */}
       <Suspense fallback={<Centred>Loading wall…</Centred>}>
         <ProposeOnWall />
       </Suspense>
-    </ArtistPortalLayout>
+    </>
   );
 }
 

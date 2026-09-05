@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LoadErrorState from "@/components/LoadErrorState";
 import { authFetch } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
@@ -191,7 +190,7 @@ export default function AnalyticsPage() {
   const totalTraffic = analytics?.traffic_sources.reduce((s, t) => s + t.count, 0) || 0;
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/analytics">
+    <>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">Analytics</h1>
@@ -507,7 +506,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
       )}
-    </ArtistPortalLayout>
+    </>
   );
 }
 

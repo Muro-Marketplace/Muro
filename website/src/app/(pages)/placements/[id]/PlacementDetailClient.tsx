@@ -19,6 +19,7 @@ import PlacementNegotiationLog from "@/components/PlacementNegotiationLog";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import InStoreOfferCard from "@/components/InStoreOfferCard";
 import { isLoan, isPurchase } from "@/lib/arrangement-type";
+import { endDateLabel } from "@/lib/placements/end-date";
 import { ARRANGEMENT_LABEL, labelForArrangement } from "@/lib/arrangement-labels";
 import { isBillingWindingDown, normaliseStatus, statusBadgeClass } from "@/lib/placements/status";
 
@@ -56,6 +57,8 @@ interface PlacementRow {
   in_store_price?: number | null;
   in_store_frame_included?: boolean | null;
   collected_at?: string | null;
+  /** Migration 136: the planned end of the placement, or null for open ended. */
+  end_date?: string | null;
 }
 
 export interface PlacementRecord {
@@ -728,6 +731,10 @@ export default function PlacementDetailClient({ placementId }: Props) {
                   );
                 })}
               </ol>
+              {/* Planned end date (migration 136). Read-only here: the
+                  portals' placement lists own the control. Phrased as a plan,
+                  because reaching the date does not end anything by itself. */}
+              <p className="mt-2 text-[11px] text-muted">{endDateLabel(placement.end_date)}</p>
               {/* Advance + Undo actions, kept side-by-side so the user
                   has both the "what's next" and "I overshot" controls
                   in one place. Undo targets the most recent reached

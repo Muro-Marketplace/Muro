@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import AccountDangerZone from "@/components/AccountDangerZone";
 import PayoutExplainerModal from "@/components/PayoutExplainerModal";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
@@ -266,7 +265,7 @@ export default function VenueSettingsPage() {
   }
 
   return (
-    <VenuePortalLayout>
+    <>
       <div className="mb-6">
         <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-1">
           Settings
@@ -517,6 +516,6 @@ export default function VenueSettingsPage() {
         userId={user?.id}
         active={!!connectStatus?.onboardingComplete}
       />
-    </VenuePortalLayout>
+    </>
   );
 }

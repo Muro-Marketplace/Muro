@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
 import { type ArtistWork, type SizePricing } from "@/data/artists";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
@@ -219,7 +218,7 @@ const PORTFOLIO_LIMITS = WORKS_CAP;
 const IMAGE_LIMITS: Record<string, number> = { core: 3, premium: 5, pro: 10 };
 
 export default function PortfolioPage() {
-  const { artist, loading: artistLoading } = useCurrentArtist();
+  const { artist, profile, loading: artistLoading } = useCurrentArtist();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [works, setWorks] = useState<ArtistWork[]>([]);
@@ -395,22 +394,20 @@ export default function PortfolioPage() {
     setWorks([...artist.works]);
     persistedWorks.current = [...artist.works];
     setInitialised(true);
-    // Fetch default shipping price
-    authFetch("/api/artist-profile")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.profile?.default_shipping_price != null) {
-          setDefaultShipping(String(data.profile.default_shipping_price));
-        }
-        if (data.profile?.ships_internationally) {
-          setShipsInternationally(true);
-        }
-        if (data.profile?.international_shipping_price != null) {
-          setInternationalShipping(String(data.profile.international_shipping_price));
-        }
-      })
-      .catch(() => {});
-  }, [artist, initialised]);
+    // Shipping defaults come off the raw profile row useCurrentArtist already
+    // holds. This used to be a FOURTH GET /api/artist-profile on this page, for
+    // three fields that were sitting in the payload the hook above had just
+    // fetched, and each response carries every artist_works row.
+    if (profile?.default_shipping_price != null) {
+      setDefaultShipping(String(profile.default_shipping_price));
+    }
+    if (profile?.ships_internationally) {
+      setShipsInternationally(true);
+    }
+    if (profile?.international_shipping_price != null) {
+      setInternationalShipping(String(profile.international_shipping_price));
+    }
+  }, [artist, profile, initialised]);
 
   // ──────────────────────────────────────────────────────────────────
   // ALL HOOKS MUST LIVE ABOVE THE `if (!artist) return ...` EARLY-RETURN
@@ -489,9 +486,9 @@ export default function PortfolioPage() {
 
   if (artistLoading || !artist) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/portfolio">
+      <>
         <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found."}</p>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -1933,7 +1930,7 @@ export default function PortfolioPage() {
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/portfolio">
+    <>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">My Portfolio</h1>
@@ -4056,7 +4053,7 @@ export default function PortfolioPage() {
           </div>
         </div>
       )}
-    </ArtistPortalLayout>
+    </>
   );
 }
 
