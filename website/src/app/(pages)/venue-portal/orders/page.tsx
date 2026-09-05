@@ -8,10 +8,14 @@ import LoadErrorState from "@/components/LoadErrorState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
+import { orderItemsSubtotal, readOrderItems, type RawOrderItem } from "@/lib/order-items";
 
 interface Order {
   id: string;
-  items: { title: string; qty: number; price: number; artistSlug?: string }[];
+  /** Either shape: the cart's {qty, price} in pounds, or the enriched
+   *  {quantity, lineTotal} in pence that the Stripe webhook overwrites the
+   *  column with. Read it through lib/order-items, never field by field. */
+  items: RawOrderItem[];
   shipping: { fullName: string; addressLine1: string; city: string; postcode: string };
   total: number;
   /** Server-provided shipping cost when available. Older orders may
@@ -192,14 +196,13 @@ function VenueOrdersContent() {
             // from the residual when the server hasn't supplied an
             // explicit value, that keeps the columns honest even on
             // legacy orders.
-            const items = selected.items || [];
-            const subtotal = items.reduce(
-              (sum, it) =>
-                sum +
-                (typeof it?.price === "number" ? it.price : 0) *
-                  (typeof it?.qty === "number" ? it.qty : 1),
-              0,
-            );
+            //
+            // Both the lines and the subtotal go through lib/order-items.
+            // Reading `price * qty` here zeroed every enriched row, which is
+            // most of production, so this block told a venue its sale was
+            // £0.00 of art and the whole total was postage.
+            const items = readOrderItems(selected.items);
+            const subtotal = orderItemsSubtotal(selected.items);
             const total = typeof selected.total === "number" ? selected.total : 0;
             const serverShipping =
               typeof selected.shipping_amount === "number"
@@ -213,16 +216,12 @@ function VenueOrdersContent() {
             return (
               <div className="mt-6 space-y-2">
                 <p className="text-xs text-muted uppercase tracking-wider">Items</p>
-                {items.map((item, i) => {
-                  const qty = item?.qty ?? 1;
-                  const price = typeof item?.price === "number" ? item.price : 0;
-                  return (
-                    <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
-                      <span>{item?.title || "Item"} &times; {qty}</span>
-                      <span className="font-medium">&pound;{(price * qty).toFixed(2)}</span>
-                    </div>
-                  );
-                })}
+                {items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
+                    <span>{item.title} &times; {item.quantity}</span>
+                    <span className="font-medium">&pound;{item.lineTotal.toFixed(2)}</span>
+                  </div>
+                ))}
                 {items.length > 0 && showShippingRow && (
                   <>
                     <div className="flex justify-between text-sm pt-1">
@@ -320,7 +319,7 @@ function VenueOrdersContent() {
                   </div>
                   <p className="text-xs text-muted mt-0.5">
                     {new Date(order.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                    {" · "}{(order.items || []).map((i) => i.title).join(", ")}
+                    {" · "}{readOrderItems(order.items).map((i) => i.title).join(", ")}
                   </p>
                 </div>
                 <div className="text-right">
