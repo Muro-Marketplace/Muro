@@ -89,4 +89,8 @@ describe("public claims the site cannot evidence stay out", () => {
     expect(pricing).not.toMatch(/premium: "Featured"/);
     expect(pricing).toMatch(/pro: "Featured"/);
   });
+
+  it("the pricing hero does not say the tiers differ by platform fee (LA-C027)", () => {
+    expect(read("src/app/(pages)/pricing/page.tsx")).not.toMatch(/difference\s+is visibility and the platform fee/);
+  });
 });

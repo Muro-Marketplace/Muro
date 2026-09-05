@@ -137,7 +137,8 @@ export default function PricingPage() {
             <p className="text-lg text-muted leading-relaxed">
               Choose the tier that fits your ambition. All tiers give you access
               to the Wallplace platform and venue network. The difference
-              is visibility and the platform fee on sales.
+              is visibility and capacity: how many works, active placements
+              and venue approaches you get.
             </p>
             <aside className="mt-8 border border-border rounded-sm p-4 bg-surface">
               <p className="text-sm text-foreground">
