@@ -1,0 +1,8 @@
+# Vercel runtime error clusters, production, last 7 days to 2026-09-05 (read via Vercel MCP get_runtime_errors)
+1. [turnstile] TURNSTILE_SECRET_KEY is UNSET IN PRODUCTION  count=7 users=4 route=/api/auth/verify-turnstile  first=2026-08-30 last=2026-09-05 (latest deployment)
+2. Supabase 23502 null value in column "primary_medium" of relation "artist_applications"  count=4 route=/api/apply  first=2026-08-08 last=2026-08-30 (deployment dpl_5bmwe7... older than current)
+3. [renders-db] wall_renders_cost_units_check violated  count=3 route=/api/walls/[id]/layouts/[lid]/preview  last=2026-09-04 (fixed by 2eac9c29, deployed 2026-09-04)
+4. Vercel Runtime Timeout 300s  count=2 route=/api/messages/unread  2026-08-31 only
+5. StripeInvalidRequestError No such checkout.session cs_test_QA...bogus  count=1 route=/api/checkout/session  2026-08-30 (QA probe)
+6. [customer-addresses PATCH] Cannot coerce the result to a single JSON object  count=1 route=/api/customer-addresses/[id]  2026-08-30
+7. Profile creation error 23505 duplicate key artist_profiles_user_id_key  count=1 route=/api/admin/applications/[id]  2026-09-03
