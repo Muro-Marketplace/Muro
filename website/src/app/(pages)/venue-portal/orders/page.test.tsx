@@ -30,7 +30,9 @@ const ORDER = {
 };
 
 afterEach(() => cleanup());
-beforeEach(() => authFetchMock.mockReset());
+beforeEach(() => {
+  authFetchMock.mockReset();
+});
 
 describe("venue orders when the request fails (LA-C036)", () => {
   it("shows an error with a retry instead of the empty state, and recovers on retry", async () => {
