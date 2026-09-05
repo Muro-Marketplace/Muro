@@ -71,7 +71,6 @@ export default function CustomerAddressesPage() {
 
   useEffect(() => {
     loadAddresses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function startCreate() {
