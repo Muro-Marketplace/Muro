@@ -300,12 +300,16 @@ export default function BrowsePortfoliosPage() {
   );
 }
 
-// 21, not 20, so the xl:grid-cols-3 layout always fills cleanly:
-// 7 full rows × 3 cards. With 20 a single orphan card sat on the
-// last row beside an empty cell, which read as a broken page.
-// Stays sensible for sm:grid-cols-2 (10 rows + 1 orphan) and
-// grid-cols-1 (no orphan possible) too.
-const PAGE_SIZE = 21;
+// 24, so every column count the grid can take fills cleanly with no
+// orphan card sitting on the last row beside an empty cell (which read
+// as a broken page): 24 rows at 1 column, 12 at 2, 8 at 3, 6 at 4. The
+// 4-column layout arrived with the collapsible filter sidebar, and 21
+// (the previous value, chosen for 3 columns) left an orphan there.
+const PAGE_SIZE = 24;
+
+// Desktop filter-sidebar collapse, remembered across reloads and view
+// switches so the choice sticks. "1" collapsed, anything else open.
+const FILTERS_COLLAPSED_KEY = "wallplace-browse-filters-collapsed";
 
 function BrowsePortfoliosPageInner() {
   // Audience-acquisition CTAs at the bottom of /browse only make sense
@@ -453,17 +457,39 @@ function BrowsePortfoliosPageInner() {
   // viewport-based column count in state and recompute on resize.
   // Sticky filter sidebar: fit its scroll height to what is visible.
   const { ref: sidebarRef, style: sidebarStyle } = useStickySidebarHeight();
+  // Desktop-only: collapsing unmounts the 240px sidebar and hands its width
+  // back to the grid, which spends it on an extra column rather than on
+  // wider cards. No effect below lg, where the sidebar is already a drawer
+  // (`sidebarOpen`).
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(FILTERS_COLLAPSED_KEY) === "1") setFiltersCollapsed(true);
+    } catch {
+      // Reading storage throws outright in some privacy modes, not just on
+      // write. Default to open rather than taking the page down with it.
+    }
+  }, []);
+  const setFiltersCollapsedPersisted = useCallback((next: boolean) => {
+    try {
+      localStorage.setItem(FILTERS_COLLAPSED_KEY, next ? "1" : "0");
+    } catch {
+      // Storage disabled (private browsing, blocked cookies). The toggle
+      // still works for this page view, it just won't be remembered.
+    }
+    setFiltersCollapsed(next);
+  }, []);
   const [galleryColCount, setGalleryColCount] = useState(2);
   useEffect(() => {
     function compute() {
       const w = window.innerWidth;
-      if (w >= 1024) setGalleryColCount(3);
+      if (w >= 1024) setGalleryColCount(filtersCollapsed ? 4 : 3);
       else setGalleryColCount(2);
     }
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
-  }, []);
+  }, [filtersCollapsed]);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [artists, setArtists] = useState<Artist[]>(
     isFlagOn("SEED_CATALOG") ? staticArtists.map((a) => ({ ...a, isSeedArtist: true })) : [],
@@ -1502,6 +1528,52 @@ function BrowsePortfoliosPageInner() {
     </div>
   );
 
+  // Collapse control, sits in each sidebar's own header row.
+  const collapseFiltersButton = (
+    <button
+      type="button"
+      onClick={() => setFiltersCollapsedPersisted(true)}
+      aria-expanded
+      aria-controls="browse-filters"
+      aria-label="Hide filters"
+      title="Hide filters"
+      data-testid="hide-filters"
+      // p-1.5 puts the hit target at 27px square. p-1 gave 23px, just under
+      // the 24px WCAG 2.2 target-size minimum, and it was fiddly to hit.
+      className="p-1.5 -mr-1.5 text-muted hover:text-foreground transition-colors cursor-pointer"
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="13 17 8 12 13 7" />
+        <polyline points="18 17 13 12 18 7" />
+      </svg>
+    </button>
+  );
+
+  // The way back, in the desktop toolbar. Only rendered while collapsed, so
+  // there is never a second control competing with the sidebar's own chevron.
+  // `badge` is whatever that view uses to signal active filters: a count for
+  // portfolios, a dot for galleries and collections.
+  const showFiltersButton = (badge: ReactNode = null) =>
+    filtersCollapsed ? (
+      <button
+        type="button"
+        onClick={() => setFiltersCollapsedPersisted(false)}
+        aria-expanded={false}
+        aria-controls="browse-filters"
+        title="Show filters"
+        data-testid="show-filters"
+        className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-sm text-xs text-foreground hover:border-foreground/30 transition-colors cursor-pointer"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <line x1="4" y1="7" x2="20" y2="7" />
+          <line x1="4" y1="12" x2="16" y2="12" />
+          <line x1="4" y1="17" x2="12" y2="17" />
+        </svg>
+        Filters
+        {badge}
+      </button>
+    ) : null;
+
   return (
     <div className="bg-background min-h-screen">
 
@@ -1614,19 +1686,24 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
+              {!filtersCollapsed && (
+              <aside id="browse-filters" ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">
                     Filters
                   </span>
-                  {hasActiveFilters && (
-                    <span data-testid="artist-filter-count" className="text-xs text-white bg-accent rounded-full w-5 h-5 flex items-center justify-center">
-                      {activeFilterCount}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {hasActiveFilters && (
+                      <span data-testid="artist-filter-count" className="text-xs text-white bg-accent rounded-full w-5 h-5 flex items-center justify-center">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                    {collapseFiltersButton}
+                  </div>
                 </div>
                 {filterPanel}
               </aside>
+              )}
 
               {/* Content */}
               <div className="flex-1 min-w-0">
@@ -1724,6 +1801,13 @@ function BrowsePortfoliosPageInner() {
                         placeholder="Search artists or themes"
                       />
                     </div>
+                    {showFiltersButton(
+                      hasActiveFilters ? (
+                        <span className="text-[10px] text-white bg-accent rounded-full w-4 h-4 flex items-center justify-center">
+                          {activeFilterCount}
+                        </span>
+                      ) : null,
+                    )}
                     <p className="text-sm text-muted whitespace-nowrap">
                       {dataReady ? (
                         <>
@@ -1823,7 +1907,7 @@ function BrowsePortfoliosPageInner() {
                     )}
                   </div>
                 ) : viewMode === "compact" ? (
-                  <div className={`grid ${mobileGrid === 2 ? "grid-cols-2" : "grid-cols-1"} sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5`}>
+                  <div data-testid="portfolios-grid" className={`grid ${mobileGrid === 2 ? "grid-cols-2" : "grid-cols-1"} sm:grid-cols-2 ${filtersCollapsed ? "lg:grid-cols-3 xl:grid-cols-4" : "xl:grid-cols-3"} gap-3 sm:gap-5`}>
                     {filteredArtists.slice(0, loadedArtists).map((artist) => {
                       const distance =
                         userCoords && artist.coordinates
@@ -1940,14 +2024,18 @@ function BrowsePortfoliosPageInner() {
           <div className="max-w-[1400px] mx-auto px-6">
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
+              {!filtersCollapsed && (
+              <aside id="browse-filters" ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">Filters</span>
-                  {hasGalleryFilters && (
-                    <button type="button" onClick={clearGalleryFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
-                      Clear all
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {hasGalleryFilters && (
+                      <button type="button" onClick={clearGalleryFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
+                        Clear all
+                      </button>
+                    )}
+                    {collapseFiltersButton}
+                  </div>
                 </div>
                 <div className="space-y-5">
                   {/* Location (#9), toggle removed; the slider is the
@@ -2154,6 +2242,7 @@ function BrowsePortfoliosPageInner() {
                   </div>
                 </div>
               </aside>
+              )}
 
               {/* Content */}
               <div className="flex-1 min-w-0">
@@ -2396,6 +2485,9 @@ function BrowsePortfoliosPageInner() {
                         placeholder="Search works or artists"
                       />
                     </div>
+                    {showFiltersButton(
+                      hasGalleryFilters ? <span className="w-1.5 h-1.5 rounded-full bg-accent" /> : null,
+                    )}
                     <p className="text-sm text-muted whitespace-nowrap">
                       {dataReady
                         ? `${filteredGalleryWorks.length} work${filteredGalleryWorks.length !== 1 ? "s" : ""}`
@@ -2448,7 +2540,7 @@ function BrowsePortfoliosPageInner() {
                   const masonryCols: typeof visibleWorks[] = Array.from({ length: galleryColCount }, () => []);
                   visibleWorks.forEach((w, i) => masonryCols[i % galleryColCount].push(w));
                   return (
-                    <div className="flex gap-5 items-start">
+                    <div data-testid="gallery-masonry" className="flex gap-5 items-start">
                       {masonryCols.map((colItems, ci) => (
                         <div key={ci} className="flex-1 min-w-0 flex flex-col gap-5">
                           {colItems.map((work) => {
@@ -2750,17 +2842,22 @@ function BrowsePortfoliosPageInner() {
             </div>
             <div className="flex gap-10 lg:gap-14 items-start">
               {/* Sidebar – desktop */}
-              <aside ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
+              {!filtersCollapsed && (
+              <aside id="browse-filters" ref={sidebarRef} style={sidebarStyle} className="hidden lg:block w-60 shrink-0 sticky top-20 overflow-y-auto pr-2 -mr-2">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-sm font-medium text-foreground">Filters</span>
-                  {hasCollectionsFilters && (
-                    <button type="button" onClick={clearCollectionsFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
-                      Clear all
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {hasCollectionsFilters && (
+                      <button type="button" onClick={clearCollectionsFilters} className="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">
+                        Clear all
+                      </button>
+                    )}
+                    {collapseFiltersButton}
+                  </div>
                 </div>
                 {collectionsFilterPanel}
               </aside>
+              )}
 
               {/* Content */}
               <div className="flex-1 min-w-0">
@@ -2826,6 +2923,9 @@ function BrowsePortfoliosPageInner() {
                         placeholder="Search collections, artists"
                       />
                     </div>
+                    {showFiltersButton(
+                      hasCollectionsFilters ? <span className="w-1.5 h-1.5 rounded-full bg-accent" /> : null,
+                    )}
                     <p className="text-sm text-muted whitespace-nowrap">
                       {dataReady
                         ? `${filteredCollections.length} collection${filteredCollections.length !== 1 ? "s" : ""}`
@@ -2849,7 +2949,7 @@ function BrowsePortfoliosPageInner() {
 
                 {filteredCollections.length > 0 ? (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+                    <div data-testid="collections-grid" className={`grid grid-cols-1 sm:grid-cols-2 ${filtersCollapsed ? "lg:grid-cols-3 xl:grid-cols-4" : "lg:grid-cols-2 xl:grid-cols-3"} gap-5`}>
                       {filteredCollections.slice(0, loadedCollections).map((col) => {
                         const collectionArtist = artists.find((a) => a.slug === col.artistSlug);
                         const colDistance = userCoords && collectionArtist?.coordinates
