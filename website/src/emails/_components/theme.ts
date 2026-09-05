@@ -2,6 +2,7 @@
 // don't resolve CSS vars, and inline styles are the only reliably portable route.
 
 import type { EmailPersona } from "@/emails/types/emailTypes";
+import { legalEntityName } from "@/lib/company";
 
 export const theme = {
   // Brand, Wallplace warm
@@ -47,7 +48,8 @@ export const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL || "https://wallplace.co.uk";
 
 export const companyDetails = {
-  name: "Wallplace Ltd",
+  // LA-C030: the registered name once incorporated, the trading name until then.
+  name: legalEntityName(),
   address: "London, United Kingdom",
   supportEmail: "hello@wallplace.co.uk",
 } as const;

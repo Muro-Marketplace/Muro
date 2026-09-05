@@ -177,3 +177,24 @@ describe("venue sign-up asks nothing about insurance (launch audit, section 05)"
     expect(screen.queryByRole("checkbox", { name: /public liability insurance/i })).toBeNull();
   });
 });
+
+// LA-C032 (launch audit 2026-09-05). The registration POST serialised the whole
+// form state, so the venue's password and its confirmation left the browser to
+// /api/register-venue, a route that neither needs nor stores them (its schema
+// strips unknown keys). The password belongs to supabase.auth.signUp only.
+describe("venue sign-up keeps the password out of the registration request (LA-C032)", () => {
+  it("posts no password fields to /api/register-venue", async () => {
+    render(<RegisterVenuePage />);
+    await fillAndSubmitVenueForm();
+    await waitFor(() => expect(mockSignUp).toHaveBeenCalled());
+    const fetchMock = globalThis.fetch as unknown as { mock: { calls: [string, RequestInit?][] } };
+    const reg = fetchMock.mock.calls.find(([url]) => url === "/api/register-venue");
+    expect(reg, "registration request was made").toBeTruthy();
+    const body = JSON.parse(String(reg![1]?.body));
+    expect(body).not.toHaveProperty("password");
+    expect(body).not.toHaveProperty("confirmPassword");
+    // The registration fields themselves still travel.
+    expect(body.venueName).toBe("Test Venue");
+    expect(body.email).toBe("jane@venue.com");
+  });
+});

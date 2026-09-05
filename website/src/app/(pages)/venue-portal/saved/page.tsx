@@ -1,33 +1,77 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import EmptyState from "@/components/EmptyState";
 import { useSaved } from "@/context/SavedContext";
 import { artists } from "@/data/artists";
-import { getGalleryWorks } from "@/data/galleries";
 import { slugify } from "@/lib/slugify";
 
 type Tab = "artists" | "works" | "collections";
+
+// The merged catalogue as /api/browse-artists returns it (static seed plus the
+// database), reduced to what a saved-work card needs.
+interface CatalogueWork { id: string; title: string; image: string; priceBand?: string }
+interface CatalogueArtist { slug: string; name: string; works?: CatalogueWork[] }
+interface SavedWorkCard {
+  id: string;
+  title: string;
+  image: string;
+  artistName: string;
+  artistSlug: string;
+  priceBand: string;
+}
 
 export default function SavedPage() {
   const [activeTab, setActiveTab] = useState<Tab>("works");
   const { savedItems, toggleSaved } = useSaved();
 
+  // LA-C003 (launch audit 2026-09-05). Saved work ids used to be resolved against
+  // getGalleryWorks(), the static seed only, so a work hearted from a database
+  // artist's page was dropped and the tab read "No saved works yet". Resolve
+  // against the merged catalogue, as the customer and artist portals do, and
+  // say so when the catalogue could not be loaded rather than pretending the
+  // list is empty.
+  const [catalogue, setCatalogue] = useState<CatalogueArtist[]>([]);
+  const [catalogueState, setCatalogueState] = useState<"loading" | "ready" | "error">("loading");
+
+  const loadCatalogue = useCallback(() => {
+    fetch("/api/browse-artists")
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok || !Array.isArray(data?.artists)) throw new Error("catalogue unavailable");
+        setCatalogue(data.artists as CatalogueArtist[]);
+        setCatalogueState("ready");
+      })
+      .catch(() => setCatalogueState("error"));
+  }, []);
+
+  useEffect(() => {
+    loadCatalogue();
+  }, [loadCatalogue]);
+
   // Resolve saved work IDs to actual work data
   const savedWorks = useMemo(() => {
-    const allWorks = getGalleryWorks();
+    const byId = new Map<string, SavedWorkCard>();
+    for (const artist of catalogue) {
+      for (const work of artist.works ?? []) {
+        byId.set(work.id, {
+          id: work.id,
+          title: work.title,
+          image: work.image,
+          artistName: artist.name,
+          artistSlug: artist.slug,
+          priceBand: work.priceBand ?? "",
+        });
+      }
+    }
     return savedItems
       .filter((s) => s.type === "work")
-      .map((s) => {
-        const work = allWorks.find((w) => w.id === s.id);
-        if (!work) return null;
-        return work;
-      })
-      .filter(Boolean);
-  }, [savedItems]);
+      .map((s) => byId.get(s.id) ?? null)
+      .filter((w): w is SavedWorkCard => w !== null);
+  }, [savedItems, catalogue]);
 
   // Only artists explicitly saved (type === "artist"). Previously
   // this was derived from savedWorks, saving a work was being
@@ -103,7 +147,25 @@ export default function SavedPage() {
       {/* Works tab */}
       {activeTab === "works" && (
         <>
-          {savedWorks.length === 0 ? (
+          {catalogueState === "loading" ? (
+            <p className="text-sm text-muted py-12 text-center">Loading saved works...</p>
+          ) : catalogueState === "error" ? (
+            <div className="bg-surface border border-border rounded-sm p-6 text-center">
+              <p className="text-sm text-foreground mb-3">
+                Could not load your saved works. Please try again.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCatalogueState("loading");
+                  loadCatalogue();
+                }}
+                className="px-4 py-2 text-xs font-medium border border-border rounded-sm text-foreground hover:border-accent transition-colors cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          ) : savedWorks.length === 0 ? (
             <EmptyState
               title="No saved works yet"
               hint="Browse galleries and tap the heart on pieces you'd like to revisit."
@@ -113,7 +175,7 @@ export default function SavedPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {savedWorks.map((work, index) => (
                 <div
-                  key={work!.id}
+                  key={work.id}
                   className="bg-white border border-border rounded-sm overflow-hidden"
                 >
                   <div className="relative aspect-[4/3] bg-border/20">
@@ -123,8 +185,8 @@ export default function SavedPage() {
                         triggering AFTER the user lands on the page,
                         leaving the visible row blank for a tick. */}
                     <Image
-                      src={work!.image}
-                      alt={work!.title}
+                      src={work.image}
+                      alt={work.title}
                       fill
                       className="object-cover"
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -133,22 +195,22 @@ export default function SavedPage() {
                   </div>
                   <div className="p-4">
                     <h3 className="font-medium text-sm text-foreground mb-0.5 leading-snug">
-                      {work!.title}
+                      {work.title}
                     </h3>
-                    <p className="text-xs text-muted mb-1">{work!.artistName}</p>
+                    <p className="text-xs text-muted mb-1">{work.artistName}</p>
                     <p className="text-xs text-accent font-medium mb-4">
-                      {work!.priceBand}
+                      {work.priceBand}
                     </p>
                     <div className="flex gap-2">
                       <Link
-                        href={`/browse/${work!.artistSlug}?work=${slugify(work!.title)}`}
+                        href={`/browse/${work.artistSlug}?work=${slugify(work.title)}`}
                         className="flex-1 text-center px-3 py-1.5 text-xs font-medium bg-foreground text-white rounded-sm hover:bg-foreground/90 transition-colors"
                       >
                         View
                       </Link>
                       <button
                         type="button"
-                        onClick={() => toggleSaved("work", work!.id)}
+                        onClick={() => toggleSaved("work", work.id)}
                         className="px-3 py-1.5 text-xs border border-border text-muted rounded-sm hover:border-red-300 hover:text-red-500 transition-colors cursor-pointer"
                       >
                         Remove

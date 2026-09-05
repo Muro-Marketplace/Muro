@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { legalEntityName } from "@/lib/company";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -21,7 +22,7 @@ export default function PrivacyPage() {
               <div>
                 <h2 className="text-2xl mb-4">1. Who We Are</h2>
                 <p className="text-muted leading-relaxed">
-                  Wallplace Ltd (&ldquo;Wallplace&rdquo;, &ldquo;we&rdquo;,
+                  {legalEntityName()} (&ldquo;Wallplace&rdquo;, &ldquo;we&rdquo;,
                   &ldquo;us&rdquo;, or &ldquo;our&rdquo;) operates the website
                   at wallplace.co.uk and provides a curated art placement service
                   connecting artists with commercial venues. We are the
@@ -269,7 +270,7 @@ export default function PrivacyPage() {
                 </p>
                 <div className="mt-4 bg-surface border border-border rounded-sm p-6">
                   <p className="text-sm text-foreground font-medium">
-                    Wallplace Ltd
+                    {legalEntityName()}
                   </p>
                   <p className="text-sm text-muted mt-1">London, UK</p>
                   <a

@@ -16,6 +16,7 @@ import { slugify } from "@/lib/slugify";
 import { SIZE_BANDS, bandsForWork, type SizeBandKey } from "@/components/browse/SizeBands";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { physicalSizeLabel } from "@/lib/physical-size";
+import { formatPounds } from "@/lib/format-currency";
 
 type CollectionWork = ArtistWork & {
   selectedSize?: string;
@@ -392,7 +393,7 @@ export default function CollectionDetailPage() {
               </p>
               {savings > 0 && (
                 <p className="text-xs text-green-700 mb-3">
-                  Save £{savings} vs. buying individually (£{individualTotal})
+                  Save {formatPounds(savings)} vs. buying individually ({formatPounds(individualTotal)})
                 </p>
               )}
               <p className="text-xs text-muted mb-4">

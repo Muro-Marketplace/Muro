@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate } from "@/lib/api-client";
 import { venuePortalNav } from "@/lib/portal-nav";
+import { loginPathWithNext } from "@/lib/login-redirect";
 
 // H6: nav lists moved to src/lib/portal-nav.ts so the header's portal dropdown
 // and this sidebar cannot drift apart again (the dropdown had lost My Offers).
@@ -89,7 +90,8 @@ export default function VenuePortalLayout({
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace("/login");
+      // LA-C004: carry the deep link so sign-in returns them to it.
+      router.replace(loginPathWithNext(window.location.pathname, window.location.search));
       return;
     }
     if (userType === "venue") return;

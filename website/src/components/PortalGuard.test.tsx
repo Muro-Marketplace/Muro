@@ -345,3 +345,22 @@ describe("<PortalGuard /> lets an account into a portal whose profile it owns (3
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/artist-portal"));
   });
 });
+
+// LA-C004 (launch audit 2026-09-05). A signed-out visitor deep-linking into a
+// portal (the offer email's "Pay now", a conversation, a label print) was sent
+// to a bare /login and landed on the dashboard after signing in. The login page
+// already honours ?next=; the guard just never sent it.
+describe("<PortalGuard /> keeps the deep link for a signed-out visitor (LA-C004)", () => {
+  it("bounces to /login with the current path and query as ?next=", async () => {
+    window.history.replaceState({}, "", "/venue-portal/offers?pay=off_1");
+    useAuthMock.mockReturnValue({ user: null, userType: null, loading: false });
+    render(
+      <PortalGuard allowedType="venue">
+        <span>portal</span>
+      </PortalGuard>,
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    expect(replace).toHaveBeenCalledWith("/login?next=%2Fvenue-portal%2Foffers%3Fpay%3Doff_1");
+    expect(screen.queryByText("portal")).toBeNull();
+  });
+});

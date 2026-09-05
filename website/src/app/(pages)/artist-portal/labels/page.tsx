@@ -340,7 +340,7 @@ export default function LabelsPage() {
                 <p className="text-[11px] text-muted leading-relaxed mb-2">
                   Hide a row from the printed label without removing the
                   underlying data. Toggles only affect what shows up on
-                  the printed card - the QR code itself always points to
+                  the printed card. The QR code itself always points to
                   the work.
                 </p>
                 <div className="flex flex-wrap gap-x-5 gap-y-2">

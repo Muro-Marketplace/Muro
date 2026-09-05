@@ -22,8 +22,8 @@ const comparisonRows = [
   {
     feature: "Artist profile",
     core: "Standard",
-    premium: "Featured",
-    pro: "Premium",
+    premium: "Standard, plus Artwork of the Week",
+    pro: "Featured",
   },
   {
     feature: "Platform visibility",
@@ -39,9 +39,9 @@ const comparisonRows = [
   },
   {
     feature: "New venue approaches",
-    core: "3 a week",
-    premium: "6 a week",
-    pro: "15 a week",
+    core: `${OUTREACH_WEEKLY_LIMIT.core} a week`,
+    premium: `${OUTREACH_WEEKLY_LIMIT.premium} a week`,
+    pro: `${OUTREACH_WEEKLY_LIMIT.pro} a week`,
   },
   {
     feature: "Venue matching",
@@ -137,7 +137,8 @@ export default function PricingPage() {
             <p className="text-lg text-muted leading-relaxed">
               Choose the tier that fits your ambition. All tiers give you access
               to the Wallplace platform and venue network. The difference
-              is visibility and the platform fee on sales.
+              is visibility and capacity: how many works, active placements
+              and venue approaches you get.
             </p>
             <aside className="mt-8 border border-border rounded-sm p-4 bg-surface">
               <p className="text-sm text-foreground">

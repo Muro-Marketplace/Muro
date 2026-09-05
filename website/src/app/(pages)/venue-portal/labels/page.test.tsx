@@ -84,3 +84,26 @@ describe("venue labels page — label colour picker (owner decision 2026-09-02)"
     expect(calledUrls).not.toContain("/api/venue-profile-theme");
   });
 });
+
+// LA-C035 (launch audit 2026-09-05). The placements request had no res.ok check
+// (authFetch resolves on a non-2xx), so a failed load became an empty list and
+// the page told a venue with live placements "No active placements yet".
+describe("venue labels when the placements request fails (LA-C035)", () => {
+  it("shows an error with a retry instead of 'No active placements yet'", async () => {
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/placements") return Promise.resolve(new Response(JSON.stringify({ error: "boom" }), { status: 500 }));
+      return jsonResponse({});
+    });
+    render(<VenueLabelsPage />);
+    expect(await screen.findByText(/could not load your placements/i)).toBeTruthy();
+    expect(screen.queryByText("No active placements yet")).toBeNull();
+
+    authFetchMock.mockImplementation((url: string) => {
+      if (url === "/api/placements") return jsonResponse({ placements: PLACEMENTS });
+      if (url === "/api/venue-profile") return jsonResponse({ profile: { name: "The Curzon", slug: "the-curzon" } });
+      return jsonResponse({});
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Sunset Over the Bay")).toBeTruthy();
+  });
+});

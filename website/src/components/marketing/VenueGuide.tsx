@@ -125,7 +125,7 @@ const faqItems = [
   {
     question: "Is there a contract?",
     answer:
-      "No. Just a simple partnership agreement covering the basics. 30 days' notice to end at any time.",
+      "Yes, a short partnership agreement in plain English covering care of the artwork, the display period and sales. Cancellable on 30 days' notice.",
   },
 ];
 
@@ -317,7 +317,7 @@ export default function VenueGuide() {
           </h2>
           <p className="text-white/60 max-w-lg mx-auto mb-10 leading-relaxed">
             Browse portfolios, filter by style, and enquire directly with artists.
-            No curation fee. No contract.
+            No curation fee. No platform fee for venues.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/browse" className="inline-flex items-center justify-center min-w-[220px] px-8 py-3.5 text-sm font-semibold tracking-wider uppercase bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors">

@@ -164,27 +164,27 @@ export default function TermsPage() {
 
                   <div className="space-y-4 mt-4">
                     <div>
-                      <h3 className="text-base font-medium text-foreground mb-1">Step 1 : Raise a Dispute</h3>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 1: Raise a Dispute</h3>
                       <p>Contact <a href="mailto:legal@wallplace.co.uk" className="text-accent hover:underline">legal@wallplace.co.uk</a> with your order number, the nature of the dispute, and any supporting evidence (photographs, messages, tracking information). You may also raise a dispute through your account dashboard.</p>
                     </div>
 
                     <div>
-                      <h3 className="text-base font-medium text-foreground mb-1">Step 2 : Acknowledgement</h3>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 2: Acknowledgement</h3>
                       <p>Wallplace will acknowledge your dispute within 2 business days and assign a case reference.</p>
                     </div>
 
                     <div>
-                      <h3 className="text-base font-medium text-foreground mb-1">Step 3 : Investigation</h3>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 3: Investigation</h3>
                       <p>We will review the available evidence, contact the other party, and request any additional information needed. We aim to complete our investigation within 10 business days.</p>
                     </div>
 
                     <div>
-                      <h3 className="text-base font-medium text-foreground mb-1">Step 4 : Resolution</h3>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 4: Resolution</h3>
                       <p>Wallplace will propose a resolution, which may include a full or partial refund, replacement, or other remedy. Both parties will be notified of the outcome.</p>
                     </div>
 
                     <div>
-                      <h3 className="text-base font-medium text-foreground mb-1">Step 5 : Escalation</h3>
+                      <h3 className="text-base font-medium text-foreground mb-1">Step 5: Escalation</h3>
                       <p className="mb-2">If you are not satisfied with the resolution, you may:</p>
                       <ul className="list-disc pl-6 space-y-1">
                         <li>Request a senior review within 14 days of the decision</li>

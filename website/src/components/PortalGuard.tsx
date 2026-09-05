@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
 import { portalPathForRole, parseRole } from "@/lib/auth-roles";
+import { loginPathWithNext } from "@/lib/login-redirect";
 import { trialOffer } from "@/lib/pricing";
 
 interface PortalGuardProps {
@@ -102,7 +103,10 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/login");
+      // LA-C004: keep the deep link (an offer's "Pay now", a conversation, a
+      // label print) so the login page can return them to it. The login page
+      // validates ?next= with safeRedirect before following it.
+      router.replace(loginPathWithNext(window.location.pathname, window.location.search));
       return;
     }
     if (loading || !user || !userType || userType === allowedType) return;

@@ -437,7 +437,7 @@ export default function Home() {
                 <div className="bg-surface border border-border rounded-sm p-5 sm:p-8 text-center flex flex-col">
                   <p className="text-xs font-medium tracking-[0.2em] uppercase text-accent mb-3">Venues</p>
                   <h3 className="font-serif text-xl mb-3">Source artwork risk-free</h3>
-                  <p className="text-sm text-muted mb-6 flex-1">Free to browse and enquire. No contracts.</p>
+                  <p className="text-sm text-muted mb-6 flex-1">Free to browse and enquire. No fees to display art.</p>
                   <Link href="/signup/venue" className="inline-flex items-center justify-center w-full px-4 py-3.5 bg-accent text-white text-xs font-semibold tracking-wide uppercase rounded-sm hover:bg-accent-hover transition-colors whitespace-nowrap">
                     Register Your Venue
                   </Link>

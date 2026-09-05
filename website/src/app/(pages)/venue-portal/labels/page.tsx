@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import LoadErrorState from "@/components/LoadErrorState";
 import LabelPreview from "@/components/labels/LabelPreview";
 import LabelThemePicker from "@/components/labels/LabelThemePicker";
 import type { LabelData } from "@/components/labels/LabelSheet";
@@ -90,12 +91,14 @@ export default function VenueLabelsPage() {
   }
   const [showPreview, setShowPreview] = useState(false);
   const [previewLabels, setPreviewLabels] = useState<LabelData[]>([]);
+  // LA-C035: a failed load is not "no placements".
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Load this venue's active placements
-  useEffect(() => {
-    async function load() {
+  const load = useCallback(async () => {
       try {
         const res = await authFetch("/api/placements");
+        if (!res.ok) throw new Error(`placements load failed (${res.status})`);
         const data = await res.json();
         const all = (data.placements || []) as Placement[];
         const active = all.filter((p) => p.status === "active");
@@ -182,12 +185,21 @@ export default function VenueLabelsPage() {
         } catch { /* ignore */ }
       } catch (e) {
         console.error("labels load error", e);
+        setLoadError("Could not load your placements. Please try again.");
       } finally {
         setLoading(false);
       }
-    }
-    load();
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function retryLoad() {
+    setLoading(true);
+    setLoadError(null);
+    load();
+  }
 
   const totalLabels = useMemo(() => {
     let count = 0;
@@ -298,6 +310,8 @@ export default function VenueLabelsPage() {
 
         {loading ? (
           <p className="text-sm text-muted py-12 text-center">Loading your placements…</p>
+        ) : loadError ? (
+          <LoadErrorState message={loadError} onRetry={retryLoad} />
         ) : placements.length === 0 ? (
           <div className="bg-surface border border-border rounded-sm p-10 text-center">
             <p className="text-sm text-foreground font-medium mb-1">No active placements yet</p>
@@ -363,7 +377,7 @@ export default function VenueLabelsPage() {
                 <p className="text-[11px] text-muted leading-relaxed mb-2">
                   Hide a row from the printed label without removing the
                   underlying data. Toggles only affect what shows up on
-                  the printed card - the QR code itself always points to
+                  the printed card. The QR code itself always points to
                   the work.
                 </p>
                 <div className="flex flex-wrap gap-x-5 gap-y-2">

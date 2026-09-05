@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import LoadErrorState from "@/components/LoadErrorState";
 import { authFetch } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
 import { labelForArrangement } from "@/lib/arrangement-labels";
@@ -63,11 +64,24 @@ export default function AnalyticsPage() {
   const [orders, setOrders] = useState<{ total?: number; artist_revenue?: number | null; shipping_cost?: number | null; created_at?: string; venue_slug?: string | null; status?: string | null }[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  // LA-C005: every request ended in .catch(() => {}) and the tiles rendered
+  // the zeros as fact. A failure now says so and can be retried.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const okJson = async (r: Response) => {
+    if (!r.ok) throw new Error(`load failed (${r.status})`);
+    return r.json();
+  };
+  function retryLoad() {
+    setLoadError(null);
+    setAnalyticsLoading(true);
+    setReloadKey((k) => k + 1);
+  }
 
   // Fetch placements and orders (unchanged)
   useEffect(() => {
     authFetch("/api/placements")
-      .then((r) => r.json())
+      .then(okJson)
       .then((data) => {
         if (data.placements) {
           setPlacements(data.placements.map((p: Record<string, unknown>) => ({
@@ -83,30 +97,37 @@ export default function AnalyticsPage() {
             revenueSharePercent: p.revenue_share_percent as number | undefined,
             status: (p.status || "active"),
             date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
-            revenue: p.revenue ? `\u00a3${p.revenue}` : null,
+            // LA-C008: GET /api/placements spreads the raw row (whose cached
+            // `revenue` column the order pipeline never fills for QR sales)
+            // and adds the computed figure as revenue_earned_gbp. Read that.
+            revenue:
+              typeof p.revenue_earned_gbp === "number" && p.revenue_earned_gbp > 0
+                ? formatPounds(p.revenue_earned_gbp)
+                : null,
           })));
         }
       })
-      .catch(() => {});
+      .catch(() => setLoadError("Could not load your analytics. Please try again."));
 
     authFetch("/api/orders")
-      .then((r) => r.json())
+      .then(okJson)
       .then((data) => { if (data.orders) setOrders(data.orders); })
-      .catch(() => {});
-  }, []);
+      .catch(() => setLoadError("Could not load your analytics. Please try again."));
+  }, [reloadKey]);
 
   // Fetch engagement analytics (reacts to date range changes)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnalyticsLoading(true);
     authFetch(`/api/analytics/artist?range=${dateRangeToParam(dateRange)}`)
-      .then((r) => r.json())
+      .then(okJson)
       .then((data) => {
-        if (data.totals) setAnalytics(data);
+        if (!data?.totals) throw new Error("analytics payload missing totals");
+        setAnalytics(data);
       })
-      .catch(() => {})
+      .catch(() => setLoadError("Could not load your analytics. Please try again."))
       .finally(() => setAnalyticsLoading(false));
-  }, [dateRange]);
+  }, [dateRange, reloadKey]);
 
   // Placement status is stored lower-case ("active"/"pending"/...). The
   // dashboard compares lower-case; this page compared title-case so every
@@ -206,31 +227,37 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {loadError && (
+        <div className="mb-6">
+          <LoadErrorState message={loadError} onRetry={retryLoad} />
+        </div>
+      )}
+
       {/* ── ENGAGEMENT METRICS ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MetricCard
           label="Profile Views"
           value={analytics?.totals.profile_views ?? 0}
           subtitle={dateRange}
-          loading={analyticsLoading}
+          loading={analyticsLoading || !!loadError}
         />
         <MetricCard
           label="Artwork Views"
           value={analytics?.totals.artwork_views ?? 0}
           subtitle={dateRange}
-          loading={analyticsLoading}
+          loading={analyticsLoading || !!loadError}
         />
         <MetricCard
           label="QR Scans"
           value={analytics?.totals.qr_scans ?? 0}
           subtitle={dateRange}
-          loading={analyticsLoading}
+          loading={analyticsLoading || !!loadError}
         />
         <MetricCard
           label="Enquiries"
           value={analytics?.totals.enquiries ?? 0}
           subtitle={dateRange}
-          loading={analyticsLoading}
+          loading={analyticsLoading || !!loadError}
         />
       </div>
 
@@ -423,12 +450,15 @@ export default function AnalyticsPage() {
                     <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.venue}</td>
                     <td className="px-4 py-3.5 text-muted text-xs">{p.type}</td>
                     <td className="px-4 py-3.5">
+                      {/* LA-C006: statuses are stored lower-case; the badge
+                          compared title case, so nothing ever coloured and the
+                          raw enum was printed. */}
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        p.status === "Active" ? "bg-green-100 text-green-700" :
-                        p.status === "Sold" ? "bg-blue-100 text-blue-700" :
-                        p.status === "Pending" ? "bg-amber-100 text-amber-700" :
+                        p.status.toLowerCase() === "active" ? "bg-green-100 text-green-700" :
+                        p.status.toLowerCase() === "sold" ? "bg-blue-100 text-blue-700" :
+                        p.status.toLowerCase() === "pending" ? "bg-amber-100 text-amber-700" :
                         "bg-gray-100 text-gray-600"
-                      }`}>{p.status}</span>
+                      }`}>{p.status.charAt(0).toUpperCase() + p.status.slice(1).toLowerCase()}</span>
                     </td>
                     <td className="px-6 py-3.5 text-right font-medium text-foreground">{p.revenue ?? "-"}</td>
                   </tr>
@@ -439,8 +469,10 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      {/* Performance by Venue */}
-      {venuePerformance.length > 0 && (
+      {/* Performance by Venue. LA-C007: this tested the imported FUNCTION's
+          length (always 3), so the header rendered above an empty table for
+          every artist with no placements. */}
+      {venuePerformanceRows.length > 0 && (
         <div className="bg-surface border border-border rounded-sm">
           <div className="px-6 py-4 border-b border-border">
             <h2 className="text-base font-medium">Performance by Venue</h2>

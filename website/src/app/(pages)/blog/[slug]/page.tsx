@@ -3,7 +3,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { blogPosts } from "@/data/blog-posts";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { renderMarkdown } from "@/lib/markdown";
+import { markdownToPlainText, renderMarkdown } from "@/lib/markdown";
 import { slugify } from "@/lib/slugify";
 import type { Metadata } from "next";
 
@@ -156,7 +156,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!dbRecord) return { title: "Post not found" };
   return {
     title: dbRecord.blog.title,
-    description: (dbRecord.blog.body_markdown ?? "").slice(0, 160),
+    description: markdownToPlainText(dbRecord.blog.body_markdown).slice(0, 160),
   };
 }
 

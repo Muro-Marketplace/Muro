@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { loginPathWithNext } from "@/lib/login-redirect";
+import LoadErrorState from "./LoadErrorState";
 import {
   artistPortalNav,
   activeGroupFor,
@@ -164,7 +166,10 @@ export default function ArtistPortalLayout({
   // portal until we know whether to keep them here or bounce them to
   // /apply — otherwise newly-signed-up artists with no profile row see
   // the portal chrome flash before the redirect kicks in.
-  const [profileCheck, setProfileCheck] = useState<"loading" | "missing" | "present">("loading");
+  // LA-C046: "failed" is a check that could not complete (500, network), which
+  // is not the same as "missing" and must not send an approved artist to /apply.
+  const [profileCheck, setProfileCheck] = useState<"loading" | "missing" | "present" | "failed">("loading");
+  const [profileCheckKey, setProfileCheckKey] = useState(0);
 
   // Sync the tab title to the current portal page. The parent route's
   // metadata template is a server-rendered concept, but every portal
@@ -178,7 +183,13 @@ export default function ArtistPortalLayout({
   }, [activePath]);
 
   useEffect(() => {
-    if (!loading && (!user || userType !== "artist")) {
+    if (loading) return;
+    if (!user) {
+      // LA-C004: a signed-out visitor keeps the deep link they arrived on.
+      router.replace(loginPathWithNext(window.location.pathname, window.location.search));
+      return;
+    }
+    if (userType !== "artist") {
       router.replace("/login");
     }
   }, [loading, user, userType, router]);
@@ -196,7 +207,10 @@ export default function ArtistPortalLayout({
     let cancelled = false;
     setProfileCheck("loading");
     authFetch("/api/artist-profile")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (r.ok === false) throw new Error(`profile check failed (${r.status})`);
+        return r.json();
+      })
       .then((data) => {
         if (cancelled) return;
         // Brand-new artist accounts (signed up, never approved /
@@ -216,18 +230,17 @@ export default function ArtistPortalLayout({
         setProfileCheck("present");
       })
       .catch(() => {
-        // Treat a failed check as missing so we don't render the portal
-        // for an account that may not actually have a profile. The
-        // /apply redirect is the safe default; if the network was just
-        // flaky, the user can retry from there.
+        // LA-C046: a failed check is not evidence of a missing profile. The
+        // old code redirected to /apply here, which sent approved artists to
+        // the application form on any transient failure. Show the failure
+        // and let them retry instead.
         if (cancelled) return;
-        setProfileCheck("missing");
-        router.replace("/apply");
+        setProfileCheck("failed");
       });
     return () => {
       cancelled = true;
     };
-  }, [loading, user, userType, router]);
+  }, [loading, user, userType, router, profileCheckKey]);
 
   // Keep the loading screen visible until BOTH the auth check and the
   // artist_profile existence check resolve. Without this guard, the
@@ -248,6 +261,22 @@ export default function ArtistPortalLayout({
             100% { width: 0%; margin-left: 100%; }
           }
         `}</style>
+      </div>
+    );
+  }
+
+  if (user && userType === "artist" && profileCheck === "failed") {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6">
+        <div className="w-full max-w-md">
+          <LoadErrorState
+            message="Could not load your profile. Please try again."
+            onRetry={() => {
+              setProfileCheck("loading");
+              setProfileCheckKey((k) => k + 1);
+            }}
+          />
+        </div>
       </div>
     );
   }
