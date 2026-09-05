@@ -439,8 +439,10 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      {/* Performance by Venue */}
-      {venuePerformance.length > 0 && (
+      {/* Performance by Venue. LA-C007: this tested the imported FUNCTION's
+          length (always 3), so the header rendered above an empty table for
+          every artist with no placements. */}
+      {venuePerformanceRows.length > 0 && (
         <div className="bg-surface border border-border rounded-sm">
           <div className="px-6 py-4 border-b border-border">
             <h2 className="text-base font-medium">Performance by Venue</h2>
