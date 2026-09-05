@@ -13,6 +13,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
+import { clearPortalGetCache } from "@/lib/portal-get";
+
 const { authFetchMock, mutateMock } = vi.hoisted(() => ({ authFetchMock: vi.fn(), mutateMock: vi.fn() }));
 
 vi.mock("@/lib/supabase", () => ({ supabase: { auth: {}, from: () => ({}) } }));
@@ -67,6 +69,9 @@ const ORDER = {
 
 afterEach(() => cleanup());
 beforeEach(() => {
+  // portalGet holds a resolved response for a few seconds so a click can join
+  // the request the sidebar hover started. That must not carry between tests.
+  clearPortalGetCache();
   authFetchMock.mockReset();
   mutateMock.mockReset();
   for (const key of Object.keys(urlStateValues)) delete urlStateValues[key];

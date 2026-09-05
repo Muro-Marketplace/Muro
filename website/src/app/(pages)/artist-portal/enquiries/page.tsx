@@ -12,9 +12,10 @@
 
 import { useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
-import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { enquiryTypeLabel } from "@/lib/enquiry-types";
 import WorkThumb from "@/components/WorkThumb";
+import { portalGet } from "@/lib/portal-get";
 
 interface Enquiry {
   id: number | string;
@@ -63,16 +64,13 @@ export default function ArtistEnquiriesPage() {
 
   useEffect(() => {
     let cancelled = false;
-    authFetch("/api/enquiry")
-      .then(async (res) => {
-        const data = await res.json().catch(() => null);
+    // portalGet, not authFetch: the sidebar starts this on hover, so the click
+    // joins a request already in flight instead of beginning one. It rejects on
+    // a non-2xx rather than handing back the error body, so the two branches
+    // that used to split on res.ok are now the resolve and reject paths.
+    portalGet<{ enquiries?: Enquiry[] }>("/api/enquiry")
+      .then((data) => {
         if (cancelled) return;
-        if (!res.ok) {
-          setLoadError(
-            (data && typeof data.error === "string" && data.error) || "Could not load enquiries.",
-          );
-          return;
-        }
         setEnquiries(Array.isArray(data?.enquiries) ? data.enquiries : []);
       })
       .catch(() => {

@@ -14,9 +14,11 @@ import {
   navGroupKey,
   navItemOwnsPath,
   navPageFor,
+  prefetchUrlsFor,
   sectionTabsFor,
   type PortalNavItem,
 } from "@/lib/portal-nav";
+import { prefetchPortalGet } from "@/lib/portal-get";
 import PortalSectionTabs from "./PortalSectionTabs";
 
 // H6: the nav lists moved to src/lib/portal-nav.ts. The header's portal
@@ -42,6 +44,25 @@ const ROW_IDLE = "text-foreground/70 hover:text-foreground hover:bg-white/60";
 
 function rowClass(active: boolean): string {
   return `${ROW_BASE} ${active ? ROW_ACTIVE : ROW_IDLE}`;
+}
+
+/**
+ * Start the destination's data request on hover and on keyboard focus.
+ *
+ * The chrome survives a navigation now and the functions sit beside the
+ * database, but a page's own request still did not begin until the page
+ * mounted, so the content area waited a full round trip after every click.
+ * A pointer spends a couple of hundred milliseconds between hovering a link and
+ * clicking it, which is most of that round trip. lib/portal-get.ts makes the
+ * click join whatever this started.
+ *
+ * Spread onto the link, so focus covers keyboard users, who never hover.
+ */
+function warmOnIntent(href: string) {
+  const warm = () => {
+    for (const url of prefetchUrlsFor(href)) prefetchPortalGet(url);
+  };
+  return { onMouseEnter: warm, onFocus: warm };
 }
 
 // A group remembers whether it is expanded under this prefix, one key per
@@ -101,7 +122,7 @@ function SidebarGroup({ group, activePath, onNavigate }: SidebarGroupProps) {
   return (
     <li>
       <div className={`flex items-center ${rowClass(isActive)}`}>
-        <Link href={group.href} onClick={onNavigate} className="flex-1 min-w-0 truncate py-2 pl-3 pr-1">
+        <Link href={group.href} onClick={onNavigate} {...warmOnIntent(group.href)} className="flex-1 min-w-0 truncate py-2 pl-3 pr-1">
           {group.label}
         </Link>
         <button
@@ -138,6 +159,7 @@ function SidebarGroup({ group, activePath, onNavigate }: SidebarGroupProps) {
             <Link
               href={child.href}
               onClick={onNavigate}
+              {...warmOnIntent(child.href)}
               className={`block py-1.5 pl-7 pr-3 ${rowClass(navItemOwnsPath(child, activePath))}`}
             >
               {child.label}
@@ -329,6 +351,7 @@ export default function ArtistPortalLayout({
                   <Link
                     href={item.href}
                     onClick={closeSidebar}
+                    {...warmOnIntent(item.href)}
                     className={`block py-2 px-3 ${rowClass(navItemOwnsPath(item, activePath))}`}
                   >
                     {item.label}

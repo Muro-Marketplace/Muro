@@ -10,6 +10,7 @@ import { useUrlState } from "@/lib/use-url-state";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
 import { artistPayoutPounds, formatPounds } from "@/lib/finance/order-money";
+import { portalGet } from "@/lib/portal-get";
 
 interface Order {
   id: string;
@@ -108,8 +109,9 @@ function ArtistOrdersContent() {
   useEffect(() => {
     const deepLinkedId = new URLSearchParams(window.location.search).get("id")
       || new URLSearchParams(window.location.search).get("order");
-    authFetch("/api/orders")
-      .then((r) => r.json())
+    // portalGet, not authFetch: the sidebar starts this on hover, so the click
+    // joins a request already in flight instead of beginning one.
+    portalGet<{ orders?: Order[] }>("/api/orders")
       .then((data) => {
         if (!data.orders) return;
         setOrders(data.orders);

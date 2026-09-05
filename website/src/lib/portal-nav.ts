@@ -274,3 +274,34 @@ export function isFullBleedPortalPath(path: string): boolean {
     return !FULL_BLEED_RESERVED.has(rest);
   });
 }
+
+/**
+ * What each portal page fetches on mount, so the sidebar can start the request
+ * when a link is hovered or focused rather than when the page mounts.
+ *
+ * Only GETs that a page needs immediately belong here. A page's secondary or
+ * conditional requests are deliberately left out: prefetching those would spend
+ * a round trip on data the visit may never use.
+ *
+ * Kept beside the nav because it is the nav that reads it, and because a new
+ * portal page is added here, next to its href, or not at all.
+ */
+const PORTAL_PREFETCH: Record<string, readonly string[]> = {
+  "/artist-portal": ["/api/dashboard"],
+  "/artist-portal/orders": ["/api/orders"],
+  "/artist-portal/enquiries": ["/api/enquiry"],
+  "/artist-portal/collections": ["/api/collections"],
+  "/artist-portal/showroom": ["/api/walls"],
+  "/artist-portal/blogs": ["/api/blogs/mine"],
+  "/artist-portal/analytics": ["/api/orders", "/api/placements"],
+  "/artist-portal/labels": ["/api/placements"],
+  "/artist-portal/posts": ["/api/placements?status=active"],
+  "/venue-portal/orders": ["/api/orders"],
+  "/venue-portal/placements": ["/api/placements"],
+  "/venue-portal/walls": ["/api/walls"],
+};
+
+/** The endpoints to warm for a portal href. Empty for anything not listed. */
+export function prefetchUrlsFor(href: string): readonly string[] {
+  return PORTAL_PREFETCH[cleanNavPath(href)] ?? [];
+}
