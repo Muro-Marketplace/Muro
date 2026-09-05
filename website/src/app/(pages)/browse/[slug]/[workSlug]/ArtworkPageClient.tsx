@@ -621,6 +621,11 @@ export default function ArtworkPageClient({
                   p.label.toLowerCase() ===
                   (selectedPricing?.label.toLowerCase() ?? ""),
               ));
+          // LA-C066: a ticked work with no pricing rows and no legacy in-store
+          // price has nothing to quote. Rendering the button printed "£null"
+          // and put a £0 line in the basket; with no price there is no offer.
+          const collectPrice = selectedPricing?.price ?? selectedInStorePrice;
+          if (collectPrice == null) return null;
           return (
             <button
               onClick={() => {
@@ -635,7 +640,7 @@ export default function ArtworkPageClient({
                       : `${work.title} (Original)`,
                   image: work.image,
                   size: isPerSize && selectedPricing ? selectedPricing.label : "Original",
-                  price: selectedPricing?.price ?? selectedInStorePrice ?? 0,
+                  price: collectPrice,
                   quantity: 1,
                   shippingPrice: 0,
                   // T9 / N2a: the line carries its collection CLAIM — venue and
@@ -651,8 +656,8 @@ export default function ArtworkPageClient({
               className="w-full px-5 py-3 text-sm font-medium text-accent border border-accent/60 hover:bg-accent/5 rounded-sm transition-colors"
             >
               {work.currentPlacement?.venueName
-                ? `Collect from ${work.currentPlacement.venueName}, £${selectedPricing?.price ?? selectedInStorePrice}`
-                : `Collect from venue, £${selectedPricing?.price ?? selectedInStorePrice}`}
+                ? `Collect from ${work.currentPlacement.venueName}, ${formatPounds(collectPrice)}`
+                : `Collect from venue, ${formatPounds(collectPrice)}`}
             </button>
           );
         })()}

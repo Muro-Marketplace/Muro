@@ -186,3 +186,37 @@ describe("Buy Now price formatting (LA-C065)", () => {
     expect(screen.queryByText(/Buy Now, £162\.5$/)).toBeNull();
   });
 });
+
+// LA-C066 (launch audit 2026-09-05). A work ticked "available to buy in store"
+// with no pricing rows passed the collect gate, and the button label
+// interpolated the missing price as "£null" while the basket line carried £0.
+describe("collect-from-venue price (LA-C066)", () => {
+  function placedWork(pricing: ArtistWork["pricing"]): ArtistWork {
+    const work = workWithPerSizeShipping();
+    work.pricing = pricing;
+    work.availableInStore = true;
+    work.currentPlacement = {
+      id: "pl1",
+      venueSlug: "the-gallery",
+      venueName: "The Gallery",
+      status: "active",
+      collectionAddress: null,
+      placedSizeLabel: null,
+      inStorePrice: null,
+    };
+    return work;
+  }
+
+  it("never prints £null: with no price to quote there is no collect button", () => {
+    render(<ArtworkPageClient work={placedWork([])} artistName="Alice Rivers" artistSlug="alice-rivers" />);
+    expect(screen.queryByText(/£null/)).toBeNull();
+    expect(screen.queryByText(/Collect from The Gallery/)).toBeNull();
+  });
+
+  it("quotes the collect price as money when there is one", () => {
+    render(
+      <ArtworkPageClient work={placedWork([{ label: "A4", price: 120 }])} artistName="Alice Rivers" artistSlug="alice-rivers" />,
+    );
+    expect(screen.getByText("Collect from The Gallery, £120.00")).toBeTruthy();
+  });
+});
