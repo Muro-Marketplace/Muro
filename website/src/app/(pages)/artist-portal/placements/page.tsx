@@ -4,7 +4,6 @@ import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import PlacementActionItems from "@/components/PlacementActionItems";
 import PlacementStepper, { type PlacementStepperData } from "@/components/PlacementStepper";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
@@ -802,16 +801,16 @@ export default function PlacementsPage() {
 
   if (artistLoading || !artist) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/placements">
+      <>
         <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found. Complete your profile setup first."}</p>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
   const works = artist.works;
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/placements">
+    <>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">Placements</h1>
@@ -1993,6 +1992,6 @@ export default function PlacementsPage() {
         }}
         onClose={() => setPendingCancelId(null)}
       />
-    </ArtistPortalLayout>
+    </>
   );
 }

@@ -13,7 +13,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 
 interface ArtistRow {
@@ -132,7 +131,7 @@ export default function AdminArtistsPage() {
   const visible = artists.filter((a) => tab === "all" || (a.review_status ?? "pending") === tab);
 
   return (
-    <AdminPortalLayout activePath="/admin/artists">
+    <>
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl lg:text-3xl mb-1">Registered Artists</h1>
@@ -258,6 +257,6 @@ export default function AdminArtistsPage() {
         {visible.length} artist{visible.length !== 1 ? "s" : ""}
         {tab === "all" ? " registered" : " in this tab"}
       </p>
-    </AdminPortalLayout>
+    </>
   );
 }

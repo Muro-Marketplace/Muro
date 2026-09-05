@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
@@ -291,11 +290,11 @@ export default function CollectionsPage() {
 
   if (artistLoading || !artist) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/collections">
+      <>
         <p className="text-muted text-sm py-12 text-center">
           {artistLoading ? "Loading..." : "No artist profile found."}
         </p>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -349,7 +348,7 @@ export default function CollectionsPage() {
     !!form.name.trim() && form.workIds.length >= 2 && !!form.bundlePrice.trim();
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/collections">
+    <>
       <UpgradePrompt
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
@@ -887,6 +886,6 @@ export default function CollectionsPage() {
           )
         )}
       </div>
-    </ArtistPortalLayout>
+    </>
   );
 }

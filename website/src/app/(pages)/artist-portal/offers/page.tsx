@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import OffersList from "@/components/offers/OffersList";
 import { useAuth } from "@/context/AuthContext";
 
@@ -18,7 +17,7 @@ export default function ArtistOffersPage() {
   }, [loading, user]);
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/offers">
+    <>
       <div className="max-w-3xl px-4 sm:px-6 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-serif">Offers received</h1>
@@ -30,6 +29,6 @@ export default function ArtistOffersPage() {
           <OffersList viewerUserId={user.id} filter="artist" />
         )}
       </div>
-    </ArtistPortalLayout>
+    </>
   );
 }

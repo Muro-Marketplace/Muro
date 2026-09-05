@@ -216,6 +216,15 @@ const money = (max: number) => z.number().finite().min(0).max(max);
 export const sizePricingSchema = z.object({
   label: safeString(100),
   price: money(100_000),
+  // Per-size fields the portfolio form puts on each tier (see SizePricing in
+  // data/artists.ts). z.object strips unknown keys, so leaving these undeclared
+  // (E46a) meant every save silently dropped the "Different quantity per size"
+  // stock cap, the per-size shipping price and the legacy per-size in-store
+  // price, all of which the artwork page, cart and checkout read back. Bounds
+  // mirror the work-level fields below. null clears the value for that size.
+  quantityAvailable: z.number().int().min(0).max(10_000).nullable().optional(),
+  shippingPrice: money(1000).nullable().optional(),
+  inStorePrice: money(100_000).nullable().optional(),
 });
 
 export const artistWorkInputSchema = z.object({

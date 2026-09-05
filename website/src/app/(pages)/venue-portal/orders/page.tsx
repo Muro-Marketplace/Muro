@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import EmptyState from "@/components/EmptyState";
 import LoadErrorState from "@/components/LoadErrorState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
@@ -36,7 +35,7 @@ type OrderTab = "sales" | "purchases";
 
 export default function VenueOrdersPage() {
   return (
-    <Suspense fallback={<VenuePortalLayout><p className="text-muted text-sm py-12 text-center">Loading orders...</p></VenuePortalLayout>}>
+    <Suspense fallback={<><p className="text-muted text-sm py-12 text-center">Loading orders...</p></>}>
       <VenueOrdersContent />
     </Suspense>
   );
@@ -101,7 +100,7 @@ function VenueOrdersContent() {
   const selected = orders.find((o) => o.id === selectedOrder);
 
   return (
-    <VenuePortalLayout>
+    <>
       <div className="mb-8">
         <h1 className="text-2xl lg:text-3xl">Orders</h1>
         <p className="text-sm text-muted mt-1">Sales from your venue and your purchases</p>
@@ -338,6 +337,6 @@ function VenueOrdersContent() {
           ))}
         </div>
       )}
-    </VenuePortalLayout>
+    </>
   );
 }

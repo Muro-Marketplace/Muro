@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import OffersList from "@/components/offers/OffersList";
 import { useAuth } from "@/context/AuthContext";
 
@@ -20,7 +19,7 @@ export default function VenueOffersPage() {
   }, [loading, user]);
 
   return (
-    <VenuePortalLayout activePath="/venue-portal/offers">
+    <>
       <div className="max-w-3xl px-4 sm:px-6 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-serif">My offers</h1>
@@ -32,6 +31,6 @@ export default function VenueOffersPage() {
           <OffersList viewerUserId={user.id} filter="buyer" />
         )}
       </div>
-    </VenuePortalLayout>
+    </>
   );
 }

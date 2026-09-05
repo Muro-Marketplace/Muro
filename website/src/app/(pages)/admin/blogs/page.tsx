@@ -14,7 +14,6 @@
 // The decision route now emails it, so the prompt says what actually happens.
 
 import { useEffect, useState, useCallback } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import type { ModerationPayload } from "@/lib/moderation/types";
 
@@ -79,7 +78,7 @@ export default function AdminBlogsPage() {
   }
 
   return (
-    <AdminPortalLayout activePath="/admin/blogs">
+    <>
       <div className="max-w-4xl px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl lg:text-3xl mb-2">Blogs</h1>
@@ -171,7 +170,7 @@ export default function AdminBlogsPage() {
           </ul>
         )}
       </div>
-    </AdminPortalLayout>
+    </>
   );
 }
 

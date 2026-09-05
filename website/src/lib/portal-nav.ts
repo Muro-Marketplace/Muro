@@ -239,3 +239,38 @@ export function navGroupKey(group: PortalNavItem): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+
+/**
+ * Routes that render their own full-bleed surface and must NOT be wrapped in
+ * the portal chrome.
+ *
+ * Both are single-scene visualiser editors that size themselves against the
+ * viewport (`h-[calc(100vh-3.5rem)]`) and carry their own top bar and back
+ * link. A sidebar would eat 14rem of that width and the height maths would be
+ * wrong. They were the only two portal pages that never rendered the chrome
+ * while every sibling did, and moving the chrome into layout.tsx would
+ * otherwise have handed it to them for the first time.
+ *
+ * `/showroom/new` and `/walls/new` are static sibling routes with their own
+ * pages, and both DO take the chrome, so the id segment is matched by
+ * exclusion rather than by a bare `[^/]+`.
+ */
+const FULL_BLEED_PARENTS = ["/artist-portal/showroom", "/venue-portal/walls"] as const;
+
+/** Segments under a full-bleed parent that are real sibling routes, not ids. */
+const FULL_BLEED_RESERVED = new Set(["new"]);
+
+/**
+ * True when the path is a full-bleed editor route, so the portal layout should
+ * render the page bare. False for the parent listing, for its `new` sibling,
+ * and for anything deeper than one id segment.
+ */
+export function isFullBleedPortalPath(path: string): boolean {
+  const clean = cleanNavPath(path);
+  return FULL_BLEED_PARENTS.some((parent) => {
+    if (!clean.startsWith(`${parent}/`)) return false;
+    const rest = clean.slice(parent.length + 1);
+    if (!rest || rest.includes("/")) return false;
+    return !FULL_BLEED_RESERVED.has(rest);
+  });
+}

@@ -9,7 +9,6 @@
 // the shared PATCH on /api/admin/moderation.
 
 import { useCallback, useEffect, useState } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import type { ModerationPayload } from "@/lib/moderation/types";
 
@@ -78,7 +77,7 @@ export default function FeedbackAdminPage() {
   }
 
   return (
-    <AdminPortalLayout activePath="/admin/feedback">
+    <>
       <div className="max-w-4xl px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl lg:text-3xl mb-2">Feedback</h1>
@@ -190,6 +189,6 @@ export default function FeedbackAdminPage() {
           </ul>
         )}
       </div>
-    </AdminPortalLayout>
+    </>
   );
 }

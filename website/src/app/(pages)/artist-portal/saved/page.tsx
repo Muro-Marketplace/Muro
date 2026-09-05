@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
@@ -229,7 +228,7 @@ export default function ArtistSavedPage() {
   }
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/saved">
+    <>
       <div className="mb-8">
         <h1 className="text-2xl lg:text-3xl">Saved</h1>
         <p className="text-sm text-muted mt-1">Your saved works, artists, and collections</p>
@@ -281,6 +280,6 @@ export default function ArtistSavedPage() {
           })}
         </div>
       )}
-    </ArtistPortalLayout>
+    </>
   );
 }

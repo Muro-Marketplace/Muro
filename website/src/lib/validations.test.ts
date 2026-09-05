@@ -5,11 +5,13 @@
 import { describe, expect, it } from "vitest";
 import {
   applySchema,
+  artistWorkInputSchema,
   checkoutSchema,
   contactSchema,
   messageSchema,
   placementSchema,
   placementUpdateSchema,
+  sizePricingSchema,
   waitlistSchema,
 } from "./validations";
 
@@ -431,5 +433,69 @@ describe("applySchema", () => {
 
   it("rejects selectedPlan outside the enum", () => {
     expect(applySchema.safeParse({ ...base, selectedPlan: "enterprise" }).success).toBe(false);
+  });
+});
+
+// The per-size fields the portfolio form puts on each pricing tier. Zod 4's
+// z.object strips unknown keys, so until these were declared every save
+// silently dropped the "Different quantity per size" stock cap, the per-size
+// shipping price and the legacy per-size in-store price that the artwork page,
+// the cart and checkout all read back from `artist_works.pricing`.
+describe("sizePricingSchema per-size fields", () => {
+  const tier = { label: "A2", price: 120 };
+
+  it("keeps per-size stock, shipping and in-store price on the parsed tier", () => {
+    const parsed = sizePricingSchema.parse({
+      ...tier,
+      quantityAvailable: 1,
+      shippingPrice: 5.5,
+      inStorePrice: 100,
+    });
+    expect(parsed).toEqual({ ...tier, quantityAvailable: 1, shippingPrice: 5.5, inStorePrice: 100 });
+  });
+
+  it("still accepts a bare label + price tier", () => {
+    expect(sizePricingSchema.parse(tier)).toEqual(tier);
+  });
+
+  it("accepts null for each per-size field, which clears it", () => {
+    const cleared = { ...tier, quantityAvailable: null, shippingPrice: null, inStorePrice: null };
+    expect(sizePricingSchema.parse(cleared)).toEqual(cleared);
+  });
+
+  it("bounds per-size stock like the work-level field: an integer from 0 to 10,000", () => {
+    expect(sizePricingSchema.safeParse({ ...tier, quantityAvailable: 0 }).success).toBe(true);
+    expect(sizePricingSchema.safeParse({ ...tier, quantityAvailable: 10_000 }).success).toBe(true);
+    expect(sizePricingSchema.safeParse({ ...tier, quantityAvailable: -1 }).success).toBe(false);
+    expect(sizePricingSchema.safeParse({ ...tier, quantityAvailable: 1.5 }).success).toBe(false);
+    expect(sizePricingSchema.safeParse({ ...tier, quantityAvailable: 10_001 }).success).toBe(false);
+  });
+
+  it("bounds per-size shipping like the work-level field: 0 to 1,000", () => {
+    expect(sizePricingSchema.safeParse({ ...tier, shippingPrice: 0 }).success).toBe(true);
+    expect(sizePricingSchema.safeParse({ ...tier, shippingPrice: 1000 }).success).toBe(true);
+    expect(sizePricingSchema.safeParse({ ...tier, shippingPrice: -0.01 }).success).toBe(false);
+    expect(sizePricingSchema.safeParse({ ...tier, shippingPrice: 1000.01 }).success).toBe(false);
+  });
+
+  it("bounds per-size in-store price like a tier price: 0 to 100,000", () => {
+    expect(sizePricingSchema.safeParse({ ...tier, inStorePrice: 0 }).success).toBe(true);
+    expect(sizePricingSchema.safeParse({ ...tier, inStorePrice: 100_000 }).success).toBe(true);
+    expect(sizePricingSchema.safeParse({ ...tier, inStorePrice: -1 }).success).toBe(false);
+    expect(sizePricingSchema.safeParse({ ...tier, inStorePrice: 100_001 }).success).toBe(false);
+  });
+
+  it("round-trips the per-size fields through artistWorkInputSchema.pricing", () => {
+    const pricing = [
+      { label: "A3", price: 120, quantityAvailable: 1, shippingPrice: 4.95 },
+      { label: "A2", price: 240, quantityAvailable: 2, shippingPrice: 7.95 },
+    ];
+    const parsed = artistWorkInputSchema.parse({
+      id: "w_1",
+      title: "Mt. Fitz Roy",
+      image: "https://example.com/x.jpg",
+      pricing,
+    });
+    expect(parsed.pricing).toEqual(pricing);
   });
 });

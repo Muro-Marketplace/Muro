@@ -10,7 +10,6 @@
 // also publishes it); everything else PATCHes /api/admin/moderation.
 
 import { useState, useEffect, useCallback } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import type { ModerationPayload } from "@/lib/moderation/types";
 
@@ -170,7 +169,7 @@ export default function AdminModerationPage() {
   }
 
   return (
-    <AdminPortalLayout activePath="/admin/moderation">
+    <>
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="font-serif text-2xl text-foreground mb-1">Moderation queue</h1>
@@ -327,7 +326,7 @@ export default function AdminModerationPage() {
           })}
         </div>
       )}
-    </AdminPortalLayout>
+    </>
   );
 }
 

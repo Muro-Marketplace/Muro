@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import BlogEditor from "@/components/BlogEditor";
 import { isFlagOn } from "@/lib/feature-flags";
 
@@ -9,8 +8,8 @@ export default function NewBlogPage() {
   // a server component, so the check runs before any client JS ships.
   if (!isFlagOn("BLOGS_V1")) notFound();
   return (
-    <ArtistPortalLayout activePath="/artist-portal/blogs">
+    <>
       <BlogEditor />
-    </ArtistPortalLayout>
+    </>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 
 interface CurationRow {
@@ -215,7 +214,7 @@ export default function AdminCurationPage() {
   }
 
   return (
-    <AdminPortalLayout activePath="/admin/curation">
+    <>
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="font-serif text-2xl text-foreground mb-1">Curation requests</h1>
@@ -347,7 +346,7 @@ export default function AdminCurationPage() {
           })}
         </div>
       )}
-    </AdminPortalLayout>
+    </>
   );
 }
 

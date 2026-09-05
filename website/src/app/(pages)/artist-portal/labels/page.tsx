@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { buildVenueOptions, resolveVenueParam, type VenueOption } from "@/lib/labels/venue-options";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LabelPreview from "@/components/labels/LabelPreview";
 import LabelThemePicker from "@/components/labels/LabelThemePicker";
 import type { LabelData } from "@/components/labels/LabelSheet";
@@ -163,9 +162,9 @@ export default function LabelsPage() {
 
   if (artistLoading || !artist) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/labels">
+      <>
         <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found."}</p>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -266,7 +265,7 @@ export default function LabelsPage() {
   }
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/labels">
+    <>
       <div className="max-w-5xl pb-24">
         {/* Header */}
         <div className="mb-6">
@@ -595,6 +594,6 @@ export default function LabelsPage() {
           onClose={() => setShowPreview(false)}
         />
       )}
-    </ArtistPortalLayout>
+    </>
   );
 }

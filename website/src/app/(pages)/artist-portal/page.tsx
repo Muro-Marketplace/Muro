@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import PlacementActionItems from "@/components/PlacementActionItems";
 import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 import Button from "@/components/Button";
@@ -288,7 +287,7 @@ export default function ArtistPortalPage() {
   }
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal">
+    <>
       {/* Welcome header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
         <div>
@@ -538,7 +537,7 @@ export default function ArtistPortalPage() {
           </div>
         </div>
       </div>
-    </ArtistPortalLayout>
+    </>
   );
 }
 

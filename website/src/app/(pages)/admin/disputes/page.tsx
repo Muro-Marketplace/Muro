@@ -12,7 +12,6 @@
 // shows the classification it was filed under plus a flag.
 
 import { useEffect, useState, useCallback } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { baseCategory, isEscalated } from "@/app/api/admin/disputes/escalation";
 
@@ -90,7 +89,7 @@ export default function AdminDisputesPage() {
   }
 
   return (
-    <AdminPortalLayout activePath="/admin/disputes">
+    <>
       <div className="max-w-5xl px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl lg:text-3xl mb-2">Disputes</h1>
@@ -187,7 +186,7 @@ export default function AdminDisputesPage() {
           </ul>
         )}
       </div>
-    </AdminPortalLayout>
+    </>
   );
 }
 

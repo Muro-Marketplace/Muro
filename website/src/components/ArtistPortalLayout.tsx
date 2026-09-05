@@ -3,9 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { fetchArtistProfileShared } from "@/lib/artist-profile-source";
 import { loginPathWithNext } from "@/lib/login-redirect";
 import LoadErrorState from "./LoadErrorState";
 import {
@@ -151,13 +151,21 @@ function SidebarGroup({ group, activePath, onNavigate }: SidebarGroupProps) {
 
 interface ArtistPortalLayoutProps {
   children: React.ReactNode;
-  activePath: string;
+  /**
+   * Optional override for the active route. The chrome is rendered once by
+   * artist-portal/layout.tsx, which passes nothing and lets the layout read
+   * the path itself; the prop is kept so tests can render a given route
+   * directly. Same shape VenuePortalLayout already used.
+   */
+  activePath?: string;
 }
 
 export default function ArtistPortalLayout({
   children,
-  activePath,
+  activePath: activePathProp,
 }: ArtistPortalLayoutProps) {
+  const pathname = usePathname();
+  const activePath = activePathProp ?? pathname ?? "/artist-portal";
   const router = useRouter();
   const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -206,11 +214,12 @@ export default function ArtistPortalLayout({
     }
     let cancelled = false;
     setProfileCheck("loading");
-    authFetch("/api/artist-profile")
-      .then(async (r) => {
-        if (r.ok === false) throw new Error(`profile check failed (${r.status})`);
-        return r.json();
-      })
+    // Shared with PortalGuard and the page's own useCurrentArtist: one request
+    // for all three on the portal's first load, rather than three identical
+    // ones each carrying every artist_works row. This caller reads the avatar
+    // and whether a row exists, so it asks for the profile alone; it still
+    // joins a works request that is already out.
+    fetchArtistProfileShared(user.id, { withWorks: false })
       .then((data) => {
         if (cancelled) return;
         // Brand-new artist accounts (signed up, never approved /
@@ -221,7 +230,7 @@ export default function ArtistPortalLayout({
         // Send them through /apply instead so they can complete the
         // application. Once an admin approves it the profile row is
         // created and this guard naturally lets them in.
-        if (!data?.profile) {
+        if (!data.profile) {
           setProfileCheck("missing");
           router.replace("/apply");
           return;
