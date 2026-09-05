@@ -18,6 +18,8 @@ const CART = { title: "Mt. Fitz Roy", qty: 2, price: 49.99 };
 describe("readOrderItem", () => {
   it("reads the enriched shape the Stripe webhook writes", () => {
     expect(readOrderItem(ENRICHED)).toEqual({
+      // The production row always carried this; the reader used to drop it.
+      image: "https://example.test/a.png",
       title: "Streets of St. Tropez",
       quantity: 1,
       lineTotal: 69.99,
@@ -27,6 +29,8 @@ describe("readOrderItem", () => {
 
   it("reads the legacy cart shape", () => {
     expect(readOrderItem(CART)).toEqual({
+      // The legacy cart shape never had one.
+      image: null,
       title: "Mt. Fitz Roy",
       quantity: 2,
       lineTotal: 99.98,
@@ -105,5 +109,30 @@ describe("orderItemsSubtotal", () => {
 
   it("is zero for an empty order", () => {
     expect(orderItemsSubtotal([])).toBe(0);
+  });
+});
+
+describe("the artwork image on an order line", () => {
+  // Portals named a purchased piece in text alone because this reader dropped
+  // the image the stored item already carried.
+  it("carries the image through", () => {
+    expect(readOrderItem({ title: "Harbour Light", image: "https://cdn.example/h.jpg" }).image)
+      .toBe("https://cdn.example/h.jpg");
+  });
+
+  it("is null for a legacy row saved without one, and for a blank string", () => {
+    expect(readOrderItem({ title: "x" }).image).toBeNull();
+    expect(readOrderItem({ title: "x", image: "" }).image).toBeNull();
+    expect(readOrderItem({ title: "x", image: "   " }).image).toBeNull();
+    expect(readOrderItem(null).image).toBeNull();
+  });
+
+  it("survives the array reader every order surface uses", () => {
+    const [a, b] = readOrderItems([
+      { title: "One", image: "a.jpg" },
+      { title: "Two" },
+    ]);
+    expect(a.image).toBe("a.jpg");
+    expect(b.image).toBeNull();
   });
 });

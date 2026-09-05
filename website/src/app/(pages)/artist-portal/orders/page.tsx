@@ -5,6 +5,7 @@ import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { readOrderItems, type RawOrderItem } from "@/lib/order-items";
+import WorkThumb from "@/components/WorkThumb";
 import { useUrlState } from "@/lib/use-url-state";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
@@ -368,11 +369,14 @@ function ArtistOrdersContent() {
           <div className="mt-6 space-y-2">
             <p className="text-xs text-muted uppercase tracking-wider">Items</p>
             {readOrderItems(selected.items).map((item, i) => (
-              <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
-                <span>
-                  {item.title} &times; {item.quantity}
-                </span>
-                <span className="font-medium">&pound;{item.lineTotal.toFixed(2)}</span>
+              <div key={i} className="flex items-center justify-between gap-3 text-sm border-b border-border pb-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <WorkThumb src={item.image} alt={item.title} size="md" />
+                  <span className="min-w-0 truncate">
+                    {item.title} &times; {item.quantity}
+                  </span>
+                </div>
+                <span className="font-medium shrink-0">&pound;{item.lineTotal.toFixed(2)}</span>
               </div>
             ))}
           </div>
