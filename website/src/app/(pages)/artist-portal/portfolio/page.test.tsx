@@ -501,3 +501,73 @@ describe("Add work jumps to the top of the page (owner-reported 2 September)", (
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
   });
 });
+
+describe("restocking a sold-out work puts it back on sale (owner-reported 5 September)", () => {
+  // decrement_work_stock (migration 120), and the form's own save at quantity 0,
+  // write available=false. The form then hydrated the box from that flag and
+  // ANDed it with the new quantity, so a restock from 0 to 100 saved
+  // available=false and the marketplace kept saying Sold (live row
+  // fin-coles-1777209447418). Clearing the field to unlimited took the same path.
+  const SOLD_OUT = {
+    ...WORK,
+    id: "w1",
+    title: "Vietnamese Village",
+    available: false,
+    quantityAvailable: 0,
+  };
+
+  async function openEditFor(title: string) {
+    const card = (await screen.findAllByText(title))[0].closest(".group") as HTMLElement;
+    fireEvent.mouseEnter(card);
+    fireEvent.click(within(card).getByText("Edit"));
+    await screen.findAllByPlaceholderText(TITLE_PLACEHOLDER);
+  }
+  // The box is a button inside the label; the tick is an inline svg, so an
+  // unticked box renders no svg at all.
+  const availableBox = () =>
+    screen.getAllByText("Available for purchase")[0].closest("label")!.querySelector("button")!;
+  const quantityInput = () => screen.getAllByPlaceholderText("e.g. 10")[0];
+  const postedBody = () => JSON.parse((mutateMock.mock.calls[0][1] as { body: string }).body);
+
+  it("shows a work that only ran out of stock as still for sale when the form opens", async () => {
+    artistState.works = [SOLD_OUT];
+    render(<PortfolioPage />);
+    await openEditFor("Vietnamese Village");
+    expect(availableBox().querySelector("svg")).not.toBeNull();
+    expect((quantityInput() as HTMLInputElement).value).toBe("0");
+  });
+
+  it("quantity 0 to 100 saves available=true", async () => {
+    mutateMock.mockResolvedValue({ savedRow: { id: "w1" } });
+    artistState.works = [SOLD_OUT];
+    render(<PortfolioPage />);
+    await openEditFor("Vietnamese Village");
+    fireEvent.change(quantityInput(), { target: { value: "100" } });
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Artwork updated"));
+    expect(postedBody()).toMatchObject({ id: "w1", available: true, quantityAvailable: 100 });
+  });
+
+  it("quantity 0 to blank saves unlimited stock with available=true", async () => {
+    mutateMock.mockResolvedValue({ savedRow: { id: "w1" } });
+    artistState.works = [SOLD_OUT];
+    render(<PortfolioPage />);
+    await openEditFor("Vietnamese Village");
+    fireEvent.change(quantityInput(), { target: { value: "" } });
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Artwork updated"));
+    expect(postedBody()).toMatchObject({ id: "w1", available: true, quantityAvailable: null });
+  });
+
+  it("a work the artist withdrew stays withdrawn when its stock changes", async () => {
+    mutateMock.mockResolvedValue({ savedRow: { id: "w1" } });
+    artistState.works = [{ ...WORK, id: "w1", title: "Withdrawn Piece", available: false, quantityAvailable: 5 }];
+    render(<PortfolioPage />);
+    await openEditFor("Withdrawn Piece");
+    expect(availableBox().querySelector("svg")).toBeNull();
+    fireEvent.change(quantityInput(), { target: { value: "7" } });
+    fireEvent.click(screen.getAllByText("Save Changes")[0]);
+    await waitFor(() => expect(showToastMock).toHaveBeenCalledWith("Artwork updated"));
+    expect(postedBody()).toMatchObject({ id: "w1", available: false, quantityAvailable: 7 });
+  });
+});

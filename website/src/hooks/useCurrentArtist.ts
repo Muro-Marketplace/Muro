@@ -6,6 +6,11 @@ import { artists, type Artist } from "@/data/artists";
 import { slugify } from "@/lib/slugify";
 import { authFetch } from "@/lib/api-client";
 import { dbProfileToArtist, type DbArtistProfile, type DbArtistWork } from "@/lib/db/artist-profiles-transform";
+import {
+  currentArtistCacheGeneration,
+  readCurrentArtistCache,
+  writeCurrentArtistCache,
+} from "@/lib/current-artist-cache";
 
 /**
  * Returns the Artist record for the currently logged-in user.
@@ -14,6 +19,10 @@ import { dbProfileToArtist, type DbArtistProfile, type DbArtistWork } from "@/li
  * 1. Query Supabase artist_profiles table via API
  * 2. Fall back to static artists array (for demo/seed accounts)
  * 3. Returns null if no match (new user needs to complete onboarding)
+ *
+ * A per-tab snapshot (lib/current-artist-cache.ts) is handed out first so a
+ * navigation between portal pages does not wait on the API; it is refreshed
+ * in the background and dropped by every confirmed write in this tab.
  */
 export function useCurrentArtist(): {
   artist: Artist | null;
@@ -38,46 +47,44 @@ export function useCurrentArtist(): {
     }
 
     let cancelled = false;
+    const userId = user.id;
 
     async function loadProfile() {
       setLoading(true);
 
-      // Check sessionStorage cache first (avoids cold start on navigation)
-      const cacheKey = `wallplace-artist-${user!.id}`;
-      try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached && !cancelled) {
-          const { profile, works, ts } = JSON.parse(cached);
-          // Use cache if less than 5 minutes old
-          if (Date.now() - ts < 300000 && profile) {
-            const a = dbProfileToArtist(profile as DbArtistProfile, (works || []) as DbArtistWork[]);
-            setArtist(a);
-            setProfileId(profile.id);
-            setLoading(false);
-            // Refresh in background
-            authFetch("/api/artist-profile").then((r) => r.json()).then((data) => {
-              if (data.profile && !cancelled) {
-                sessionStorage.setItem(cacheKey, JSON.stringify({ profile: data.profile, works: data.works, ts: Date.now() }));
-                const fresh = dbProfileToArtist(data.profile as DbArtistProfile, (data.works || []) as DbArtistWork[]);
-                setArtist(fresh);
-              }
-            }).catch(() => {});
-            return;
-          }
-        }
-      } catch { /* sessionStorage unavailable */ }
+      // Warm start from the snapshot. A hit means no write in this tab is
+      // newer than what it holds, because mutate() drops it on every 2xx.
+      const cached = readCurrentArtistCache(userId);
+      if (cached && !cancelled) {
+        setArtist(dbProfileToArtist(cached.profile, cached.works));
+        setProfileId(cached.profile.id);
+        setLoading(false);
+        // Refresh in background. If a write lands while this GET is out the
+        // generation moves, and the result (already behind that write) is
+        // dropped rather than written back over the cleared snapshot.
+        const generation = currentArtistCacheGeneration();
+        authFetch("/api/artist-profile").then((r) => r.json()).then((data) => {
+          if (!data.profile || cancelled) return;
+          if (currentArtistCacheGeneration() !== generation) return;
+          const works = (data.works || []) as DbArtistWork[];
+          writeCurrentArtistCache(userId, { profile: data.profile, works });
+          setArtist(dbProfileToArtist(data.profile as DbArtistProfile, works));
+        }).catch(() => {});
+        return;
+      }
 
       // Fetch from API
       try {
+        const generation = currentArtistCacheGeneration();
         const res = await authFetch("/api/artist-profile");
         if (res.ok) {
           const data = await res.json();
           if (data.profile && !cancelled) {
-            try { sessionStorage.setItem(cacheKey, JSON.stringify({ profile: data.profile, works: data.works, ts: Date.now() })); } catch { /* ignore */ }
-            const a = dbProfileToArtist(
-              data.profile as DbArtistProfile,
-              (data.works || []) as DbArtistWork[]
-            );
+            const works = (data.works || []) as DbArtistWork[];
+            if (currentArtistCacheGeneration() === generation) {
+              writeCurrentArtistCache(userId, { profile: data.profile, works });
+            }
+            const a = dbProfileToArtist(data.profile as DbArtistProfile, works);
             setArtist(a);
             setProfileId(data.profile.id);
             setLoading(false);

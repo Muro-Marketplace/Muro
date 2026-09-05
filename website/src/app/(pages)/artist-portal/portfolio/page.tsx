@@ -16,6 +16,7 @@ import { buildFramePayload, type FramePayloadInput } from "./frame-payload";
 import { mergeBulkPricing, copySizesPricing } from "./bulk-pricing";
 import { worksToPost } from "./changed-works";
 import { partitionBulkAddDrafts } from "./bulk-add-validation";
+import { deriveAvailable, hydrateAvailable } from "./work-availability";
 import { estimateShipping, tierLabel } from "@/lib/shipping-calculator";
 import { canFeatureArtwork, isArtworkOfTheWeek } from "@/lib/tier-features";
 import Combobox from "@/components/Combobox";
@@ -1521,7 +1522,9 @@ export default function PortfolioPage() {
       imagePreview: w.image,
       additionalImages: Array.isArray(w.images) ? [...w.images] : [],
       description: w.description || "",
-      available: w.available,
+      // A work that only ran out of stock opens ticked, so raising the count
+      // puts it back on sale (work-availability.ts).
+      available: hydrateAvailable(w),
       orientation: w.orientation || "landscape",
       sizes: w.pricing.map((p) => ({ label: p.label, price: p.price })),
       shippingPrice: w.shippingPrice != null ? w.shippingPrice.toFixed(2) : "",
@@ -1872,7 +1875,7 @@ export default function PortfolioPage() {
         // which DOES round-trip through the API and DB.
         return base;
       }),
-      available: form.available && (!qtyFinite || qtyVal! > 0),
+      available: deriveAvailable(form.available, qtyFinite ? qtyVal : null),
       color: "#C17C5A",
       description: form.description.trim(),
       images: form.additionalImages.filter((u) => typeof u === "string" && u.length > 0),
