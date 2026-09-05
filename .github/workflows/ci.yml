@@ -20,7 +20,14 @@ jobs:
   check:
     name: lint + typecheck + unit
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 15, not 10. `npm ci` is the whole problem: setup-node's `cache: npm`
+    # caches ~/.npm, not node_modules, so every run still does a full install
+    # and it has been measured at 7 minutes on a slow runner. That left under
+    # 2 minutes for the test suite and the job was killed mid-run, which
+    # surfaces as "cancelled" rather than a failure and blocks the PR with
+    # nothing actually broken (see PR #84). Successful runs on main were
+    # already landing at 9 to 13 minutes, so the margin was gone either way.
+    timeout-minutes: 15
     env:
       # Dummy values let the build + env.ts parse succeed without any real
       # infra. Tests that need specific env set it themselves.
