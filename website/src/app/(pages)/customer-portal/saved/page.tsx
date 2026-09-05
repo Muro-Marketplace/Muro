@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
+import LoadErrorState from "@/components/LoadErrorState";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { slugify } from "@/lib/slugify";
@@ -72,6 +73,8 @@ function CustomerSavedContent() {
   const [items, setItems] = useState<SavedItemRow[]>([]);
   const [allArtists, setAllArtists] = useState<ArtistData[]>([]);
   const [loading, setLoading] = useState(true);
+  // LA-C022: a failed load is not an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   // C7: whether the artist catalogue actually arrived. Without this an empty
   // or failed /api/browse-artists would make every saved work look deleted.
   const [catalogueLoaded, setCatalogueLoaded] = useState(false);
@@ -90,24 +93,32 @@ function CustomerSavedContent() {
   }, [allArtists]);
 
   const fetchItems = useCallback(() => {
-    Promise.all([
-      authFetch("/api/saved").then((r) => r.json()),
-      fetch("/api/browse-artists").then((r) => r.json()),
-    ])
+    const asJson = async (r: Response) => {
+      if (!r.ok) throw new Error(`load failed (${r.status})`);
+      return r.json();
+    };
+    Promise.all([authFetch("/api/saved").then(asJson), fetch("/api/browse-artists").then(asJson)])
       .then(([savedData, artistsData]) => {
         if (savedData.items) setItems(savedData.items);
         if (artistsData.artists) {
           setAllArtists(artistsData.artists);
           setCatalogueLoaded(true);
         }
+        setLoadError(null);
       })
-      .catch(() => {})
+      .catch(() => setLoadError("Could not load your saved items. Please try again."))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  function retryLoad() {
+    setLoading(true);
+    setLoadError(null);
+    fetchItems();
+  }
 
   async function handleRemove(item: SavedItemRow) {
     setRemoving(item.id);
@@ -157,6 +168,8 @@ function CustomerSavedContent() {
       {/* Content */}
       {loading ? (
         <p className="text-muted text-sm py-12 text-center">Loading saved items...</p>
+      ) : loadError ? (
+        <LoadErrorState message={loadError} onRetry={retryLoad} />
       ) : filtered.length === 0 ? (
         <EmptyState
           title={

@@ -8,7 +8,7 @@
 // claimed item_id was "artist-slug/work-title".
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const { authFetchMock, mutateMock, fetchMock } = vi.hoisted(() => ({
   authFetchMock: vi.fn(),
@@ -126,5 +126,22 @@ describe("customer saved works, unresolved works (C7)", () => {
     // Fail-before: every row still linked to /browse/<uuid>.
     expect(hrefs().some((h) => h.includes(VANISHED_WORK_ID))).toBe(false);
     expect(hrefs().some((h) => h.includes(LIVE_WORK_ID))).toBe(false);
+  });
+});
+
+// LA-C022 (launch audit 2026-09-05). Both requests behind this page ended in
+// .catch(() => {}), so a failed saved-items or catalogue load rendered
+// "No saved works yet" with no feedback.
+describe("customer saved when a request fails (LA-C022)", () => {
+  it("shows an error with a retry instead of the empty state, and recovers", async () => {
+    authFetchMock.mockImplementationOnce(() =>
+      Promise.resolve({ ok: false, status: 500, json: async () => ({ error: "boom" }) } as unknown as Response),
+    );
+    render(<CustomerSavedPage />);
+    expect(await screen.findByText(/could not load your saved items/i)).toBeTruthy();
+    expect(screen.queryByText("No saved works yet")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Copper Morning")).toBeTruthy();
   });
 });
