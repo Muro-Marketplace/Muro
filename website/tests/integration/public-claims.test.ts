@@ -115,4 +115,8 @@ describe("public claims the site cannot evidence stay out", () => {
   it("the billing page spells cancelled the British way (LA-C010)", () => {
     expect(read("src/app/(pages)/artist-portal/billing/page.tsx")).not.toMatch(/"Canceled"|has been canceled/);
   });
+
+  it("the venue dashboard has no em dash in its copy (LA-C084)", () => {
+    expect(read("src/app/(pages)/venue-portal/page.tsx")).not.toMatch(/—|\\u2014/);
+  });
 });

@@ -394,7 +394,7 @@ export default function VenueDashboardPage() {
             className="bg-white border border-border rounded-sm p-5"
           >
             <p className={`text-2xl font-serif text-foreground mb-1 ${loading ? "animate-pulse" : ""}`}>
-              {loading ? "\u2014" : stat.value}
+              {loading ? "\u2026" : stat.value}
             </p>
             <p className="text-xs text-muted">{stat.label}</p>
           </div>
