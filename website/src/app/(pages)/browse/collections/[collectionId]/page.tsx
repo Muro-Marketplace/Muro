@@ -630,6 +630,10 @@ export default function CollectionDetailPage() {
                   artistName={collection.artistName}
                   collectionId={collection.id}
                   collectionTitle={collection.name}
+                  // Which size is being negotiated. api/offers floors the offer
+                  // against this tier's price; without it the floor falls back
+                  // to the cheapest tier, which is what "From £120" quotes.
+                  sizeLabel={activeTier?.label}
                   askingPriceGbp={(() => {
                     // Prefer the artist's declared bundle price, the
                     // headline figure on the Buy CTA. Falls back to the

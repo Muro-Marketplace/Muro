@@ -341,7 +341,8 @@ export async function POST(request: Request) {
     // Collections were the last fully client-priced line (2026-08-28 audit):
     // the server never opened artist_collections, so the bundle price on the
     // wire was the bundle price charged. Same treatment as works now: the row
-    // must exist and be available, and the DB's bundle_price is the number.
+    // must exist and be available, and the DB is the number: the selected
+    // tier's price on a tiered collection, bundle_price on an untiered one.
     const collectionIds = items
       .map((it) => (!it.workId && it.collectionId ? it.collectionId : null))
       .filter((id): id is string => typeof id === "string" && id.length > 0);
@@ -501,7 +502,8 @@ export async function POST(request: Request) {
     // 2026-08-28 audit: the client's price no longer survives to Stripe on ANY
     // line. Works price from their pricing tier (in-store tier for a
     // collect-from-venue line), framed lines from the server-computed uplift,
-    // collections from bundle_price, and a line the DB cannot price is refused
+    // collections from the selected size tier, or from bundle_price when the
+    // collection has no tiers, and a line the DB cannot price is refused
     // above rather than trusted. `priceLine` returns pence, or a refusal.
     const unresolvableSize = (item: { workId?: string; size?: string; title: string }) =>
       NextResponse.json(

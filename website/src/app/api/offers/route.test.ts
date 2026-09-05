@@ -212,7 +212,7 @@ describe("POST /api/offers — 4.3 customer gate", () => {
 const COLLECTION_COLUMNS = new Set([
   "id", "artist_id", "artist_slug", "name", "description", "bundle_price",
   "work_ids", "available", "created_at", "thumbnail", "banner_image",
-  "updated_at", "work_sizes",
+  "updated_at", "work_sizes", "size_tiers",
 ]);
 
 function getEnrichmentDb(collectionRow: Record<string, unknown>) {
@@ -305,5 +305,138 @@ describe("POST /api/offers sets an expiry (row 2244)", () => {
     await POST(makeRequest({ ...validBody, expiresAt: chosen }));
 
     expect(offerInserts[0].expires_at).toBe(chosen);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Collection size tiers (2026-09-05).
+//
+// The 60% floor for a collection offer pinned to bundle_price. On a tiered
+// collection bundle_price is the CHEAPEST tier, kept there so cards can read
+// "From £120", so a buyer looking at the £480 set could anchor their offer on
+// £120 and open at £72. The floor has to follow the size being negotiated.
+// ---------------------------------------------------------------------------
+
+describe("POST /api/offers price floor on a tiered collection", () => {
+  const TIERS = [
+    { label: "Small", price: 120, workSizes: [] },
+    { label: "Large", price: 480, workSizes: [] },
+  ];
+
+  function setupTieredCollection(sizeTiers: unknown) {
+    fromMock.mockImplementation((table: string) => {
+      if (table === "venue_profiles") {
+        return makeMaybeSingleChain({ user_id: "u-test", slug: "test-venue" });
+      }
+      if (table === "artist_profiles") {
+        return {
+          select: () => ({
+            eq: (_col: string) => ({
+              maybeSingle: async () => ({
+                data:
+                  _col === "user_id" ? null : { user_id: "u-alice", name: "Alice" },
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "artist_collections") {
+        return {
+          select: (cols: string) => {
+            for (const c of cols.split(",").map((x) => x.trim())) {
+              if (!COLLECTION_COLUMNS.has(c)) {
+                throw new Error(`select names a column the schema lacks: ${c}`);
+              }
+            }
+            return {
+              eq: () => ({
+                maybeSingle: async () => ({
+                  data: {
+                    work_ids: ["work-1", "work-2"],
+                    bundle_price: 120,
+                    size_tiers: sizeTiers,
+                  },
+                  error: null,
+                }),
+              }),
+            };
+          },
+        };
+      }
+      if (table === "artist_works") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => ({ id, pricing: [{ label: "M", price: 100 }] })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return {
+        insert: async (row: Record<string, unknown>) => {
+          offerInserts.push(row);
+          return { error: null };
+        },
+        select: () => ({
+          eq: () => ({
+            single: async () => ({
+              data: { buyer_user_id: "u-test", artist_user_id: "u-alice" },
+            }),
+            maybeSingle: async () => ({ data: null }),
+          }),
+        }),
+      };
+    });
+  }
+
+  const offer = (amountPence: number, sizeLabel?: string) =>
+    makeRequest({
+      artistSlug: "alice",
+      workIds: [],
+      collectionId: "c-1",
+      amountPence,
+      ...(sizeLabel ? { sizeLabel } : {}),
+    });
+
+  it("floors an offer on the Large set against the Large price", async () => {
+    setupTieredCollection(TIERS);
+    // 60% of £480 is £288. £200 is above the £72 the cheapest tier would allow,
+    // and must still be refused.
+    const res = await POST(offer(20000, "Large"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("below_minimum_offer");
+    expect(body.askingPence).toBe(48000);
+  });
+
+  it("accepts an offer that clears the Large floor", async () => {
+    setupTieredCollection(TIERS);
+    const res = await POST(offer(30000, "Large"));
+    expect(res.status).not.toBe(400);
+  });
+
+  it("floors an offer on the Small set against the Small price", async () => {
+    setupTieredCollection(TIERS);
+    const res = await POST(offer(5000, "Small"));
+    expect(res.status).toBe(400);
+    expect((await res.json()).askingPence).toBe(12000);
+  });
+
+  it("falls back to the cheapest tier when the offer names no size", async () => {
+    // A stale client. The cheapest tier is the safe assumption: it is the most
+    // permissive floor, and refusing the offer outright would be worse than
+    // letting the artist judge a number they can see.
+    setupTieredCollection(TIERS);
+    const res = await POST(offer(5000));
+    expect(res.status).toBe(400);
+    expect((await res.json()).askingPence).toBe(12000);
+  });
+
+  it("still uses bundle_price on an untiered collection", async () => {
+    setupTieredCollection([]);
+    const res = await POST(offer(5000, "Large"));
+    expect(res.status).toBe(400);
+    expect((await res.json()).askingPence).toBe(12000);
   });
 });

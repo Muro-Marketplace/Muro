@@ -17,6 +17,8 @@ import { defaultOfferExpiry } from "@/lib/offers/expiry";
 import { sendEmail } from "@/lib/email/send";
 import { OfferReceivedNotification } from "@/emails/templates/messages/OfferReceivedNotification";
 import { physicalSizeLabel } from "@/lib/physical-size";
+import { findCollectionTier } from "@/lib/collection-tiers";
+import type { CollectionSizeTier } from "@/data/collections";
 
 export const runtime = "nodejs";
 
@@ -43,9 +45,10 @@ type DbWorkRow = {
 
 /**
  * Compute the "asking price" used to enforce the 60% offer floor.
- * For works: sum of the largest size price per work. For collections:
- * the artist's declared bundle_price when set (matches the headline
- * Buy CTA the venue sees), otherwise sum of each work's largest size.
+ * For works: sum of the largest size price per work. For collections: the
+ * price of the size being negotiated when the offer names one, else the
+ * artist's declared bundle_price (which matches the headline Buy CTA the venue
+ * sees), else the sum of each work's largest size.
  *
  * Returns `null` if we can't determine a price (in which case the
  * caller should let the offer through, the artist can still decline).
@@ -58,10 +61,29 @@ async function computeAskingPricePence(
   if (target.collectionId) {
     const { data: collection } = await db
       .from("artist_collections")
-      .select("work_ids, bundle_price")
+      .select("work_ids, bundle_price, size_tiers")
       .eq("id", target.collectionId)
-      .maybeSingle<{ work_ids: string[] | null; bundle_price: number | null }>();
+      .maybeSingle<{
+        work_ids: string[] | null;
+        bundle_price: number | null;
+        size_tiers: CollectionSizeTier[] | null;
+      }>();
     if (!collection?.work_ids?.length) return null;
+
+    // A tiered collection is negotiated one size at a time, so the floor has to
+    // follow the size. bundle_price is the CHEAPEST tier, kept there so cards
+    // can read "From £120", which would let a buyer looking at the £480 set
+    // anchor on £120 and open at £72.
+    //
+    // An offer naming no size falls through to bundle_price, so a stale client
+    // gets the most permissive floor rather than a refusal. That is the right
+    // way round: the artist sees the number and judges it, and no money moves
+    // without them accepting.
+    const tier = findCollectionTier(collection.size_tiers, target.sizeLabel);
+    if (tier && Number.isFinite(tier.price) && tier.price > 0) {
+      return Math.round(tier.price * 100);
+    }
+
     // Pin the floor to the artist's declared bundle price when set;
     // otherwise fall through to summing the works below. Stored as
     // pounds (NUMERIC), convert to pence here.
