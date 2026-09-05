@@ -113,12 +113,10 @@ export default function AnalyticsPage() {
       .then(okJson)
       .then((data) => { if (data.orders) setOrders(data.orders); })
       .catch(() => setLoadError("Could not load your analytics. Please try again."));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadKey]);
 
   // Fetch engagement analytics (reacts to date range changes)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnalyticsLoading(true);
     authFetch(`/api/analytics/artist?range=${dateRangeToParam(dateRange)}`)
       .then(okJson)
@@ -128,7 +126,6 @@ export default function AnalyticsPage() {
       })
       .catch(() => setLoadError("Could not load your analytics. Please try again."))
       .finally(() => setAnalyticsLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange, reloadKey]);
 
   // Placement status is stored lower-case ("active"/"pending"/...). The
