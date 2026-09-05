@@ -68,7 +68,7 @@ function statusBadge(status: string) {
     active: "Active",
     trialing: "Trial",
     past_due: "Past Due",
-    canceled: "Canceled",
+    canceled: "Cancelled",
     none: "No Plan",
   };
   return (
@@ -109,7 +109,7 @@ export default function BillingPage() {
   // profile until the webhook lands and the subscription_status flips
   // from canceled/none → active. Without this poll, the page renders
   // the stale pre-upgrade state and the user sees "Your subscription
-  // has been canceled" right after a successful upgrade.
+  // has been cancelled" right after a successful upgrade.
   const [confirmingUpgrade, setConfirmingUpgrade] = useState(false);
 
   // Detect post-Stripe redirect URLs and clean them out of the bar.
@@ -444,7 +444,7 @@ export default function BillingPage() {
           )}
           {status === "canceled" && !confirmingUpgrade && (
             <div className="bg-surface border border-border rounded-sm px-4 py-3 mb-5 text-sm text-muted">
-              Your subscription has been canceled. Choose a plan below to reactivate.
+              Your subscription has been cancelled. Choose a plan below to reactivate.
             </div>
           )}
 

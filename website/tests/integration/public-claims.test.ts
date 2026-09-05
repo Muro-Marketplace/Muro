@@ -110,4 +110,8 @@ describe("public claims the site cannot evidence stay out", () => {
     const shipped = grepFiles("Wallplace Ltd", ["src/app", "src/components", "src/emails", "src/lib"]).filter((f) => !/\.test\.tsx?$/.test(f));
     expect(shipped).toEqual([]);
   });
+
+  it("the billing page spells cancelled the British way (LA-C010)", () => {
+    expect(read("src/app/(pages)/artist-portal/billing/page.tsx")).not.toMatch(/"Canceled"|has been canceled/);
+  });
 });
