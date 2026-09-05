@@ -97,4 +97,11 @@ describe("public claims the site cannot evidence stay out", () => {
   it("the FAQ does not promise lower platform fees on higher tiers (LA-C023)", () => {
     expect(read("src/app/(pages)/faqs/page.tsx")).not.toMatch(/lower platform\s+fees/);
   });
+
+  it("venue copy does not say there is no contract when the FAQ and agreement say there is one (LA-C047)", () => {
+    for (const p of ["src/components/marketing/VenueGuide.tsx", "src/app/page.tsx"]) {
+      expect(read(p), p).not.toMatch(/No contracts?\./);
+    }
+    expect(read("src/components/marketing/VenueGuide.tsx")).not.toMatch(/answer:\s*"No\. Just a simple partnership agreement/);
+  });
 });
