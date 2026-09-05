@@ -129,4 +129,10 @@ describe("public claims the site cannot evidence stay out", () => {
   it("the terms dispute steps have no space before the colon (LA-C080)", () => {
     expect(read("src/app/(pages)/terms/page.tsx")).not.toMatch(/Step \d :/);
   });
+
+  it("no Buy Now or saving line prints a raw number after a pound sign (LA-C065)", () => {
+    expect(read("src/app/(pages)/browse/[slug]/ArtistProfileClient.tsx")).not.toMatch(/Buy Now, £\$\{totalPrice\}/);
+    expect(read("src/app/(pages)/browse/collections/[collectionId]/page.tsx")).not.toMatch(/Save £\{savings\}/);
+    expect(read("src/app/(pages)/browse/[slug]/[workSlug]/ArtworkPageClient.tsx")).not.toMatch(/Buy Now, £\{totalPrice\}/);
+  });
 });

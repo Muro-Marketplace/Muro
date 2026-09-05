@@ -24,6 +24,7 @@ import { ENQUIRY_TYPES } from "@/lib/enquiry-types";
 import { filterWorksByTheme, largestPricedTier } from "./portfolio-filters";
 import { physicalSizeLabel } from "@/lib/physical-size";
 import { frameUpliftFor } from "@/app/(pages)/browse/[slug]/[workSlug]/frame-uplift";
+import { formatPounds } from "@/lib/format-currency";
 
 interface ArtistProfileClientProps {
   artistName: string;
@@ -1151,7 +1152,7 @@ export default function ArtistProfileClient({
                         }}
                         className="w-full px-5 py-2.5 text-sm font-medium text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {soldOut ? "Sold out" : `Buy Now, £${totalPrice}`}
+                        {soldOut ? "Sold out" : `Buy Now, ${formatPounds(totalPrice)}`}
                       </button>
                       <button
                         disabled={soldOut}

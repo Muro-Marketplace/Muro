@@ -174,3 +174,15 @@ describe("sample pill (owner instruction, 2 September)", () => {
     expect(screen.queryByText("Sample")).toBeNull();
   });
 });
+
+// LA-C065 (launch audit 2026-09-05). The Buy Now button printed the raw number
+// after a pound sign, so a work priced at £162.50 read "Buy Now, £162.5".
+describe("Buy Now price formatting (LA-C065)", () => {
+  it("prints the price as money, with two decimals", () => {
+    const work = workWithPerSizeShipping();
+    work.pricing = [{ label: "A4", price: 162.5 }];
+    render(<ArtworkPageClient work={work} artistName="Alice Rivers" artistSlug="alice-rivers" />);
+    expect(screen.getByText(/Buy Now, £162\.50/)).toBeTruthy();
+    expect(screen.queryByText(/Buy Now, £162\.5$/)).toBeNull();
+  });
+});

@@ -24,6 +24,7 @@ import { resolveShippingCost, tierLabel, SIGNATURE_THRESHOLD_GBP } from "@/lib/s
 import { frameUpliftFor } from "./frame-uplift";
 import { formatSizeLabelForDisplay } from "@/lib/format-size-label";
 import { formatDimensionsForDisplay } from "@/lib/format-dimensions";
+import { formatPounds } from "@/lib/format-currency";
 interface ArtworkPageClientProps {
   work: ArtistWork;
   artistName: string;
@@ -485,7 +486,7 @@ export default function ArtworkPageClient({
                 }}
                 className="flex-1 px-5 py-3.5 text-[13px] font-medium tracking-wider uppercase text-white bg-foreground hover:bg-foreground/90 rounded-sm transition-colors"
               >
-                Buy Now, £{totalPrice}
+                Buy Now, {formatPounds(totalPrice)}
               </button>
               {/* Compact basket icon — keeps the page from getting two
                   competing CTAs while still giving multi-item buyers a
