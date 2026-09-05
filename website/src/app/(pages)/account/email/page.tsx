@@ -43,8 +43,14 @@ export default function EmailPreferencesPage() {
     if (loading || !user) return;
     let cancelled = false;
     authFetch("/api/account/email-preferences")
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled && data?.preferences) setPrefs(data.preferences); })
+      .then(async (r) => {
+        // LA-C053: a non-2xx body has no `preferences`, which used to leave
+        // the loading line on screen for ever with no error.
+        const data = await r.json().catch(() => null);
+        if (!r.ok || !data?.preferences) throw new Error(`preferences load failed (${r.status})`);
+        return data;
+      })
+      .then((data) => { if (!cancelled) setPrefs(data.preferences); })
       .catch(() => { if (!cancelled) setError("Could not load your preferences. Please retry."); });
     return () => { cancelled = true; };
   }, [loading, user]);
@@ -117,7 +123,7 @@ export default function EmailPreferencesPage() {
           {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 
           {!prefs ? (
-            <p className="text-sm text-muted">Loading your preferences…</p>
+            error ? null : <p className="text-sm text-muted">Loading your preferences…</p>
           ) : (
             <>
               <ul className="divide-y divide-border border border-border rounded-sm">
