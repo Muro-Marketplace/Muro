@@ -45,3 +45,16 @@ describe("email preferences load (LA-C053)", () => {
     expect(screen.queryByText(/Loading your preferences/)).toBeNull();
   });
 });
+
+describe("email preferences save (LA-C054)", () => {
+  it("puts a toggle back when the save fails, and says so", async () => {
+    authFetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ preferences: PREFS }) });
+    mutateMock.mockRejectedValue(new Error("boom"));
+    render(<EmailPreferencesPage />);
+    const box = (await screen.findAllByRole("checkbox"))[0] as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    await waitFor(() => expect(screen.getByText("Could not save. Try again.")).toBeTruthy());
+    await waitFor(() => expect(box.checked).toBe(true));
+  });
+});

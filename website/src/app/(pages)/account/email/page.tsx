@@ -69,6 +69,8 @@ export default function EmailPreferencesPage() {
       });
       setSavedAt(Date.now());
     } catch {
+      // LA-C054: the optimistic value must not stay on screen as if saved.
+      setPrefs(prefs);
       setError("Could not save. Try again.");
     }
   }
