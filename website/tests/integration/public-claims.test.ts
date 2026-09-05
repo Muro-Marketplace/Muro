@@ -53,15 +53,16 @@ describe("public claims the site cannot evidence stay out", () => {
     expect((cards.match(/Priority visibility in venue recommendations/g) || []).length).toBe(2);
   });
 
-  it("the billing upgrade panel and application form sell the same tier perks (Finding 4)", () => {
-    for (const p of [
-      "src/app/(pages)/artist-portal/billing/page.tsx",
-      "src/components/ApplicationForm.tsx",
-    ]) {
-      const src = read(p);
-      expect(src, p).not.toMatch(/featured profile/i);
-      expect(src, p).toMatch(/Artwork of the Week/);
-    }
+  it("the billing upgrade panel and application form sell the same tier perks (Finding 4, LA-C009)", () => {
+    const form = read("src/components/ApplicationForm.tsx");
+    expect(form).not.toMatch(/featured profile/i);
+    expect(form).toMatch(/Artwork of the Week/);
+    // LA-C009: the Change Plan bullets were a third hand-written copy of the
+    // perks and had drifted (they still sold "Message venues directly", which is
+    // no longer a plan feature). They now render planFeaturesFor(), the one list.
+    const billing = read("src/app/(pages)/artist-portal/billing/page.tsx");
+    expect(billing).toMatch(/planFeaturesFor\(/);
+    expect(billing).not.toMatch(/Message venues directly|<li>Dedicated support<\/li>|<li>Up to 8 works<\/li>/);
   });
 
   it("venue photo captions name a type, never an invented place", () => {

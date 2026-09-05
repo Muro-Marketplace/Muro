@@ -9,6 +9,7 @@ import { useToast } from "@/context/ToastContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { PLAN_PRICES, PLATFORM_FEE_PERCENT, trialOffer } from "@/lib/pricing";
 import { OUTREACH_WEEKLY_LIMIT } from "@/lib/outreach-cap";
+import { planFeaturesFor } from "@/lib/plan-features";
 import OutreachAllowanceBadge, { useOutreachAllowance } from "@/components/OutreachAllowance";
 
 interface ProfileSubscription {
@@ -558,9 +559,11 @@ export default function BillingPage() {
                   )}
                   <p className="text-xs text-muted mb-2">{d.fee} platform fee</p>
                   <ul className="text-xs text-muted space-y-1 mb-4 flex-1">
-                    {p === "core" && <><li>Up to 8 works</li><li>Standard profile</li><li>Basic analytics</li></>}
-                    {p === "premium" && <><li>Up to 20 works</li><li>Artwork of the Week: feature one work for seven days</li><li>Priority in venue recommendations</li><li>Message venues directly</li><li>Full analytics</li></>}
-                    {p === "pro" && <><li>Up to 50 works</li><li>Featured artist: your profile leads the marketplace</li><li>Artwork of the Week: feature one work for seven days</li><li>Priority in venue recommendations</li><li>Message venues directly</li><li>Dedicated support</li></>}
+                    {/* LA-C009: one list, shared with the pricing cards and the
+                        trial-ending email, so the perks cannot drift again. */}
+                    {planFeaturesFor(p).map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
                   </ul>
                   {isCurrent ? (
                     <div className="w-full py-2.5 text-sm font-medium text-center text-accent border border-accent/30 rounded-sm">
