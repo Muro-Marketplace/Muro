@@ -429,12 +429,15 @@ export default function AnalyticsPage() {
                     <td className="px-4 py-3.5 text-muted whitespace-nowrap">{p.venue}</td>
                     <td className="px-4 py-3.5 text-muted text-xs">{p.type}</td>
                     <td className="px-4 py-3.5">
+                      {/* LA-C006: statuses are stored lower-case; the badge
+                          compared title case, so nothing ever coloured and the
+                          raw enum was printed. */}
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        p.status === "Active" ? "bg-green-100 text-green-700" :
-                        p.status === "Sold" ? "bg-blue-100 text-blue-700" :
-                        p.status === "Pending" ? "bg-amber-100 text-amber-700" :
+                        p.status.toLowerCase() === "active" ? "bg-green-100 text-green-700" :
+                        p.status.toLowerCase() === "sold" ? "bg-blue-100 text-blue-700" :
+                        p.status.toLowerCase() === "pending" ? "bg-amber-100 text-amber-700" :
                         "bg-gray-100 text-gray-600"
-                      }`}>{p.status}</span>
+                      }`}>{p.status.charAt(0).toUpperCase() + p.status.slice(1).toLowerCase()}</span>
                     </td>
                     <td className="px-6 py-3.5 text-right font-medium text-foreground">{p.revenue ?? "-"}</td>
                   </tr>

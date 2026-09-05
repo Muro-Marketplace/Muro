@@ -6,7 +6,7 @@
 // against lower-case data (LA-C006), and every failed request rendered as a
 // zero (LA-C005).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const { authFetchMock } = vi.hoisted(() => ({ authFetchMock: vi.fn() }));
 
@@ -75,5 +75,17 @@ describe("placement revenue column (LA-C008)", () => {
     render(<AnalyticsPage />);
     await screen.findByText("Harbour at Dusk");
     expect(screen.getByText("£42.50")).toBeTruthy();
+  });
+});
+
+describe("placement status badge (LA-C006)", () => {
+  it("labels a lower-case active status as Active and colours it", async () => {
+    wire({ placements: () => respond({ placements: [PLACEMENT] }) });
+    render(<AnalyticsPage />);
+    await screen.findByText("Harbour at Dusk");
+    // The summary strip also says "Active"; the badge under test is in the table.
+    const table = screen.getAllByRole("table")[0];
+    const badge = within(table).getByText("Active");
+    expect(badge.className).toContain("bg-green-100");
   });
 });
