@@ -83,7 +83,13 @@ export default function AnalyticsPage() {
             revenueSharePercent: p.revenue_share_percent as number | undefined,
             status: (p.status || "active"),
             date: p.created_at ? new Date(p.created_at as string).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "",
-            revenue: p.revenue ? `\u00a3${p.revenue}` : null,
+            // LA-C008: GET /api/placements spreads the raw row (whose cached
+            // `revenue` column the order pipeline never fills for QR sales)
+            // and adds the computed figure as revenue_earned_gbp. Read that.
+            revenue:
+              typeof p.revenue_earned_gbp === "number" && p.revenue_earned_gbp > 0
+                ? formatPounds(p.revenue_earned_gbp)
+                : null,
           })));
         }
       })

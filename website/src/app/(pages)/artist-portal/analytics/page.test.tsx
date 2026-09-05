@@ -68,3 +68,12 @@ describe("Performance by Venue (LA-C007)", () => {
     expect(screen.queryByText("Performance by Venue")).toBeNull();
   });
 });
+
+describe("placement revenue column (LA-C008)", () => {
+  it("shows the revenue the API computed for the placement", async () => {
+    wire({ placements: () => respond({ placements: [PLACEMENT] }) });
+    render(<AnalyticsPage />);
+    await screen.findByText("Harbour at Dusk");
+    expect(screen.getByText("£42.50")).toBeTruthy();
+  });
+});
