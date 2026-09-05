@@ -175,3 +175,162 @@ describe("Collection arrangement chips use the shared labels (B15)", () => {
     expect(chips).not.toContain("Purchase");
   });
 });
+
+// ── Size tiers (2026-09-05) ─────────────────────────────────────────────────
+//
+// A collection can be sold in several sizes. Picking one has to move the
+// headline price, the savings line, the buy button and the size and price on
+// every work tile together, because the tier IS the product being bought.
+//
+// Per-tier work prices are resolved on the client from each work's own
+// `pricing` array, which the detail API already returns in full, so switching
+// tiers costs no round trip.
+describe("Collection size tiers", () => {
+  const TIER_WORKS = [
+    {
+      id: "w-1",
+      title: "Harbour Light",
+      image: "https://example.com/1.jpg",
+      medium: "Photography",
+      dimensions: "30 x 40 cm",
+      available: true,
+      selectedSize: "A4",
+      selectedSizePrice: 55,
+      pricing: [
+        { label: "A4", price: 55 },
+        { label: "A2", price: 160 },
+      ],
+    },
+    {
+      id: "w-2",
+      title: "Low Tide",
+      image: "https://example.com/2.jpg",
+      medium: "Photography",
+      dimensions: "30 x 40 cm",
+      available: true,
+      selectedSize: "A4",
+      selectedSizePrice: 55,
+      pricing: [
+        { label: "A4", price: 55 },
+        { label: "50x70cm", price: 190 },
+      ],
+    },
+  ];
+
+  const TIERED = {
+    ...COLLECTION,
+    workIds: ["w-1", "w-2"],
+    bundlePrice: 120,
+    bundlePriceBand: "From £120",
+    sizeTiers: [
+      {
+        label: "Small",
+        price: 120,
+        description: "A4 prints",
+        workSizes: [
+          { workId: "w-1", sizeLabel: "A4" },
+          { workId: "w-2", sizeLabel: "A4" },
+        ],
+      },
+      {
+        label: "Large",
+        price: 480,
+        workSizes: [
+          { workId: "w-1", sizeLabel: "A2" },
+          { workId: "w-2", sizeLabel: "50x70cm" },
+        ],
+      },
+    ],
+  };
+
+  const addItem = vi.fn();
+
+  function mountTiered(collection: unknown = TIERED) {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ collection, works: TIER_WORKS, artistArrangements: null }),
+    } as Response);
+    return render(<CollectionDetailPage />);
+  }
+
+  const tierButton = (container: HTMLElement, label: string) =>
+    Array.from(container.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes(label),
+    );
+
+  beforeEach(() => {
+    addItem.mockClear();
+  });
+
+  it("renders no size picker when the collection has no tiers", async () => {
+    const { container } = mountTiered({ ...COLLECTION, sizeTiers: [] });
+    await waitFor(() => expect(container.textContent).toContain("Coastal Series"));
+    expect(container.textContent).not.toContain("Choose a size");
+  });
+
+  it("renders one option per tier", async () => {
+    const { container } = mountTiered();
+    await waitFor(() => expect(container.textContent).toContain("Choose a size"));
+    expect(tierButton(container, "Small")).toBeDefined();
+    expect(tierButton(container, "Large")).toBeDefined();
+  });
+
+  it("opens on the cheapest tier", async () => {
+    const { container } = mountTiered();
+    await waitFor(() => expect(container.textContent).toContain("Choose a size"));
+    expect(tierButton(container, "Small")!.getAttribute("aria-pressed")).toBe("true");
+    expect(tierButton(container, "Large")!.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("moves the headline price when another tier is picked", async () => {
+    const { container } = mountTiered();
+    await waitFor(() => expect(container.textContent).toContain("Choose a size"));
+    expect(container.textContent).toContain("£120");
+
+    fireEvent.click(tierButton(container, "Large")!);
+    expect(container.textContent).toContain("£480");
+    expect(tierButton(container, "Large")!.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("moves each work's size and price with the tier", async () => {
+    const { container } = mountTiered();
+    await waitFor(() => expect(container.textContent).toContain("Choose a size"));
+    expect(container.textContent).toContain("A4");
+
+    fireEvent.click(tierButton(container, "Large")!);
+    expect(container.textContent).toContain("A2");
+    expect(container.textContent).toContain("50x70cm");
+    expect(container.textContent).not.toContain("A4 ");
+  });
+
+  it("recomputes the saving against the selected tier", async () => {
+    // Large: the works cost 160 + 190 = 350 individually, against a 480 tier,
+    // so there is no saving to claim and the line must not appear.
+    const { container } = mountTiered();
+    await waitFor(() => expect(container.textContent).toContain("Choose a size"));
+    // Small: 55 + 55 = 110 against a 120 tier, also no saving.
+    expect(container.textContent).not.toContain("Save ");
+
+    fireEvent.click(tierButton(container, "Large")!);
+    expect(container.textContent).not.toContain("Save ");
+  });
+
+  it("shows a saving when the tier really is cheaper than its parts", async () => {
+    const { container } = mountTiered({
+      ...TIERED,
+      sizeTiers: [
+        { ...TIERED.sizeTiers[0], price: 90 },
+        TIERED.sizeTiers[1],
+      ],
+    });
+    await waitFor(() => expect(container.textContent).toContain("Choose a size"));
+    // 55 + 55 = 110 individually, against a 90 tier.
+    expect(container.textContent).toContain("Save £20");
+  });
+
+  it("shows the tier's own description when it has one", async () => {
+    const { container } = mountTiered();
+    await waitFor(() => expect(container.textContent).toContain("Choose a size"));
+    expect(container.textContent).toContain("A4 prints");
+  });
+});

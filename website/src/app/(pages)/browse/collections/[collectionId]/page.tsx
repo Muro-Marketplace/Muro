@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams, useRouter, notFound as nextNotFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -17,6 +17,7 @@ import { SIZE_BANDS, bandsForWork, type SizeBandKey } from "@/components/browse/
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { physicalSizeLabel } from "@/lib/physical-size";
 import { formatPounds } from "@/lib/format-currency";
+import { cheapestTier, findCollectionTier } from "@/lib/collection-tiers";
 
 type CollectionWork = ArtistWork & {
   selectedSize?: string;
@@ -43,6 +44,10 @@ export default function CollectionDetailPage() {
   // Size filter — same band aesthetic as /browse + portfolio surfaces
   // so the collection detail behaves as a first-class browsing surface.
   const [activeSizes, setActiveSizes] = useState<Set<SizeBandKey>>(new Set());
+  // Which size of a tiered collection the buyer is looking at. Null means
+  // "not chosen yet", which resolves to the cheapest tier below, so the page
+  // opens on the same tier the "From £X" band quotes.
+  const [tierLabel, setTierLabel] = useState<string | null>(null);
   // Per-card tap reveal on touch devices. Desktop uses :hover; mobile
   // taps reveal the action overlay before navigating.
   const [revealedWorkIndex, setRevealedWorkIndex] = useState<number | null>(null);
@@ -93,6 +98,34 @@ export default function CollectionDetailPage() {
     };
   }, [collectionId]);
 
+  const sizeTiers = collection?.sizeTiers ?? [];
+  const activeTier = findCollectionTier(sizeTiers, tierLabel) ?? cheapestTier(sizeTiers);
+
+  // Every work re-resolved against the selected tier. The detail API returns
+  // each work's full `pricing` array, so switching tiers is local: no refetch,
+  // and every tile, the size filter and the totals below move together because
+  // they all read this one list.
+  //
+  // The fallback mirrors the server's: a pinned size the work no longer sells
+  // resolves to the work's first size rather than to a label with no price.
+  const displayWorks: CollectionWork[] = useMemo(() => {
+    if (!activeTier) return works;
+    const sizeByWork = new Map(
+      activeTier.workSizes.map((ws) => [ws.workId, ws.sizeLabel] as const),
+    );
+    return works.map((w) => {
+      const pinned = sizeByWork.get(w.id);
+      const pricing = w.pricing || [];
+      const entry =
+        (pinned ? pricing.find((p) => p.label === pinned) : undefined) ?? pricing[0];
+      return {
+        ...w,
+        selectedSize: entry?.label ?? pinned ?? w.selectedSize,
+        selectedSizePrice: entry?.price ?? (pinned ? undefined : w.selectedSizePrice),
+      };
+    });
+  }, [works, activeTier]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center px-6">
@@ -109,13 +142,24 @@ export default function CollectionDetailPage() {
     nextNotFound();
   }
 
-  const individualTotal = works.reduce(
+
+  // The number this page charges. On a tiered collection bundlePrice is the
+  // cheapest tier, so once a buyer has picked, the tier is the price.
+  const activePrice = activeTier?.price ?? collection.bundlePrice;
+  // "From £120" belongs on a card and in the hero, where no size has been
+  // chosen. Beside a picker it would be wrong, so the sidebar quotes the
+  // selected tier instead.
+  const activeBand = activeTier
+    ? `£${activeTier.price}`
+    : collection.bundlePriceBand;
+
+  const individualTotal = displayWorks.reduce(
     (sum, w) => sum + (w.selectedSizePrice || 0),
     0
   );
   const savings =
-    individualTotal > 0 && collection.bundlePrice > 0
-      ? Math.max(0, individualTotal - collection.bundlePrice)
+    individualTotal > 0 && activePrice > 0
+      ? Math.max(0, individualTotal - activePrice)
       : 0;
 
   function handleBuyCollection() {
@@ -127,8 +171,15 @@ export default function CollectionDetailPage() {
       artistName: collection.artistName,
       title: collection.name + " (Collection)",
       image: collection.coverImage,
-      size: `${collection.workIds.length} works`,
-      price: collection.bundlePrice,
+      // `size` is what the order record and the confirmation email print, so
+      // naming the tier here is what makes a receipt read "Medium, 6 works".
+      size: activeTier
+        ? `${activeTier.label}, ${collection.workIds.length} works`
+        : `${collection.workIds.length} works`,
+      // api/checkout re-prices this from the tier's own row and refuses the
+      // line if the label matches none, so the number here is a display value.
+      price: activePrice,
+      ...(activeTier ? { collectionTierLabel: activeTier.label } : {}),
       quantity: 1,
     });
     router.push(`/checkout?backTo=${encodeURIComponent(window.location.pathname + window.location.search)}`);
@@ -233,8 +284,8 @@ export default function CollectionDetailPage() {
                 // had set per-bundle sizes but left dimensions blank
                 // would render an empty grid under any active filter.
                 const visible = activeSizes.size === 0
-                  ? works
-                  : works.filter((w) => {
+                  ? displayWorks
+                  : displayWorks.filter((w) => {
                       const bands = bandsForWork(w);
                       for (const b of bands) {
                         if (activeSizes.has(b)) return true;
@@ -251,7 +302,7 @@ export default function CollectionDetailPage() {
                   );
                 }
                 return visible.map((work) => {
-                  const index = works.indexOf(work);
+                  const index = displayWorks.indexOf(work);
                   return (
                 <div
                   key={work.id}
@@ -388,8 +439,45 @@ export default function CollectionDetailPage() {
                 {collection.artistName}
               </p>
               <h2 className="text-lg font-serif mb-2">{collection.name}</h2>
+              {/* Size picker. Only a tiered collection has one; an untiered
+                  collection renders exactly what it always did. Picking a size
+                  moves the price, the saving, the buy button and every work
+                  tile at once, because all of them read the tier. */}
+              {sizeTiers.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[11px] uppercase tracking-widest text-muted mb-2">
+                    Choose a size
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {sizeTiers.map((tier) => {
+                      const selected = tier.label === activeTier?.label;
+                      return (
+                        <button
+                          key={tier.label}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => setTierLabel(tier.label)}
+                          className={`px-3 py-2 text-xs rounded-sm border transition-colors ${
+                            selected
+                              ? "border-accent bg-accent/10 text-accent"
+                              : "border-border text-muted hover:border-accent/50"
+                          }`}
+                        >
+                          <span className="block font-medium">{tier.label}</span>
+                          <span className="block text-[11px] opacity-80">
+                            £{tier.price}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {activeTier?.description && (
+                    <p className="text-xs text-muted mt-2">{activeTier.description}</p>
+                  )}
+                </div>
+              )}
               <p className="text-2xl font-serif text-accent mb-1">
-                {collection.bundlePriceBand}
+                {activeBand}
               </p>
               {savings > 0 && (
                 <p className="text-xs text-green-700 mb-3">
@@ -397,7 +485,9 @@ export default function CollectionDetailPage() {
                 </p>
               )}
               <p className="text-xs text-muted mb-4">
-                All {collection.workIds.length} works at the sizes selected by the artist, one price.
+                {activeTier
+                  ? `All ${collection.workIds.length} works at the sizes in the ${activeTier.label} set, one price.`
+                  : `All ${collection.workIds.length} works at the sizes selected by the artist, one price.`}
               </p>
 
               {/* Arrangement chips (#42), same shape as gallery cards
@@ -431,9 +521,9 @@ export default function CollectionDetailPage() {
                 </div>
               )}
 
-              {works.length > 0 && (
+              {displayWorks.length > 0 && (
                 <div className="mb-6 space-y-1.5">
-                  {works.map((w) => (
+                  {displayWorks.map((w) => (
                     <div
                       key={w.id}
                       className="flex items-center justify-between text-[11px] text-muted"
@@ -454,7 +544,7 @@ export default function CollectionDetailPage() {
                     onClick={handleBuyCollection}
                     className="w-full px-5 py-3 text-sm font-medium text-white bg-accent hover:bg-accent-hover rounded-sm transition-colors"
                   >
-                    Buy Collection, {collection.bundlePriceBand}
+                    Buy Collection, {activeBand}
                   </button>
                 )}
                 {/* Request placement (#41). Always shown when the
@@ -546,7 +636,7 @@ export default function CollectionDetailPage() {
                     // sum of each work's selected-size price (the
                     // "buy individually" line), and finally to the sum
                     // of largest-size prices if neither is available.
-                    if (collection.bundlePrice > 0) return collection.bundlePrice;
+                    if (activePrice > 0) return activePrice;
                     if (individualTotal > 0) return individualTotal;
                     const total = works.reduce((sum, w) => {
                       const tiers = w.pricing || [];
