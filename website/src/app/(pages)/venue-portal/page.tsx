@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import LoadErrorState from "@/components/LoadErrorState";
 import PlacementActionItems from "@/components/PlacementActionItems";
 import { useAuth } from "@/context/AuthContext";
 import { useSaved } from "@/context/SavedContext";
@@ -102,6 +103,14 @@ export default function VenueDashboardPage() {
   // null until /api/walls answers, so the prompt never flashes for a venue
   // that has walls.
   const [wallSummary, setWallSummary] = useState<{ total: number; publicCount: number } | null>(null);
+  // LA-C037: a failed figures request is not a venue with £0 and no scans.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  function retryLoad() {
+    setLoading(true);
+    setLoadError(null);
+    setReloadKey((k) => k + 1);
+  }
 
   useEffect(() => {
     const dismissed = typeof window !== "undefined" && localStorage.getItem("wallplace-venue-onboarding-complete") === "true";
@@ -110,14 +119,17 @@ export default function VenueDashboardPage() {
   }, []);
 
   useEffect(() => {
+    // The three requests that feed the tiles mark a failure; the checklist
+    // tick and the walls prompt keep their existing fallbacks.
+    let failed = false;
     Promise.all([
-      authFetch("/api/dashboard").then((r) => r.json()).catch(() => ({})),
-      authFetch("/api/placements").then((r) => r.json()).catch(() => ({ placements: [] })),
+      authFetch("/api/dashboard").then((r) => { if (!r.ok) failed = true; return r.json(); }).catch(() => { failed = true; return {}; }),
+      authFetch("/api/placements").then((r) => { if (!r.ok) failed = true; return r.json(); }).catch(() => { failed = true; return { placements: [] }; }),
       // QR scan count comes from the venue analytics endpoint, which counts
       // analytics_events rows scoped to this venue (event_type=qr_scan).
       // `range=all` so the dashboard tile shows the lifetime number rather
       // than a 30-day window.
-      authFetch("/api/analytics/venue?range=all").then((r) => r.json()).catch(() => ({ totals: { qr_scans: 0 } })),
+      authFetch("/api/analytics/venue?range=all").then((r) => { if (!r.ok) failed = true; return r.json(); }).catch(() => { failed = true; return { totals: { qr_scans: 0 } }; }),
       // E4: the payouts checklist tick needs the real onboarding fact.
       // An account id alone is stored the moment onboarding STARTS.
       authFetch("/api/stripe-connect/status")
@@ -128,6 +140,7 @@ export default function VenueDashboardPage() {
         .then((r) => (r.ok ? r.json() : { walls: [] }))
         .catch(() => ({ walls: [] })),
     ]).then(([dashboardData, placementsData, analyticsData, connectData, wallsData]) => {
+      setLoadError(failed ? "Could not load your dashboard figures. Please try again." : null);
       const wallRows = Array.isArray(wallsData?.walls) ? (wallsData.walls as Array<{ is_public_on_profile?: boolean }>) : [];
       setWallSummary({ total: wallRows.length, publicCount: wallRows.filter((w) => !!w.is_public_on_profile).length });
       const orders = dashboardData.orders || [];
@@ -247,7 +260,7 @@ export default function VenueDashboardPage() {
     }).finally(() => setLoading(false));
     // user?.email feeds the Total Spent purchase match above; re-run once
     // the auth context resolves so the tile doesn't stick at £0.
-  }, [savedArtistCount, user?.email]);
+  }, [savedArtistCount, user?.email, reloadKey]);
 
   const onboardingComplete = onboardingItems.filter((i) => i.complete).length;
   const onboardingTotal = onboardingItems.length;
@@ -387,19 +400,25 @@ export default function VenueDashboardPage() {
       )}
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-white border border-border rounded-sm p-5"
-          >
-            <p className={`text-2xl font-serif text-foreground mb-1 ${loading ? "animate-pulse" : ""}`}>
-              {loading ? "\u2014" : stat.value}
-            </p>
-            <p className="text-xs text-muted">{stat.label}</p>
-          </div>
-        ))}
-      </div>
+      {loadError ? (
+        <div className="mb-8">
+          <LoadErrorState message={loadError} onRetry={retryLoad} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="bg-white border border-border rounded-sm p-5"
+            >
+              <p className={`text-2xl font-serif text-foreground mb-1 ${loading ? "animate-pulse" : ""}`}>
+                {loading ? "\u2026" : stat.value}
+              </p>
+              <p className="text-xs text-muted">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Placement Action Items */}
       <PlacementActionItems userId={user?.id} role="venue" />

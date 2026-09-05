@@ -1,0 +1,5 @@
+tests/e2e/a11y.spec.ts
+tests/e2e/security-no-leaks.spec.ts
+tests/e2e/smoke.spec.ts
+tests/e2e/tap-targets.spec.ts
+tests/e2e/visualizer-customer.spec.ts

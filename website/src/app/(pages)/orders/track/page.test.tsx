@@ -71,3 +71,43 @@ describe("order tracking Updates timeline (B26)", () => {
     expect(screen.getByText("Royal Mail")).toBeTruthy();
   });
 });
+
+// LA-C002 (launch audit 2026-09-05). Receipt emails link to /orders/track?t=<token>.
+// When the token was expired or altered the page set an error and then rendered
+// nothing: the only place the error was printed sat inside the manual lookup
+// form, and the token branch hides that form. A guest saw the heading, the
+// intro paragraph, and a blank.
+describe("order tracking via a receipt token that fails (LA-C002)", () => {
+  // jsdom's location persists across tests in this file; put it back so the
+  // form-path tests above are not affected if the order ever changes.
+  afterEach(() => {
+    window.history.replaceState({}, "", "/orders/track");
+  });
+
+  function mockTokenFailure() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: "Invalid or expired link" }),
+      })) as unknown as typeof fetch,
+    );
+  }
+
+  it("shows the error message when the tracking link is rejected", async () => {
+    window.history.replaceState({}, "", "/orders/track?t=expired-token");
+    mockTokenFailure();
+    render(<OrderTrackPage />);
+    expect(await screen.findByText("Invalid or expired link")).toBeTruthy();
+  });
+
+  it("falls back to the manual order ID and email form after a rejected link", async () => {
+    window.history.replaceState({}, "", "/orders/track?t=expired-token");
+    mockTokenFailure();
+    render(<OrderTrackPage />);
+    await screen.findByText("Invalid or expired link");
+    expect(screen.getByLabelText("Order ID")).toBeTruthy();
+    expect(screen.getByLabelText("Email used at checkout")).toBeTruthy();
+  });
+});

@@ -94,3 +94,24 @@ describe("an artist can delete their own post (row D L1313)", () => {
     expect(screen.getByText("A draft")).toBeTruthy();
   });
 });
+
+// LA-C011 (launch audit 2026-09-05). A non-OK answer left the list empty and the
+// page said "You haven't written anything yet", and a network failure escaped
+// the try/finally as an unhandled rejection with nothing on screen.
+describe("blogs list when the load fails (LA-C011)", () => {
+  it("shows an error with a retry on a non-2xx answer instead of the empty copy", async () => {
+    authFetchMock.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ error: "boom" }) });
+    render(<BlogsPage />);
+    expect(await screen.findByText(/could not load your blogs/i)).toBeTruthy();
+    expect(screen.queryByText(/written anything yet/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("A draft")).toBeTruthy();
+  });
+
+  it("shows the same error when the request itself fails", async () => {
+    authFetchMock.mockRejectedValueOnce(new Error("network down"));
+    render(<BlogsPage />);
+    expect(await screen.findByText(/could not load your blogs/i)).toBeTruthy();
+  });
+});

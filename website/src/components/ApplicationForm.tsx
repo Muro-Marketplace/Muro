@@ -303,18 +303,22 @@ export default function ApplicationForm({ onSubmitted }: { onSubmitted?: () => v
         throw err;
       }
 
-      // Record terms acceptances (fire-and-forget)
+      // Record terms acceptances (fire-and-forget). LA-C045: these went out with
+      // a bare fetch and no bearer token, so the route's authenticated branch
+      // never ran and every artist_agreement acceptance in production carries
+      // user_id NULL. The /apply gate guarantees a session here, and mutate()
+      // attaches it, so the row is stamped with who actually accepted.
       const termsPayload = {
         userEmail: form.email,
         userType: "artist",
         termsVersion: TERMS_VERSION,
       };
-      fetch("/api/terms/accept", {
+      mutate("/api/terms/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...termsPayload, termsType: "platform_tos" }),
       }).catch(() => {});
-      fetch("/api/terms/accept", {
+      mutate("/api/terms/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...termsPayload, termsType: "artist_agreement" }),

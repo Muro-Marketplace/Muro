@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import LoadErrorState from "@/components/LoadErrorState";
 import { ApiError, authFetch, mutate } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
 import { isFlagOn } from "@/lib/feature-flags";
@@ -79,22 +80,36 @@ export default function ArtistBlogsPage() {
     }
   }
   const [loading, setLoading] = useState(true);
+  // LA-C011: a failed load is not an empty list, and a network failure must
+  // not escape as an unhandled rejection with nothing on screen.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const res = await authFetch("/api/blogs/mine");
-        if (!cancelled && res.ok) {
-          const data = await res.json();
+        if (!res.ok) throw new Error(`blogs load failed (${res.status})`);
+        const data = await res.json();
+        if (!cancelled) {
           setRows(data.blogs ?? []);
+          setLoadError(null);
         }
+      } catch {
+        if (!cancelled) setLoadError("Could not load your blogs. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [reloadKey]);
+
+  function retryLoad() {
+    setLoading(true);
+    setLoadError(null);
+    setReloadKey((k) => k + 1);
+  }
 
   return (
     <ArtistPortalLayout activePath="/artist-portal/blogs">
@@ -120,6 +135,8 @@ export default function ArtistBlogsPage() {
 
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
+        ) : loadError ? (
+          <LoadErrorState message={loadError} onRetry={retryLoad} />
         ) : rows.length === 0 ? (
           <p className="text-sm text-muted">You haven&rsquo;t written anything yet.</p>
         ) : (

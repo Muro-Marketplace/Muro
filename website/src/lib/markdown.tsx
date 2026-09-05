@@ -231,3 +231,30 @@ export function renderMarkdown(source: string): ReactNode[] {
 
   return blocks;
 }
+
+/**
+ * The prose of a markdown body with the markup removed: one line, single
+ * spaces. For card excerpts and meta descriptions, where headings, emphasis
+ * and link syntax must not reach a reader or a search engine as literal `##`,
+ * `**` and `[text](url)` (LA-C015). Fenced code keeps its text, rules are
+ * dropped, links and images keep their label and lose the URL. Mirrors the
+ * syntax renderMarkdown understands.
+ */
+export function markdownToPlainText(source: string | null | undefined): string {
+  const lines = (source ?? "").replace(/\r\n/g, "\n").split("\n");
+  const out: string[] = [];
+  for (const raw of lines) {
+    if (/^\s*```/.test(raw)) continue;
+    if (/^\s*([-*_])\1{2,}\s*$/.test(raw)) continue;
+    let line = raw.replace(/^\s*#{1,6}\s+/, "");
+    line = line.replace(/^\s*>\s?/, "");
+    line = line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, "");
+    line = line.replace(/!?\[([^\]]*)\]\([^)\s]*\)/g, "$1");
+    line = line.replace(/`([^`]+)`/g, "$1");
+    line = line.replace(/(\*\*|__)(.+?)\1/g, "$2");
+    line = line.replace(/(\*|_)(.+?)\1/g, "$2");
+    const text = line.trim();
+    if (text) out.push(text);
+  }
+  return out.join(" ").replace(/\s+/g, " ").trim();
+}

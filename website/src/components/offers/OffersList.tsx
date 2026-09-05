@@ -12,6 +12,7 @@ import Image from "next/image";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { displayPhysicalDimensions } from "@/lib/dimensions";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import LoadErrorState from "@/components/LoadErrorState";
 import { useToast } from "@/context/ToastContext";
 import { formatOfferDeadline, isOfferLapsed } from "@/lib/offers/expiry";
 
@@ -103,6 +104,8 @@ export default function OffersList({ viewerUserId, filter }: Props) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // LA-C048: a failed load is not an empty list.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [counterFor, setCounterFor] = useState<OfferRow | null>(null);
   const [counterAmount, setCounterAmount] = useState("");
   const [counterMessage, setCounterMessage] = useState("");
@@ -117,10 +120,13 @@ export default function OffersList({ viewerUserId, filter }: Props) {
     try {
       const url = filter ? `/api/offers?role=${filter}` : "/api/offers";
       const res = await authFetch(url);
+      if (!res.ok) throw new Error(`offers load failed (${res.status})`);
       const data = await res.json();
       setOffers(data.offers || []);
+      setLoadError(null);
     } catch {
       setOffers([]);
+      setLoadError("Could not load your offers. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -266,6 +272,7 @@ export default function OffersList({ viewerUserId, filter }: Props) {
   }
 
   if (loading) return <p className="text-sm text-muted">Loading…</p>;
+  if (loadError) return <LoadErrorState message={loadError} onRetry={load} />;
   if (offers.length === 0) {
     return (
       <p className="text-sm text-muted">

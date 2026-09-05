@@ -53,15 +53,16 @@ describe("public claims the site cannot evidence stay out", () => {
     expect((cards.match(/Priority visibility in venue recommendations/g) || []).length).toBe(2);
   });
 
-  it("the billing upgrade panel and application form sell the same tier perks (Finding 4)", () => {
-    for (const p of [
-      "src/app/(pages)/artist-portal/billing/page.tsx",
-      "src/components/ApplicationForm.tsx",
-    ]) {
-      const src = read(p);
-      expect(src, p).not.toMatch(/featured profile/i);
-      expect(src, p).toMatch(/Artwork of the Week/);
-    }
+  it("the billing upgrade panel and application form sell the same tier perks (Finding 4, LA-C009)", () => {
+    const form = read("src/components/ApplicationForm.tsx");
+    expect(form).not.toMatch(/featured profile/i);
+    expect(form).toMatch(/Artwork of the Week/);
+    // LA-C009: the Change Plan bullets were a third hand-written copy of the
+    // perks and had drifted (they still sold "Message venues directly", which is
+    // no longer a plan feature). They now render planFeaturesFor(), the one list.
+    const billing = read("src/app/(pages)/artist-portal/billing/page.tsx");
+    expect(billing).toMatch(/planFeaturesFor\(/);
+    expect(billing).not.toMatch(/Message venues directly|<li>Dedicated support<\/li>|<li>Up to 8 works<\/li>/);
   });
 
   it("venue photo captions name a type, never an invented place", () => {
@@ -75,5 +76,63 @@ describe("public claims the site cannot evidence stay out", () => {
     expect(pricing).not.toMatch(/PROGRAMME_PIECE_RENT_TARGET_GBP \* 12/);
     expect(pricing).toMatch(/PROGRAMME_PIECE_STINT_MONTHS/);
     expect(read("src/app/(pages)/artist-agreement/page.tsx")).toMatch(/9A\. Programme Rent/);
+  });
+
+  it("the pricing comparison table reads the venue-approach cap from OUTREACH_WEEKLY_LIMIT (LA-C029)", () => {
+    const pricing = read("src/app/(pages)/pricing/page.tsx");
+    expect(pricing).not.toMatch(/"\d+ a week"/);
+    expect(pricing).toMatch(/OUTREACH_WEEKLY_LIMIT\.core\} a week/);
+    expect(pricing).toMatch(/OUTREACH_WEEKLY_LIMIT\.pro\} a week/);
+  });
+
+  it("the pricing comparison table gives Featured to Pro only (LA-C028)", () => {
+    const pricing = read("src/app/(pages)/pricing/page.tsx");
+    expect(pricing).not.toMatch(/premium: "Featured"/);
+    expect(pricing).toMatch(/pro: "Featured"/);
+  });
+
+  it("the pricing hero does not say the tiers differ by platform fee (LA-C027)", () => {
+    expect(read("src/app/(pages)/pricing/page.tsx")).not.toMatch(/difference\s+is visibility and the platform fee/);
+  });
+
+  it("the FAQ does not promise lower platform fees on higher tiers (LA-C023)", () => {
+    expect(read("src/app/(pages)/faqs/page.tsx")).not.toMatch(/lower platform\s+fees/);
+  });
+
+  it("venue copy does not say there is no contract when the FAQ and agreement say there is one (LA-C047)", () => {
+    for (const p of ["src/components/marketing/VenueGuide.tsx", "src/app/page.tsx"]) {
+      expect(read(p), p).not.toMatch(/No contracts?\./);
+    }
+    expect(read("src/components/marketing/VenueGuide.tsx")).not.toMatch(/answer:\s*"No\. Just a simple partnership agreement/);
+  });
+
+  it("nothing renders a limited-company name while company.ts has no registration (LA-C030)", () => {
+    // Tests that simulate incorporation set the name themselves; only shipped code counts.
+    const shipped = grepFiles("Wallplace Ltd", ["src/app", "src/components", "src/emails", "src/lib"]).filter((f) => !/\.test\.tsx?$/.test(f));
+    expect(shipped).toEqual([]);
+  });
+
+  it("the billing page spells cancelled the British way (LA-C010)", () => {
+    expect(read("src/app/(pages)/artist-portal/billing/page.tsx")).not.toMatch(/"Canceled"|has been canceled/);
+  });
+
+  it("the venue dashboard has no em dash in its copy (LA-C084)", () => {
+    expect(read("src/app/(pages)/venue-portal/page.tsx")).not.toMatch(/—|\\u2014/);
+  });
+
+  it("the QR label help copy does not use a hyphen as a dash (LA-C064, LA-C081)", () => {
+    for (const p of ["src/app/(pages)/artist-portal/labels/page.tsx", "src/app/(pages)/venue-portal/labels/page.tsx"]) {
+      expect(read(p), p).not.toMatch(/printed card - the QR code/);
+    }
+  });
+
+  it("the terms dispute steps have no space before the colon (LA-C080)", () => {
+    expect(read("src/app/(pages)/terms/page.tsx")).not.toMatch(/Step \d :/);
+  });
+
+  it("no Buy Now or saving line prints a raw number after a pound sign (LA-C065)", () => {
+    expect(read("src/app/(pages)/browse/[slug]/ArtistProfileClient.tsx")).not.toMatch(/Buy Now, £\$\{totalPrice\}/);
+    expect(read("src/app/(pages)/browse/collections/[collectionId]/page.tsx")).not.toMatch(/Save £\{savings\}/);
+    expect(read("src/app/(pages)/browse/[slug]/[workSlug]/ArtworkPageClient.tsx")).not.toMatch(/Buy Now, £\{totalPrice\}/);
   });
 });

@@ -111,3 +111,22 @@ describe("OffersList withdraw (E43-b, mutate)", () => {
     );
   });
 });
+
+// LA-C048 (launch audit 2026-09-05). A failed or non-2xx GET /api/offers set
+// offers to [] and the component rendered "No offers yet.", so a venue with live
+// offers saw an empty account during an outage. The error banner below the list
+// was unreachable because the empty-state return came first.
+describe("OffersList when the offers request fails (LA-C048)", () => {
+  it("shows an error with a retry instead of 'No offers yet.'", async () => {
+    authFetchMock.mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ error: "boom" }), { status: 500 })),
+    );
+    render(<OffersList viewerUserId="v1" />);
+    expect(await screen.findByText(/could not load your offers/i)).toBeTruthy();
+    expect(screen.queryByText(/No offers yet/)).toBeNull();
+
+    authFetchMock.mockImplementation(() => Promise.resolve(mockLoadOk()));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Withdraw")).toBeTruthy();
+  });
+});

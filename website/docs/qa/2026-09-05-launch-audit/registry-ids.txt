@@ -1,0 +1,174 @@
+admin_alert	platform_admin	false	Wallplace admin alert
+venue_sale_from_placement	orders_and_payouts	false	Sale from your venue: {{workTitle}}
+customer_order_status_update	orders_and_payouts	false	Update on order {{orderNumber}}
+customer_refund_rejected	orders_and_payouts	false	Refund decision for order {{orderNumber}}
+artist_refund_requested	orders_and_payouts	false	Refund request for order {{orderNumber}}
+artist_new_placement_invitation	placements	true	{{venueName}} would like to display your work
+curation_enquiry_received	orders_and_payouts	false	Your Wallplace curation enquiry
+curation_quote_ready	orders_and_payouts	false	Your Wallplace programme quote is ready
+curation_payment_received	orders_and_payouts	false	Your Wallplace curation is underway
+curation_programme_confirmed	orders_and_payouts	false	Your Wallplace programme is confirmed
+venue_collection_pending	orders_and_payouts	false	{{workTitle}} has sold and will be collected from you
+curation_refund_issued	orders_and_payouts	false	Your Wallplace curation payment has been refunded
+account_email_verification	security	false	Confirm your Wallplace account
+account_password_reset	security	false	Reset your Wallplace password
+account_password_changed	security	false	Your Wallplace password was changed
+account_deletion_requested	legal	false	Your Wallplace account is scheduled for deletion
+account_deletion_confirmed	legal	false	Your Wallplace account has been deleted
+account_data_export_ready	legal	false	Your Wallplace data export is ready
+account_suspicious_login	security	false	New sign-in to your Wallplace account
+account_email_change_verify	security	false	Confirm your new email address
+account_two_factor_enabled	security	false	Two-factor authentication is now on
+account_two_factor_disabled	security	false	Two-factor authentication was turned off
+account_team_invite	security	false	{{inviterName}} invited you to {{venueName}} on Wallplace
+account_team_invite_accepted	placements	true	{{memberName}} joined {{venueName}}
+support_request_received	orders_and_payouts	false	We've got your message
+account_invite	security	false	Welcome to Wallplace, set your password
+feedback_received	orders_and_payouts	false	Thanks for your {{submittedType}}
+artist_welcome_checklist	recommendations	true	Welcome to Wallplace, {{firstName}}, here's how artists get placed
+artist_profile_completion_nudge	recommendations	true	Your profile is {{completionPct}}% done, a few minutes finishes it
+artist_first_artwork_upload_nudge	recommendations	true	The first artwork is the hardest, here's how to add yours
+artist_connect_stripe_nudge	recommendations	true	Connect Stripe so you don't miss a payout
+artist_placement_preferences_nudge	recommendations	true	Tell us where you'd love your work to live
+artist_onboarding_graduation	recommendations	true	You're live on Wallplace, {{firstName}}
+artist_onboarding_incomplete_recap	recommendations	true	Your Wallplace setup is {{completionPct}}% done
+venue_welcome_checklist	recommendations	true	Welcome to Wallplace, how {{venueName}} finds art
+venue_space_details_nudge	recommendations	true	Finish {{venueName}}'s details so artists can match
+venue_photo_upload_nudge	recommendations	true	Photos make {{venueName}}'s listing come alive
+venue_art_preferences_nudge	recommendations	true	Tell us the kind of art {{venueName}} is drawn to
+venue_first_placement_cta	recommendations	true	Ready to host art at {{venueName}}?
+customer_welcome	recommendations	true	Welcome to Wallplace, {{firstName}}
+customer_browse_nudge	recommendations	true	A handful of works you might like, {{firstName}}
+customer_follow_artist_nudge	recommendations	true	Artists you might like, {{firstName}}
+venue_new_placement_request	placements	true	New placement request from {{artistName}}
+artist_placement_request_sent	placements	true	Request sent to {{venueName}}
+venue_placement_request_sent	placements	true	Request sent to {{artistName}}
+artist_placement_accepted	orders_and_payouts	false	{{venueName}} accepted your placement
+venue_placement_accepted_confirmation	orders_and_payouts	false	Placement confirmed with {{artistName}}
+artist_placement_declined	orders_and_payouts	false	{{venueName}} passed on this placement
+placement_venue_declined_artist_request	orders_and_payouts	false	{{artistName}} passed on your placement request
+placement_cancelled	orders_and_payouts	false	{{cancelledByName}} cancelled the placement
+placement_counter_offer_received	orders_and_payouts	false	{{counterpartyName}} sent revised terms
+placement_scheduled	placements	true	Install scheduled for {{scheduledDate}}
+placement_artwork_installed	placements	true	{{artistName}}'s work is now at {{venueName}}
+placement_live_on_wall	placements	true	{{workTitle}} is live at {{venueName}}
+placement_midway_checkin	digests	true	Halfway through at {{venueName}}
+placement_ending_soon	placements	true	Placement at {{venueName}} ends {{endDate}}
+placement_ended	placements	true	Your placement at {{venueName}} has ended
+placement_review_request	placements	true	A quick review for {{counterpartyName}}?
+placement_consignment_record_created	legal	false	Consignment record ready for {{artistName}} × {{venueName}}
+artist_artwork_response_accepted	placements	false	{{venueName}} accepted your response
+artist_artwork_response_declined	placements	false	{{venueName}} passed on your response
+artist_brief_invitation	placements	true	{{venueName}} would like you to respond to a brief
+venue_brief_response_received	placements	true	{{artistName}} responded to your brief
+placement_contract_countersigned	legal	false	Contract countersigned by {{counterpartyName}}
+message_unread_notification	messages	true	{{senderName}} sent you a message
+message_hourly_digest	messages	true	{{total}} new messages on Wallplace
+review_posted_notification	placements	true	{{reviewerName}} left you a {{reviewRating}}-star review
+offer_received_notification	orders_and_payouts	false	{{venueName}} offered {{formattedAmount}}
+offer_outcome_notification	orders_and_payouts	false	{{counterpartyName}} {{outcome}} the offer of {{formattedAmount}}
+enquiry_received	orders_and_payouts	false	We've passed your message to {{artistName}}
+artist_first_qr_scan	recommendations	true	Your work was just scanned at {{venueName}}
+artist_qr_scan_milestone	recommendations	true	{{milestone}} scans on {{workTitle}}
+artist_qr_scan_digest	digests	true	{{totalScans}} QR scan{{plural}} yesterday
+artist_weekly_portfolio_digest	digests	true	Your week on Wallplace, {{firstName}}
+artist_new_venue_match	recommendations	true	{{count}} venues near you looking for your work
+artist_low_engagement_tips	tips	true	A couple of tweaks could lift {{workTitle}}
+venue_weekly_digest	digests	true	{{venueName}}'s week on Wallplace
+venue_new_artist_matches	recommendations	true	{{count}} new artists that would suit {{venueName}}
+venue_rotation_reminder	recommendations	true	Time to rotate the walls at {{venueName}}?
+venue_placement_anniversary	digests	true	A year of {{artistName}} at {{venueName}}
+venue_managed_curation_pitch	promotions	true	Want a hand curating {{venueName}}?
+venue_registration_confirmation	security	false	Your venue is registered on Wallplace
+customer_order_receipt	orders_and_payouts	false	Your Wallplace order {{orderNumber}}
+artist_work_sold	orders_and_payouts	false	You made a sale, {{workTitle}}
+artist_order_confirmation	orders_and_payouts	false	Order {{orderNumber}}, {{workTitle}}
+customer_shipping_confirmation	orders_and_payouts	false	Your order {{orderNumber}} is on its way
+customer_delivery_confirmation	orders_and_payouts	false	Your order {{orderNumber}} has arrived
+customer_post_purchase_care	tips	true	Looking after {{workTitle}}
+customer_purchase_review_request	recommendations	true	A few words on {{workTitle}}?
+customer_refund_confirmation	orders_and_payouts	false	Refund on the way for order {{orderNumber}}
+customer_payment_failed	orders_and_payouts	false	Your Wallplace payment did not go through
+artist_refund_notification	orders_and_payouts	false	Refund issued on order {{orderNumber}}
+order_dispute_opened	orders_and_payouts	false	Dispute opened on order {{orderNumber}}
+order_dispute_resolved	orders_and_payouts	false	Dispute on {{orderNumber}} resolved
+artist_order_received	orders_and_payouts	false	New order {{orderNumber}}, {{workTitle}}
+artist_order_delivered	orders_and_payouts	false	Order {{orderNumber}} arrived, your payout is released
+customer_order_placed	orders_and_payouts	false	Order {{orderNumber}} confirmed
+customer_order_processing	orders_and_payouts	false	{{orderNumber}} is being prepared
+customer_order_out_for_delivery	orders_and_payouts	false	{{orderNumber}} is on its way
+customer_order_delivered	orders_and_payouts	false	{{orderNumber}} has arrived
+customer_confirm_delivery_48h	orders_and_payouts	false	Did {{orderNumber}} arrive safely?
+artist_chargeback_opened	orders_and_payouts	false	A chargeback has been opened on order {{orderNumber}}
+artist_chargeback_closed	orders_and_payouts	false	The chargeback on order {{orderNumber}} has been decided
+customer_refund_failed	orders_and_payouts	false	Your refund for order {{orderNumber}} did not go through
+artist_order_unshipped_payout_held	orders_and_payouts	false	Order {{orderNumber}} needs to ship before we can pay you
+artist_payout_sent	orders_and_payouts	false	Payout on the way: {{amount}}
+artist_payout_failed	orders_and_payouts	false	Payout couldn't be sent
+subscription_payment_failed	orders_and_payouts	false	Payment failed on your {{planName}} subscription
+paid_loan_setup_payment	orders_and_payouts	false	Set up the monthly payment for your placement
+paid_loan_payment_failed	orders_and_payouts	false	Your monthly display fee payment failed
+referral_credit_granted	orders_and_payouts	false	You earned 30 fee-free days on Wallplace
+subscription_recovered	orders_and_payouts	false	Payment received, your portfolio is live again
+referral_window_ending	orders_and_payouts	false	Your fee-free window ends soon
+subscription_trial_ending	orders_and_payouts	false	Your {{planName}} trial ends {{trialEndDate}}
+subscription_upgraded	orders_and_payouts	false	You're now on {{newPlan}}
+subscription_cancelled	orders_and_payouts	false	Your {{planName}} subscription is cancelled
+venue_revenue_share_statement	orders_and_payouts	false	Revenue share for {{venueName}}, {{statementPeriod}}
+venue_paid_loan_invoice	orders_and_payouts	false	Invoice {{invoiceNumber}}, {{venueName}}
+subscription_started	orders_and_payouts	false	You're on Wallplace {{planName}}
+subscription_renewal_receipt	orders_and_payouts	false	Receipt for your {{planName}} subscription
+subscription_card_expiring	orders_and_payouts	false	Card ending {{last4}} expires soon
+curation_payment_failed	orders_and_payouts	false	Your Wallplace programme payment failed
+curation_renewal_receipt	orders_and_payouts	false	Payment received for {{venueName}}
+curation_subscription_cancelled	orders_and_payouts	false	Your Wallplace programme has ended
+artist_programme_rent_statement	orders_and_payouts	false	Programme rent recorded for you
+artist_programme_rent_settled	orders_and_payouts	false	Programme rent on the way
+subscription_ended	orders_and_payouts	false	Your {{planName}} subscription has ended
+venue_paid_loan_payment_set_up	orders_and_payouts	false	Monthly payments are set up for {{workTitle}}
+venue_paid_loan_billing_stopped	orders_and_payouts	false	Monthly payments have stopped for {{workTitle}}
+artist_paid_loan_billing_stopped	orders_and_payouts	false	Monthly payments have stopped for {{workTitle}}
+venue_payout_sent	orders_and_payouts	false	A payout is on its way to your bank
+artist_payout_retries_exhausted	orders_and_payouts	false	We could not send your payout for {{orderNumber}}
+artist_stripe_kyc_needed	orders_and_payouts	false	Stripe needs more info to keep payouts flowing
+artist_application_submitted	placements	false	We've received your Wallplace application
+artist_application_under_review	placements	false	Your Wallplace application is still under review
+artist_application_approved	placements	false	You're in, welcome to Wallplace
+artist_application_rejected	placements	false	A note on your Wallplace application
+artist_blog_published	placements	false	Your Wallplace post is live
+artist_blog_rejected	placements	false	A note on your Wallplace post
+artist_year_in_review	newsletter	true	Your {{year}} on Wallplace, {{firstName}}
+artist_founding_place_confirmed	orders_and_payouts	false	Your founding place on Wallplace is confirmed
+artist_tier_cap_hit	promotions	true	You've hit the {{capType}} limit on {{currentPlan}}
+artist_premium_upgrade_educational	promotions	true	What Premium actually unlocks
+venue_analytics_upgrade	promotions	true	See how {{venueName}}'s walls really perform
+venue_managed_curation_upgrade	promotions	true	Let us handle the curation at {{venueName}}
+customer_abandoned_checkout_1h	promotions	true	Left something behind?
+customer_abandoned_checkout_24h	promotions	true	A note on your cart
+customer_saved_work_back_in_stock	promotions	true	{{workTitle}} is available again
+customer_saved_work_price_drop	promotions	true	{{workTitle}} is now {{newPrice}}
+customer_new_work_from_followed_artist	recommendations	true	New work from {{artistName}}
+customer_saved_works_digest	digests	true	Your saved works, a quick look
+customer_waitlist_confirmation	security	false	You're on the Wallplace waitlist
+artist_inactive_14d	tips	true	{{profileViews}} views on your profile
+artist_inactive_30d	tips	true	A month in, your portfolio snapshot
+artist_inactive_90d	tips	true	We're keeping a spot for you
+venue_inactive_30d	tips	true	New artists for {{venueName}}
+venue_inactive_90d_white_glove	tips	true	Can we help at {{venueName}}?
+customer_inactive_30d	tips	true	New pieces worth seeing
+customer_inactive_90d	tips	true	Still enjoy the gallery?
+user_repermission_campaign	newsletter	true	Should we keep in touch?
+newsletter_monthly_gallery	newsletter	true	Wallplace, this month
+newsletter_subscribe_confirm	newsletter	true	Confirm your Wallplace newsletter subscription
+newsletter_artist_spotlight	newsletter	true	Artist spotlight: {{artistName}}
+newsletter_venue_spotlight	newsletter	true	Venue spotlight: {{venueName}}
+newsletter_curators_picks	newsletter	true	Curator's picks: {{theme}}
+newsletter_local_art_near_you	newsletter	true	Art from around {{location}}
+legal_terms_update	legal	false	Updates to the Wallplace Terms, effective {{effectiveDate}}
+legal_privacy_update	legal	false	Privacy policy update, effective {{effectiveDate}}
+artist_tax_document_ready	legal	false	Your {{taxYear}} Wallplace tax summary
+operational_platform_incident	legal	false	Wallplace service update
+operational_policy_violation_warning	legal	false	An issue with your Wallplace account
+operational_account_restricted	legal	false	Your Wallplace account has been restricted
+operational_account_restored	legal	false	Your Wallplace account is back to normal
+operational_dispute_resolved	legal	false	Your Wallplace dispute has been resolved

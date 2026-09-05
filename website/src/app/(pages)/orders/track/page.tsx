@@ -86,11 +86,16 @@ export default function OrderTrackPage() {
         });
         const data: { order?: TrackedOrder; error?: string } = await res.json();
         if (!res.ok || !data.order) {
+          // LA-C002: the error renders inside the manual lookup form, which the
+          // token branch hides. Drop back to the form so the message shows and
+          // the buyer can fall back to order ID plus email.
+          setTokenAuthed(false);
           setError(data.error || "This tracking link has expired or is invalid.");
           return;
         }
         setOrder(data.order);
       } catch {
+        setTokenAuthed(false);
         setError("Network error, please try again in a moment.");
       } finally {
         setLoading(false);

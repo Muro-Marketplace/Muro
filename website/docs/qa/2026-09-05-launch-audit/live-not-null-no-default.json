@@ -1,0 +1,300 @@
+{
+ "admin_audit_log": [
+  "action",
+  "admin_user_id"
+ ],
+ "admin_users": [
+  "user_id"
+ ],
+ "analytics_events": [
+  "event_type"
+ ],
+ "artist_applications": [
+  "artist_statement",
+  "email",
+  "location",
+  "name",
+  "portfolio_link",
+  "primary_medium"
+ ],
+ "artist_collections": [
+  "artist_id",
+  "artist_slug",
+  "id",
+  "name"
+ ],
+ "artist_profiles": [
+  "name",
+  "slug"
+ ],
+ "artist_referrals": [
+  "referral_code",
+  "referrer_slug",
+  "referrer_user_id"
+ ],
+ "artist_works": [
+  "artist_id",
+  "id",
+  "image",
+  "title"
+ ],
+ "artwork_request_responses": [
+  "artist_user_id",
+  "message",
+  "request_id",
+  "response_type"
+ ],
+ "artwork_requests": [
+  "description",
+  "id",
+  "title",
+  "venue_user_id"
+ ],
+ "blog_featured_artworks": [
+  "artwork_id",
+  "blog_id"
+ ],
+ "blogs": [
+  "author_user_id",
+  "body_json",
+  "slug",
+  "title"
+ ],
+ "cart_sessions": [
+  "cart",
+  "shipping",
+  "stripe_session_id"
+ ],
+ "commissions": [
+  "amount_pence",
+  "artist_user_id",
+  "buyer_type",
+  "buyer_user_id",
+  "description",
+  "id",
+  "title"
+ ],
+ "contact_submissions": [
+  "email",
+  "message",
+  "name",
+  "type"
+ ],
+ "conversation_reports": [
+  "other_party",
+  "reason",
+  "reporter_user_id"
+ ],
+ "curation_requests": [
+  "contact_email",
+  "contact_name",
+  "tier",
+  "venue_name"
+ ],
+ "customer_addresses": [
+  "city",
+  "country",
+  "full_name",
+  "line1",
+  "postcode",
+  "user_id"
+ ],
+ "customer_profiles": [],
+ "disputes": [
+  "description",
+  "opener_user_id"
+ ],
+ "email_events": [
+  "idempotency_key",
+  "template",
+  "to_email"
+ ],
+ "email_preferences": [
+  "user_id"
+ ],
+ "email_recent_sends": [],
+ "email_suppressions": [
+  "email",
+  "reason"
+ ],
+ "enquiries": [
+  "artist_slug",
+  "enquiry_type",
+  "message",
+  "sender_email",
+  "sender_name"
+ ],
+ "feature_request_upvotes": [
+  "request_id",
+  "user_id"
+ ],
+ "feature_requests": [
+  "description",
+  "title"
+ ],
+ "featured_artists": [
+  "artist_slug"
+ ],
+ "messages": [
+  "content",
+  "conversation_id",
+  "recipient_slug",
+  "sender_name"
+ ],
+ "moderation_queue": [
+  "entity_id",
+  "entity_type"
+ ],
+ "newsletter_subscribers": [
+  "email"
+ ],
+ "notifications": [
+  "kind",
+  "title",
+  "user_id"
+ ],
+ "order_events": [
+  "event_type",
+  "order_id"
+ ],
+ "orders": [
+  "buyer_email",
+  "id",
+  "items",
+  "shipping",
+  "shipping_cost",
+  "subtotal",
+  "total"
+ ],
+ "placement_archives": [
+  "placement_id",
+  "user_id"
+ ],
+ "placement_photos": [
+  "placement_id",
+  "url"
+ ],
+ "placement_record_versions": [
+  "changed_by_role",
+  "placement_id",
+  "snapshot"
+ ],
+ "placement_records": [
+  "placement_id"
+ ],
+ "placement_recurring_billings": [
+  "monthly_amount_pence",
+  "placement_id"
+ ],
+ "placement_reviews": [
+  "placement_id",
+  "rating",
+  "reviewee_user_id",
+  "reviewer_user_id"
+ ],
+ "placements": [
+  "arrangement_type",
+  "id",
+  "venue",
+  "work_title"
+ ],
+ "programme_rent_accruals": [
+  "amount_pence",
+  "curation_request_id",
+  "period_months",
+  "placement_id",
+  "stripe_invoice_id"
+ ],
+ "purchase_offers": [
+  "amount_pence",
+  "artist_user_id",
+  "buyer_type",
+  "buyer_user_id",
+  "created_by_user_id",
+  "id"
+ ],
+ "refund_requests": [
+  "order_id",
+  "reason",
+  "requester_email",
+  "requester_type"
+ ],
+ "reports": [
+  "reason",
+  "reporter_user_id"
+ ],
+ "saved_items": [
+  "item_id",
+  "item_type",
+  "user_id"
+ ],
+ "stripe_transfers": [
+  "amount_cents",
+  "order_id",
+  "recipient_type",
+  "recipient_user_id",
+  "stripe_connect_account_id",
+  "stripe_transfer_id"
+ ],
+ "stripe_webhook_events": [
+  "event_id",
+  "event_type"
+ ],
+ "terms_acceptances": [
+  "terms_type",
+  "terms_version",
+  "user_email",
+  "user_type"
+ ],
+ "user_blocks": [
+  "blocked_slug",
+  "blocker_user_id"
+ ],
+ "venue_profiles": [
+  "name",
+  "slug"
+ ],
+ "venue_registrations": [
+  "address_line1",
+  "city",
+  "contact_name",
+  "email",
+  "postcode",
+  "venue_name",
+  "venue_type"
+ ],
+ "visualizer_quota_overrides": [
+  "user_id"
+ ],
+ "visualizer_usage": [
+  "action",
+  "cost_units",
+  "day_bucket",
+  "month_bucket",
+  "user_id"
+ ],
+ "waitlist_signups": [
+  "email",
+  "name",
+  "user_type"
+ ],
+ "wall_layouts": [
+  "name",
+  "user_id",
+  "wall_id"
+ ],
+ "wall_renders": [
+  "kind",
+  "layout_hash",
+  "output_path",
+  "user_id"
+ ],
+ "walls": [
+  "height_cm",
+  "kind",
+  "name",
+  "owner_type",
+  "user_id",
+  "width_cm"
+ ]
+}

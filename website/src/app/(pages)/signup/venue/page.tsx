@@ -158,10 +158,16 @@ export default function RegisterVenuePage() {
       // on the first verified login (ensureVenueProfile), hydrated from this
       // record via the confirmed email. E34: the slug used to be computed here
       // and sent along, which made it a value the browser chose.
+      // LA-C032: the password belongs to supabase.auth.signUp below and to
+      // nothing else. The registration route neither needs nor stores it, so it
+      // must not leave the browser in this request.
+      const registration = Object.fromEntries(
+        Object.entries(form).filter(([key]) => key !== "password" && key !== "confirmPassword"),
+      );
       const regRes = await fetch("/api/register-venue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(registration),
       });
       if (!regRes.ok) {
         const data = await regRes.json().catch(() => ({}));
