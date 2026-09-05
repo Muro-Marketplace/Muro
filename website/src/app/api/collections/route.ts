@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
+import { parseCollectionSizeTiers } from "@/lib/collection-tiers";
+import type { CollectionSizeTier } from "@/data/collections";
 
 type CollectionPayload = {
   name?: unknown;
@@ -10,6 +12,7 @@ type CollectionPayload = {
   bundlePrice?: unknown;
   workIds?: unknown;
   workSizes?: unknown;
+  sizeTiers?: unknown;
   thumbnail?: unknown;
   bannerImage?: unknown;
   available?: unknown;
@@ -24,6 +27,7 @@ type DbRow = {
   bundle_price: number | null;
   work_ids: string[] | null;
   work_sizes: { workId: string; sizeLabel: string }[] | null;
+  size_tiers: CollectionSizeTier[] | null;
   thumbnail: string | null;
   banner_image: string | null;
   available: boolean;
@@ -40,6 +44,7 @@ function rowToClient(row: DbRow) {
     bundlePrice: row.bundle_price != null ? String(row.bundle_price) : "",
     workIds: Array.isArray(row.work_ids) ? row.work_ids : [],
     workSizes: Array.isArray(row.work_sizes) ? row.work_sizes : [],
+    sizeTiers: Array.isArray(row.size_tiers) ? row.size_tiers : [],
     thumbnail: row.thumbnail || undefined,
     bannerImage: row.banner_image || undefined,
     available: row.available,
@@ -86,12 +91,22 @@ function parseBody(body: CollectionPayload) {
   const availableExplicit = typeof body.available === "boolean";
   const available = availableExplicit ? (body.available as boolean) : true;
 
+  // Size tiers are validated rather than filtered, because the tier LABEL is
+  // the key api/checkout re-prices a bundle against. A duplicate or blank
+  // label there is not cosmetic, it makes the charge ambiguous, so the route
+  // refuses the write instead of quietly cleaning it up.
+  const parsedTiers = parseCollectionSizeTiers(body.sizeTiers, workIds);
+  const sizeTiers = "error" in parsedTiers ? [] : parsedTiers.tiers;
+  const tierError = "error" in parsedTiers ? parsedTiers.error : null;
+
   return {
     name,
     description,
     bundlePrice,
     workIds,
     workSizes,
+    sizeTiers,
+    tierError,
     thumbnail,
     bannerImage,
     available,
@@ -182,6 +197,8 @@ export async function POST(request: Request) {
       bundlePrice,
       workIds,
       workSizes,
+      sizeTiers,
+      tierError,
       thumbnail,
       bannerImage,
       available,
@@ -193,6 +210,10 @@ export async function POST(request: Request) {
         { error: "name and at least 2 workIds are required" },
         { status: 400 }
       );
+    }
+
+    if (tierError) {
+      return NextResponse.json({ error: tierError }, { status: 400 });
     }
 
     const db = getSupabaseAdmin();
@@ -227,6 +248,7 @@ export async function POST(request: Request) {
           bundle_price: bundlePrice,
           work_ids: workIds,
           work_sizes: workSizes,
+          size_tiers: sizeTiers,
           thumbnail,
           banner_image: bannerImage,
           available: gated.available,
@@ -267,6 +289,8 @@ export async function PATCH(request: Request) {
       bundlePrice,
       workIds,
       workSizes,
+      sizeTiers,
+      tierError,
       thumbnail,
       bannerImage,
       available,
@@ -278,6 +302,10 @@ export async function PATCH(request: Request) {
         { error: "name and at least 2 workIds are required" },
         { status: 400 }
       );
+    }
+
+    if (tierError) {
+      return NextResponse.json({ error: tierError }, { status: 400 });
     }
 
     const db = getSupabaseAdmin();
@@ -305,6 +333,7 @@ export async function PATCH(request: Request) {
         bundle_price: bundlePrice,
         work_ids: workIds,
         work_sizes: workSizes,
+        size_tiers: sizeTiers,
         thumbnail,
         banner_image: bannerImage,
         available: gated.available,

@@ -11,6 +11,8 @@ import { saveCartSession } from "@/lib/cart-sessions";
 import { canReceivePayout } from "@/lib/payouts/capability";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { findCollectionTier } from "@/lib/collection-tiers";
+import type { CollectionSizeTier } from "@/data/collections";
 
 // Fulfilment methods. Earlier revisions also handled "digital", but the
 // validations schema never accepted it and no client emits it, so that branch
@@ -343,11 +345,20 @@ export async function POST(request: Request) {
     const collectionIds = items
       .map((it) => (!it.workId && it.collectionId ? it.collectionId : null))
       .filter((id): id is string => typeof id === "string" && id.length > 0);
-    const collectionById = new Map<string, { id: string; available: boolean | null; bundle_price: number | null; name: string | null }>();
+    const collectionById = new Map<
+      string,
+      {
+        id: string;
+        available: boolean | null;
+        bundle_price: number | null;
+        name: string | null;
+        size_tiers: CollectionSizeTier[] | null;
+      }
+    >();
     if (collectionIds.length > 0) {
       const { data: colRows, error: colErr } = await getSupabaseAdmin()
         .from("artist_collections")
-        .select("id, available, bundle_price, name")
+        .select("id, available, bundle_price, name, size_tiers")
         .in("id", collectionIds);
       if (colErr) {
         console.error("[checkout] collection re-validation lookup failed:", colErr);
@@ -509,6 +520,44 @@ export async function POST(request: Request) {
       // Collections: DB bundle_price, validated present above.
       if (!item.workId && item.collectionId) {
         const col = collectionById.get(item.collectionId)!;
+        const tiers = Array.isArray(col.size_tiers) ? col.size_tiers : [];
+
+        // A tiered collection is priced from the tier the buyer picked, and
+        // NEVER from bundle_price. bundle_price on a tiered row is the
+        // CHEAPEST tier, kept there by the migration 136 trigger so cards can
+        // read "From £120". Falling back to it would let a buyer select the
+        // £480 tier, send a label the server cannot match, and be charged
+        // £120, which is the same class of hole as the framed-line fallback
+        // in E46c. So an unmatched label, or a line naming no tier at all on a
+        // collection that has them, is refused outright.
+        //
+        // A stale label on a collection whose tiers have since been removed is
+        // simply ignored: with no tiers, bundle_price is the artist's own
+        // single number again, so there is nothing to undercharge.
+        if (tiers.length > 0) {
+          const tier = findCollectionTier(tiers, item.collectionTierLabel);
+          if (!tier) {
+            return NextResponse.json(
+              {
+                error: `"${col.name || item.title}" is now sold in several sizes. Please remove it from your cart and pick one.`,
+                code: "collection_tier_unavailable",
+                collectionId: item.collectionId,
+              },
+              { status: 409 },
+            );
+          }
+          const tierPence = Math.round(tier.price * 100);
+          if (tierPence !== clientPence) {
+            console.warn("[checkout] collection tier price corrected", {
+              collectionId: item.collectionId,
+              tier: tier.label,
+              clientPence,
+              tierPence,
+            });
+          }
+          return tierPence;
+        }
+
         const dbPence = Math.round((col.bundle_price as number) * 100);
         if (dbPence !== clientPence) {
           console.warn("[checkout] collection price corrected", {

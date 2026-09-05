@@ -38,6 +38,10 @@ export interface CartItem {
       is not a sentence anybody should read. */
   collectVenueName?: string;
   collectPlacementId?: string;
+  /** Which size of a tiered collection this line buys, matching a
+      `label` in the collection's `size_tiers`. Absent on work lines and
+      on untiered collections. */
+  collectionTierLabel?: string;
 }
 
 export interface ShippingInfo {
