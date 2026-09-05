@@ -104,4 +104,10 @@ describe("public claims the site cannot evidence stay out", () => {
     }
     expect(read("src/components/marketing/VenueGuide.tsx")).not.toMatch(/answer:\s*"No\. Just a simple partnership agreement/);
   });
+
+  it("nothing renders a limited-company name while company.ts has no registration (LA-C030)", () => {
+    // Tests that simulate incorporation set the name themselves; only shipped code counts.
+    const shipped = grepFiles("Wallplace Ltd", ["src/app", "src/components", "src/emails", "src/lib"]).filter((f) => !/\.test\.tsx?$/.test(f));
+    expect(shipped).toEqual([]);
+  });
 });

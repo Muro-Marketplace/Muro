@@ -15,3 +15,12 @@ export const COMPANY = {
 export function isIncorporated(): boolean {
   return COMPANY.number.trim().length > 0;
 }
+
+/**
+ * The name to print where a legal entity is named (the privacy policy, the
+ * email footer). The registered company once incorporated, the trading name
+ * until then, so no page can claim a limited company that does not yet exist.
+ */
+export function legalEntityName(): string {
+  return isIncorporated() ? COMPANY.legalName : COMPANY.tradingName;
+}
