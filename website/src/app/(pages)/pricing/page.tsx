@@ -22,8 +22,8 @@ const comparisonRows = [
   {
     feature: "Artist profile",
     core: "Standard",
-    premium: "Featured",
-    pro: "Premium",
+    premium: "Standard, plus Artwork of the Week",
+    pro: "Featured",
   },
   {
     feature: "Platform visibility",

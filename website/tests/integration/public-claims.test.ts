@@ -83,4 +83,10 @@ describe("public claims the site cannot evidence stay out", () => {
     expect(pricing).toMatch(/OUTREACH_WEEKLY_LIMIT\.core\} a week/);
     expect(pricing).toMatch(/OUTREACH_WEEKLY_LIMIT\.pro\} a week/);
   });
+
+  it("the pricing comparison table gives Featured to Pro only (LA-C028)", () => {
+    const pricing = read("src/app/(pages)/pricing/page.tsx");
+    expect(pricing).not.toMatch(/premium: "Featured"/);
+    expect(pricing).toMatch(/pro: "Featured"/);
+  });
 });
