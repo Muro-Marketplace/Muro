@@ -64,6 +64,9 @@ interface Placement {
   installedAt?: string | null;
   liveFrom?: string | null;
   collectedAt?: string | null;
+  /** Migration 136. The planned end of the placement, YYYY-MM-DD, or null
+   *  for an open-ended arrangement. Drives reminders only. */
+  endDate?: string | null;
   createdAtTs?: number;
   updatedAtTs?: number;
   /** Stripe subscription state for paid-loan placements. Null until
@@ -386,6 +389,7 @@ export default function PlacementsPage() {
               installedAt: (p.installed_at as string | null) ?? null,
               liveFrom: (p.live_from as string | null) ?? null,
               collectedAt: (p.collected_at as string | null) ?? null,
+              endDate: (p.end_date as string | null) ?? null,
               subscriptionStatus: (p.subscription_status as string | null) ?? null,
               createdAtTs: p.created_at ? new Date(p.created_at as string).getTime() : 0,
               // The latest timestamp on the row, used to sort the list
@@ -1513,6 +1517,7 @@ export default function PlacementsPage() {
                           installedAt: p.installedAt,
                           liveFrom: p.liveFrom,
                           collectedAt: p.collectedAt,
+                          endDate: p.endDate,
                         }}
                         canAdvance={p.status === "Active"}
                         currentUserId={user?.id}
@@ -1524,6 +1529,10 @@ export default function PlacementsPage() {
                           installedAt: next.installedAt ?? x.installedAt,
                           liveFrom: next.liveFrom ?? x.liveFrom,
                           collectedAt: next.collectedAt ?? x.collectedAt,
+                          // Not `?? x.endDate`: null here means the user
+                          // cleared it, and coalescing would put the old date
+                          // straight back on screen.
+                          endDate: next.endDate ?? null,
                         } : x))}
                       />
 
@@ -1803,6 +1812,7 @@ export default function PlacementsPage() {
                     installedAt: p.installedAt,
                     liveFrom: p.liveFrom,
                     collectedAt: p.collectedAt,
+                    endDate: p.endDate,
                   }}
                   canAdvance={p.status === "Active"}
                   onChange={(next) => setPlacements((prev) => prev.map((x) => x.id === p.id ? {
@@ -1813,6 +1823,7 @@ export default function PlacementsPage() {
                     installedAt: next.installedAt ?? x.installedAt,
                     liveFrom: next.liveFrom ?? x.liveFrom,
                     collectedAt: next.collectedAt ?? x.collectedAt,
+                    endDate: next.endDate ?? null,
                   } : x))}
                 />
                 {/* Paid-loan payment status, only shown once the work is

@@ -6,6 +6,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { handleAuthzError } from "@/lib/authz";
 import { cancelPaidLoanBilling } from "@/lib/placements/paid-loan-billing";
 import { deriveArrangementType } from "@/lib/placements/arrangement";
+import { validateEndDate } from "@/lib/placements/end-date";
 import { isFlagOn } from "@/lib/feature-flags";
 import { isSubscribed } from "@/lib/subscriptions";
 import { placementSchema, placementUpdateSchema } from "@/lib/validations";
@@ -909,10 +910,14 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "ID and valid status required" }, { status: 400 });
     }
 
-    const { id, status, stage, counter, stageDate, unsetStage, inStorePrice, inStoreFrameIncluded } = parsed.data;
+    const { id, status, stage, counter, stageDate, unsetStage, inStorePrice, inStoreFrameIncluded, endDate } = parsed.data;
     const hasOfferUpdate = inStorePrice !== undefined || inStoreFrameIncluded !== undefined;
-    if (!status && !stage && !counter && !unsetStage && !hasOfferUpdate) {
-      return NextResponse.json({ error: "status, stage, counter, unsetStage, or an in-store offer update required" }, { status: 400 });
+    // Migration 136. `undefined` means the caller said nothing about the end
+    // date; `null` means they cleared it. The two must stay distinguishable,
+    // so a truthiness test would be wrong here.
+    const hasEndDateUpdate = endDate !== undefined;
+    if (!status && !stage && !counter && !unsetStage && !hasOfferUpdate && !hasEndDateUpdate) {
+      return NextResponse.json({ error: "status, stage, counter, unsetStage, an end date, or an in-store offer update required" }, { status: 400 });
     }
 
     const db = getSupabaseAdmin();
@@ -922,7 +927,7 @@ export async function PATCH(request: Request) {
     // relied on (the phantom requester_user_id rejected the whole query) is gone.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at, revenue_share_percent, scheduled_for")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at, revenue_share_percent, scheduled_for, created_at, end_date")
       .eq("id", id)
       .single();
 
@@ -1442,6 +1447,24 @@ export async function PATCH(request: Request) {
     if (inStoreFrameIncluded !== undefined && inStorePrice !== null) {
       updates.in_store_frame_included = inStoreFrameIncluded;
     }
+
+    // Planned end date (migration 136). Either party may set or clear it: it
+    // is a shared intention about when the work comes down, not one side's
+    // decision, and the `!isArtist && !isVenue` gate above is what keeps
+    // everyone else out.
+    //
+    // It writes ONLY `end_date`. Nothing here touches `status`, and nothing
+    // may: the migration is explicit that the work stays on the wall until a
+    // human confirms collection, so a date is a reminder trigger and never an
+    // ending.
+    if (hasEndDateUpdate) {
+      const validated = validateEndDate(endDate, existing.created_at as string | null);
+      if (!validated.ok) {
+        return NextResponse.json({ error: validated.error }, { status: 400 });
+      }
+      updates.end_date = validated.value;
+    }
+
     if (status) updates.status = status;
     const now = new Date().toISOString();
 
@@ -2485,7 +2508,15 @@ export async function PATCH(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true });
+    // Echo the stored end date back when the caller changed it, so the UI
+    // renders what the server actually holds rather than its own optimistic
+    // guess. Omitted otherwise: every other PATCH shape answers `{success}`
+    // and adding a field to all of them would be a change nobody asked for.
+    return NextResponse.json(
+      hasEndDateUpdate
+        ? { success: true, end_date: (updates.end_date as string | null) ?? null }
+        : { success: true },
+    );
   } catch (err) {
     // 01 §1.3, Phase E item 14. This was a bare `catch {}` answering 400 for
     // everything: an AuthzError that means 403 or 404, a schema failure, and a

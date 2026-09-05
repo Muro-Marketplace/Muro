@@ -5,13 +5,15 @@ Supabase's template tokens (`{{ .ConfirmationURL }}`, `{{ .Email }}`,
 `{{ .Data.first_name | default: "there" }}`) baked in. Copy each into the
 matching slot in **Supabase Dashboard → Authentication → Email Templates**.
 
-> **Heads-up:** until you complete the SMTP setup below, Supabase sends
-> auth emails from `noreply@mail.app.supabase.io` — that's why password
-> resets are arriving from a Supabase address rather than Wallplace. The
-> branded HTML is already in the dashboard, but the *sender* needs the
-> SMTP swap to flip to `noreply@tx.wallplace.co.uk`. Do the SMTP step
-> first, then paste these templates so the next reset lands fully
-> on-brand.
+> **Re-paste needed, 5 September 2026.** These four files were regenerated
+> after the footer stopped naming "Wallplace Ltd", a company that does not
+> exist yet. The copies sitting in the Supabase dashboard still carry the old
+> footer, so paste all four again. Only one line changed in each.
+>
+> **On the sender:** unless the SMTP step below is done, Supabase sends these
+> from `noreply@mail.app.supabase.io`, so a password reset arrives from a
+> Supabase address wearing Wallplace's clothes. The templates control the
+> look; only the SMTP swap changes who it comes from.
 
 | File                  | Supabase slot                | Subject suggestion                           |
 | --------------------- | ---------------------------- | -------------------------------------------- |

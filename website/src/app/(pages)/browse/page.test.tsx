@@ -344,3 +344,156 @@ describe("browse page — seed artists carry the Sample pill from first paint (F
     expect(pills.length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Collapsible desktop filter sidebar.
+//
+// The sidebar is `hidden lg:block`, so below lg it never showed anyway and
+// these behaviours are desktop-only. jsdom reports innerWidth 1024, which is
+// the lg breakpoint, so the gallery masonry's JS column count is exercised for
+// real here (3 open, 4 collapsed). The two CSS grids can't be measured in
+// jsdom — Tailwind never runs — so those assert the breakpoint classes.
+// ---------------------------------------------------------------------------
+
+const COLLAPSED_KEY = "wallplace-browse-filters-collapsed";
+
+/**
+ * jsdom in this project hands back a `localStorage` that is a bare object with
+ * no Storage methods, so anything that touches it has to bring its own. This
+ * is a minimal in-memory stand-in; `failWrites` reproduces the privacy-mode
+ * case where setItem throws.
+ */
+function memoryStorage(failWrites = false) {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k: string) => (map.has(k) ? map.get(k)! : null),
+    setItem: (k: string, v: string) => {
+      if (failWrites) throw new Error("storage disabled");
+      map.set(k, String(v));
+    },
+    removeItem: (k: string) => void map.delete(k),
+    clear: () => map.clear(),
+    key: (i: number) => Array.from(map.keys())[i] ?? null,
+    get length() {
+      return map.size;
+    },
+  };
+}
+
+/** The sidebar's own collapse chevron. */
+function hideButton(): HTMLElement {
+  const el = document.querySelector('[data-testid="hide-filters"]');
+  if (!el) throw new Error("collapse chevron not rendered");
+  return el as HTMLElement;
+}
+
+/** The toolbar button that brings the sidebar back. */
+function showButton(): HTMLElement {
+  const el = document.querySelector('[data-testid="show-filters"]');
+  if (!el) throw new Error("show-filters button not rendered");
+  return el as HTMLElement;
+}
+
+function sidebar(): HTMLElement | null {
+  return document.getElementById("browse-filters");
+}
+
+describe("browse page — collapsible desktop filter sidebar", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", memoryStorage());
+  });
+
+  it("starts open, with no restore button competing with the sidebar", async () => {
+    render(<BrowsePortfoliosPage />);
+
+    await waitFor(() => expect(sidebar()).not.toBeNull());
+    expect(document.querySelector('[data-testid="show-filters"]')).toBeNull();
+    expect(hideButton().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("collapsing the gallery sidebar takes the masonry from 3 columns to 4", async () => {
+    render(<BrowsePortfoliosPage />);
+
+    const masonry = await screen.findByTestId("gallery-masonry");
+    expect(masonry.children.length).toBe(3);
+
+    fireEvent.click(hideButton());
+
+    await waitFor(() => expect(sidebar()).toBeNull());
+    expect(screen.getByTestId("gallery-masonry").children.length).toBe(4);
+    // The way back is in the toolbar, and it says the panel is hidden.
+    expect(showButton().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("collapsing the portfolios sidebar takes the grid from 3 columns to 4", async () => {
+    currentParams = new URLSearchParams("view=portfolios");
+    setLiveUrl("view=portfolios");
+    render(<BrowsePortfoliosPage />);
+
+    const grid = await screen.findByTestId("portfolios-grid");
+    expect(grid.className).toContain("xl:grid-cols-3");
+    expect(grid.className).not.toContain("xl:grid-cols-4");
+
+    fireEvent.click(hideButton());
+
+    await waitFor(() => expect(sidebar()).toBeNull());
+    const wide = screen.getByTestId("portfolios-grid");
+    expect(wide.className).toContain("xl:grid-cols-4");
+    // lg gains a column too, rather than jumping straight to 4 and leaving
+    // 229px artist cards at a 1024px viewport.
+    expect(wide.className).toContain("lg:grid-cols-3");
+  });
+
+  it("restores the sidebar from the toolbar button", async () => {
+    render(<BrowsePortfoliosPage />);
+    await waitFor(() => expect(sidebar()).not.toBeNull());
+
+    fireEvent.click(hideButton());
+    await waitFor(() => expect(sidebar()).toBeNull());
+
+    fireEvent.click(showButton());
+
+    await waitFor(() => expect(sidebar()).not.toBeNull());
+    expect(document.querySelector('[data-testid="show-filters"]')).toBeNull();
+    expect(screen.getByTestId("gallery-masonry").children.length).toBe(3);
+  });
+
+  it("remembers the collapsed choice across a remount", async () => {
+    const first = render(<BrowsePortfoliosPage />);
+    await waitFor(() => expect(sidebar()).not.toBeNull());
+    fireEvent.click(hideButton());
+    await waitFor(() => expect(localStorage.getItem(COLLAPSED_KEY)).toBe("1"));
+    first.unmount();
+
+    render(<BrowsePortfoliosPage />);
+
+    // Hydrates from storage on mount: no sidebar, restore button present.
+    await waitFor(() => expect(document.querySelector('[data-testid="show-filters"]')).not.toBeNull());
+    expect(sidebar()).toBeNull();
+  });
+
+  it("remembers the open choice too, so reopening is not undone by a reload", async () => {
+    localStorage.setItem(COLLAPSED_KEY, "1");
+    const first = render(<BrowsePortfoliosPage />);
+    await waitFor(() => expect(document.querySelector('[data-testid="show-filters"]')).not.toBeNull());
+    fireEvent.click(showButton());
+    await waitFor(() => expect(localStorage.getItem(COLLAPSED_KEY)).toBe("0"));
+    first.unmount();
+
+    render(<BrowsePortfoliosPage />);
+
+    await waitFor(() => expect(sidebar()).not.toBeNull());
+  });
+
+  it("survives storage being unavailable", async () => {
+    vi.stubGlobal("localStorage", memoryStorage(true));
+
+    render(<BrowsePortfoliosPage />);
+    await waitFor(() => expect(sidebar()).not.toBeNull());
+
+    // The toggle still works for this page view, it just isn't remembered.
+    fireEvent.click(hideButton());
+
+    await waitFor(() => expect(sidebar()).toBeNull());
+  });
+});
