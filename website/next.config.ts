@@ -68,8 +68,24 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "uwkuhygwvasdzwsusiym.supabase.co" },
     ],
     formats: ["image/avif", "image/webp"],
-    deviceSizes: [640, 750, 828, 1080, 1200],
+    // The largest entry here is the most detail any `sizes="100vw"` image can
+    // ever be served, because Next builds the srcset from this list alone.
+    // Capped at 1200, every full-bleed background on the site (the auth pages,
+    // /programmes, blog heroes) was upscaled by the browser: a 1512pt MacBook
+    // is 3024 device pixels wide, so it stretched a 1200px file by 2.5x, and
+    // the sign-in backdrop looked soft on every Retina screen. The top three
+    // restore Next's own defaults. They cost nothing on user uploads, which
+    // are client-resized to 2000px before upload: sharp resizes
+    // `withoutEnlargement`, so the 3840 slot on a 2000px original returns the
+    // 2000px image rather than an inflated one.
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    // Next 16 defaults this to [75] and the optimiser answers 400 for any
+    // quality outside the list, so every `quality={…}` the app passes has to
+    // be declared here or the image simply fails to load. 45/55/60 are the
+    // browse-grid and lightbox thumbnails, 80–92 the detail, venue and hero
+    // images, 75 the framework default used wherever no quality prop is set.
+    qualities: [45, 55, 60, 75, 80, 85, 88, 90, 92],
     minimumCacheTTL: 2592000, // 30 days
     // Dev-only escape hatch: the Next.js image proxy uses Node's
     // native fetch to download upstream images. On macOS + Node 25,
