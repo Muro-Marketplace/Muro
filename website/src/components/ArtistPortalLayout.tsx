@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/api-client";
+import { fetchArtistProfileShared } from "@/lib/artist-profile-source";
 import { loginPathWithNext } from "@/lib/login-redirect";
 import LoadErrorState from "./LoadErrorState";
 import {
@@ -214,11 +214,10 @@ export default function ArtistPortalLayout({
     }
     let cancelled = false;
     setProfileCheck("loading");
-    authFetch("/api/artist-profile")
-      .then(async (r) => {
-        if (r.ok === false) throw new Error(`profile check failed (${r.status})`);
-        return r.json();
-      })
+    // Shared with PortalGuard and the page's own useCurrentArtist: one request
+    // for all three on the portal's first load, rather than three identical
+    // ones each carrying every artist_works row.
+    fetchArtistProfileShared(user.id)
       .then((data) => {
         if (cancelled) return;
         // Brand-new artist accounts (signed up, never approved /
@@ -229,7 +228,7 @@ export default function ArtistPortalLayout({
         // Send them through /apply instead so they can complete the
         // application. Once an admin approves it the profile row is
         // created and this guard naturally lets them in.
-        if (!data?.profile) {
+        if (!data.profile) {
           setProfileCheck("missing");
           router.replace("/apply");
           return;

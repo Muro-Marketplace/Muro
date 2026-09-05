@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { authFetch } from "@/lib/api-client";
+import { fetchArtistProfileShared } from "@/lib/artist-profile-source";
 import { portalPathForRole, parseRole } from "@/lib/auth-roles";
 import { loginPathWithNext } from "@/lib/login-redirect";
 import { trialOffer } from "@/lib/pricing";
@@ -122,7 +123,28 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
     router.replace(portalPathForRole(parseRole(userType)));
   }, [user, loading, userType, allowedType, ownRoles, router, showToast]);
 
-  // Check subscription for artists
+  /**
+   * Billing and settings stay reachable whatever the subscription says, so a
+   * lapsed subscriber can go and fix it. That is a property of the CURRENT
+   * path, so it is evaluated here at render.
+   *
+   * It used to be an early return inside the effect below, which put
+   * `pathname` in that effect's dependencies and re-ran the whole profile
+   * fetch on EVERY navigation inside the portal. The check is unchanged; only
+   * where it happens is.
+   */
+  const billingExempt =
+    allowedType === "artist" &&
+    (pathname === "/artist-portal/billing" || pathname === "/artist-portal/settings");
+
+  // Check subscription for artists.
+  //
+  // Runs once per session now that the portal chrome lives in the route layout
+  // (see app/(pages)/artist-portal/layout.tsx), and shares its request with the
+  // chrome and the page's own useCurrentArtist. review_status is set by admin
+  // review and subscription_status by Stripe, and every path that changes
+  // either one returns through a full page load, so there is nothing for an
+  // in-tab refresh to pick up.
   useEffect(() => {
     if (allowedType !== "artist" || !user || loading) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -130,16 +152,10 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
       return;
     }
 
-    // Always allow access to billing and settings pages (so users can subscribe/manage)
-    if (pathname === "/artist-portal/billing" || pathname === "/artist-portal/settings") {
-      setSubscriptionChecked(true);
-      setSubscriptionOk(true);
-      return;
-    }
-
-    authFetch("/api/artist-profile")
-      .then((res) => res.json())
+    let cancelled = false;
+    fetchArtistProfileShared(user.id)
       .then((data) => {
+        if (cancelled) return;
         const profile = data.profile;
         if (!profile) {
           setSubscriptionOk(true); // New user, let them through to set up
@@ -181,10 +197,16 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
         }
       })
       .catch(() => {
-        setSubscriptionOk(true); // On error, don't block
+        if (!cancelled) setSubscriptionOk(true); // On error, don't block
       })
-      .finally(() => setSubscriptionChecked(true));
-  }, [allowedType, user, loading, pathname]);
+      .finally(() => {
+        if (!cancelled) setSubscriptionChecked(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allowedType, user, loading]);
 
   if (loading || !subscriptionChecked) {
     return (
@@ -239,6 +261,11 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
       </div>
     );
   }
+
+  // Billing and settings render plainly: no plan gate, no review banner. Same
+  // outcome the in-effect early return used to produce by leaving
+  // subscriptionOk true and reviewStatus null on those two paths.
+  if (billingExempt) return <>{children}</>;
 
   // Subscription gate for artists
   if (allowedType === "artist" && !subscriptionOk) {
