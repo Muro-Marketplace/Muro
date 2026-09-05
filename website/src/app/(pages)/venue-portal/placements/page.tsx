@@ -60,6 +60,9 @@ interface PlacementRequest {
   installedAt?: string | null;
   liveFrom?: string | null;
   collectedAt?: string | null;
+  /** Migration 136. The planned end of the placement, YYYY-MM-DD, or null
+   *  for an open-ended arrangement. Drives reminders only. */
+  endDate?: string | null;
   requesterUserId?: string | null;
   artistUserId?: string | null;
   venueUserId?: string | null;
@@ -507,6 +510,7 @@ export default function VenuePlacementsPage() {
         liveFrom: (p.live_from as string | null) ?? null,
         subscriptionStatus: (p.subscription_status as string | null) ?? null,
         collectedAt: (p.collected_at as string | null) ?? null,
+        endDate: (p.end_date as string | null) ?? null,
         // F24/F51: the list API emits the resolved requester as
         // proposed_by_user_id; requester_user_id is a phantom the rows never
         // carry. Read both so Accept/Decline, "Awaiting response" chips and
@@ -1623,6 +1627,7 @@ export default function VenuePlacementsPage() {
                               installedAt: p.installedAt,
                               liveFrom: p.liveFrom,
                               collectedAt: p.collectedAt,
+                              endDate: p.endDate,
                             }}
                             canAdvance={p.status === "Active"}
                             currentUserId={user?.id}
@@ -1634,6 +1639,10 @@ export default function VenuePlacementsPage() {
                               installedAt: next.installedAt ?? x.installedAt,
                               liveFrom: next.liveFrom ?? x.liveFrom,
                               collectedAt: next.collectedAt ?? x.collectedAt,
+                              // Not `?? x.endDate`: null here means the user
+                              // cleared it, and coalescing would put the old
+                              // date straight back on screen.
+                              endDate: next.endDate ?? null,
                             } : x))}
                           />
 
@@ -1941,6 +1950,7 @@ export default function VenuePlacementsPage() {
                         installedAt: p.installedAt,
                         liveFrom: p.liveFrom,
                         collectedAt: p.collectedAt,
+                        endDate: p.endDate,
                       }}
                       canAdvance={p.status === "Active"}
                       onChange={(next) => setPlacements((prev) => prev.map((x) => x.id === p.id ? {
@@ -1951,6 +1961,7 @@ export default function VenuePlacementsPage() {
                         installedAt: next.installedAt ?? x.installedAt,
                         liveFrom: next.liveFrom ?? x.liveFrom,
                         collectedAt: next.collectedAt ?? x.collectedAt,
+                        endDate: next.endDate ?? null,
                       } : x))}
                     />
                     {/* Paid-loan payment status, only shown once the

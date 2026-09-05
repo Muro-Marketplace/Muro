@@ -17,6 +17,7 @@ import {
   type PlacementLifecycle,
 } from "@/lib/placements/status";
 import { canRespond } from "@/lib/placement-permissions";
+import { endDateLabel } from "@/lib/placements/end-date";
 import { deriveArrangementType } from "@/lib/placements/arrangement";
 import PlacementDirectionTag, { directionFor } from "@/components/PlacementDirectionTag";
 import Toggle from "@/components/Toggle";
@@ -63,6 +64,8 @@ interface RemotePlacement extends PlacementLifecycle {
   installed_at: string | null;
   live_from: string | null;
   collected_at: string | null;
+  /** Migration 136: the planned end of the placement, or null for open ended. */
+  end_date?: string | null;
   revenue_earned_gbp: number | null;
   message: string | null;
   created_at: string;
@@ -743,6 +746,11 @@ export default function PlacementContextPanel({
             });
           })()}
         </ol>
+
+        {/* Planned end date (migration 136). Read-only here; both portals'
+            placement pages are where it is set. Stated as a plan, because
+            reaching it does not end anything by itself. */}
+        <p className="mt-2 text-[10px] text-muted">{endDateLabel(p.end_date)}</p>
 
         {/* Inline action row, Accept / Counter / Decline when Pending,
             Mark next stage when Active. */}

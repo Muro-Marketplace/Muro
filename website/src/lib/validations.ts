@@ -286,6 +286,16 @@ export const placementUpdateSchema = z.object({
   // (the live-on-wall prompt sends them together).
   inStorePrice: z.number().positive().max(100_000).nullable().optional(),
   inStoreFrameIncluded: z.boolean().optional(),
+  // Migration 136. The planned end of the placement, a plain YYYY-MM-DD date
+  // that either party may set or clear. Explicit null clears it back to open
+  // ended, which is a legitimate state rather than a missing answer.
+  //
+  // Kept as a loose string here on purpose: a zod format failure would land in
+  // this route's single catch-all 400 ("ID and valid status required"), which
+  // says nothing useful about a bad date. The shape and the "not before the
+  // placement existed" rule are both checked by validateEndDate() in the
+  // route, which can name the actual problem and knows the row's created_at.
+  endDate: z.string().max(40).nullable().optional(),
   // A counter offer keeps the row pending but revises the terms and hands the
   // "needs to respond" role back to the original requester.
   counter: z.object({
