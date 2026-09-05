@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
 import EmptyState from "@/components/EmptyState";
+import LoadErrorState from "@/components/LoadErrorState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
@@ -50,22 +51,39 @@ function VenueOrdersContent() {
   const initialTab: OrderTab = searchParams?.get("tab") === "purchases" ? "purchases" : "sales";
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  // LA-C036: a failed request is not an empty order book.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
   const [venueSlug, setVenueSlug] = useState<string>("");
   const [tab, setTab] = useState<OrderTab>(initialTab);
 
-  useEffect(() => {
+  const loadOrders = useCallback(() => {
     authFetch("/api/orders")
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || `orders load failed (${r.status})`);
+        return data;
+      })
       .then((data) => {
         if (data.orders) setOrders(data.orders);
         if (data.userEmail) setUserEmail(data.userEmail);
         if (data.venueSlug) setVenueSlug(data.venueSlug);
+        setLoadError(null);
       })
-      .catch(() => {})
+      .catch(() => setLoadError("Could not load your orders. Please try again."))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  function retryLoad() {
+    setLoading(true);
+    setLoadError(null);
+    loadOrders();
+  }
 
   // Classify each order: placement-driven sale (venue-attributed revenue)
   // vs a purchase the venue itself made. Legacy orders without venue_slug
@@ -275,6 +293,8 @@ function VenueOrdersContent() {
       {/* Order list */}
       {loading ? (
         <p className="text-muted text-sm py-12 text-center">Loading orders...</p>
+      ) : loadError ? (
+        <LoadErrorState message={loadError} onRetry={retryLoad} />
       ) : visibleOrders.length === 0 ? (
         <EmptyState
           title={tab === "sales" ? "No placement sales yet" : "Nothing purchased yet"}
