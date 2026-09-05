@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
+import { loginPathWithNext } from "@/lib/login-redirect";
 import {
   artistPortalNav,
   activeGroupFor,
@@ -178,7 +179,13 @@ export default function ArtistPortalLayout({
   }, [activePath]);
 
   useEffect(() => {
-    if (!loading && (!user || userType !== "artist")) {
+    if (loading) return;
+    if (!user) {
+      // LA-C004: a signed-out visitor keeps the deep link they arrived on.
+      router.replace(loginPathWithNext(window.location.pathname, window.location.search));
+      return;
+    }
+    if (userType !== "artist") {
       router.replace("/login");
     }
   }, [loading, user, userType, router]);
