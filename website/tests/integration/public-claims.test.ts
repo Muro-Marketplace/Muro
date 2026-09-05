@@ -93,4 +93,8 @@ describe("public claims the site cannot evidence stay out", () => {
   it("the pricing hero does not say the tiers differ by platform fee (LA-C027)", () => {
     expect(read("src/app/(pages)/pricing/page.tsx")).not.toMatch(/difference\s+is visibility and the platform fee/);
   });
+
+  it("the FAQ does not promise lower platform fees on higher tiers (LA-C023)", () => {
+    expect(read("src/app/(pages)/faqs/page.tsx")).not.toMatch(/lower platform\s+fees/);
+  });
 });

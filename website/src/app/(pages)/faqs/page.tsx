@@ -50,8 +50,9 @@ const artistFaqs: FaqEntry[] = [
         <p>
           It is free to apply. Once accepted, membership starts from
           £9.99/month (Core plan).{" "}{foundingOfferLine()}{" "}Higher tiers
-          (Premium at £24.99/month, Pro at £49.99/month) offer lower platform
-          fees on sales and more visibility.
+          (Premium at £24.99/month, Pro at £49.99/month) give you more works,
+          more active placements, more venue approaches and more visibility.
+          The 15% platform fee on sales is the same on every plan.
         </p>
         <p>
           See our <Link href="/pricing">pricing page</Link> for the full breakdown,
