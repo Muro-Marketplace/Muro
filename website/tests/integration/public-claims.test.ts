@@ -76,4 +76,11 @@ describe("public claims the site cannot evidence stay out", () => {
     expect(pricing).toMatch(/PROGRAMME_PIECE_STINT_MONTHS/);
     expect(read("src/app/(pages)/artist-agreement/page.tsx")).toMatch(/9A\. Programme Rent/);
   });
+
+  it("the pricing comparison table reads the venue-approach cap from OUTREACH_WEEKLY_LIMIT (LA-C029)", () => {
+    const pricing = read("src/app/(pages)/pricing/page.tsx");
+    expect(pricing).not.toMatch(/"\d+ a week"/);
+    expect(pricing).toMatch(/OUTREACH_WEEKLY_LIMIT\.core\} a week/);
+    expect(pricing).toMatch(/OUTREACH_WEEKLY_LIMIT\.pro\} a week/);
+  });
 });

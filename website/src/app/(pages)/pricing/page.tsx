@@ -39,9 +39,9 @@ const comparisonRows = [
   },
   {
     feature: "New venue approaches",
-    core: "3 a week",
-    premium: "6 a week",
-    pro: "15 a week",
+    core: `${OUTREACH_WEEKLY_LIMIT.core} a week`,
+    premium: `${OUTREACH_WEEKLY_LIMIT.premium} a week`,
+    pro: `${OUTREACH_WEEKLY_LIMIT.pro} a week`,
   },
   {
     feature: "Venue matching",
