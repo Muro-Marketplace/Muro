@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import { useToast } from "@/context/ToastContext";
@@ -127,7 +126,7 @@ export default function AdminApplicationsPage() {
   ];
 
   return (
-    <AdminPortalLayout activePath="/admin/applications">
+    <>
       <h1 className="text-2xl lg:text-3xl mb-6">Applications</h1>
 
       {/* Toast */}
@@ -365,6 +364,6 @@ export default function AdminApplicationsPage() {
           ))}
         </div>
       )}
-    </AdminPortalLayout>
+    </>
   );
 }

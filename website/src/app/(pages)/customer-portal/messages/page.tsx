@@ -11,7 +11,6 @@
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
 
 function CustomerMessagesContent() {
@@ -23,7 +22,7 @@ function CustomerMessagesContent() {
   const artistName = searchParams.get("artistName");
 
   return (
-    <CustomerPortalLayout>
+    <>
       <div className="mb-6">
         <h1 className="text-2xl lg:text-3xl">Messages</h1>
         <p className="text-sm text-muted mt-1">How contacting artists works</p>
@@ -45,13 +44,13 @@ function CustomerMessagesContent() {
           secondaryCta={artistSlug ? { label: "Browse all artists", href: "/browse" } : undefined}
         />
       </div>
-    </CustomerPortalLayout>
+    </>
   );
 }
 
 export default function CustomerMessagesPage() {
   return (
-    <Suspense fallback={<CustomerPortalLayout><p className="text-muted text-sm py-12 text-center">Loading...</p></CustomerPortalLayout>}>
+    <Suspense fallback={<><p className="text-muted text-sm py-12 text-center">Loading...</p></>}>
       <CustomerMessagesContent />
     </Suspense>
   );

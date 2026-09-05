@@ -10,7 +10,6 @@
 // one control that actually moves money.
 
 import { useState, useEffect } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 
 interface RefundOrder {
@@ -128,7 +127,7 @@ export default function AdminRefundsPage() {
   const pendingCount = requests.filter((r) => r.status === "pending").length;
 
   return (
-    <AdminPortalLayout activePath="/admin/refunds">
+    <>
       <div className="flex items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="font-serif text-2xl text-foreground mb-1">Refund requests</h1>
@@ -240,7 +239,7 @@ export default function AdminRefundsPage() {
           })}
         </div>
       )}
-    </AdminPortalLayout>
+    </>
   );
 }
 

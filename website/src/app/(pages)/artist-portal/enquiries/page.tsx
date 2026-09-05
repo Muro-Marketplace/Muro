@@ -11,7 +11,6 @@
 // triggers an email, so this page is the tidy-up view, not the only signal.
 
 import { useEffect, useState } from "react";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { enquiryTypeLabel } from "@/lib/enquiry-types";
@@ -106,7 +105,7 @@ export default function ArtistEnquiriesPage() {
   });
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/enquiries">
+    <>
       <div className="mb-6">
         <h1 className="text-2xl lg:text-3xl">Enquiries</h1>
         <p className="text-sm text-muted mt-1">
@@ -229,6 +228,6 @@ export default function ArtistEnquiriesPage() {
           })}
         </div>
       )}
-    </ArtistPortalLayout>
+    </>
   );
 }

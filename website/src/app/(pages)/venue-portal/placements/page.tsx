@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import PlacementStepper, { type PlacementStepperData } from "@/components/PlacementStepper";
 import PaidLoanPaymentChip from "@/components/PaidLoanPaymentChip";
 import PlacementActionItems from "@/components/PlacementActionItems";
@@ -909,7 +908,7 @@ export default function VenuePlacementsPage() {
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
 
   return (
-    <VenuePortalLayout>
+    <>
       {/* Row 2187 / production pass 2, P4. The payment setup's success_url
           returns here as ?payment=setup-complete and nothing on the page
           acknowledged it, so a venue who had just entered card details landed
@@ -2124,6 +2123,6 @@ export default function VenuePlacementsPage() {
         }}
         onClose={() => setPendingCancelId(null)}
       />
-    </VenuePortalLayout>
+    </>
   );
 }

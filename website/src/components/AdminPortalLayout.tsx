@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 
@@ -34,13 +34,20 @@ const secondaryItems = [
 
 interface AdminPortalLayoutProps {
   children: React.ReactNode;
-  activePath: string;
+  /**
+   * Optional override for the active route. The chrome is rendered once by
+   * admin/layout.tsx, which passes nothing and lets the layout read the path
+   * itself; the prop is kept so tests can render a given route directly.
+   */
+  activePath?: string;
 }
 
 export default function AdminPortalLayout({
   children,
-  activePath,
+  activePath: activePathProp,
 }: AdminPortalLayoutProps) {
+  const pathname = usePathname();
+  const activePath = activePathProp ?? pathname ?? "/admin";
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);

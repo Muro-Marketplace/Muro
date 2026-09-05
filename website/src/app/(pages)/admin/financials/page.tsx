@@ -3,7 +3,6 @@
 // Phase 2.8 A3. Read-only financials dashboard.
 
 import { useEffect, useState } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch } from "@/lib/api-client";
 
 interface FinancialsResponse {
@@ -63,7 +62,7 @@ export default function AdminFinancialsPage() {
   }, []);
 
   return (
-    <AdminPortalLayout activePath="/admin/financials">
+    <>
       <div className="max-w-6xl px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl lg:text-3xl mb-2">Financials</h1>
@@ -151,7 +150,7 @@ export default function AdminFinancialsPage() {
           </div>
         ) : null}
       </div>
-    </AdminPortalLayout>
+    </>
   );
 }
 

@@ -11,7 +11,6 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import { useAuth } from "@/context/AuthContext";
 import { resizeImage } from "@/lib/image";
 import { isFlagOn } from "@/lib/feature-flags";
@@ -55,7 +54,7 @@ export default function NewArtistShowroomPage() {
 
   if (!flagOn) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/showroom">
+      <>
         <div className="py-16 text-center">
           <h1 className="font-serif text-2xl text-foreground mb-2">
             Showroom coming soon
@@ -64,7 +63,7 @@ export default function NewArtistShowroomPage() {
             The wall visualiser is in private beta.
           </p>
         </div>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -265,7 +264,7 @@ export default function NewArtistShowroomPage() {
   }
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/showroom">
+    <>
       <div className="max-w-2xl">
         <div className="mb-6">
           <Link
@@ -584,7 +583,7 @@ export default function NewArtistShowroomPage() {
           </div>
         </form>
       </div>
-    </ArtistPortalLayout>
+    </>
   );
 }
 

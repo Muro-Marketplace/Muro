@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch } from "@/lib/api-client";
 
 interface Stats {
@@ -79,7 +78,7 @@ export default function AdminDashboard() {
   }, []);
 
   return (
-    <AdminPortalLayout activePath="/admin">
+    <>
       <h1 className="text-2xl lg:text-3xl mb-8">Admin Dashboard</h1>
 
       {loading ? (
@@ -242,6 +241,6 @@ export default function AdminDashboard() {
           )}
         </>
       )}
-    </AdminPortalLayout>
+    </>
   );
 }

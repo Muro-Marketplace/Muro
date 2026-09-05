@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import Button from "@/components/Button";
 import { type ArtistWork, type SizePricing } from "@/data/artists";
 import { uploadImage } from "@/lib/upload";
@@ -489,9 +488,9 @@ export default function PortfolioPage() {
 
   if (artistLoading || !artist) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/portfolio">
+      <>
         <p className="text-muted text-sm py-12 text-center">{artistLoading ? "Loading..." : "No artist profile found."}</p>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -1933,7 +1932,7 @@ export default function PortfolioPage() {
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/portfolio">
+    <>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <h1 className="text-2xl lg:text-3xl">My Portfolio</h1>
@@ -4056,7 +4055,7 @@ export default function PortfolioPage() {
           </div>
         </div>
       )}
-    </ArtistPortalLayout>
+    </>
   );
 }
 

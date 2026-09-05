@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { loginPathWithNext } from "@/lib/login-redirect";
@@ -151,13 +151,21 @@ function SidebarGroup({ group, activePath, onNavigate }: SidebarGroupProps) {
 
 interface ArtistPortalLayoutProps {
   children: React.ReactNode;
-  activePath: string;
+  /**
+   * Optional override for the active route. The chrome is rendered once by
+   * artist-portal/layout.tsx, which passes nothing and lets the layout read
+   * the path itself; the prop is kept so tests can render a given route
+   * directly. Same shape VenuePortalLayout already used.
+   */
+  activePath?: string;
 }
 
 export default function ArtistPortalLayout({
   children,
-  activePath,
+  activePath: activePathProp,
 }: ArtistPortalLayoutProps) {
+  const pathname = usePathname();
+  const activePath = activePathProp ?? pathname ?? "/artist-portal";
   const router = useRouter();
   const { user, loading, userType, displayName, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);

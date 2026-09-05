@@ -11,7 +11,6 @@
 // same endpoint the unified /admin/moderation queue uses, not a second one.
 
 import { useCallback, useEffect, useState } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import type { ModerationPayload } from "@/lib/moderation/types";
 
@@ -81,7 +80,7 @@ export default function FeatureRequestsAdminPage() {
   }
 
   return (
-    <AdminPortalLayout activePath="/admin/feature-requests">
+    <>
       <div className="max-w-4xl px-4 sm:px-6 py-8">
         <div className="mb-8">
           <h1 className="text-2xl lg:text-3xl mb-2">Feature requests</h1>
@@ -177,6 +176,6 @@ export default function FeatureRequestsAdminPage() {
           </ul>
         )}
       </div>
-    </AdminPortalLayout>
+    </>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import LoadErrorState from "@/components/LoadErrorState";
 import PlacementActionItems from "@/components/PlacementActionItems";
 import { useAuth } from "@/context/AuthContext";
@@ -274,7 +273,7 @@ export default function VenueDashboardPage() {
   }
 
   return (
-    <VenuePortalLayout>
+    <>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
@@ -595,6 +594,6 @@ export default function VenueDashboardPage() {
           </ul>
         )}
       </div>
-    </VenuePortalLayout>
+    </>
   );
 }

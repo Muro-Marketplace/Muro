@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
 import LoadErrorState from "@/components/LoadErrorState";
@@ -181,7 +180,7 @@ export default function CustomerAddressesPage() {
     form.country.length > 0;
 
   return (
-    <CustomerPortalLayout>
+    <>
       <div className="mb-8 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl lg:text-3xl">Addresses</h1>
@@ -378,6 +377,6 @@ export default function CustomerAddressesPage() {
         onConfirm={confirmDelete}
         onClose={() => setPendingDelete(null)}
       />
-    </CustomerPortalLayout>
+    </>
   );
 }

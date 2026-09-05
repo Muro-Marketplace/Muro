@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { notFound, useParams } from "next/navigation";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import BlogEditor from "@/components/BlogEditor";
 import { authFetch } from "@/lib/api-client";
 import { isFlagOn } from "@/lib/feature-flags";
@@ -53,7 +52,7 @@ export default function EditBlogPage() {
   }, [id]);
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/blogs">
+    <>
       {loading ? (
         <p className="text-sm text-muted px-6 py-8">Loading…</p>
       ) : error ? (
@@ -68,6 +67,6 @@ export default function EditBlogPage() {
           status={blog.status}
         />
       ) : null}
-    </ArtistPortalLayout>
+    </>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import AccountDangerZone from "@/components/AccountDangerZone";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -47,7 +46,7 @@ export default function CustomerSettingsPage() {
   }
 
   return (
-    <CustomerPortalLayout>
+    <>
       <div className="mb-8">
         <h1 className="text-2xl lg:text-3xl">Settings</h1>
         <p className="text-sm text-muted mt-1">Manage your account and preferences</p>
@@ -125,6 +124,6 @@ export default function CustomerSettingsPage() {
 
         <AccountDangerZone />
       </div>
-    </CustomerPortalLayout>
+    </>
   );
 }

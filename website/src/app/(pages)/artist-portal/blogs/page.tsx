@@ -7,7 +7,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import LoadErrorState from "@/components/LoadErrorState";
 import { ApiError, authFetch, mutate } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
@@ -112,7 +111,7 @@ export default function ArtistBlogsPage() {
   }
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/blogs">
+    <>
       <div className="max-w-3xl px-4 sm:px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -183,6 +182,6 @@ export default function ArtistBlogsPage() {
           </ul>
         )}
       </div>
-    </ArtistPortalLayout>
+    </>
   );
 }
