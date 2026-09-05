@@ -117,6 +117,7 @@ export default function AnalyticsPage() {
 
   // Fetch engagement analytics (reacts to date range changes)
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnalyticsLoading(true);
     authFetch(`/api/analytics/artist?range=${dateRangeToParam(dateRange)}`)
       .then(okJson)
