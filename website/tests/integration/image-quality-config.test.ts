@@ -92,7 +92,17 @@ const BACKDROPS: { page: string; photo: string; ceiling: number | null }[] = [
   // centre crop that exists. Asking Unsplash for more only has it enlarge the
   // same detail into a bigger file, so this one is capped at native.
   { page: "src/app/(pages)/how-it-works/HowItWorksClient.tsx", photo: "photo-1460661419201-fd4cecdf8a8b", ceiling: 2448 },
+  // Homepage hero: master is 3449x4368, so 3449x1940 is the whole 16:9 crop.
+  { page: "src/app/page.tsx", photo: "photo-1541961017774-22349e4a1262", ceiling: 3449 },
 ];
+
+/**
+ * The homepage's curated banner is full-bleed too, but its box is short and
+ * wide (h-56 lg:h-72), so the width binds and object-cover adds no overdraw.
+ * 100vw is right there, which is why it is not in BACKDROPS: it needs the
+ * native-width rule without the overdraw rule.
+ */
+const BANNER = { page: "src/app/page.tsx", photo: "photo-1460661419201-fd4cecdf8a8b", ceiling: 2448 };
 
 describe("full-bleed backdrop resolution", () => {
   it("requests each source at the widest size its master actually holds", () => {
@@ -126,5 +136,14 @@ describe("full-bleed backdrop resolution", () => {
       expect(sizes, `${page} backdrop has no sizes, so it defaults to 100vw`).toBeTruthy();
       expect(sizes, `${page} backdrop sizes`).toMatch(/max-width:\s*640px\)\s*\d{3}vw/);
     }
+  });
+
+  it("requests the curated banner at its master's native width", () => {
+    const src = readFileSync(path.join(ROOT, BANNER.page), "utf8").match(
+      new RegExp(String.raw`images\.unsplash\.com/${BANNER.photo}\?([^"]*)`),
+    );
+    expect(src, "homepage curated banner").toBeTruthy();
+    const params = new URLSearchParams(src![1].replace(/&amp;/g, "&"));
+    expect(Number(params.get("w"))).toBe(BANNER.ceiling);
   });
 });

@@ -84,12 +84,35 @@ export default function Home() {
       <section className="relative min-h-[110vh] sm:min-h-screen flex flex-col">
         {/* Hero background image – scoped to hero only */}
         <div className="absolute inset-0 -z-10">
+          {/* Resolution, same story as the auth pages and how-it-works. This
+              is the site's LCP image and it was the worst off: w=1920 with no
+              `sizes`, so Next defaulted to 100vw and a 1440pt screen at 2x
+              needed 2880px of a 1920px file. The master is 3449x4368, so
+              3449x1940 is the whole 16:9 centre crop that exists; asking for
+              3840 would only have Unsplash enlarge it.
+
+              `sizes` carries the object-cover overdraw. The section is
+              min-h-[110vh] on mobile, so the height binds and the image paints
+              about four times the viewport width, while browsers pick from the
+              width alone. Reasoning in full in (pages)/login/page.tsx.
+
+              quality is 60 here, lower than the 80 the auth pages use, and
+              deliberately so. This is the LCP image on the busiest page, and
+              unlike the soft abstract on the auth pages it is high-frequency
+              paint texture, so the encoder has real work to do and the file
+              grows fast. Measured against the master with this gradient over
+              it, the live 1200px@q75 sat 3.19/255 off; 3449px@q60 is 0.70 for
+              376KB and q80 is 0.42 for 1023KB. Nearly four fifths of the win
+              is in the resolution, so the last 0.28 is not worth 647KB on the
+              image that decides this page's LCP. */}
           <Image
-            src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=1920&h=1080&fit=crop&crop=center"
+            src="https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=3449&h=1940&fit=crop&crop=center&q=92&fm=jpg"
             alt="Close-up of textured paint strokes on canvas"
             fill
             className="object-cover"
             priority
+            quality={60}
+            sizes="(max-width: 640px) 400vw, (max-width: 1024px) 250vw, 100vw"
           />
           <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/40" />
         </div>
@@ -299,19 +322,19 @@ export default function Home() {
 
                 <div className="hidden sm:grid grid-cols-5 grid-rows-4 gap-2 aspect-square">
                   <div className="col-span-3 row-span-2 relative rounded-sm overflow-hidden">
-                    <Image src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&h=400&fit=crop" alt="Moody urban street photography" fill className="object-cover" sizes="25vw" />
+                    <Image src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=900&h=600&fit=crop" alt="Moody urban street photography" fill className="object-cover" sizes="25vw" />
                   </div>
                   <div className="col-span-2 row-span-1 relative rounded-sm overflow-hidden">
-                    <Image src="https://images.unsplash.com/photo-1418065460487-3e41a6c84dc5?w=400&h=400&fit=crop" alt="Misty forest landscape" fill className="object-cover" sizes="15vw" />
+                    <Image src="https://images.unsplash.com/photo-1418065460487-3e41a6c84dc5?w=640&h=640&fit=crop" alt="Misty forest landscape" fill className="object-cover" sizes="15vw" />
                   </div>
                   <div className="col-span-2 row-span-1 relative rounded-sm overflow-hidden">
-                    <Image src="https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=400&h=200&fit=crop" alt="Vintage film camera" fill className="object-cover" sizes="15vw" />
+                    <Image src="https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=640&h=320&fit=crop" alt="Vintage film camera" fill className="object-cover" sizes="15vw" />
                   </div>
                   <div className="col-span-2 row-span-2 relative rounded-sm overflow-hidden">
-                    <Image src="https://images.unsplash.com/photo-1484406566174-9da000fda645?w=400&h=400&fit=crop" alt="Deer in misty woodland" fill className="object-cover" sizes="15vw" />
+                    <Image src="https://images.unsplash.com/photo-1484406566174-9da000fda645?w=640&h=640&fit=crop" alt="Deer in misty woodland" fill className="object-cover" sizes="15vw" />
                   </div>
                   <div className="col-span-3 row-span-2 relative rounded-sm overflow-hidden">
-                    <Image src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=400&fit=crop" alt="Mountain landscape at night" fill className="object-cover" sizes="25vw" />
+                    <Image src="https://images.unsplash.com/photo-1519681393784-d120267933ba?w=900&h=600&fit=crop" alt="Mountain landscape at night" fill className="object-cover" sizes="25vw" />
                   </div>
                 </div>
               </div>
@@ -465,7 +488,11 @@ export default function Home() {
 
           {/* ─── CURATED BANNER ─── */}
           <section className="relative h-56 lg:h-72 overflow-hidden">
-            <Image src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=400&fit=crop&crop=center" alt="Art being created" fill className="object-cover" />
+            {/* 2448x510 is the full 4.8:1 crop this master (2448x2448) holds;
+                w=1920 left a 1440pt screen at 2x needing 2880px of a 1920px
+                file. Unlike the hero, `sizes` stays 100vw: this band is short
+                and wide, so the width binds and object-cover adds no overdraw. */}
+            <Image src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=2448&h=510&fit=crop&crop=center&q=92&fm=jpg" alt="Art being created" fill className="object-cover" quality={80} sizes="100vw" />
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative h-full flex items-center justify-center text-center px-6">
               <div>
