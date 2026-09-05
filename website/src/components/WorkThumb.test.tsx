@@ -5,6 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 // next/image needs a plain img in jsdom. Forward alt and src only; `fill` and
 // friends are not valid DOM attributes.
 vi.mock("next/image", () => ({
+  // eslint-disable-next-line @next/next/no-img-element
   default: ({ src, alt }: { src: string; alt: string }) => <img src={src} alt={alt} />,
 }));
 

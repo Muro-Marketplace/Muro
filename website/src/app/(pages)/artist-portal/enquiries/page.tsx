@@ -14,12 +14,19 @@ import { useEffect, useState } from "react";
 import EmptyState from "@/components/EmptyState";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { enquiryTypeLabel } from "@/lib/enquiry-types";
+import WorkThumb from "@/components/WorkThumb";
 
 interface Enquiry {
   id: number | string;
   sender_name: string | null;
   sender_email: string | null;
   work_title: string | null;
+  /**
+   * Display copy of the work's image, from enquiries.work_image (migration
+   * 137). Null for a general enquiry and for every row predating it, which
+   * WorkThumb renders as its placeholder.
+   */
+  work_image: string | null;
   enquiry_type: string | null;
   message: string | null;
   status: string | null;
@@ -184,12 +191,17 @@ export default function ArtistEnquiriesPage() {
                   {statusBadge(handled)}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className="text-xs px-2 py-0.5 bg-background border border-border rounded-sm text-foreground/70">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs px-2 py-0.5 bg-background border border-border rounded-sm text-foreground/70 shrink-0">
                     {enquiryTypeLabel(enquiry.enquiry_type)}
                   </span>
                   {enquiry.work_title && (
-                    <span className="text-xs text-muted">Re: {enquiry.work_title}</span>
+                    <span className="flex items-center gap-2 min-w-0">
+                      {/* "Re: Harbour Light" meant nothing without the picture:
+                          the artist had to remember which piece that was. */}
+                      <WorkThumb src={enquiry.work_image} alt={enquiry.work_title} size="sm" />
+                      <span className="text-xs text-muted truncate">Re: {enquiry.work_title}</span>
+                    </span>
                   )}
                 </div>
 
