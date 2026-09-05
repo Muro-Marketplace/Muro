@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { clearCurrentArtistCache } from "@/lib/current-artist-cache";
 
 /**
  * Thrown when a request reaches the server and comes back non-2xx. Carries the
@@ -101,6 +102,13 @@ export async function mutate<T = unknown>(
     throw new ApiError(res.status, message, code, payload);
   }
 
+  // A confirmed write may have changed what /api/artist-profile returns, and
+  // useCurrentArtist seeds the next portal page from a per-tab snapshot of it.
+  // Drop the snapshot so that page fetches, or an artist who saves a work and
+  // comes back within five minutes edits the pre-save copy (owner report,
+  // 5 September 2026). Broad on purpose: a placement or visualizer write can
+  // touch artist_works too, and the cost is one GET on the next mount.
+  clearCurrentArtistCache();
   return payload as T;
 }
 
