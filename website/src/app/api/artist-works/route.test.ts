@@ -374,3 +374,48 @@ describe("POST /api/artist-works post-limit is claimed atomically (row 21)", () 
     expect(upsertWorkMock).not.toHaveBeenCalled();
   });
 });
+
+// Regression from E46a (e53630d8). `sizePricingSchema` was declared as a bare
+// {label, price}, and Zod 4 strips unknown keys, so every save dropped the
+// per-size fields the portfolio form puts on each tier: `quantityAvailable`
+// ("Different quantity per size"), `shippingPrice` (per-size shipping) and the
+// legacy `inStorePrice`. Live rows written before E46a still carry them and the
+// artwork page, cart and checkout read them, so re-saving a work silently wiped
+// its per-size stock caps and delivery prices.
+describe("POST /api/artist-works keeps the per-size fields on each pricing tier", () => {
+  const row = () =>
+    (upsertWorkMock.mock.calls as unknown as Array<[string, Record<string, unknown>]>)[0]?.[1];
+
+  it("saves per-size stock and shipping exactly as the form sent them", async () => {
+    const pricing = [
+      { label: "A3", price: 120, quantityAvailable: 1, shippingPrice: 4.95 },
+      { label: "A2", price: 240, quantityAvailable: 3, shippingPrice: 7.5 },
+    ];
+    const res = await POST(req({ ...baseBody, pricing }));
+    expect(res.status).toBe(200);
+    expect(row()?.pricing).toEqual(pricing);
+  });
+
+  it("keeps a legacy per-size inStorePrice so a re-save does not wipe it", async () => {
+    const pricing = [{ label: "Original", price: 900, inStorePrice: 850 }];
+    const res = await POST(req({ ...baseBody, pricing }));
+    expect(res.status).toBe(200);
+    expect(row()?.pricing).toEqual(pricing);
+  });
+
+  it("rejects negative per-size stock, which the artwork page reads as sold out", async () => {
+    const res = await POST(
+      req({ ...baseBody, pricing: [{ label: "A3", price: 120, quantityAvailable: -1 }] }),
+    );
+    expect(res.status).toBe(400);
+    expect(upsertWorkMock).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.message).toMatch(/pricing\.0\.quantityAvailable/);
+  });
+
+  it("rejects a negative per-size shipping price, which feeds resolveLineShipping", async () => {
+    const res = await POST(req({ ...baseBody, pricing: [{ label: "A3", price: 120, shippingPrice: -5 }] }));
+    expect(res.status).toBe(400);
+    expect(upsertWorkMock).not.toHaveBeenCalled();
+  });
+});
