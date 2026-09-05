@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import VenuePortalLayout from "@/components/VenuePortalLayout";
+import LoadErrorState from "@/components/LoadErrorState";
 import { authFetch } from "@/lib/api-client";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
@@ -38,23 +39,34 @@ export default function VenueAnalyticsPage() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [data, setData] = useState<VenueAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  // LA-C034: a failed request is not a venue nobody has scanned.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  function retryLoad() {
+    setLoadError(null);
+    setReloadKey((k) => k + 1);
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     authFetch(`/api/analytics/venue?range=${dateRangeToParam(dateRange)}`)
-      .then((r) => r.json())
-      .then((d: VenueAnalytics & { error?: string }) => {
-        if (d.error) {
-          console.warn("[venue analytics]", d.error);
-          setData(null);
-        } else {
-          setData(d);
-        }
+      .then(async (r) => {
+        const d = (await r.json()) as VenueAnalytics & { error?: string };
+        if (!r.ok || d.error) throw new Error(d.error || `analytics load failed (${r.status})`);
+        return d;
       })
-      .catch(() => setData(null))
+      .then((d) => {
+        setData(d);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        console.warn("[venue analytics]", err instanceof Error ? err.message : err);
+        setData(null);
+        setLoadError("Could not load your analytics. Please try again.");
+      })
       .finally(() => setLoading(false));
-  }, [dateRange]);
+  }, [dateRange, reloadKey]);
 
   return (
     <VenuePortalLayout>
@@ -91,26 +103,32 @@ export default function VenueAnalyticsPage() {
           </div>
         </div>
 
+        {loadError && (
+          <div className="mb-8">
+            <LoadErrorState message={loadError} onRetry={retryLoad} />
+          </div>
+        )}
+
         {/* Headline tile */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <div className="bg-surface border border-border rounded-sm p-5">
             <p className="text-xs text-muted uppercase tracking-wider">QR scans</p>
             <p className="text-3xl font-serif text-foreground mt-1">
-              {loading ? "…" : data?.totals.qr_scans ?? 0}
+              {loading || loadError ? "…" : data?.totals.qr_scans ?? 0}
             </p>
             <p className="text-[11px] text-muted mt-1">{dateRange.toLowerCase()}</p>
           </div>
           <div className="bg-surface border border-border rounded-sm p-5">
             <p className="text-xs text-muted uppercase tracking-wider">Unique works scanned</p>
             <p className="text-3xl font-serif text-foreground mt-1">
-              {loading ? "…" : data?.top_works.length ?? 0}
+              {loading || loadError ? "…" : data?.top_works.length ?? 0}
             </p>
             <p className="text-[11px] text-muted mt-1">across the period</p>
           </div>
           <div className="bg-surface border border-border rounded-sm p-5">
             <p className="text-xs text-muted uppercase tracking-wider">Artists scanned</p>
             <p className="text-3xl font-serif text-foreground mt-1">
-              {loading ? "…" : data?.top_artists.length ?? 0}
+              {loading || loadError ? "…" : data?.top_artists.length ?? 0}
             </p>
             <p className="text-[11px] text-muted mt-1">across the period</p>
           </div>
@@ -121,7 +139,7 @@ export default function VenueAnalyticsPage() {
           <h2 className="text-lg font-serif text-foreground mb-3">Top scanned works</h2>
           {loading ? (
             <p className="text-sm text-muted">Loading…</p>
-          ) : !data || data.top_works.length === 0 ? (
+          ) : loadError ? null : !data || data.top_works.length === 0 ? (
             <p className="text-sm text-muted">No scans yet. Print QR labels for your placements and we&rsquo;ll start tracking them here.</p>
           ) : (
             <div className="bg-surface border border-border rounded-sm divide-y divide-border">
@@ -183,7 +201,7 @@ export default function VenueAnalyticsPage() {
           <h2 className="text-lg font-serif text-foreground mb-3">Top scanned artists</h2>
           {loading ? (
             <p className="text-sm text-muted">Loading…</p>
-          ) : !data || data.top_artists.length === 0 ? (
+          ) : loadError ? null : !data || data.top_artists.length === 0 ? (
             <p className="text-sm text-muted">No scans yet.</p>
           ) : (
             <div className="bg-surface border border-border rounded-sm divide-y divide-border">
