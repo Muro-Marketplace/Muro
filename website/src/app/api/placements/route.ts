@@ -927,7 +927,7 @@ export async function PATCH(request: Request) {
     // relied on (the phantom requester_user_id rejected the whole query) is gone.
     const { data: existing } = await db
       .from("placements")
-      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, cancelled_at, revenue_share_percent, scheduled_for, created_at, end_date")
+      .select("artist_user_id, venue_user_id, artist_slug, venue_slug, venue, status, proposed_by_user_id, arrangement_type, stripe_subscription_id, monthly_fee_gbp, work_title, work_image, cancelled_at, revenue_share_percent, scheduled_for, created_at, end_date")
       .eq("id", id)
       .single();
 
@@ -2016,6 +2016,7 @@ export async function PATCH(request: Request) {
               title: headline,
               body: stageBodies[stage as string](venueLabel),
               link: `/placements/${encodeURIComponent(id)}`,
+              workImage: (existing.work_image as string | null) ?? null,
               idempotencyKey: `placement_${stage}:${id}:${uid}`,
             }).catch((err) => console.warn("[placements] stage notification failed:", err));
           }
@@ -2084,6 +2085,7 @@ export async function PATCH(request: Request) {
         title: status === "active" ? "Placement accepted" : "Placement declined",
         body: existing.venue || "Venue",
         link: `/placements/${encodeURIComponent(id)}`,
+        workImage: (existing.work_image as string | null) ?? null,
       }).catch((err) => console.warn("[placements] createNotification failed:", err));
 
       try {
@@ -2362,6 +2364,7 @@ export async function PATCH(request: Request) {
           title: "Placement cancelled",
           body: `${cancellerName} cancelled the placement.${billingLine}`,
           link: `/placements/${encodeURIComponent(id)}`,
+          workImage: (existing.work_image as string | null) ?? null,
         }).catch((err) => console.warn("[placements] cancel notification failed:", err));
 
         // Rows 2179-2187. The CANCELLER got nothing at all, and on a paid loan
@@ -2376,6 +2379,7 @@ export async function PATCH(request: Request) {
             title: "Monthly payment cancelled",
             body: `The £${monthlyFee.toFixed(2)} monthly payment for this placement has been cancelled. No further charges.`,
             link: `/placements/${encodeURIComponent(id)}`,
+            workImage: (existing.work_image as string | null) ?? null,
           }).catch((err) => console.warn("[placements] canceller billing notification failed:", err));
         }
 

@@ -10,6 +10,7 @@ import { isRefundEligible } from "@/lib/order-status-labels";
 import { readOrderItem, type RawOrderItem } from "@/lib/order-items";
 import { useUrlState } from "@/lib/use-url-state";
 import type { RefundRequestRow, RefundsListResponse, RefundRequestCreateResponse } from "@/app/api/refunds/types";
+import WorkThumb from "@/components/WorkThumb";
 
 function safeArray(val: unknown): RawOrderItem[] {
   if (Array.isArray(val)) return val;
@@ -329,9 +330,12 @@ function CustomerPortalContent() {
             {safeArray(selected.items).map((raw, i) => {
               const item = readOrderItem(raw);
               return (
-                <div key={i} className="flex items-center justify-between text-sm border-b border-border pb-2">
-                  <span className="text-foreground">{item.title} &times; {item.quantity}</span>
-                  <span className="text-foreground font-medium">{formatCurrency(item.lineTotal, item.currency || selected.currency)}</span>
+                <div key={i} className="flex items-center justify-between gap-3 text-sm border-b border-border pb-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <WorkThumb src={item.image} alt={item.title} size="md" />
+                    <span className="text-foreground min-w-0 truncate">{item.title} &times; {item.quantity}</span>
+                  </div>
+                  <span className="text-foreground font-medium shrink-0">{formatCurrency(item.lineTotal, item.currency || selected.currency)}</span>
                 </div>
               );
             })}

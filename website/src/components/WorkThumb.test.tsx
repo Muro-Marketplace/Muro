@@ -36,6 +36,11 @@ describe("WorkThumb", () => {
     expect(container.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("offers an xs size for the notification drawer's tighter mobile row", () => {
+    const { container } = render(<WorkThumb src="x.jpg" alt="a" size="xs" />);
+    expect(container.firstElementChild?.className).toContain("w-6 h-6");
+  });
+
   it("sizes the box from the size prop", () => {
     const { container } = render(<WorkThumb src="x.jpg" alt="a" size="sm" />);
     expect(container.firstElementChild?.className).toContain("w-8 h-8");

@@ -8,6 +8,7 @@ import { formatPounds } from "@/lib/format-currency";
 import { labelForArrangement } from "@/lib/arrangement-labels";
 import { artistPayoutPounds, artistPostagePounds } from "@/lib/finance/order-money";
 import { venuePerformance } from "@/lib/finance/venue-performance";
+import WorkThumb from "@/components/WorkThumb";
 
 const dateRanges = ["Last 7 days", "Last 30 days", "Last 3 months", "Last 12 months", "All time"];
 
@@ -49,7 +50,7 @@ interface AnalyticsData {
     venue_views: number;
   };
   views_over_time: { date: string; profile_views: number; artwork_views: number; qr_scans: number }[];
-  top_works: { work_id: string; title: string; views: number }[];
+  top_works: { work_id: string; title: string; image: string | null; views: number }[];
   traffic_sources: { source: string; count: number }[];
   venue_viewers: { venue_name: string; venue_type: string; viewed_at: string }[] | null;
   venue_viewer_count: number;
@@ -312,6 +313,7 @@ export default function AnalyticsPage() {
             {analytics.top_works.map((work, i) => (
               <div key={work.work_id} className="px-6 py-3 flex items-center gap-3">
                 <span className="text-xs text-muted w-5 shrink-0 tabular-nums">{i + 1}.</span>
+                <WorkThumb src={work.image} alt={work.title} size="sm" />
                 <span className="text-sm text-foreground truncate flex-1">{work.title}</span>
                 <span className="text-sm text-muted tabular-nums shrink-0">{work.views} view{work.views !== 1 ? "s" : ""}</span>
               </div>

@@ -33,6 +33,7 @@ interface WorkThumbProps {
 // Tailwind needs literal class names, so the sizes are a lookup rather than
 // interpolation.
 const SIZES = {
+  xs: { box: "w-6 h-6", px: "24px" },
   sm: { box: "w-8 h-8", px: "32px" },
   md: { box: "w-10 h-10", px: "40px" },
   lg: { box: "w-12 h-12", px: "48px" },
