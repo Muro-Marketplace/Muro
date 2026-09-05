@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
+import LoadErrorState from "@/components/LoadErrorState";
 import { authFetch } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
 import { labelForArrangement } from "@/lib/arrangement-labels";
@@ -63,11 +64,24 @@ export default function AnalyticsPage() {
   const [orders, setOrders] = useState<{ total?: number; artist_revenue?: number | null; shipping_cost?: number | null; created_at?: string; venue_slug?: string | null; status?: string | null }[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  // LA-C005: every request ended in .catch(() => {}) and the tiles rendered
+  // the zeros as fact. A failure now says so and can be retried.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const okJson = async (r: Response) => {
+    if (!r.ok) throw new Error(`load failed (${r.status})`);
+    return r.json();
+  };
+  function retryLoad() {
+    setLoadError(null);
+    setAnalyticsLoading(true);
+    setReloadKey((k) => k + 1);
+  }
 
   // Fetch placements and orders (unchanged)
   useEffect(() => {
     authFetch("/api/placements")
-      .then((r) => r.json())
+      .then(okJson)
       .then((data) => {
         if (data.placements) {
           setPlacements(data.placements.map((p: Record<string, unknown>) => ({
@@ -93,26 +107,29 @@ export default function AnalyticsPage() {
           })));
         }
       })
-      .catch(() => {});
+      .catch(() => setLoadError("Could not load your analytics. Please try again."));
 
     authFetch("/api/orders")
-      .then((r) => r.json())
+      .then(okJson)
       .then((data) => { if (data.orders) setOrders(data.orders); })
-      .catch(() => {});
-  }, []);
+      .catch(() => setLoadError("Could not load your analytics. Please try again."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   // Fetch engagement analytics (reacts to date range changes)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAnalyticsLoading(true);
     authFetch(`/api/analytics/artist?range=${dateRangeToParam(dateRange)}`)
-      .then((r) => r.json())
+      .then(okJson)
       .then((data) => {
-        if (data.totals) setAnalytics(data);
+        if (!data?.totals) throw new Error("analytics payload missing totals");
+        setAnalytics(data);
       })
-      .catch(() => {})
+      .catch(() => setLoadError("Could not load your analytics. Please try again."))
       .finally(() => setAnalyticsLoading(false));
-  }, [dateRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange, reloadKey]);
 
   // Placement status is stored lower-case ("active"/"pending"/...). The
   // dashboard compares lower-case; this page compared title-case so every
@@ -212,31 +229,37 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {loadError && (
+        <div className="mb-6">
+          <LoadErrorState message={loadError} onRetry={retryLoad} />
+        </div>
+      )}
+
       {/* ── ENGAGEMENT METRICS ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MetricCard
           label="Profile Views"
           value={analytics?.totals.profile_views ?? 0}
           subtitle={dateRange}
-          loading={analyticsLoading}
+          loading={analyticsLoading || !!loadError}
         />
         <MetricCard
           label="Artwork Views"
           value={analytics?.totals.artwork_views ?? 0}
           subtitle={dateRange}
-          loading={analyticsLoading}
+          loading={analyticsLoading || !!loadError}
         />
         <MetricCard
           label="QR Scans"
           value={analytics?.totals.qr_scans ?? 0}
           subtitle={dateRange}
-          loading={analyticsLoading}
+          loading={analyticsLoading || !!loadError}
         />
         <MetricCard
           label="Enquiries"
           value={analytics?.totals.enquiries ?? 0}
           subtitle={dateRange}
-          loading={analyticsLoading}
+          loading={analyticsLoading || !!loadError}
         />
       </div>
 

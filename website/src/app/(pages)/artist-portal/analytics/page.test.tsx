@@ -89,3 +89,25 @@ describe("placement status badge (LA-C006)", () => {
     expect(badge.className).toContain("bg-green-100");
   });
 });
+
+describe("analytics when a request fails (LA-C005)", () => {
+  it("shows an error with a retry instead of zeros, and recovers on retry", async () => {
+    let calls = 0;
+    wire({
+      analytics: () => {
+        calls += 1;
+        return calls === 1 ? respond({ error: "Artist profile not found" }, false) : respond(ANALYTICS);
+      },
+    });
+    render(<AnalyticsPage />);
+    expect(await screen.findByText(/could not load your analytics/i)).toBeTruthy();
+    // The engagement tiles must not present a failed load as 0.
+    // After a failed load the engagement card must still be a skeleton, not "0".
+    const card = screen.getByText("Profile Views").closest("div")!;
+    expect(card.querySelector("p.text-2xl")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(await screen.findByText("12")).toBeTruthy();
+  });
+});
