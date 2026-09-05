@@ -3,7 +3,6 @@
 import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import LoadErrorState from "@/components/LoadErrorState";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
@@ -59,9 +58,9 @@ export default function CustomerSavedPage() {
   return (
     <Suspense
       fallback={
-        <CustomerPortalLayout>
+        <>
           <p className="text-muted text-sm py-12 text-center">Loading saved items...</p>
-        </CustomerPortalLayout>
+        </>
       }
     >
       <CustomerSavedContent />
@@ -142,7 +141,7 @@ function CustomerSavedContent() {
   const filtered = items.filter((i) => i.item_type === activeTab);
 
   return (
-    <CustomerPortalLayout>
+    <>
       <div className="mb-8">
         <h1 className="text-2xl lg:text-3xl">Saved</h1>
         <p className="text-sm text-muted mt-1">Your saved works, artists, and collections</p>
@@ -278,6 +277,6 @@ function CustomerSavedContent() {
           ))}
         </div>
       )}
-    </CustomerPortalLayout>
+    </>
   );
 }

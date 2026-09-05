@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import WorksEditor from "@/components/portfolio/WorksEditor";
 import { type Artist } from "@/data/artists";
 import { themes as allThemes } from "@/data/themes";
@@ -407,9 +406,9 @@ export default function ProfileEditorPage() {
 
   if (artistLoading || !profile) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/profile">
+      <>
         <p className="text-muted text-sm py-12 text-center">Loading...</p>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -571,7 +570,7 @@ export default function ProfileEditorPage() {
   const sectionClass = "pb-10 mb-10 border-b border-border";
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/profile">
+    <>
       <div className="max-w-5xl">
         {/*
          * Sticky action bar. Save Changes used to live in the header row
@@ -1064,7 +1063,7 @@ export default function ProfileEditorPage() {
         </div>
 
       </div>
-    </ArtistPortalLayout>
+    </>
   );
 }
 

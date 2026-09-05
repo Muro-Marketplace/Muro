@@ -87,11 +87,28 @@ export default function HowItWorksClient() {
             whole section; object-cover re-crops slightly when a taller
             tab is selected, which is the lesser cost. */}
         <div className="absolute inset-0 -z-10 overflow-hidden">
+          {/* Resolution, as on the auth pages: w=1920 with no `sizes` meant
+              Next defaulted to 100vw and, with deviceSizes then capped at
+              1200, every Retina screen upscaled a 1200px file to fill the
+              hero. Unlike the sign-in backdrop this master is only 2448x2448,
+              so 2448x1377 is the whole 16:9 centre crop there is. Asking
+              Unsplash for 3840 would just have it enlarge the same detail
+              into a file twice the size, so the request stops at native and
+              Next's own resize (`withoutEnlargement`) holds the ceiling.
+
+              `sizes` accounts for object-cover overdraw: the section is
+              min-h-screen and grows with the longer tabs, so on a portrait
+              viewport the height binds and the image paints roughly four
+              times the viewport width. Browsers pick from the width alone,
+              so the plain 100vw default asked for a quarter of what it drew.
+              Same reasoning, and the same numbers, as (pages)/login/page.tsx. */}
           <Image
-            src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=1920&h=1080&fit=crop&crop=center"
+            src="https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=2448&h=1377&fit=crop&crop=center&q=92&fm=jpg"
             alt="Curated gallery interior with framed artwork"
             fill
             priority
+            quality={80}
+            sizes="(max-width: 640px) 400vw, (max-width: 1024px) 250vw, 100vw"
             className="object-cover"
           />
           {/* Two layers of darkening: a solid base so even the bright

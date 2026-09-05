@@ -148,6 +148,9 @@ type Row = {
   cancelled_at?: string | null;
   /** P4: read so an install cannot land before its own scheduled date. */
   scheduled_for?: string | null;
+  /** Migration 136: the floor the end date is validated against. */
+  created_at?: string | null;
+  end_date?: string | null;
 };
 
 const updates: Record<string, unknown>[] = [];
@@ -2118,5 +2121,179 @@ describe("PATCH /api/placements sends each party to their own labels page (item 
     expect(templateProps(placementLiveOnWallMock, 1).qrLabelsUrl).toBe(
       "https://wallplace.co.uk/venue-portal/labels?placement=pl-1",
     );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Migration 136: placements.end_date.
+//
+// The column is a shared intention about when the work comes down. The three
+// properties worth pinning are that BOTH parties can write it, that a stranger
+// cannot, and that writing it touches nothing but `end_date` — reaching the
+// date must never end the placement, and neither may setting it.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("PATCH /api/placements end date (migration 136)", () => {
+  const ACTIVE: Row = {
+    artist_user_id: ARTIST,
+    venue_user_id: VENUE,
+    artist_slug: "alice",
+    venue_slug: "kings-arms",
+    venue: "Kings Arms",
+    status: "active",
+    created_at: "2026-04-01T09:00:00.000Z",
+    end_date: null,
+  };
+
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: ARTIST, email: "a@example.com", user_metadata: {} }, error: null });
+    vi.mocked(sendEmail).mockClear();
+  });
+
+  it("lets the artist set the end date", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", endDate: "2026-09-30" });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, end_date: "2026-09-30" });
+    expect(updates).toEqual([{ end_date: "2026-09-30" }]);
+  });
+
+  it("lets the venue set the end date too, because it is a shared intention", async () => {
+    authMock.mockResolvedValue({ user: { id: VENUE, email: "v@example.com", user_metadata: {} }, error: null });
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", endDate: "2026-09-30" });
+
+    expect(res.status).toBe(200);
+    expect(updates).toEqual([{ end_date: "2026-09-30" }]);
+  });
+
+  it("refuses a caller who is neither party, and writes nothing", async () => {
+    authMock.mockResolvedValue({ user: { id: "u-stranger", email: "s@example.com" }, error: null });
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", endDate: "2026-09-30" });
+
+    expect(res.status).toBe(403);
+    expect(updates).toEqual([]);
+  });
+
+  it("clears the date back to open ended on an explicit null", async () => {
+    setupDb({ ...ACTIVE, end_date: "2026-09-30" });
+
+    const res = await patch({ id: "pl-1", endDate: null });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, end_date: null });
+    // Fail-before: a truthiness test on `endDate` would treat null as "not
+    // supplied" and silently leave the old date in place.
+    expect(updates).toEqual([{ end_date: null }]);
+  });
+
+  it("refuses a date before the placement was created, and writes nothing", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", endDate: "2026-03-31" });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("before the placement") });
+    expect(updates).toEqual([]);
+  });
+
+  it("refuses a malformed date with a message about the date, not about status", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", endDate: "30/09/2026" });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("YYYY-MM-DD") });
+    expect(updates).toEqual([]);
+  });
+
+  it("refuses a day that does not exist", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", endDate: "2026-02-31" });
+
+    expect(res.status).toBe(400);
+    expect(updates).toEqual([]);
+  });
+
+  it("never changes status, on a placement in any state", async () => {
+    // The migration is explicit: the work is on the wall until a human
+    // confirms collection, so an end date must not move the row.
+    for (const status of ["active", "paused", "pending", "sold"]) {
+      setupDb({ ...ACTIVE, status });
+      await patch({ id: "pl-1", endDate: "2026-09-30" });
+      expect(updates, `status ${status}`).toEqual([{ end_date: "2026-09-30" }]);
+    }
+  });
+
+  it("sends no email and fires no billing hook, because setting a date is not an event", async () => {
+    setupDb(ACTIVE);
+
+    await patch({ id: "pl-1", endDate: "2026-09-30" });
+
+    expect(vi.mocked(sendEmail)).not.toHaveBeenCalled();
+    expect(cancelBillingMock).not.toHaveBeenCalled();
+  });
+
+  it("rides alongside a stage advance without disturbing it", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1", stage: "installed", endDate: "2026-09-30" });
+
+    expect(res.status).toBe(200);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({ end_date: "2026-09-30", installed_at: expect.any(String) });
+  });
+
+  it("still refuses a PATCH that asks for nothing at all", async () => {
+    setupDb(ACTIVE);
+
+    const res = await patch({ id: "pl-1" });
+
+    expect(res.status).toBe(400);
+    expect(updates).toEqual([]);
+  });
+
+  it("passes the write through assertNoServerOwned like every other path", async () => {
+    setupDb(ACTIVE);
+
+    await patch({ id: "pl-1", endDate: "2026-09-30" });
+
+    expect(assertNoServerOwnedSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ end_date: "2026-09-30" }),
+      PLACEMENT_SERVER_OWNED,
+      "placements",
+      undefined,
+    );
+  });
+});
+
+describe("GET /api/placements carries the end date (migration 136)", () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: ARTIST, email: "maya@example.com" }, error: null });
+    getWallProposalsForPlacementsMock.mockReset();
+    getWallProposalsForPlacementsMock.mockResolvedValue({});
+  });
+
+  it("emits end_date on the rows so the portals can show it", async () => {
+    setupGetDb([
+      { id: "pl-1", artist_user_id: ARTIST, venue_user_id: VENUE, status: "active", hidden_for_artist: false, created_at: "2026-04-01T10:00:00Z", end_date: "2026-09-30" },
+      { id: "pl-2", artist_user_id: ARTIST, venue_user_id: VENUE, status: "active", hidden_for_artist: false, created_at: "2026-04-02T10:00:00Z", end_date: null },
+    ]);
+
+    const res = await GET(new Request("http://localhost/api/placements", { headers: { authorization: "Bearer valid" } }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Open ended reaches the client as an explicit null, not as an absent
+    // key: the UI distinguishes "no end date" from "not loaded yet".
+    expect(body.placements.map((p: { end_date: string | null }) => p.end_date)).toEqual([
+      "2026-09-30",
+      null,
+    ]);
   });
 });

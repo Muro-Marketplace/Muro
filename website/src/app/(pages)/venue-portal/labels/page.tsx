@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import LoadErrorState from "@/components/LoadErrorState";
 import LabelPreview from "@/components/labels/LabelPreview";
 import LabelThemePicker from "@/components/labels/LabelThemePicker";
@@ -298,7 +297,7 @@ export default function VenueLabelsPage() {
   }
 
   return (
-    <VenuePortalLayout>
+    <>
       <div className="max-w-5xl pb-24">
         {/* Header */}
         <div className="mb-6">
@@ -591,6 +590,6 @@ export default function VenueLabelsPage() {
           onClose={() => setShowPreview(false)}
         />
       )}
-    </VenuePortalLayout>
+    </>
   );
 }

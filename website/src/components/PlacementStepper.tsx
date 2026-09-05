@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { mutate, apiErrorMessage } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
+import { ENDING_SOON_NOTICE_DAYS, endDateLabel } from "@/lib/placements/end-date";
 
 export interface PlacementStepperData {
   id: string;
@@ -15,6 +16,11 @@ export interface PlacementStepperData {
   installedAt?: string | null;
   liveFrom?: string | null;
   collectedAt?: string | null;
+  /** Migration 136. The planned end of the placement, a plain YYYY-MM-DD
+      date. Null means open ended, which is a legitimate arrangement and not
+      a missing answer. It drives reminders only: reaching it never ends the
+      placement, because the work is on the wall until someone takes it down. */
+  endDate?: string | null;
   /** Kept for backwards-compat with callers that still pass them,
       bilateral confirmation is no longer used. */
   proposedStage?: "installed" | "collected" | null;
@@ -76,6 +82,13 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
   const [error, setError] = useState<string | null>(null);
   const [schedulePickerOpen, setSchedulePickerOpen] = useState(false);
   const [scheduleDraft, setScheduleDraft] = useState<string>(() => isoDateToInput(placement.scheduledFor));
+  // End date (migration 136). Its own busy flag and error slot rather than
+  // sharing the stage ones: it is not a stage, and a failed save here must not
+  // read as a failed advance.
+  const [endDatePickerOpen, setEndDatePickerOpen] = useState(false);
+  const [endDateDraft, setEndDateDraft] = useState<string>(placement.endDate ?? "");
+  const [savingEndDate, setSavingEndDate] = useState(false);
+  const [endDateError, setEndDateError] = useState<string | null>(null);
 
   const steps: Step[] = [
     { key: "requested", label: "Requested",  timestamp: placement.createdAt ?? null,  advanceable: false },
@@ -149,6 +162,42 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
     canAdvance && nextStage && (placement.status === "active" || (isSold && nextStage === "collected"));
   const hasSchedule = !!placement.scheduledFor;
   const canEditSchedule = canAdvance && placement.status === "active" && hasSchedule && !placement.installedAt;
+
+  // ─── Planned end date (migration 136) ───
+  // Shown from acceptance onwards, because before that there is no agreement
+  // to put a date on. A row that reached any later stage was necessarily
+  // accepted, so the status check covers the placements whose acceptedAt this
+  // caller does not pass through.
+  const isAccepted =
+    !!placement.acceptedAt ||
+    ["active", "paused", "completed", "sold"].includes(placement.status);
+  // Either party may set or clear it: it is a shared intention, and the API
+  // authorises both sides identically.
+  const canEditEndDate = canAdvance && isAccepted && !placement.collectedAt;
+
+  /** Save `value` (a YYYY-MM-DD string, or null to clear back to open ended). */
+  async function saveEndDate(value: string | null) {
+    setSavingEndDate(true);
+    setEndDateError(null);
+    try {
+      await mutate("/api/placements", {
+        method: "PATCH",
+        body: JSON.stringify({ id: placement.id, endDate: value }),
+      });
+      setEndDateDraft(value ?? "");
+      setEndDatePickerOpen(false);
+      onChange?.({ ...placement, endDate: value });
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("wallplace:placement-changed", {
+          detail: { placementId: placement.id, action: "end-date", endDate: value },
+        }));
+      }
+    } catch (err) {
+      setEndDateError(apiErrorMessage(err, "Could not save the end date"));
+    } finally {
+      setSavingEndDate(false);
+    }
+  }
 
   // Most-recent advanceable stage that has a timestamp = what Undo
   // should pull back. Requested + Accepted aren't advanceable so they're
@@ -345,6 +394,78 @@ export default function PlacementStepper({ placement, canAdvance = false, onChan
             <p role="alert" className="basis-full text-xs text-red-600">
               {error}
             </p>
+          )}
+        </div>
+      )}
+      {/* Planned end date. A statement of intent both parties share, so it
+          reads as a fact about the plan and never as something the system
+          will act on by itself. */}
+      {isAccepted && (
+        <div className="mt-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-[11px] text-muted">{endDateLabel(placement.endDate)}</p>
+            {canEditEndDate && !endDatePickerOpen && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEndDateDraft(placement.endDate ?? "");
+                  setEndDateError(null);
+                  setEndDatePickerOpen(true);
+                }}
+                className="text-[11px] text-muted hover:text-accent transition-colors"
+              >
+                {placement.endDate ? "Change end date" : "Set end date"}
+              </button>
+            )}
+          </div>
+          {endDatePickerOpen && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap bg-surface border border-border rounded-sm px-3 py-2">
+              <label className="text-xs text-muted" htmlFor={`end-date-${placement.id}`}>End date</label>
+              <input
+                id={`end-date-${placement.id}`}
+                type="date"
+                value={endDateDraft}
+                onChange={(e) => setEndDateDraft(e.target.value)}
+                min={isoDateToInput(placement.createdAt) || undefined}
+                className="px-2 py-1 bg-background border border-border rounded-sm text-xs focus:outline-none focus:border-accent/60"
+              />
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); saveEndDate(endDateDraft); }}
+                disabled={!endDateDraft || savingEndDate}
+                className="px-3 py-1 text-xs font-medium text-accent bg-accent/5 border border-accent/30 hover:bg-accent/10 rounded-sm transition-colors disabled:opacity-60"
+              >
+                {savingEndDate ? "Saving…" : placement.endDate ? "Update date" : "Save"}
+              </button>
+              {placement.endDate && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); saveEndDate(null); }}
+                  disabled={savingEndDate}
+                  className="text-[11px] text-muted hover:text-foreground disabled:opacity-60"
+                  title="Clear the end date and leave the placement open ended"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setEndDatePickerOpen(false); setEndDateError(null); }}
+                className="text-[11px] text-muted hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <p className="basis-full text-[10px] text-muted">
+                Either of you can change this. We will remind you both {ENDING_SOON_NOTICE_DAYS} days
+                before, so there is time to extend or arrange collection.
+              </p>
+              {endDateError && (
+                <p role="alert" className="basis-full text-xs text-red-600">
+                  {endDateError}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}

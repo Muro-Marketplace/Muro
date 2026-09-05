@@ -145,7 +145,7 @@ export async function GET(
       workIds,
       workSizes,
       sizeTiers,
-      // The trigger in migration 136 keeps bundle_price on the cheapest tier,
+      // The trigger in migration 137 keeps bundle_price on the cheapest tier,
       // but the tiers are the truth if a row ever drifts.
       bundlePrice: defaultTier?.price ?? row.bundle_price ?? 0,
       bundlePriceBand: collectionPriceBand(row.bundle_price, sizeTiers) ?? "",

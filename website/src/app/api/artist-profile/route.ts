@@ -1,16 +1,37 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { handleAuthzError } from "@/lib/authz";
-import { getArtistProfileByUserId, upsertArtistProfile } from "@/lib/db/artist-profiles";
+import {
+  getArtistProfileByUserId,
+  getArtistProfileRowByUserId,
+  upsertArtistProfile,
+} from "@/lib/db/artist-profiles";
 import { getAppliedPlanByEmail } from "@/lib/db/artist-applications";
 import { getWorksByArtistProfileId } from "@/lib/db/artist-works";
 import { geocodePostcode } from "@/lib/geocode";
 import { pickWritable, ARTIST_PROFILE_WRITABLE } from "@/lib/db/writable-fields";
 
-// GET: fetch the current user's artist profile
+/**
+ * GET: the current user's artist profile.
+ *
+ * `?works=0` answers with the profile row alone. Every response used to carry
+ * every artist_works row (30 columns each), including for the two callers that
+ * only ever read the avatar, review_status and subscription_status, and one of
+ * those blocks the portal's first paint. appliedPlan is skipped too: only the
+ * billing page reads it, and it costs a second lookup.
+ */
 export async function GET(request: Request) {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return auth.error;
+
+  const wantsWorks = new URL(request.url).searchParams.get("works") !== "0";
+
+  if (!wantsWorks) {
+    const profile = await getArtistProfileRowByUserId(auth.user!.id);
+    // `works: []` rather than omitted, so the shape does not change with the
+    // query string. A caller that needs works asks for them.
+    return NextResponse.json({ profile, works: [], appliedPlan: null });
+  }
 
   const result = await getArtistProfileByUserId(auth.user!.id);
 

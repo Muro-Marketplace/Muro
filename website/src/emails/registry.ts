@@ -351,9 +351,13 @@ import OperationalDisputeResolved from "./templates/legal/OperationalDisputeReso
 //        (moderation has no email surface for these two),
 //      venue_revenue_share_statement (no statement generator or cron; the
 //        programme rent statement added 2026-09-04 is a different template,
-//        artist_programme_rent_statement, and is wired),
-//      placement_ending_soon (cron exists, deliberately gated off: no
-//        end-date column; D60)
+//        artist_programme_rent_statement, and is wired)
+//
+//    Corrected 2026-09-05: placement_ending_soon was listed here as "cron
+//    exists, deliberately gated off: no end-date column; D60". The owner took
+//    option (b): migration 136 adds placements.end_date, both portals write
+//    it, and /api/cron/placement-ending-soon now sends the reminder to both
+//    parties. The template is WIRED.
 //
 //    Corrected 2026-09-04: operational_account_restricted and
 //    operational_account_restored were listed here as dormant "moderation has

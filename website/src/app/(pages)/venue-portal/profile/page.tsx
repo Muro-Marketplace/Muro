@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 import { useToast } from "@/context/ToastContext";
 import { mutate, ApiError } from "@/lib/api-client";
@@ -400,7 +399,7 @@ export default function VenueProfilePage() {
   };
 
   return (
-    <VenuePortalLayout>
+    <>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-1">
@@ -775,6 +774,6 @@ export default function VenueProfilePage() {
           </p>
         </aside>
       </div>
-    </VenuePortalLayout>
+    </>
   );
 }

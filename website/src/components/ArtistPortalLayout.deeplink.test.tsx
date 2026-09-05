@@ -13,7 +13,10 @@ const { replace, router } = vi.hoisted(() => {
   return { replace, router: { replace, push: vi.fn() } };
 });
 
-vi.mock("next/navigation", () => ({ useRouter: () => router }));
+// The chrome now reads the route itself (it is rendered once by
+// artist-portal/layout.tsx, which passes no activePath). These tests still
+// pass activePath explicitly, so usePathname only has to exist.
+vi.mock("next/navigation", () => ({ useRouter: () => router, usePathname: () => "/artist-portal" }));
 vi.mock("next/link", () => ({ default: ({ children }: { children: unknown }) => children }));
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({ user: null, loading: false, userType: null, displayName: null, signOut: vi.fn() }),

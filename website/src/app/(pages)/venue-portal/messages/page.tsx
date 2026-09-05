@@ -1,7 +1,6 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import MessageInbox from "@/components/MessageInbox";
 import { useCurrentVenue } from "@/hooks/useCurrentVenue";
 
@@ -22,10 +21,10 @@ export default function VenueMessagesPage() {
   // Wait for the venue profile to load so we have the correct slug.
   if (loading) {
     return (
-      <VenuePortalLayout>
+      <>
         {header}
         <p className="text-muted text-sm py-16 text-center">Loading messages...</p>
-      </VenuePortalLayout>
+      </>
     );
   }
 
@@ -38,7 +37,7 @@ export default function VenueMessagesPage() {
   // give the user the same Retry affordance it has.
   if (!venue?.slug) {
     return (
-      <VenuePortalLayout>
+      <>
         {header}
         <div className="max-w-md mx-auto py-16 text-center">
           <p className="text-sm font-medium text-foreground mb-1">
@@ -56,12 +55,12 @@ export default function VenueMessagesPage() {
             Try again
           </button>
         </div>
-      </VenuePortalLayout>
+      </>
     );
   }
 
   return (
-    <VenuePortalLayout>
+    <>
       {header}
       <MessageInbox
         userSlug={venue.slug}
@@ -69,6 +68,6 @@ export default function VenueMessagesPage() {
         initialArtistSlug={initialArtistSlug}
         initialArtistName={initialArtistName}
       />
-    </VenuePortalLayout>
+    </>
   );
 }

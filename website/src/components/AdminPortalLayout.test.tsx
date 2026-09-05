@@ -15,7 +15,9 @@ const { replace, authFetchMock, useAuthMock } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
 }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
+// The chrome now reads the route itself (admin/layout.tsx passes no
+// activePath). This test still passes one, so usePathname only has to exist.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }), usePathname: () => "/admin" }));
 vi.mock("@/lib/api-client", () => ({ authFetch: authFetchMock }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: useAuthMock }));
 

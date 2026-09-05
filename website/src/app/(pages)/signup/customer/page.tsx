@@ -109,14 +109,17 @@ export default function CustomerSignUpPage() {
   return (
     <RedirectIfLoggedIn>
     <div className="min-h-screen flex items-center justify-center relative">
+      {/* Background, same as login. The source width, upstream quality and
+          `sizes` multipliers are explained in (pages)/login/page.tsx. */}
       <div className="absolute inset-0 -z-10">
         <Image
-          src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=1920&h=1080&fit=crop&crop=center"
+          src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=3840&h=2160&fit=crop&crop=center&q=92&fm=jpg"
           alt="Abstract pour painting in yellow, ink and bone"
           fill
           className="object-cover"
           priority
-          sizes="100vw"
+          quality={80}
+          sizes="(max-width: 640px) 400vw, (max-width: 1024px) 250vw, 100vw"
         />
         <div className="absolute inset-0 bg-black/55" />
       </div>

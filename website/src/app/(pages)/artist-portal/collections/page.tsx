@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
-import ArtistPortalLayout from "@/components/ArtistPortalLayout";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
@@ -239,7 +238,7 @@ export default function CollectionsPage() {
       name: form.name,
       description: form.description,
       // A tiered collection has no single price to send: the trigger in
-      // migration 136 sets bundle_price from the cheapest tier.
+      // migration 137 sets bundle_price from the cheapest tier.
       bundlePrice: tiered ? "" : form.bundlePrice,
       workIds: form.workIds,
       workSizes: workSizesArr,
@@ -384,11 +383,11 @@ export default function CollectionsPage() {
 
   if (artistLoading || !artist) {
     return (
-      <ArtistPortalLayout activePath="/artist-portal/collections">
+      <>
         <p className="text-muted text-sm py-12 text-center">
           {artistLoading ? "Loading..." : "No artist profile found."}
         </p>
-      </ArtistPortalLayout>
+      </>
     );
   }
 
@@ -537,7 +536,7 @@ export default function CollectionsPage() {
     (tiered || !!form.bundlePrice.trim());
 
   return (
-    <ArtistPortalLayout activePath="/artist-portal/collections">
+    <>
       <UpgradePrompt
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
@@ -1251,6 +1250,6 @@ export default function CollectionsPage() {
           )
         )}
       </div>
-    </ArtistPortalLayout>
+    </>
   );
 }

@@ -9,7 +9,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import LoadErrorState from "@/components/LoadErrorState";
 import { authFetch } from "@/lib/api-client";
 
@@ -69,7 +68,7 @@ export default function VenueAnalyticsPage() {
   }, [dateRange, reloadKey]);
 
   return (
-    <VenuePortalLayout>
+    <>
       <div className="max-w-5xl pb-24">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
@@ -229,6 +228,6 @@ export default function VenueAnalyticsPage() {
           </p>
         </div>
       </div>
-    </VenuePortalLayout>
+    </>
   );
 }

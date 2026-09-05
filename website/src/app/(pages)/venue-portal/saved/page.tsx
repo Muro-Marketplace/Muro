@@ -3,7 +3,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import EmptyState from "@/components/EmptyState";
 import { useSaved } from "@/context/SavedContext";
 import { artists } from "@/data/artists";
@@ -113,7 +112,7 @@ export default function SavedPage() {
   }, [savedItems]);
 
   return (
-    <VenuePortalLayout>
+    <>
       <div className="mb-6">
         <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-1">
           Saved
@@ -325,6 +324,6 @@ export default function SavedPage() {
           </div>
         );
       })()}
-    </VenuePortalLayout>
+    </>
   );
 }

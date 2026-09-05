@@ -179,15 +179,42 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-[calc(110vh-3.5rem)] sm:min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-4rem)] flex items-center justify-center px-6 py-16">
-      {/* Background image */}
+      {/* Background image. The Unsplash original is 3917x5555, so asking for
+          w=1920 threw away most of it before Next had even seen the file and
+          left the backdrop visibly soft. 3840 is the widest Next will now
+          request (see deviceSizes in next.config.ts) and the centre crop still
+          comes out of the master at roughly 1:1, so nothing is upscaled
+          anywhere in the chain. q=92 upstream costs ~90KB over Unsplash's
+          default 85 and gives Next a clean source to re-encode from; Next
+          caches it for 30 days, so the fetch happens about once a month.
+
+          The width is the whole win, not `quality`. Measured against the
+          21MP master with the bg-black/55 overlay applied, 1200px@q75 sat
+          1.66/255 off it and 3840px@q75 sits 1.01 off: the resolution closes
+          40% of the gap. Raising the re-encode from 75 to 90 closes a further
+          2% and nearly doubles the file (590KB to 1150KB), because the
+          overlay flattens the range the codec is being asked to preserve.
+          Under this overlay even 80 is already past the visible difference;
+          it is here as headroom in case bg-black/55 is ever lightened, which
+          is what would make the codec's work start to show. If it is, revisit
+          this number rather than assuming it still has nothing to do.
+
+          `sizes` is not 100vw because the image is `object-cover` in a
+          full-height box. On anything taller than 16:9 the height binds, so
+          the rendered image is far wider than the viewport: a 390x844 phone
+          covers a box ~872pt tall, which needs ~1550pt of image width, four
+          times the viewport. Browsers pick a srcset entry off the width alone,
+          so 100vw asked for a quarter of what it painted. The multipliers
+          below reflect that overdraw. */}
       <div className="absolute inset-0 -z-10">
         <Image
-          src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=1920&h=1080&fit=crop&crop=center"
+          src="https://images.unsplash.com/photo-1561214115-f2f134cc4912?w=3840&h=2160&fit=crop&crop=center&q=92&fm=jpg"
           alt="Abstract pour painting in yellow, ink and bone"
           fill
           className="object-cover"
           priority
-          sizes="100vw"
+          quality={80}
+          sizes="(max-width: 640px) 400vw, (max-width: 1024px) 250vw, 100vw"
         />
         <div className="absolute inset-0 bg-black/55" />
       </div>

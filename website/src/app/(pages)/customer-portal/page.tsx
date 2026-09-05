@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useCallback, useMemo, useState, useEffect } from "react";
-import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import EmptyState from "@/components/EmptyState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
@@ -86,9 +85,9 @@ export default function CustomerPortalPage() {
   return (
     <Suspense
       fallback={
-        <CustomerPortalLayout>
+        <>
           <p className="text-muted text-sm py-12 text-center">Loading orders...</p>
-        </CustomerPortalLayout>
+        </>
       }
     >
       <CustomerPortalContent />
@@ -270,7 +269,7 @@ function CustomerPortalContent() {
   } : null;
 
   return (
-    <CustomerPortalLayout>
+    <>
       <div className="mb-8">
         <h1 className="text-2xl lg:text-3xl">My Orders</h1>
         <p className="text-sm text-muted mt-1">Track your purchases and delivery status</p>
@@ -675,6 +674,6 @@ function CustomerPortalContent() {
           )}
         </>
       )}
-    </CustomerPortalLayout>
+    </>
   );
 }

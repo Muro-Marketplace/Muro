@@ -526,7 +526,7 @@ export async function POST(request: Request) {
 
         // A tiered collection is priced from the tier the buyer picked, and
         // NEVER from bundle_price. bundle_price on a tiered row is the
-        // CHEAPEST tier, kept there by the migration 136 trigger so cards can
+        // CHEAPEST tier, kept there by the migration 137 trigger so cards can
         // read "From £120". Falling back to it would let a buyer select the
         // £480 tier, send a label the server cannot match, and be charged
         // £120, which is the same class of hole as the framed-line fallback

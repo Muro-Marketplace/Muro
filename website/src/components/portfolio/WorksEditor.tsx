@@ -5,7 +5,7 @@ import Image from "next/image";
 import { type ArtistWork, type SizePricing } from "@/data/artists";
 import { uploadImage } from "@/lib/upload";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useConfirm } from "@/context/ConfirmContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
@@ -241,7 +241,7 @@ export interface WorksEditorProps {
  * the profile only, and the section says so.
  */
 export default function WorksEditor({ title, headerActions }: WorksEditorProps) {
-  const { artist, loading: artistLoading } = useCurrentArtist();
+  const { artist, profile, loading: artistLoading } = useCurrentArtist();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [works, setWorks] = useState<ArtistWork[]>([]);
@@ -417,22 +417,20 @@ export default function WorksEditor({ title, headerActions }: WorksEditorProps) 
     setWorks([...artist.works]);
     persistedWorks.current = [...artist.works];
     setInitialised(true);
-    // Fetch default shipping price
-    authFetch("/api/artist-profile")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.profile?.default_shipping_price != null) {
-          setDefaultShipping(String(data.profile.default_shipping_price));
-        }
-        if (data.profile?.ships_internationally) {
-          setShipsInternationally(true);
-        }
-        if (data.profile?.international_shipping_price != null) {
-          setInternationalShipping(String(data.profile.international_shipping_price));
-        }
-      })
-      .catch(() => {});
-  }, [artist, initialised]);
+    // Shipping defaults come off the raw profile row useCurrentArtist already
+    // holds. This used to be a FOURTH GET /api/artist-profile on this page, for
+    // three fields that were sitting in the payload the hook above had just
+    // fetched, and each response carries every artist_works row.
+    if (profile?.default_shipping_price != null) {
+      setDefaultShipping(String(profile.default_shipping_price));
+    }
+    if (profile?.ships_internationally) {
+      setShipsInternationally(true);
+    }
+    if (profile?.international_shipping_price != null) {
+      setInternationalShipping(String(profile.international_shipping_price));
+    }
+  }, [artist, profile, initialised]);
 
   // ──────────────────────────────────────────────────────────────────
   // ALL HOOKS MUST LIVE ABOVE THE `if (!artist) return ...` EARLY-RETURN

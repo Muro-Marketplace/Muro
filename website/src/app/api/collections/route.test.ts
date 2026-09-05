@@ -318,7 +318,7 @@ describe("collection size tiers", () => {
 
   it("leaves bundle_price for the database trigger rather than computing it here", async () => {
     // AGENTS.md bans a derived column written only by application code. The
-    // cheapest-tier sync lives in the migration 136 trigger, so this route must
+    // cheapest-tier sync lives in the migration 137 trigger, so this route must
     // not also compute it, or the two can disagree.
     const res = await POST(req("POST", { ...baseBody, bundlePrice: "", sizeTiers: tiers }));
     expect(res.status).toBe(200);

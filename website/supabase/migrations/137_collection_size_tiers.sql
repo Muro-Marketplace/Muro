@@ -1,5 +1,5 @@
 -- ============================================
--- Migration 136: Collection size tiers
+-- Migration 137: Collection size tiers
 --
 -- A collection was a fixed set of works at one bundle_price, with one size
 -- pinned per work in work_sizes (migration 006). An artist selling a print

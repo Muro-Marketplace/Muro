@@ -17,6 +17,7 @@ const { authMock, upsertMock, getProfileMock, geocodeMock, adminMock } = vi.hois
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/db/artist-profiles", () => ({
   getArtistProfileByUserId: getProfileMock,
+  getArtistProfileRowByUserId: vi.fn(),
   upsertArtistProfile: upsertMock,
 }));
 vi.mock("@/lib/db/artist-works", () => ({ getWorksByArtistProfileId: vi.fn() }));

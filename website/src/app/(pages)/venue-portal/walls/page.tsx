@@ -13,7 +13,6 @@
 import { useEffect, useState } from "react";
 import ImageLightbox from "@/components/ImageLightbox";
 import Link from "next/link";
-import VenuePortalLayout from "@/components/VenuePortalLayout";
 import EmptyState from "@/components/EmptyState";
 import ImageWithFallback from "@/components/ImageWithFallback";
 import { safeHexBackground } from "@/lib/hex-color";
@@ -85,7 +84,7 @@ export default function VenueWallsPage() {
 
   if (!flagOn) {
     return (
-      <VenuePortalLayout>
+      <>
         <div className="py-16 text-center">
           <h1 className="font-serif text-2xl text-foreground mb-2">
             Walls coming soon
@@ -94,12 +93,12 @@ export default function VenueWallsPage() {
             The wall visualiser is in private beta.
           </p>
         </div>
-      </VenuePortalLayout>
+      </>
     );
   }
 
   return (
-    <VenuePortalLayout>
+    <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-2xl lg:text-3xl text-foreground mb-1">
@@ -167,7 +166,7 @@ export default function VenueWallsPage() {
           ))}
         </div>
       )}
-    </VenuePortalLayout>
+    </>
   );
 }
 

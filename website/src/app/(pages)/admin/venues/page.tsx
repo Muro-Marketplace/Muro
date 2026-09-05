@@ -10,7 +10,6 @@
 // address is wrong and an admin had to go into Supabase to change it.
 
 import { useCallback, useState, useEffect } from "react";
-import AdminPortalLayout from "@/components/AdminPortalLayout";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 
@@ -153,7 +152,7 @@ export default function AdminVenuesPage() {
   });
 
   return (
-    <AdminPortalLayout activePath="/admin/venues">
+    <>
       <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
         <h1 className="text-2xl lg:text-3xl">Registered Venues</h1>
         <input
@@ -297,7 +296,7 @@ export default function AdminVenuesPage() {
       )}
 
       <p className="text-xs text-muted mt-4">{filtered.length} venue{filtered.length !== 1 ? "s" : ""} {search ? "matched" : "registered"}</p>
-    </AdminPortalLayout>
+    </>
   );
 }
 
