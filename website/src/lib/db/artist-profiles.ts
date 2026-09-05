@@ -17,6 +17,28 @@ import {
 export { dbProfileToArtist, normalisePriceBand };
 export type { DbArtistProfile, DbArtistWork };
 
+/**
+ * The artist_profiles row alone, without the artist's works.
+ *
+ * getArtistProfileByUserId always pulls every artist_works row alongside the
+ * profile. Callers that only need the profile (the portal chrome wants the
+ * avatar and whether a row exists at all; PortalGuard wants review_status and
+ * subscription_status) were paying for a second query and a payload of 30
+ * columns per work, on the request that blocks the portal's first paint.
+ */
+export async function getArtistProfileRowByUserId(
+  userId: string,
+): Promise<DbArtistProfile | null> {
+  const db = getSupabaseAdmin();
+  const { data: profile } = await db
+    .from("artist_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+
+  return (profile as DbArtistProfile) ?? null;
+}
+
 export async function getArtistProfileByUserId(userId: string) {
   const db = getSupabaseAdmin();
   const { data: profile } = await db

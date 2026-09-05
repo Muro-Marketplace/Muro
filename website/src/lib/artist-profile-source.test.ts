@@ -113,6 +113,51 @@ describe("fetchArtistProfileShared", () => {
     await expect(fetchArtistProfileShared(USER)).resolves.toEqual({ profile: null, works: [] });
   });
 
+  it("asks for the profile alone when the caller does not need works", async () => {
+    authFetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ profile: PROFILE, works: [] }) });
+    await fetchArtistProfileShared(USER, { withWorks: false });
+    expect(authFetchMock).toHaveBeenCalledWith("/api/artist-profile?works=0");
+  });
+
+  it("lets a profile-only caller join a request that already carries works", async () => {
+    const { release, res } = deferredResponse({ profile: PROFILE, works: [{ id: "w1" }] });
+    authFetchMock.mockResolvedValue(res);
+
+    const withWorks = fetchArtistProfileShared(USER);
+    const chrome = fetchArtistProfileShared(USER, { withWorks: false });
+    release();
+    const [a, b] = await Promise.all([withWorks, chrome]);
+
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    expect(authFetchMock).toHaveBeenCalledWith("/api/artist-profile");
+    expect(a.works).toHaveLength(1);
+    expect(b.works).toHaveLength(1);
+  });
+
+  it("does NOT let a works caller settle for a profile-only request in flight", async () => {
+    const chromeCall = deferredResponse({ profile: PROFILE, works: [] });
+    authFetchMock.mockResolvedValueOnce(chromeCall.res);
+    const chrome = fetchArtistProfileShared(USER, { withWorks: false });
+
+    authFetchMock.mockResolvedValueOnce({
+      ok: true, status: 200, json: async () => ({ profile: PROFILE, works: [{ id: "w1" }] }),
+    });
+    const full = await fetchArtistProfileShared(USER);
+
+    chromeCall.release();
+    await chrome;
+
+    expect(authFetchMock).toHaveBeenCalledTimes(2);
+    expect(full.works).toHaveLength(1);
+  });
+
+  it("never seeds the snapshot from a profile-only response", async () => {
+    // Otherwise the next portal page starts warm with an empty portfolio.
+    authFetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ profile: PROFILE, works: [] }) });
+    await fetchArtistProfileShared(USER, { withWorks: false });
+    expect(peekArtistProfile(USER)).toBeNull();
+  });
+
   it("propagates a network rejection", async () => {
     authFetchMock.mockRejectedValue(new Error("network down"));
     await expect(fetchArtistProfileShared(USER)).rejects.toThrow("network down");

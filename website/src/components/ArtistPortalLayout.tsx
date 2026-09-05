@@ -216,8 +216,10 @@ export default function ArtistPortalLayout({
     setProfileCheck("loading");
     // Shared with PortalGuard and the page's own useCurrentArtist: one request
     // for all three on the portal's first load, rather than three identical
-    // ones each carrying every artist_works row.
-    fetchArtistProfileShared(user.id)
+    // ones each carrying every artist_works row. This caller reads the avatar
+    // and whether a row exists, so it asks for the profile alone; it still
+    // joins a works request that is already out.
+    fetchArtistProfileShared(user.id, { withWorks: false })
       .then((data) => {
         if (cancelled) return;
         // Brand-new artist accounts (signed up, never approved /

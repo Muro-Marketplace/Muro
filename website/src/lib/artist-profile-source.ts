@@ -37,9 +37,23 @@ export interface ArtistProfilePayload {
 
 let inflight: Promise<ArtistProfilePayload> | null = null;
 let inflightGeneration = -1;
+let inflightHasWorks = false;
 
 /**
  * Fetch the profile, sharing one request between concurrent callers.
+ *
+ * `withWorks: false` asks the API for the profile row alone. The two chrome
+ * callers (the layout wants the avatar and whether a row exists, PortalGuard
+ * wants review_status and subscription_status) never look at the works, and one
+ * of them blocks the portal's first paint; the works list is 30 columns a row.
+ *
+ * A request that carries works satisfies a caller that does not need them, so a
+ * profile-only caller joins whatever is already out. The reverse is not true: a
+ * works caller will not take a profile-only response and issues its own. On a
+ * page that uses useCurrentArtist the page's effect runs before the layout's
+ * (React runs effects child first), so the shared request is the one WITH works
+ * and the chrome piggybacks on it. If that order ever changed the cost would be
+ * one extra request, never wrong data.
  *
  * Rejects when the request could not be completed. A resolved `profile: null`
  * means the account genuinely has no artist_profiles row (it has never
@@ -48,12 +62,18 @@ let inflightGeneration = -1;
  *
  * `userId` only names the snapshot slot. Pass the signed-in auth user's id.
  */
-export function fetchArtistProfileShared(userId: string): Promise<ArtistProfilePayload> {
+export function fetchArtistProfileShared(
+  userId: string,
+  { withWorks = true }: { withWorks?: boolean } = {},
+): Promise<ArtistProfilePayload> {
   const generation = currentArtistCacheGeneration();
-  if (inflight && inflightGeneration === generation) return inflight;
+  if (inflight && inflightGeneration === generation && (inflightHasWorks || !withWorks)) {
+    return inflight;
+  }
 
   inflightGeneration = generation;
-  const request = authFetch("/api/artist-profile")
+  inflightHasWorks = withWorks;
+  const request = authFetch(withWorks ? "/api/artist-profile" : "/api/artist-profile?works=0")
     .then(async (res) => {
       if (!res.ok) throw new Error(`profile check failed (${res.status})`);
       const data = (await res.json()) as { profile?: DbArtistProfile; works?: DbArtistWork[] };
@@ -61,7 +81,10 @@ export function fetchArtistProfileShared(userId: string): Promise<ArtistProfileP
         profile: data.profile ?? null,
         works: data.works ?? [],
       };
-      if (payload.profile && currentArtistCacheGeneration() === generation) {
+      // Only a response that actually carries the works may seed the snapshot.
+      // Writing a profile-only one would hand the next portal page an artist
+      // with an empty portfolio.
+      if (withWorks && payload.profile && currentArtistCacheGeneration() === generation) {
         writeCurrentArtistCache(userId, { profile: payload.profile, works: payload.works });
       }
       return payload;
@@ -86,4 +109,5 @@ export function peekArtistProfile(userId: string): ArtistProfilePayload | null {
 export function resetArtistProfileSharedForTests(): void {
   inflight = null;
   inflightGeneration = -1;
+  inflightHasWorks = false;
 }

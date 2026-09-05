@@ -14,6 +14,7 @@ const { authMock, getProfileMock, appliedPlanMock } = vi.hoisted(() => ({
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: authMock }));
 vi.mock("@/lib/db/artist-profiles", () => ({
   getArtistProfileByUserId: getProfileMock,
+  getArtistProfileRowByUserId: vi.fn(),
   upsertArtistProfile: vi.fn(),
 }));
 vi.mock("@/lib/db/artist-works", () => ({ getWorksByArtistProfileId: vi.fn() }));

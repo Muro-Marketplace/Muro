@@ -153,7 +153,8 @@ export default function PortalGuard({ allowedType, children }: PortalGuardProps)
     }
 
     let cancelled = false;
-    fetchArtistProfileShared(user.id)
+    // review_status and subscription_status only; no need for the works.
+    fetchArtistProfileShared(user.id, { withWorks: false })
       .then((data) => {
         if (cancelled) return;
         const profile = data.profile;
