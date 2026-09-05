@@ -6,6 +6,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { mutate } from "@/lib/api-client";
+import LoadErrorState from "@/components/LoadErrorState";
 
 interface Request {
   id: string;
@@ -36,6 +37,8 @@ export default function FeatureRequestsPage() {
   const { user } = useAuth();
   const [requests, setRequests] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
+  // LA-C024: a failed load is not an empty board.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Request["status"]>("open");
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
@@ -50,10 +53,13 @@ export default function FeatureRequestsPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/feature-requests?status=${filter}`);
+      if (!res.ok) throw new Error(`feature requests load failed (${res.status})`);
       const data = await res.json();
       setRequests(data.requests || []);
+      setLoadError(null);
     } catch {
       setRequests([]);
+      setLoadError("Could not load feature requests. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -207,6 +213,8 @@ export default function FeatureRequestsPage() {
 
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
+      ) : loadError ? (
+        <LoadErrorState message={loadError} onRetry={load} />
       ) : requests.length === 0 ? (
         <p className="text-sm text-muted">No {STATUS_LABELS[filter].toLowerCase()} requests yet.</p>
       ) : (
