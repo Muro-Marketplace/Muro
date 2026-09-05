@@ -8,6 +8,7 @@ import { authFetch } from "@/lib/api-client";
 import VenueWallCard from "@/components/VenueWallCard";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import VenueProfileApplyCta from "@/components/VenueProfileApplyCta";
+import LoadErrorState from "@/components/LoadErrorState";
 
 interface VenueShape {
   slug: string;
@@ -63,10 +64,13 @@ interface ProfileResponse {
 type State =
   | { status: "loading" }
   | { status: "notfound" }
+  // LA-C094: a failed request is not a missing venue.
+  | { status: "error" }
   | { status: "ready"; data: ProfileResponse };
 
 export default function VenueProfileBody({ slug }: { slug: string }) {
   const [state, setState] = useState<State>({ status: "loading" });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,19 +80,19 @@ export default function VenueProfileBody({ slug }: { slug: string }) {
           cache: "no-store",
         });
         if (!res.ok) {
-          if (!cancelled) setState({ status: "notfound" });
+          if (!cancelled) setState({ status: res.status === 404 ? "notfound" : "error" });
           return;
         }
         const data = (await res.json()) as ProfileResponse;
         if (!cancelled) setState({ status: "ready", data });
       } catch {
-        if (!cancelled) setState({ status: "notfound" });
+        if (!cancelled) setState({ status: "error" });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, reloadKey]);
 
   // Give entitled viewers a proper tab title without leaking the name in the
   // server-rendered <title> (metadata can't be per-viewer).
@@ -105,6 +109,22 @@ export default function VenueProfileBody({ slug }: { slug: string }) {
         <div className="max-w-[1100px] mx-auto px-6 py-10 space-y-4">
           <div className="h-6 w-1/3 bg-border/30 rounded-sm animate-pulse" />
           <div className="h-4 w-2/3 bg-border/20 rounded-sm animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <div className="bg-background min-h-screen flex items-center justify-center px-6">
+        <div className="w-full max-w-md">
+          <LoadErrorState
+            message="Could not load this space. Please try again."
+            onRetry={() => {
+              setState({ status: "loading" });
+              setReloadKey((k) => k + 1);
+            }}
+          />
         </div>
       </div>
     );
