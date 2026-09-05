@@ -119,4 +119,10 @@ describe("public claims the site cannot evidence stay out", () => {
   it("the venue dashboard has no em dash in its copy (LA-C084)", () => {
     expect(read("src/app/(pages)/venue-portal/page.tsx")).not.toMatch(/—|\\u2014/);
   });
+
+  it("the QR label help copy does not use a hyphen as a dash (LA-C064, LA-C081)", () => {
+    for (const p of ["src/app/(pages)/artist-portal/labels/page.tsx", "src/app/(pages)/venue-portal/labels/page.tsx"]) {
+      expect(read(p), p).not.toMatch(/printed card - the QR code/);
+    }
+  });
 });
