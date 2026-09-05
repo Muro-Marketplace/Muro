@@ -78,3 +78,20 @@ describe("customer addresses setDefault (05 mutate)", () => {
     expect(showToastMock).not.toHaveBeenCalledWith("Couldn't set default. Try again.", { variant: "error" });
   });
 });
+
+// LA-C020 (launch audit 2026-09-05). The address load had no r.ok check, so a
+// non-2xx body with no `addresses` array left the list empty and the page said
+// "No saved addresses". A failure now says so and can be retried.
+describe("customer addresses when the load fails (LA-C020)", () => {
+  it("shows an error with a retry, then the addresses once the retry succeeds", async () => {
+    authFetchMock.mockImplementationOnce(() =>
+      Promise.resolve(new Response(JSON.stringify({ error: "boom" }), { status: 500 })),
+    );
+    render(<CustomerAddressesPage />);
+    expect(await screen.findByText(/could not load your addresses/i)).toBeTruthy();
+    expect(screen.queryByText("Set default")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Set default")).toBeTruthy();
+  });
+});

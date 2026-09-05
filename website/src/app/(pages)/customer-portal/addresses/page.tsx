@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import CustomerPortalLayout from "@/components/CustomerPortalLayout";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import EmptyState from "@/components/EmptyState";
+import LoadErrorState from "@/components/LoadErrorState";
 import { useToast } from "@/context/ToastContext";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { COUNTRIES, labelForCountry } from "@/lib/iso-countries";
@@ -44,6 +45,8 @@ export default function CustomerAddressesPage() {
   const { showToast } = useToast();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
+  // LA-C020: a failed load is not an empty address book.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -52,12 +55,17 @@ export default function CustomerAddressesPage() {
 
   function loadAddresses() {
     setLoading(true);
+    setLoadError(null);
     authFetch("/api/customer-addresses")
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || `addresses load failed (${r.status})`);
+        return data;
+      })
       .then((data) => {
         if (Array.isArray(data.addresses)) setAddresses(data.addresses);
       })
-      .catch(() => showToast("Couldn't load your addresses.", { variant: "error" }))
+      .catch(() => setLoadError("Could not load your addresses. Please try again."))
       .finally(() => setLoading(false));
   }
 
@@ -298,6 +306,8 @@ export default function CustomerAddressesPage() {
 
       {loading ? (
         <p className="text-muted text-sm py-12 text-center">Loading addresses...</p>
+      ) : loadError ? (
+        <LoadErrorState message={loadError} onRetry={loadAddresses} />
       ) : addresses.length === 0 && !creating ? (
         <EmptyState
           title="No saved addresses"
