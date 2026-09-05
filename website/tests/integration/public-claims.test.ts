@@ -125,4 +125,8 @@ describe("public claims the site cannot evidence stay out", () => {
       expect(read(p), p).not.toMatch(/printed card - the QR code/);
     }
   });
+
+  it("the terms dispute steps have no space before the colon (LA-C080)", () => {
+    expect(read("src/app/(pages)/terms/page.tsx")).not.toMatch(/Step \d :/);
+  });
 });
