@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { blogPosts } from "@/data/blog-posts";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { markdownToPlainText } from "@/lib/markdown";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -159,7 +160,7 @@ export default async function BlogPage() {
                       {post.title}
                     </h2>
                     <p className="text-sm text-muted leading-relaxed line-clamp-2">
-                      {(post.body_markdown ?? "").slice(0, 240)}
+                      {markdownToPlainText(post.body_markdown).slice(0, 240)}
                     </p>
                   </div>
                 </article>
