@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import type { ArtistCollection } from "@/data/collections";
+import type { ArtistCollection, CollectionSizeTier } from "@/data/collections";
+import { cheapestTierPrice, collectionPriceBand } from "@/lib/collection-tiers";
 
 /**
  * Public endpoint: returns all available collections from the database.
@@ -37,6 +38,9 @@ export async function GET() {
 
       for (const row of data) {
         const artist = artistMap[row.artist_slug] || { name: "", image: "" };
+        const sizeTiers: CollectionSizeTier[] = Array.isArray(row.size_tiers)
+          ? row.size_tiers
+          : [];
         const thumbnail: string | undefined = row.thumbnail || undefined;
         const bannerImage: string | undefined = row.banner_image || undefined;
         const coverImage =
@@ -52,8 +56,12 @@ export async function GET() {
           description: row.description || undefined,
           workIds: Array.isArray(row.work_ids) ? row.work_ids : [],
           workSizes: Array.isArray(row.work_sizes) ? row.work_sizes : [],
-          bundlePrice: row.bundle_price || 0,
-          bundlePriceBand: row.bundle_price ? `£${row.bundle_price}` : "",
+          sizeTiers,
+          bundlePrice: cheapestTierPrice(sizeTiers) ?? row.bundle_price ?? 0,
+          // A tiered collection reads "From £120" on the card. The empty
+          // string for an unpriced collection is this surface's own existing
+          // wording, which is why the helper returns null rather than picking.
+          bundlePriceBand: collectionPriceBand(row.bundle_price, sizeTiers) ?? "",
           thumbnail,
           bannerImage,
           coverImage,

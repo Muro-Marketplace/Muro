@@ -7,13 +7,28 @@ import { useCurrentArtist } from "@/hooks/useCurrentArtist";
 import { authFetch, mutate, ApiError } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { useConfirm } from "@/context/ConfirmContext";
+import { MAX_COLLECTION_TIERS } from "@/lib/collection-tiers";
+
+/**
+ * One size the collection is sold in, as the form holds it. Prices stay
+ * strings while the artist is typing; the API coerces and validates them.
+ */
+interface FormTier {
+  label: string;
+  price: string;
+  description: string;
+  /** workId -> selected size label, for THIS tier only */
+  workSizes: Record<string, string>;
+}
 
 interface CollectionForm {
   name: string;
   description: string;
   workIds: string[];
-  /** workId -> selected size label */
+  /** workId -> selected size label. Used only when the collection is untiered. */
   workSizes: Record<string, string>;
+  /** Empty means the collection is sold at one price, as it always was. */
+  tiers: FormTier[];
   bundlePrice: string;
   thumbnail: string;
   bannerImage: string;
@@ -28,6 +43,12 @@ interface ServerCollection {
   bundlePrice: string;
   workIds: string[];
   workSizes: { workId: string; sizeLabel: string }[];
+  sizeTiers?: {
+    label: string;
+    price: number;
+    description?: string;
+    workSizes: { workId: string; sizeLabel: string }[];
+  }[];
   thumbnail?: string;
   bannerImage?: string;
   available: boolean;
@@ -39,6 +60,7 @@ const EMPTY_FORM: CollectionForm = {
   description: "",
   workIds: [],
   workSizes: {},
+  tiers: [],
   bundlePrice: "",
   thumbnail: "",
   bannerImage: "",
@@ -93,11 +115,92 @@ export default function CollectionsPage() {
     setFormError(null);
   }, []);
 
+  /**
+   * A size choice per work, filled in from each work's first size where the
+   * artist has not picked one. Shared by the untiered form and by every tier,
+   * so the fallback cannot drift between them.
+   */
+  const resolveWorkSizes = useCallback(
+    (chosen: Record<string, string>) => {
+      const out: { workId: string; sizeLabel: string }[] = [];
+      for (const wid of form.workIds) {
+        const explicit = chosen[wid];
+        if (explicit) {
+          out.push({ workId: wid, sizeLabel: explicit });
+          continue;
+        }
+        const work = artist?.works.find((w) => w.id === wid);
+        const firstSize = work?.pricing?.[0]?.label;
+        if (firstSize) out.push({ workId: wid, sizeLabel: firstSize });
+      }
+      return out;
+    },
+    [artist, form.workIds],
+  );
+
+  /** What the works in a given size selection cost bought separately. */
+  const sumIndividual = useCallback(
+    (chosen: Record<string, string>) =>
+      form.workIds.reduce((sum, wid) => {
+        const work = artist?.works.find((w) => w.id === wid);
+        if (!work) return sum;
+        const sizeLabel = chosen[wid] || work.pricing?.[0]?.label;
+        const sizeEntry =
+          work.pricing?.find((p) => p.label === sizeLabel) || work.pricing?.[0];
+        return sum + (typeof sizeEntry?.price === "number" ? sizeEntry.price : 0);
+      }, 0),
+    [artist, form.workIds],
+  );
+
   const handleSave = useCallback(async () => {
-    if (!artist || !form.name || form.workIds.length < 2 || !form.bundlePrice) return;
+    const tiered = form.tiers.length > 0;
+    if (!artist || !form.name || form.workIds.length < 2) return;
+    if (!tiered && !form.bundlePrice) return;
+
+    // Tiers are checked here as well as on the server. The server is the
+    // authority, this is only so the artist sees the problem beside the field
+    // rather than as a rejected save.
+    if (tiered) {
+      const seen = new Set<string>();
+      for (const tier of form.tiers) {
+        const label = tier.label.trim();
+        const price = parseFloat(tier.price);
+        if (!label || !Number.isFinite(price) || price <= 0) {
+          setFormError("Give every size a name and a price above zero.");
+          return;
+        }
+        const key = label.toLowerCase();
+        if (seen.has(key)) {
+          setFormError(`Two sizes have the same name ("${label}"). Rename one.`);
+          return;
+        }
+        seen.add(key);
+      }
+
+      // The same overpricing guard the single-price form has, run per tier:
+      // one sensible tier should not vouch for an overpriced sibling.
+      for (const tier of form.tiers) {
+        const total = sumIndividual(tier.workSizes);
+        const price = parseFloat(tier.price);
+        if (total > 0 && price > total) {
+          const overBy = (price - total).toFixed(0);
+          const ok = await confirm({
+            title: `"${tier.label.trim()}" priced above sum of works`,
+            body: `The ${tier.label.trim()} set is £${overBy} more than buying those works individually. Publish anyway?`,
+            confirmLabel: "Publish",
+          });
+          if (!ok) {
+            setFormError(
+              `The ${tier.label.trim()} set is £${overBy} more than the sum of its works. Lower it, or confirm publish to override.`,
+            );
+            return;
+          }
+        }
+      }
+    }
 
     const bundleNum = parseFloat(form.bundlePrice);
-    if (!Number.isFinite(bundleNum) || bundleNum <= 0) {
+    if (!tiered && (!Number.isFinite(bundleNum) || bundleNum <= 0)) {
       setFormError("Bundle price must be a positive number.");
       return;
     }
@@ -107,15 +210,8 @@ export default function CollectionsPage() {
     // saved at £300 against £180 of individual works. The form already
     // warns inline, but nothing blocked publish. Require the artist to
     // explicitly confirm before sending an overpriced bundle live.
-    const individualTotal = form.workIds.reduce((sum, wid) => {
-      const work = artist.works.find((w) => w.id === wid);
-      if (!work) return sum;
-      const sizeLabel = form.workSizes[wid] || work.pricing?.[0]?.label;
-      const sizeEntry = work.pricing?.find((p) => p.label === sizeLabel) || work.pricing?.[0];
-      const sizePrice = typeof sizeEntry?.price === "number" ? sizeEntry.price : 0;
-      return sum + sizePrice;
-    }, 0);
-    if (individualTotal > 0 && bundleNum > individualTotal) {
+    const individualTotal = sumIndividual(form.workSizes);
+    if (!tiered && individualTotal > 0 && bundleNum > individualTotal) {
       const overBy = (bundleNum - individualTotal).toFixed(0);
       const ok = await confirm({
         title: "Bundle priced above sum of works",
@@ -130,26 +226,23 @@ export default function CollectionsPage() {
       }
     }
 
-    // Convert workSizes record -> array. For works with no explicit choice,
-    // fall back to the first pricing entry (if any).
-    const workSizesArr: { workId: string; sizeLabel: string }[] = [];
-    for (const wid of form.workIds) {
-      const explicit = form.workSizes[wid];
-      if (explicit) {
-        workSizesArr.push({ workId: wid, sizeLabel: explicit });
-        continue;
-      }
-      const work = artist.works.find((w) => w.id === wid);
-      const firstSize = work?.pricing?.[0]?.label;
-      if (firstSize) workSizesArr.push({ workId: wid, sizeLabel: firstSize });
-    }
+    const workSizesArr = resolveWorkSizes(form.workSizes);
+    const sizeTiers = form.tiers.map((tier) => ({
+      label: tier.label.trim(),
+      price: tier.price,
+      description: tier.description.trim(),
+      workSizes: resolveWorkSizes(tier.workSizes),
+    }));
 
     const payload = {
       name: form.name,
       description: form.description,
-      bundlePrice: form.bundlePrice,
+      // A tiered collection has no single price to send: the trigger in
+      // migration 138 sets bundle_price from the cheapest tier.
+      bundlePrice: tiered ? "" : form.bundlePrice,
       workIds: form.workIds,
       workSizes: workSizesArr,
+      sizeTiers,
       thumbnail: form.thumbnail || undefined,
       bannerImage: form.bannerImage || undefined,
       available: form.available,
@@ -188,7 +281,7 @@ export default function CollectionsPage() {
     } finally {
       setSaving(false);
     }
-  }, [artist, form, editingId, resetForm]);
+  }, [artist, form, editingId, resetForm, confirm, resolveWorkSizes, sumIndividual]);
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -314,7 +407,21 @@ export default function CollectionsPage() {
       } else {
         delete nextSizes[workId];
       }
-      return { ...prev, workIds, workSizes: nextSizes };
+
+      // Tiers pin sizes per work, so a work leaving the collection has to leave
+      // every tier as well, and a work joining needs a default in each.
+      const tiers = prev.tiers.map((tier) => {
+        const sizes = { ...tier.workSizes };
+        if (isAdding) {
+          const work = artist!.works.find((w) => w.id === workId);
+          const firstLabel = work?.pricing?.[0]?.label;
+          if (firstLabel && !sizes[workId]) sizes[workId] = firstLabel;
+        } else {
+          delete sizes[workId];
+        }
+        return { ...tier, workSizes: sizes };
+      });
+      return { ...prev, workIds, workSizes: nextSizes, tiers };
     });
   }
 
@@ -322,6 +429,71 @@ export default function CollectionsPage() {
     setForm((prev) => ({
       ...prev,
       workSizes: { ...prev.workSizes, [workId]: sizeLabel },
+    }));
+  }
+
+  /** Default sizes for a brand new tier: whatever the artist has picked so far. */
+  function seedTierSizes(prev: CollectionForm): Record<string, string> {
+    const sizes: Record<string, string> = {};
+    for (const wid of prev.workIds) {
+      const work = artist?.works.find((w) => w.id === wid);
+      const label = prev.workSizes[wid] || work?.pricing?.[0]?.label;
+      if (label) sizes[wid] = label;
+    }
+    return sizes;
+  }
+
+  function setTiered(on: boolean) {
+    setForm((prev) => {
+      if (!on) return { ...prev, tiers: [] };
+      if (prev.tiers.length > 0) return prev;
+      return {
+        ...prev,
+        tiers: [{ label: "", price: "", description: "", workSizes: seedTierSizes(prev) }],
+      };
+    });
+    setFormError(null);
+  }
+
+  function addTier() {
+    setForm((prev) => {
+      if (prev.tiers.length >= MAX_COLLECTION_TIERS) return prev;
+      // Copy the last tier's sizes so the artist adjusts rather than starts
+      // from scratch each time.
+      const last = prev.tiers[prev.tiers.length - 1];
+      return {
+        ...prev,
+        tiers: [
+          ...prev.tiers,
+          {
+            label: "",
+            price: "",
+            description: "",
+            workSizes: last ? { ...last.workSizes } : seedTierSizes(prev),
+          },
+        ],
+      };
+    });
+  }
+
+  function removeTier(index: number) {
+    setForm((prev) => ({ ...prev, tiers: prev.tiers.filter((_, i) => i !== index) }));
+  }
+
+  function updateTier(index: number, patch: Partial<FormTier>) {
+    setForm((prev) => ({
+      ...prev,
+      tiers: prev.tiers.map((t, i) => (i === index ? { ...t, ...patch } : t)),
+    }));
+    setFormError(null);
+  }
+
+  function setTierWorkSize(index: number, workId: string, sizeLabel: string) {
+    setForm((prev) => ({
+      ...prev,
+      tiers: prev.tiers.map((t, i) =>
+        i === index ? { ...t, workSizes: { ...t.workSizes, [workId]: sizeLabel } } : t,
+      ),
     }));
   }
 
@@ -334,6 +506,16 @@ export default function CollectionsPage() {
       bundlePrice: col.bundlePrice,
       workIds: col.workIds,
       workSizes,
+      tiers: (col.sizeTiers ?? []).map((tier) => {
+        const sizes: Record<string, string> = {};
+        for (const ws of tier.workSizes) sizes[ws.workId] = ws.sizeLabel;
+        return {
+          label: tier.label,
+          price: String(tier.price),
+          description: tier.description ?? "",
+          workSizes: sizes,
+        };
+      }),
       thumbnail: col.thumbnail || "",
       bannerImage: col.bannerImage || "",
       available: col.available,
@@ -344,8 +526,14 @@ export default function CollectionsPage() {
     setFormError(null);
   }
 
+  const tiered = form.tiers.length > 0;
+  // A tiered collection has no single price to require. The per-tier names and
+  // prices are checked in handleSave, so the artist gets a message naming the
+  // problem instead of a button that is silently dead.
   const isFormValid =
-    !!form.name.trim() && form.workIds.length >= 2 && !!form.bundlePrice.trim();
+    !!form.name.trim() &&
+    form.workIds.length >= 2 &&
+    (tiered || !!form.bundlePrice.trim());
 
   return (
     <>
@@ -403,8 +591,10 @@ export default function CollectionsPage() {
               {/* Bundle price, show £ prefix, and once we have sizes picked
                   for each work, calculate the sum-of-individual vs bundle so
                   the artist can see the saving (or, critically, if they've
-                  UNDER-priced the bundle relative to individuals). */}
-              {(() => {
+                  UNDER-priced the bundle relative to individuals).
+                  A tiered collection prices each size instead, so this whole
+                  block steps aside for the tier editor below. */}
+              {!tiered && (() => {
                 // Sum individual prices from the selected works + their sizes
                 const individualTotal = form.workIds.reduce((sum, wid) => {
                   const work = artist?.works.find((w) => w.id === wid);
@@ -661,8 +851,9 @@ export default function CollectionsPage() {
                 )}
               </div>
 
-              {/* Per-work size pickers */}
-              {form.workIds.length > 0 && (
+              {/* Per-work size pickers. A tiered collection pins its sizes
+                  inside each tier, so this is the untiered form only. */}
+              {!tiered && form.workIds.length > 0 && (
                 <div>
                   <p className="text-xs text-muted uppercase tracking-wider mb-3">
                     Size for each work{" "}
@@ -739,6 +930,179 @@ export default function CollectionsPage() {
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* Sell in several sizes. Off is the collection this form has
+                  always produced: one price, one size per work. On replaces
+                  both with one of each per size, because a size IS the product
+                  a buyer picks. */}
+              <div className="border-t border-border/40 pt-5">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="tiered"
+                    checked={tiered}
+                    onChange={(e) => setTiered(e.target.checked)}
+                    className="w-4 h-4 accent-accent"
+                  />
+                  <span className="text-sm text-foreground">
+                    Sell this collection in several sizes{" "}
+                    <span className="text-muted">
+                      (for example small, medium and large prints, each at its own price)
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {tiered && (
+                <div className="space-y-4">
+                  {form.tiers.map((tier, index) => {
+                    const individualTotal = sumIndividual(tier.workSizes);
+                    const price = parseFloat(tier.price) || 0;
+                    const saving = individualTotal - price;
+                    return (
+                      <div
+                        key={index}
+                        className="border border-border rounded-sm p-4 space-y-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Size name (e.g. Small)"
+                            value={tier.label}
+                            onChange={(e) => updateTier(index, { label: e.target.value })}
+                            className="flex-1 px-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50"
+                          />
+                          <div className="relative w-32">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">
+                              &pound;
+                            </span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="Price"
+                              value={tier.price}
+                              onChange={(e) =>
+                                updateTier(index, {
+                                  price: e.target.value.replace(/^£\s*/, ""),
+                                })
+                              }
+                              className="w-full pl-7 pr-3 py-2 bg-background border border-border rounded-sm text-sm focus:outline-none focus:border-accent/50"
+                            />
+                          </div>
+                          {form.tiers.length > 1 && (
+                            <button
+                              type="button"
+                              data-remove-tier={index}
+                              onClick={() => removeTier(index)}
+                              className="text-[11px] text-muted hover:text-red-600 transition-colors px-1"
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+
+                        <input
+                          type="text"
+                          placeholder="Short note for buyers (optional), e.g. A4 prints, unframed"
+                          value={tier.description}
+                          onChange={(e) => updateTier(index, { description: e.target.value })}
+                          className="w-full px-3 py-2 bg-background border border-border rounded-sm text-xs focus:outline-none focus:border-accent/50"
+                        />
+
+                        {individualTotal > 0 && price > 0 && (
+                          <p
+                            className={`text-xs ${saving > 0 ? "text-muted" : "text-red-600"}`}
+                          >
+                            Individually:{" "}
+                            <span className="text-foreground font-medium">
+                              &pound;{individualTotal.toFixed(0)}
+                            </span>
+                            {saving > 0 ? (
+                              <>
+                                {" "}
+                                &middot; buyers save{" "}
+                                <span className="text-green-700 font-medium">
+                                  &pound;{saving.toFixed(0)}
+                                </span>
+                              </>
+                            ) : saving === 0 ? (
+                              <> &middot; no saving against buying individually</>
+                            ) : (
+                              <>
+                                {" "}
+                                &middot; this size is{" "}
+                                <span className="font-semibold">
+                                  &pound;{Math.abs(saving).toFixed(0)} more
+                                </span>{" "}
+                                than buying individually, double-check it
+                              </>
+                            )}
+                          </p>
+                        )}
+
+                        {form.workIds.length > 0 && (
+                          <div className="space-y-1.5">
+                            {form.workIds.map((wid) => {
+                              const work = artist.works.find((w) => w.id === wid);
+                              if (!work) {
+                                return (
+                                  <p key={wid} className="text-[11px] text-muted italic">
+                                    Work removed from portfolio
+                                  </p>
+                                );
+                              }
+                              const pricing = work.pricing || [];
+                              const selected =
+                                tier.workSizes[wid] || pricing[0]?.label || "";
+                              return (
+                                <div key={wid} className="flex items-center gap-3">
+                                  <span className="text-xs flex-1 truncate">
+                                    {work.title}
+                                  </span>
+                                  {pricing.length === 0 ? (
+                                    <span className="text-[11px] text-muted italic">
+                                      No sizes configured
+                                    </span>
+                                  ) : pricing.length === 1 ? (
+                                    <span className="text-[11px] text-muted">
+                                      {pricing[0].label} &middot; &pound;{pricing[0].price}
+                                    </span>
+                                  ) : (
+                                    <select
+                                      data-tier={index}
+                                      value={selected}
+                                      onChange={(e) =>
+                                        setTierWorkSize(index, wid, e.target.value)
+                                      }
+                                      className="px-2 py-1.5 bg-background border border-border rounded-sm text-xs focus:outline-none focus:border-accent/50 max-w-[180px]"
+                                    >
+                                      {pricing.map((pr) => (
+                                        <option key={pr.label} value={pr.label}>
+                                          {pr.label} &middot; &pound;{pr.price}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {form.tiers.length < MAX_COLLECTION_TIERS && (
+                    <button
+                      type="button"
+                      onClick={addTier}
+                      className="text-xs text-accent hover:text-accent-hover transition-colors"
+                    >
+                      Add another size
+                    </button>
+                  )}
                 </div>
               )}
 

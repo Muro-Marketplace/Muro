@@ -33,6 +33,7 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
   };
 });
 vi.mock("@/context/ToastContext", () => ({ useToast: () => ({ showToast: showToastMock }) }));
+vi.mock("@/context/ConfirmContext", () => ({ useConfirm: () => ({ confirm: vi.fn(async () => true) }) }));
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({ user: { id: "u1", email: "a@b.com", user_metadata: {} }, loading: false }),
 }));
@@ -58,78 +59,99 @@ beforeEach(() => {
 });
 
 describe("artist profile page — no dead localStorage artwork editor (E41-f)", () => {
-  it("shows works read-only, opens no inline editor, and never writes the dead keys", async () => {
+  // The editor this page mounts today is the real one, sharing a component with
+  // My Portfolio and writing through the works API. The point that survives from
+  // E41-f is the one about the dead keys: whatever edits works here, it is never
+  // the localStorage mirror that was deleted.
+  it("never writes the dead localStorage keys", async () => {
     const setItem = vi.spyOn(Storage.prototype, "setItem");
     render(<ProfileEditorPage />);
 
     await screen.findByText("Your Works");
     expect(screen.getAllByText("My Work").length).toBeGreaterThan(0);
 
-    // Clicking a work card must NOT open the inline edit modal that used to live here
-    // (the deleted editor's "Edit Work" / "Add New Work" form).
     fireEvent.click(screen.getAllByText("My Work")[0]);
-    expect(screen.queryByText("Edit Work")).toBeNull();
-    expect(screen.queryByText("Add New Work")).toBeNull();
 
-    // The dead editor's localStorage keys are never written.
     const keys = setItem.mock.calls.map((c) => c[0]);
     expect(keys).not.toContain("wallplace-artist-works");
     expect(keys).not.toContain("wallplace-artist-profile");
   });
 });
 
-describe("Works section routes to the Portfolio editor (owner request 2026-09-02: inline quick-add removed)", () => {
+// ── The Works section is the full editor (owner request 2026-09-06) ─────────
+//
+// This replaces a block that pinned the opposite: a read-only grid and a "Go to
+// My Portfolio" button, from the 2026-09-02 request to keep artists in the
+// portfolio editor. The owner reversed that. The tests are replaced rather than
+// repaired, because they encoded the old decision correctly and there is nothing
+// wrong with them except that the decision changed.
+describe("Works section mounts the full editor", () => {
   beforeEach(() => pushMock.mockReset());
 
-  it("shows the note and a 'Go to My Portfolio' link to /artist-portal/portfolio when the form is clean", async () => {
+  it("offers the editor's own add control, not a link away", async () => {
     render(<ProfileEditorPage />);
     await screen.findByText("Your Works");
+
+    expect(screen.getAllByText("+ Add New Work").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("link", { name: "Go to My Portfolio" })).toBeNull();
+    expect(screen.queryByText(/Works are added and edited in My Portfolio/)).toBeNull();
+  });
+
+  it("carries the shipping defaults across too", async () => {
+    render(<ProfileEditorPage />);
+    await screen.findByText("Your Works");
+
+    expect(screen.getByText("Default UK Shipping")).toBeTruthy();
+    expect(screen.getByText("International Shipping")).toBeTruthy();
+  });
+
+  it("opens the work form in place", async () => {
+    render(<ProfileEditorPage />);
+    await screen.findByText("Your Works");
+
+    fireEvent.click(screen.getAllByText("+ Add New Work")[0]);
+    await waitFor(() => expect(screen.getAllByText("Add New Work").length).toBeGreaterThan(0));
+  });
+
+  it("keeps the profile's Save button clean while a work is being edited", async () => {
+    // Works save as they go, so touching one must not make the profile look
+    // dirty. If it did, the Save button would promise something it does not do.
+    render(<ProfileEditorPage />);
+    await screen.findByText("Your Works");
+
+    const saveButton = screen.getAllByRole("button", { name: "Save Changes" })[0];
+    expect(saveButton.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(screen.getAllByText("+ Add New Work")[0]);
+    await waitFor(() => expect(screen.getAllByText("Add New Work").length).toBeGreaterThan(0));
 
     expect(
-      screen.getByText("Works are added and edited in My Portfolio. Save your profile changes first."),
-    ).toBeTruthy();
-    const link = screen.getByRole("link", { name: "Go to My Portfolio" });
-    expect(link.getAttribute("href")).toBe("/artist-portal/portfolio");
+      screen.getAllByRole("button", { name: "Save Changes" })[0].hasAttribute("disabled"),
+      "editing a work made the profile's Save button think the profile was dirty",
+    ).toBe(true);
   });
 
-  it("swaps to a 'Save and go to My Portfolio' button once the form is dirty, and only navigates after a successful save", async () => {
-    render(<ProfileEditorPage />);
-    await screen.findByText("Your Works");
-
-    // Dirty the form via the Location field.
-    fireEvent.change(screen.getByPlaceholderText("e.g. Hackney, London"), {
-      target: { value: "Peckham, London" },
-    });
-
-    expect(screen.queryByRole("link", { name: "Go to My Portfolio" })).toBeNull();
-    const saveAndGo = screen.getByRole("button", { name: "Save and go to My Portfolio" });
-
-    fireEvent.click(saveAndGo);
-
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/artist-portal/portfolio"));
-  });
-
-  it("stays put and shows the existing error toast, without navigating, when the save fails", async () => {
-    mutateMock.mockRejectedValueOnce(new Error("network down"));
+  it("still saves the profile on its own button, and still shows works", async () => {
     render(<ProfileEditorPage />);
     await screen.findByText("Your Works");
 
     fireEvent.change(screen.getByPlaceholderText("e.g. Hackney, London"), {
       target: { value: "Peckham, London" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save and go to My Portfolio" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Save Changes" })[0]);
 
-    await waitFor(() => expect(showToastMock).toHaveBeenCalled());
-    expect(pushMock).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Save and go to My Portfolio" })).toBeTruthy();
+    await waitFor(() => expect(mutateMock).toHaveBeenCalled());
+    expect(screen.getAllByText("My Work").length).toBeGreaterThan(0);
   });
 
-  it("points the empty-state copy at the new button", async () => {
+  it("shows the editor's own empty state rather than pointing at another page", async () => {
     artistState.artist = { ...artists[0], works: [] };
     render(<ProfileEditorPage />);
-    await screen.findByText(/No works yet/);
-    // JSX renders &ldquo;/&rdquo; as curly quotes, not straight ones.
-    expect(screen.getByText("No works yet. Use “Go to My Portfolio” to add your first piece.")).toBeTruthy();
+    await screen.findByText("Your Works");
+
+    expect(screen.queryByText(/Use .No works yet/)).toBeNull();
+    expect(screen.queryByText(/Go to My Portfolio/)).toBeNull();
+    expect(screen.getAllByText("+ Add New Work").length).toBeGreaterThan(0);
   });
 });
 

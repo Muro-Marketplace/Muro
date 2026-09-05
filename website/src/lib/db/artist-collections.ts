@@ -12,7 +12,8 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { ArtistCollection } from "@/data/collections";
+import type { ArtistCollection, CollectionSizeTier } from "@/data/collections";
+import { cheapestTierPrice, collectionPriceBand } from "@/lib/collection-tiers";
 
 interface DbCollectionRow {
   id: string;
@@ -23,6 +24,7 @@ interface DbCollectionRow {
   bundle_price: number | null;
   work_ids: string[] | null;
   work_sizes: { workId: string; sizeLabel: string }[] | null;
+  size_tiers: CollectionSizeTier[] | null;
   thumbnail: string | null;
   banner_image: string | null;
   cover_image: string | null;
@@ -34,11 +36,17 @@ function rowToCollection(
   row: DbCollectionRow,
   artistName: string,
 ): ArtistCollection {
-  const bundlePrice = row.bundle_price ?? 0;
+  const sizeTiers: CollectionSizeTier[] = Array.isArray(row.size_tiers)
+    ? row.size_tiers
+    : [];
+  const bundlePrice = cheapestTierPrice(sizeTiers) ?? row.bundle_price ?? 0;
   // Provide a reasonable price band string for UI consumers that
-  // expect it (CollectionCard renders this directly).
+  // expect it (CollectionCard renders this directly). A tiered collection
+  // reads "From £120"; the enquiry wording for an unpriced one is this
+  // surface's own, which is why the shared helper returns null instead of
+  // choosing between it and the browse feed's empty string.
   const bundlePriceBand =
-    bundlePrice > 0 ? `£${bundlePrice}` : "Price on enquiry";
+    collectionPriceBand(row.bundle_price, sizeTiers) ?? "Price on enquiry";
   return {
     id: row.id,
     artistSlug: row.artist_slug ?? "",
@@ -47,6 +55,7 @@ function rowToCollection(
     description: row.description ?? "",
     workIds: Array.isArray(row.work_ids) ? row.work_ids : [],
     workSizes: Array.isArray(row.work_sizes) ? row.work_sizes : undefined,
+    sizeTiers,
     bundlePrice,
     bundlePriceBand,
     thumbnail: row.thumbnail ?? undefined,

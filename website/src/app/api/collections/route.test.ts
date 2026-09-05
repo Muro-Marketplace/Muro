@@ -206,3 +206,122 @@ describe("PATCH /api/collections — D15 publish gate", () => {
     expect(updateMock.mock.calls[0][0].available).toBe(true);
   });
 });
+
+// Size tiers (2026-09-05). A collection can optionally be sold in several
+// sizes, each with its own price and its own pinned size per work. The route
+// is the gate: a tier set that reaches the column has already been validated,
+// because the tier LABEL is what checkout re-prices against.
+describe("collection size tiers", () => {
+  beforeEach(() => {
+    isFlagOnMock.mockReturnValue(false);
+  });
+
+  const tiers = [
+    {
+      label: "Small",
+      price: 120,
+      description: "A4 prints",
+      workSizes: [
+        { workId: "w_1", sizeLabel: "A4" },
+        { workId: "w_2", sizeLabel: "A4" },
+      ],
+    },
+    {
+      label: "Large",
+      price: 480,
+      workSizes: [
+        { workId: "w_1", sizeLabel: "A2" },
+        { workId: "w_2", sizeLabel: "50x70cm" },
+      ],
+    },
+  ];
+
+  it("persists the tiers to size_tiers on create", async () => {
+    const res = await POST(req("POST", { ...baseBody, sizeTiers: tiers }));
+    expect(res.status).toBe(200);
+    expect(upsertMock.mock.calls[0][0].size_tiers).toEqual(tiers);
+  });
+
+  it("persists the tiers on update", async () => {
+    const res = await PATCH(req("PATCH", { id: "alice-collection-1", ...baseBody, sizeTiers: tiers }));
+    expect(res.status).toBe(200);
+    expect(updateMock.mock.calls[0][0].size_tiers).toEqual(tiers);
+  });
+
+  it("writes an empty array when no tiers are sent, keeping the collection untiered", async () => {
+    const res = await POST(req("POST", baseBody));
+    expect(res.status).toBe(200);
+    expect(upsertMock.mock.calls[0][0].size_tiers).toEqual([]);
+  });
+
+  it("returns the tiers to the client so the editor can round-trip them", async () => {
+    const res = await POST(req("POST", { ...baseBody, sizeTiers: tiers }));
+    const body = await res.json();
+    expect(body.collection.sizeTiers).toEqual(tiers);
+  });
+
+  it("rejects two tiers sharing a name, and writes nothing", async () => {
+    const res = await POST(
+      req("POST", {
+        ...baseBody,
+        sizeTiers: [
+          { label: "Small", price: 120, workSizes: [] },
+          { label: "small", price: 480, workSizes: [] },
+        ],
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(upsertMock, "a rejected tier set still reached the database").not.toHaveBeenCalled();
+  });
+
+  it("rejects a tier with no price, and writes nothing", async () => {
+    const res = await POST(
+      req("POST", { ...baseBody, sizeTiers: [{ label: "Small", workSizes: [] }] }),
+    );
+    expect(res.status).toBe(400);
+    expect(upsertMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid tier set on update too", async () => {
+    const res = await PATCH(
+      req("PATCH", {
+        id: "alice-collection-1",
+        ...baseBody,
+        sizeTiers: [{ label: "", price: 120, workSizes: [] }],
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("drops a pinned size naming a work that is not in the collection", async () => {
+    const res = await POST(
+      req("POST", {
+        ...baseBody,
+        sizeTiers: [
+          {
+            label: "Small",
+            price: 120,
+            workSizes: [
+              { workId: "w_1", sizeLabel: "A4" },
+              { workId: "w_gone", sizeLabel: "A4" },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(upsertMock.mock.calls[0][0].size_tiers[0].workSizes).toEqual([
+      { workId: "w_1", sizeLabel: "A4" },
+    ]);
+  });
+
+  it("leaves bundle_price for the database trigger rather than computing it here", async () => {
+    // AGENTS.md bans a derived column written only by application code. The
+    // cheapest-tier sync lives in the migration 138 trigger, so this route must
+    // not also compute it, or the two can disagree.
+    const res = await POST(req("POST", { ...baseBody, bundlePrice: "", sizeTiers: tiers }));
+    expect(res.status).toBe(200);
+    expect(upsertMock.mock.calls[0][0].bundle_price).toBeNull();
+  });
+});

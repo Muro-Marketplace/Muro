@@ -38,7 +38,7 @@
   "placement_records": ["id", "placement_id", "artwork_id", "artist_user_id", "venue_user_id", "record_type", "qr_enabled", "start_date", "review_date", "collection_date", "agreed_value_gbp", "insured_value_gbp", "sale_price_gbp", "venue_share_percent", "platform_commission_percent", "artist_payout_terms", "monthly_display_fee_gbp", "condition_in", "condition_out", "damage_notes", "location_in_venue", "piece_count", "delivered_by", "collection_responsible", "exclusive_to_venue", "available_for_sale", "logistics_notes", "contract_attachment_url", "internal_notes", "created_at", "updated_at", "venue_approved", "venue_approved_at", "artist_approved", "artist_approved_at"],
   "placement_reviews": ["id", "placement_id", "reviewer_user_id", "reviewee_user_id", "rating", "text", "created_at"],
   "terms_acceptances": ["id", "user_id", "user_email", "user_type", "terms_version", "terms_type", "accepted_at", "ip_address", "user_agent"],
-  "artist_collections": ["id", "artist_id", "artist_slug", "name", "description", "bundle_price", "work_ids", "available", "created_at", "thumbnail", "banner_image", "updated_at", "work_sizes"],
+  "artist_collections": ["id", "artist_id", "artist_slug", "name", "description", "bundle_price", "work_ids", "available", "created_at", "thumbnail", "banner_image", "updated_at", "work_sizes", "size_tiers"],
   "customer_addresses": ["id", "user_id", "full_name", "line1", "line2", "city", "postcode", "country", "is_default", "created_at", "updated_at"],
   "email_recent_sends": ["user_id", "template", "stream", "created_at"],
   "email_suppressions": ["email", "reason", "scope", "notes", "created_at"],
