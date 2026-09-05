@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import ArtistPortalLayout from "@/components/ArtistPortalLayout";
-import { type ArtistWork, type Artist } from "@/data/artists";
+import WorksEditor from "@/components/portfolio/WorksEditor";
+import { type Artist } from "@/data/artists";
 import { themes as allThemes } from "@/data/themes";
 import { DISCIPLINES, formatSubStyleLabel, getDisciplineById, type DisciplineId } from "@/data/categories";
 import { uploadImage } from "@/lib/upload";
@@ -14,7 +15,7 @@ import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { useUnsavedWarning } from "@/lib/use-unsaved-warning";
 import { slugify } from "@/lib/slugify";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   PROFILE_THEMES,
   canCustomiseTheme,
@@ -347,7 +348,6 @@ export default function ProfileEditorPage() {
   const { artist, loading: artistLoading, profileId, refetch } = useCurrentArtist();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const isWelcome = searchParams?.get("welcome") === "1";
   const [profile, setProfile] = useState<ProfileState | null>(null);
@@ -381,7 +381,6 @@ export default function ProfileEditorPage() {
   const profilePicInputRef = useRef<HTMLInputElement>(null);
 
   // All hooks must be declared before any conditional returns
-  const [works, setWorks] = useState<ArtistWork[]>([]);
   // Tracks which avatar slot has a drag over it so we can light up the
   // right dropzone (banner vs profile pic) without the other one
   // flashing too.
@@ -405,11 +404,6 @@ export default function ProfileEditorPage() {
   }, [artist, artistLoading, profile, user]);
 
   useUnsavedWarning(hasUnsavedChanges);
-
-  useEffect(() => {
-    if (!artist) { setWorks([]); return; }
-    setWorks([...artist.works]);
-  }, [artist]);
 
   if (artistLoading || !profile) {
     return (
@@ -570,16 +564,6 @@ export default function ProfileEditorPage() {
     refetch();
     window.scrollTo({ top: 0, behavior: "smooth" });
     return true;
-  }
-
-  // Works are managed in the full Portfolio editor now (see the Works
-  // section below), not here. When the profile form is dirty, save it
-  // first so nothing is lost, then only navigate once that save has
-  // actually succeeded, handleSave has already shown the error toast and
-  // left the user on this page if it failed.
-  async function handleGoToPortfolio() {
-    const ok = await handleSave();
-    if (ok) router.push("/artist-portal/portfolio");
   }
 
   const inputClass = "w-full bg-background border border-border rounded-sm px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-accent/60 transition-colors";
@@ -1015,57 +999,23 @@ export default function ProfileEditorPage() {
           </div>
         </div>
 
-        {/* 6. Works */}
+        {/* 6. Works.
+            The full editor, shared with My Portfolio (2026-09-06). It used to
+            be a read-only grid and a link across, from the 2026-09-02 request
+            to keep artists in the portfolio editor; the owner reversed that.
+
+            The editor saves each work as it goes, through its own API, while
+            everything above this section waits for the Save button. That is two
+            save models on one page, so the note says which is which rather than
+            leaving an artist to guess whether Save covers their works. */}
         <div className={sectionClass}>
           <div className="mb-5">
             <h2 className="text-lg font-medium">Your Works</h2>
-            {/* The inline quick-add card (image, title, medium, one
-                size/price tier) has been removed, the owner wants artists
-                using the full Portfolio editor instead, sizes, frames,
-                extra photos and every other in-place edit already lived
-                there and nowhere else. This button saves the profile form
-                first when it's dirty, so nothing typed here is lost on
-                the way to Portfolio. */}
-            <p className="text-sm text-muted mt-1 mb-3">
-              Works are added and edited in My Portfolio. Save your profile changes first.
+            <p className="text-sm text-muted mt-1">
+              Works save as you go. The Save button at the top covers your profile only.
             </p>
-            {hasUnsavedChanges ? (
-              <button
-                type="button"
-                onClick={handleGoToPortfolio}
-                disabled={saving}
-                className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {saving ? "Saving..." : "Save and go to My Portfolio"}
-              </button>
-            ) : (
-              <Link
-                href="/artist-portal/portfolio"
-                className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium bg-accent text-white rounded-sm hover:bg-accent-hover transition-colors"
-              >
-                Go to My Portfolio
-              </Link>
-            )}
           </div>
-
-          {/* Works grid */}
-          {works.length > 0 ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-              {works.map((work) => (
-                <div key={work.id} className="relative rounded-sm overflow-hidden border border-border">
-                  <div className="aspect-square relative bg-border/20">
-                    <Image src={work.image} alt={work.title} fill className="object-cover" sizes="120px" />
-                  </div>
-                  <div className="p-2">
-                    <p className="text-[10px] font-medium truncate">{work.title}</p>
-                    <p className="text-[9px] text-muted">{work.priceBand}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted text-center py-8">No works yet. Use &ldquo;Go to My Portfolio&rdquo; to add your first piece.</p>
-          )}
+          <WorksEditor />
         </div>
 
         {/* 7. Collections */}
