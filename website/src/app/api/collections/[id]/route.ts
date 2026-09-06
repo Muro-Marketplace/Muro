@@ -6,6 +6,10 @@ import type {
   CollectionWorkSize,
 } from "@/data/collections";
 import { cheapestTier, collectionPriceBand } from "@/lib/collection-tiers";
+import {
+  getSeedCollection,
+  resolveSeedCollectionWorks,
+} from "@/lib/db/seed-collections";
 import type { ArtistWork, SizePricing } from "@/data/artists";
 
 interface DbWorkRow {
@@ -45,6 +49,27 @@ export async function GET(
       .single();
 
     if (error || !row) {
+      // No database row. It may still be one of the seed catalogue's
+      // collections, whose cards the browse feed serves alongside the real
+      // ones; without this their links were 404s. getSeedCollection returns
+      // nothing when SEED_CATALOG is off, so a guessed URL is not a way back
+      // into a catalogue that is meant to be hidden.
+      const seed = getSeedCollection(id);
+      if (seed) {
+        const { works: seedWorks, artistName } = resolveSeedCollectionWorks(seed);
+        return NextResponse.json({
+          collection: { ...seed, artistName: artistName || seed.artistName },
+          works: seedWorks,
+          // The seed artists carry these preferences on their own records, and
+          // the collection page only needs the defaults to render its chips.
+          artistArrangements: {
+            openToFreeLoan: true,
+            openToRevenueShare: true,
+            revenueSharePercent: null,
+            openToOutrightPurchase: true,
+          },
+        });
+      }
       return NextResponse.json({ error: "Collection not found" }, { status: 404 });
     }
 

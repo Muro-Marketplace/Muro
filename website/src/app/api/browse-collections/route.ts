@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import type { ArtistCollection, CollectionSizeTier } from "@/data/collections";
 import { cheapestTierPrice, collectionPriceBand } from "@/lib/collection-tiers";
+import { withSeedCollections } from "@/lib/db/seed-collections";
 
 /**
- * Public endpoint: returns all available collections from the database.
- * No static seed data, collections are created by artists only.
+ * Public endpoint: every available collection, real ones first.
+ *
+ * Real collections come from the database. The seed catalogue's collections
+ * are appended behind SEED_CATALOG, the same flag and the same reason as the
+ * seed artists in merged-data.ts: without them this feed was empty while the
+ * artist grid beside it was full. They carry isSeedCollection, which is what
+ * puts the Sample pill on their cards.
  */
 export async function GET() {
   const allCollections: ArtistCollection[] = [];
@@ -73,5 +79,7 @@ export async function GET() {
     // DB not available, return empty
   }
 
-  return NextResponse.json({ collections: allCollections });
+  // Outside the try, so a database failure still serves the seed catalogue
+  // rather than an empty grid.
+  return NextResponse.json({ collections: withSeedCollections(allCollections) });
 }
