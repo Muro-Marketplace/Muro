@@ -8,7 +8,12 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { fromMock } = vi.hoisted(() => ({ fromMock: vi.fn() }));
+const { fromMock, isFlagOnMock } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
+  isFlagOnMock: vi.fn(),
+}));
+
+vi.mock("@/lib/feature-flags", () => ({ isFlagOn: isFlagOnMock }));
 
 vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: fromMock }),
@@ -126,7 +131,21 @@ const call = async () => {
 
 beforeEach(() => {
   fromMock.mockReset();
+  isFlagOnMock.mockReset();
+  isFlagOnMock.mockImplementation((f: string) => f === "SEED_CATALOG");
 });
+
+/** A database that holds no collection at all, so the seed fallback decides. */
+function setupEmptyDb() {
+  fromMock.mockImplementation(() => ({
+    select: () => ({
+      eq: () => ({
+        eq: () => ({ single: async () => ({ data: null, error: { message: "no rows" } }) }),
+      }),
+      in: async () => ({ data: [], error: null }),
+    }),
+  }));
+}
 
 describe("GET /api/collections/[id] without tiers", () => {
   beforeEach(() => setupDb());
@@ -202,5 +221,79 @@ describe("GET /api/collections/[id] with tiers", () => {
     const { body } = await call();
     expect(body.works[0].selectedSize).toBe("A4");
     expect(body.works[0].selectedSizePrice).toBe(55);
+  });
+});
+
+// ── The seed catalogue's collections (2026-09-06) ───────────────────────────
+//
+// A sample collection has no database row, so without a fallback its card on
+// /browse linked to a 404. The detail route serves it from the compiled-in
+// catalogue instead, behind the same SEED_CATALOG flag that decides whether
+// the card was ever shown.
+describe("GET /api/collections/[id] for a sample collection", () => {
+  const call = async (id: string) => {
+    const res = await GET(new Request(`http://localhost/api/collections/${id}`), {
+      params: Promise.resolve({ id }),
+    });
+    return { status: res.status, body: await res.json() };
+  };
+
+  beforeEach(() => setupEmptyDb());
+
+  it("serves a sample collection the database does not have", async () => {
+    const { status, body } = await call("seed-james-okafor-concrete-poems");
+    expect(status).toBe(200);
+    expect(body.collection.name).toBe("Concrete Poems");
+    expect(body.collection.artistName).toBe("James Okafor");
+  });
+
+  it("marks it as a sample, so the page can say so", async () => {
+    const { body } = await call("seed-james-okafor-concrete-poems");
+    expect(body.collection.isSeedCollection).toBe(true);
+  });
+
+  it("returns its tiers and its works", async () => {
+    const { body } = await call("seed-james-okafor-concrete-poems");
+    expect(body.collection.sizeTiers.map((t: { label: string }) => t.label)).toEqual([
+      "Small",
+      "Medium",
+      "Large",
+    ]);
+    expect(body.works).toHaveLength(3);
+    expect(body.works[0].pricing.length).toBeGreaterThan(1);
+  });
+
+  it("opens on the cheapest tier, as the database path does", async () => {
+    const { body } = await call("seed-james-okafor-concrete-poems");
+    expect(body.collection.bundlePrice).toBe(595);
+    expect(body.works.every((w: { selectedSize: string }) => w.selectedSize === '8×10" (A4)')).toBe(
+      true,
+    );
+  });
+
+  it("serves an untiered sample with its single price", async () => {
+    const { body } = await call("seed-priya-sharma-soft-boundaries");
+    expect(body.collection.sizeTiers).toEqual([]);
+    expect(body.collection.bundlePriceBand).toBe("£750");
+  });
+
+  it("404s for an unknown id", async () => {
+    const { status } = await call("not-a-collection");
+    expect(status).toBe(404);
+  });
+
+  it("404s for a sample when the seed catalogue is switched off", async () => {
+    // The card would not have been rendered either, so a guessed URL must not
+    // be a way back into a hidden catalogue.
+    isFlagOnMock.mockReturnValue(false);
+    const { status } = await call("seed-james-okafor-concrete-poems");
+    expect(status).toBe(404);
+  });
+
+  it("prefers the database row when one exists with the same id", async () => {
+    setupDb({ id: "seed-james-okafor-concrete-poems", name: "The real one" });
+    const { body } = await call("seed-james-okafor-concrete-poems");
+    expect(body.collection.name).toBe("The real one");
+    expect(body.collection.isSeedCollection).toBeFalsy();
   });
 });

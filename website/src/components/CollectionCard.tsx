@@ -12,6 +12,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { ArtistCollection } from "@/data/collections";
 import SaveButton from "./SaveButton";
+import SamplePill from "./SamplePill";
 import DistanceBadge from "./DistanceBadge";
 
 interface CollectionCardProps {
@@ -60,7 +61,12 @@ export default function CollectionCard({ collection, distance }: CollectionCardP
           the pill. */}
       <div className="p-4 relative">
         <DistanceBadge distance={distance ?? null} corner="top-right" />
-        <p className="text-xs text-muted mb-0.5 min-w-0 truncate pr-16">{collection.artistName}</p>
+        <p className="text-xs text-muted mb-0.5 min-w-0 truncate pr-16">
+          {collection.artistName}
+          {/* Same marking the seed artists carry, for the same reason: a
+              sample collection must not read as a real listing. */}
+          {collection.isSeedCollection && <SamplePill className="ml-1.5 align-middle" />}
+        </p>
         <h3 className="text-sm font-medium text-foreground mb-1 pr-16">{collection.name}</h3>
         {collection.description && (
           <p className="text-xs text-muted line-clamp-2 mb-2">{collection.description}</p>
