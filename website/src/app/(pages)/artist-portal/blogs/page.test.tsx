@@ -27,6 +27,7 @@ vi.mock("@/components/ArtistPortalLayout", () => ({
 }));
 
 import BlogsPage from "./page";
+import { clearPortalGetCache } from "@/lib/portal-get";
 
 const DRAFT = {
   id: "b-1",
@@ -39,6 +40,9 @@ const DRAFT = {
 
 afterEach(() => cleanup());
 beforeEach(() => {
+  // portalGet holds a resolved response briefly so a click can join the
+  // request the sidebar hover started; it must not carry between tests.
+  clearPortalGetCache();
   authFetchMock.mockReset();
   mutateMock.mockReset();
   confirmMock.mockReset();

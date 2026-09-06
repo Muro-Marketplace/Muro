@@ -54,6 +54,13 @@ export const enquirySchema = z.object({
   senderEmail: email,
   artistSlug: safeString(100),
   workTitle: optionalString(200),
+  /**
+   * The work the enquiry is about. artist_works.id is TEXT, not a uuid.
+   * Optional: a general enquiry has no work, and the server treats an id it
+   * cannot verify against this artist as absent rather than rejecting the
+   * enquiry, which is correspondence and worth more than its thumbnail.
+   */
+  workId: optionalString(100),
   enquiryType: safeString(50),
   message: safeString(2000),
 });

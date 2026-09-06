@@ -71,7 +71,7 @@ export async function GET(request: Request) {
   const db = getSupabaseAdmin();
   const { data, error } = await db
     .from("enquiries")
-    .select("id, sender_name, sender_email, work_title, enquiry_type, message, status, created_at")
+    .select("id, sender_name, sender_email, work_title, work_image, enquiry_type, message, status, created_at")
     .eq("artist_slug", artist.slug)
     .order("created_at", { ascending: false });
 
@@ -125,6 +125,47 @@ export async function PATCH(request: Request) {
   return NextResponse.json({ ok: true, enquiry: data[0] });
 }
 
+/**
+ * Resolve the work an enquiry names, and its image, for the artist it is
+ * addressed to.
+ *
+ * The id arrives from a public form, so it is verified against THIS artist
+ * before it is stored: without the ownership check a visitor could attach any
+ * work id in the table and the artist's enquiries list would show someone
+ * else's painting. The image is read here rather than accepted from the client
+ * for the same reason.
+ *
+ * An id that does not resolve returns nulls rather than an error. An enquiry is
+ * correspondence and is worth more than its thumbnail, so a stale or forged id
+ * costs the picture, never the message.
+ */
+async function resolveEnquiryWork(
+  workId: string | null | undefined,
+  artistSlug: string,
+): Promise<{ work_id: string | null; work_image: string | null }> {
+  const none = { work_id: null, work_image: null };
+  const id = workId?.trim();
+  if (!id) return none;
+
+  const db = getSupabaseAdmin();
+  const { data: profile } = await db
+    .from("artist_profiles")
+    .select("id")
+    .eq("slug", artistSlug)
+    .maybeSingle<{ id: string }>();
+  if (!profile?.id) return none;
+
+  const { data: work } = await db
+    .from("artist_works")
+    .select("id, image")
+    .eq("id", id)
+    .eq("artist_id", profile.id)
+    .maybeSingle<{ id: string; image: string | null }>();
+  if (!work) return none;
+
+  return { work_id: work.id, work_image: work.image?.trim() || null };
+}
+
 export async function POST(request: Request) {
   const limited = await checkRateLimit(request, 5, 60000);
   if (limited) return limited;
@@ -136,7 +177,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
 
-    const { senderName, senderEmail, artistSlug, workTitle, enquiryType, message } = parsed.data;
+    const { senderName, senderEmail, artistSlug, workTitle, workId, enquiryType, message } = parsed.data;
+    // Verified against this artist, and the image read server-side.
+    const work = await resolveEnquiryWork(workId, artistSlug);
 
     const { error } = await supabase.from("enquiries").insert({
       // The artist's enquiries page renders this straight to them
@@ -153,6 +196,8 @@ export async function POST(request: Request) {
       sender_email: senderEmail,
       artist_slug: artistSlug,
       work_title: workTitle || null,
+      work_id: work.work_id,
+      work_image: work.work_image,
       enquiry_type: enquiryType,
       message,
       status: "pending",

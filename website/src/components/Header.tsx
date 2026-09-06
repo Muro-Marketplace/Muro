@@ -8,6 +8,7 @@ import CartIndicator from "./CartIndicator";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate } from "@/lib/api-client";
 import { portalNavLinksForRole } from "@/lib/portal-nav";
+import WorkThumb from "@/components/WorkThumb";
 
 // When the user is inside the marketplace area (/browse or /spaces)
 // the top-level "Marketplace" link is replaced by these inline tabs.
@@ -55,7 +56,7 @@ const venueMarketplaceTabs = [
 
 type NavLink = { label: string; href: string; subLinks?: { label: string; href: string; description?: string }[] };
 
-type HeaderNotification = { id: string; type: string; title: string; description: string; time: string; link: string; readAt?: string | null };
+type HeaderNotification = { id: string; type: string; title: string; description: string; time: string; link: string; readAt?: string | null; workImage?: string | null };
 
 // Where a notification row navigates when its own `link` is empty (legacy rows
 // written before we populated it, and platform notifications with no specific
@@ -745,6 +746,13 @@ export default function Header() {
                                 <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-accent" aria-hidden />
                               )}
                               <div className="flex items-start gap-3">
+                                {/* A bell about a specific piece shows the piece.
+                                    The kind icon says what happened, which the
+                                    title already says; the artwork says which
+                                    work it happened to, which nothing else did. */}
+                                {n.workImage ? (
+                                  <WorkThumb src={n.workImage} alt={n.title} size="sm" />
+                                ) : (
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                                   n.type === "placement" ? "bg-amber-100" : n.type === "placement_declined" ? "bg-red-100" : n.type === "message" ? "bg-accent/10" : "bg-green-100"
                                 }`}>
@@ -758,6 +766,7 @@ export default function Header() {
                                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#15803D" strokeWidth="2" strokeLinecap="round"><polyline points="2 7 5.5 10.5 12 3.5" /></svg>
                                   )}
                                 </div>
+                                )}
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5">
                                     <p className={`text-sm truncate ${isUnread ? "font-semibold text-foreground" : "font-normal text-muted"}`}>{n.title}</p>
@@ -1067,6 +1076,9 @@ export default function Header() {
                                         }`}
                                       >
                                         <div className="flex items-center gap-1.5">
+                                          {n.workImage && (
+                                            <WorkThumb src={n.workImage} alt={n.title} size="xs" />
+                                          )}
                                           <p className={`text-sm truncate ${isUnread ? "font-semibold text-foreground" : "font-normal text-muted"}`}>{n.title}</p>
                                           {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" aria-label="Unread" />}
                                         </div>

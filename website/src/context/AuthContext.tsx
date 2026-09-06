@@ -4,6 +4,8 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { supabase } from "@/lib/supabase";
 import type { User, Session, AuthError } from "@supabase/supabase-js";
 import { parseRole, type SignupRole, type UserRole } from "@/lib/auth-roles";
+import { clearPortalGetCache } from "@/lib/portal-get";
+import { clearCurrentArtistCache } from "@/lib/current-artist-cache";
 
 interface AuthContextValue {
   user: User | null;
@@ -103,6 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const prevId = prev?.id || null;
           const nextId = nextUser?.id || null;
           if (prevId === nextId) return prev;
+          // Whoever is signed in has changed, including to nobody. Both caches
+          // are keyed by URL alone, so anything held from the previous session
+          // must go before the next one can read it.
+          clearPortalGetCache();
+          clearCurrentArtistCache();
           fetchSubscription(nextUser);
           return nextUser;
         });

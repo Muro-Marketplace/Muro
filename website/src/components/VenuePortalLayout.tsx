@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authFetch, mutate } from "@/lib/api-client";
 import { venuePortalNav } from "@/lib/portal-nav";
+import { warmOnIntent } from "@/lib/portal-get";
 import { loginPathWithNext } from "@/lib/login-redirect";
 
 // H6: nav lists moved to src/lib/portal-nav.ts so the header's portal dropdown
@@ -192,6 +193,7 @@ export default function VenuePortalLayout({
               <Link
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
+                {...warmOnIntent(item.href)}
                 className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-colors duration-150 rounded-sm mx-1 ${
                   isActive(item.href)
                     ? "bg-accent/8 text-accent font-medium"
@@ -210,6 +212,7 @@ export default function VenuePortalLayout({
               <Link
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
+                {...warmOnIntent(item.href)}
                 className="flex items-center gap-3 px-4 py-2.5 text-sm text-muted hover:text-foreground hover:bg-white/60 transition-colors duration-150 rounded-sm mx-1"
               >
                 {item.label}

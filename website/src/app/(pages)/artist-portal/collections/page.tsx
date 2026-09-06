@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import UpgradePrompt from "@/components/UpgradePrompt";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch, mutate, ApiError } from "@/lib/api-client";
+import { mutate, ApiError } from "@/lib/api-client";
 import { uploadImage } from "@/lib/upload";
 import { useConfirm } from "@/context/ConfirmContext";
+import { portalGet } from "@/lib/portal-get";
 import { MAX_COLLECTION_TIERS } from "@/lib/collection-tiers";
 
 /**
@@ -90,8 +91,7 @@ export default function CollectionsPage() {
     if (!artist) return;
     let cancelled = false;
     setLoadingList(true);
-    authFetch("/api/collections")
-      .then((r) => r.json())
+    portalGet<{ collections?: typeof userCollections }>("/api/collections")
       .then((data) => {
         if (cancelled) return;
         setUserCollections(data.collections || []);

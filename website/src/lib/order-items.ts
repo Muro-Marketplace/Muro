@@ -46,6 +46,12 @@ export type OrderItemLine = {
   lineTotal: number;
   /** From `lineTotal.currency` when the enriched shape carries one. */
   currency: string | null;
+  /**
+   * The artwork image, which the stored item already carried and this reader
+   * used to drop, so every order surface named the piece in text alone. Null
+   * for a legacy row saved without one; WorkThumb renders its placeholder.
+   */
+  image: string | null;
 };
 
 function finiteNumber(value: unknown): number | null {
@@ -72,6 +78,7 @@ export function readOrderItem(item: RawOrderItem | null | undefined): OrderItemL
     pence !== null ? pence / 100 : price !== null ? price * quantity : 0;
 
   return {
+    image: raw.image?.trim() || null,
     title: raw.title?.trim() || "Artwork",
     quantity,
     lineTotal,
