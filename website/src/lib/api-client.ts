@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { clearCurrentArtistCache } from "@/lib/current-artist-cache";
+import { invalidateCaches } from "@/lib/cache-bus";
 
 /**
  * Thrown when a request reaches the server and comes back non-2xx. Carries the
@@ -109,6 +110,11 @@ export async function mutate<T = unknown>(
   // 5 September 2026). Broad on purpose: a placement or visualizer write can
   // touch artist_works too, and the cost is one GET on the next mount.
   clearCurrentArtistCache();
+  // Same reasoning for the portal list reads: a confirmed write must never be
+  // followed by a stale list, even inside portal-get's short reuse window.
+  // Announced rather than called directly, so api-client does not import the
+  // caches that read through it. See lib/cache-bus.ts.
+  invalidateCaches();
   return payload as T;
 }
 

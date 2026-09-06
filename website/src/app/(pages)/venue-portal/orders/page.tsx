@@ -8,10 +8,11 @@ import LoadErrorState from "@/components/LoadErrorState";
 import OrderStatusTracker from "@/components/OrderStatusTracker";
 import { authFetch } from "@/lib/api-client";
 import { detectCarrierUrl } from "@/lib/carrier-tracking";
+import WorkThumb from "@/components/WorkThumb";
 
 interface Order {
   id: string;
-  items: { title: string; qty: number; price: number; artistSlug?: string }[];
+  items: { title: string; qty: number; price: number; artistSlug?: string; image?: string | null }[];
   shipping: { fullName: string; addressLine1: string; city: string; postcode: string };
   total: number;
   /** Server-provided shipping cost when available. Older orders may
@@ -217,9 +218,12 @@ function VenueOrdersContent() {
                   const qty = item?.qty ?? 1;
                   const price = typeof item?.price === "number" ? item.price : 0;
                   return (
-                    <div key={i} className="flex justify-between text-sm border-b border-border pb-2">
-                      <span>{item?.title || "Item"} &times; {qty}</span>
-                      <span className="font-medium">&pound;{(price * qty).toFixed(2)}</span>
+                    <div key={i} className="flex items-center justify-between gap-3 text-sm border-b border-border pb-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <WorkThumb src={item?.image} alt={item?.title || "Item"} size="md" />
+                        <span className="min-w-0 truncate">{item?.title || "Item"} &times; {qty}</span>
+                      </div>
+                      <span className="font-medium shrink-0">&pound;{(price * qty).toFixed(2)}</span>
                     </div>
                   );
                 })}

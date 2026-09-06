@@ -132,15 +132,20 @@ export async function GET(request: NextRequest) {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 20); // pull more so the post-filter still shows 10
 
+  // Carries the image too: "Top Performing Works" listed titles alone, so the
+  // artist had to recognise their own work from a string. Same query, one more
+  // column.
   let workTitleMap: Record<string, string> = {};
+  let workImageMap: Record<string, string | null> = {};
   if (topWorkIds.length > 0) {
     const ids = topWorkIds.map(([id]) => id);
     const { data: works } = await db
       .from("artist_works")
-      .select("id, title")
+      .select("id, title, image")
       .in("id", ids);
     if (works) {
       workTitleMap = Object.fromEntries(works.map((w) => [w.id, w.title]));
+      workImageMap = Object.fromEntries(works.map((w) => [w.id, w.image ?? null]));
     }
   }
 
@@ -150,7 +155,7 @@ export async function GET(request: NextRequest) {
   // title and keep the work_id of the most-viewed copy for the link
   // target. The sum of views is what the artist actually wants to
   // see for that title.
-  const byTitle: Record<string, { work_id: string; title: string; views: number }> = {};
+  const byTitle: Record<string, { work_id: string; title: string; image: string | null; views: number }> = {};
   for (const [work_id, views] of topWorkIds) {
     const title = workTitleMap[work_id];
     if (!title) continue; // skip unresolved (deleted) work rows
@@ -160,6 +165,8 @@ export async function GET(request: NextRequest) {
       byTitle[key] = {
         work_id,
         title,
+        // The most-viewed copy wins the row, so its image is the one to show.
+        image: workImageMap[work_id] ?? null,
         views: (existing?.views || 0) + views,
       };
     } else {

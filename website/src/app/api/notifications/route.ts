@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const db = getSupabaseAdmin();
   const { data, error } = await db
     .from("notifications")
-    .select("id, kind, title, body, link, read_at, created_at")
+    .select("id, kind, title, body, link, read_at, created_at, work_image")
     .eq("user_id", auth.user!.id)
     .order("created_at", { ascending: false })
     .limit(30);
@@ -30,6 +30,9 @@ export async function GET(request: Request) {
     link: n.link || "",
     time: n.created_at,
     readAt: n.read_at,
+    // Present only for a bell about a specific piece; the drawer shows it in
+    // place of the generic kind icon.
+    workImage: n.work_image || null,
   }));
   const unreadCount = notifications.filter((n) => !n.readAt).length;
 

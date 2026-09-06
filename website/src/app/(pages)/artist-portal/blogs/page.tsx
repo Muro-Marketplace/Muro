@@ -8,9 +8,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import LoadErrorState from "@/components/LoadErrorState";
-import { ApiError, authFetch, mutate } from "@/lib/api-client";
+import { ApiError, mutate } from "@/lib/api-client";
 import { useConfirm } from "@/context/ConfirmContext";
 import { isFlagOn } from "@/lib/feature-flags";
+import { portalGet } from "@/lib/portal-get";
 
 interface BlogRow {
   id: string;
@@ -88,9 +89,9 @@ export default function ArtistBlogsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await authFetch("/api/blogs/mine");
-        if (!res.ok) throw new Error(`blogs load failed (${res.status})`);
-        const data = await res.json();
+        // portalGet does the same status check, and the sidebar has usually
+        // started this on hover already.
+        const data = await portalGet<{ blogs?: BlogRow[] }>("/api/blogs/mine");
         if (!cancelled) {
           setRows(data.blogs ?? []);
           setLoadError(null);

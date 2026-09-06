@@ -43,9 +43,13 @@ vi.mock("@/components/labels/LabelPreview", () => ({
 
 import LabelsPage from "./page";
 import { artists } from "@/data/artists";
+import { clearPortalGetCache } from "@/lib/portal-get";
 
 afterEach(() => cleanup());
 beforeEach(() => {
+  // portalGet holds a resolved response briefly so a click can join the
+  // request the sidebar hover started; it must not carry between tests.
+  clearPortalGetCache();
   mutateMock.mockReset();
   authFetchMock.mockReset();
   showToastMock.mockReset();
