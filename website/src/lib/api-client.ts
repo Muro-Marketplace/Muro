@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { clearCurrentArtistCache } from "@/lib/current-artist-cache";
-import { clearPortalGetCache } from "@/lib/portal-get";
+import { invalidateCaches } from "@/lib/cache-bus";
 
 /**
  * Thrown when a request reaches the server and comes back non-2xx. Carries the
@@ -112,7 +112,9 @@ export async function mutate<T = unknown>(
   clearCurrentArtistCache();
   // Same reasoning for the portal list reads: a confirmed write must never be
   // followed by a stale list, even inside portal-get's short reuse window.
-  clearPortalGetCache();
+  // Announced rather than called directly, so api-client does not import the
+  // caches that read through it. See lib/cache-bus.ts.
+  invalidateCaches();
   return payload as T;
 }
 

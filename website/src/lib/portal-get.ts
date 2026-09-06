@@ -2,6 +2,7 @@
 
 import { authFetch } from "@/lib/api-client";
 import { prefetchUrlsFor } from "@/lib/portal-nav";
+import { onCacheInvalidate } from "@/lib/cache-bus";
 
 /**
  * Shared reads for portal pages, so a click lands on a request that is already
@@ -90,10 +91,14 @@ export function prefetchPortalGet(url: string): void {
   });
 }
 
-/** Drop everything. Called by mutate() on every confirmed write. */
+/** Drop everything. Runs on every confirmed write, via the cache bus. */
 export function clearPortalGetCache(): void {
   entries.clear();
 }
+
+// Registered rather than imported by api-client, which would make a cycle:
+// api-client -> portal-get -> api-client. See lib/cache-bus.ts.
+onCacheInvalidate(clearPortalGetCache);
 
 /** Test seam. */
 export function portalGetCacheSize(): number {

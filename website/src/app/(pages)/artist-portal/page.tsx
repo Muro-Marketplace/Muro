@@ -10,6 +10,16 @@ import { authFetch } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
 import { artistPayoutPounds } from "@/lib/finance/order-money";
 import WorkThumb from "@/components/WorkThumb";
+import { portalGet } from "@/lib/portal-get";
+
+/**
+ * GET /api/dashboard, as loosely as the old untyped `.json()` had it. Naming
+ * every field this page reads would be a real improvement, but it is a separate
+ * job from moving the read onto portalGet, and doing it here would have made a
+ * behaviour-preserving change look like a rewrite.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DashboardPayload = Record<string, any>;
 
 interface ActivityItem {
   id: string;
@@ -125,7 +135,8 @@ export default function ArtistPortalPage() {
     // which is stored the moment onboarding STARTS.
     async function loadDashboard() {
       const [data, connect] = await Promise.all([
-        authFetch("/api/dashboard").then((r) => r.json()).catch(() => ({})),
+        // Warmed by the sidebar on hover; the catch already absorbs a failure.
+        portalGet<DashboardPayload>("/api/dashboard").catch(() => ({} as DashboardPayload)),
         authFetch("/api/stripe-connect/status")
           .then((r) => r.json())
           .catch(() => ({} as { onboardingComplete?: boolean })),
