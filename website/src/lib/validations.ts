@@ -523,3 +523,48 @@ export const customerAddressUpdateSchema = z
   .object(customerAddressFieldsShape)
   .partial()
   .superRefine(postcodeFormatRefiner);
+
+/**
+ * Reporting a piece of content: an artwork, an artist profile, a venue profile
+ * or a collection.
+ *
+ * Conversations already had a report path (`POST /api/messages/report`,
+ * `conversation_reports`). Nothing else did, so the marketplace's primary
+ * content, user-uploaded images and the profiles around them, could not be
+ * flagged by anyone. The `reports` table has existed since migration 060 with
+ * an index on (reported_entity_type, reported_entity_id) and no writer.
+ *
+ * `entityId` is a slug for a profile and a UUID for a work or a collection, so
+ * it is validated as a bounded string rather than a uuid: the route resolves it
+ * against the owning table and refuses anything it cannot find.
+ */
+export const REPORTABLE_ENTITY_TYPES = [
+  "artist_work",
+  "artist_profile",
+  "venue_profile",
+  "collection",
+] as const;
+
+export type ReportableEntityType = (typeof REPORTABLE_ENTITY_TYPES)[number];
+
+/**
+ * Why the content is being reported. Kept short and closed so the moderation
+ * queue can be triaged by reason, with `other` carrying the detail.
+ */
+export const REPORT_REASONS = [
+  "not_the_artists_own_work",
+  "offensive_or_explicit",
+  "misleading_or_scam",
+  "spam",
+  "impersonation",
+  "other",
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number];
+
+export const reportSchema = z.object({
+  entityType: z.enum(REPORTABLE_ENTITY_TYPES),
+  entityId: safeString(200),
+  reason: z.enum(REPORT_REASONS),
+  detail: optionalString(2000),
+});

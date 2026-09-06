@@ -56,6 +56,17 @@ const PUBLIC_ROUTES = {
     "INSERT policies on artist_applications: the route is now the only writer. " +
     "Alternative controls: applySchema validation, checkRateLimit, a pending status " +
     "the applicant cannot set past, and an insert of nothing but the submitted form.",
+  "src/app/api/reports/route.ts":
+    "Content reporting (artwork, artist profile, venue profile, collection). Requires a " +
+    "Bearer token (reports.reporter_user_id is NOT NULL with an FK to auth.users), so the " +
+    "caller is always identified. It imports nothing from @/lib/authz because there is no " +
+    "ownership predicate to assert: you report someone ELSE'S content by definition, and an " +
+    "assert*() here would refuse exactly the callers the route exists for. The controls that " +
+    "replace it: reportSchema closes both the entity type and the reason to fixed enums; the " +
+    "reported owner is resolved from the entity's own table and never read from the body; a " +
+    "self-report is refused; the entity must exist (404 otherwise); checkRateLimit caps it at " +
+    "6/min; and the only row written is a report naming the caller as reporter. Mirrors " +
+    "api/messages/report, which has the same shape for conversations.",
   "src/app/api/analytics/track/route.ts":
     "Anonymous event ingest. Append-only, no row is read back to the caller.",
   "src/app/api/account/email/unsubscribe/route.ts":
