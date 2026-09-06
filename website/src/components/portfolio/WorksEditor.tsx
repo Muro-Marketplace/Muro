@@ -268,7 +268,12 @@ export default function WorksEditor({ title, headerActions }: WorksEditorProps) 
    */
   function scrollFormIntoView() {
     requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      // `?.` on the method as well as the ref: jsdom's Element does not
+      // implement scrollIntoView, so an unguarded call throws inside this
+      // callback, after the test that opened the form has already finished.
+      // Vitest reports that as an unhandled error and exits non-zero while
+      // still printing every test as passed, which is how it reached CI.
+      formRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
     });
   }
   const [form, setForm] = useState<WorkFormState>(emptyWork);
