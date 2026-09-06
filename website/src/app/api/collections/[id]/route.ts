@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import type { ArtistCollection, CollectionWorkSize } from "@/data/collections";
+import type {
+  ArtistCollection,
+  CollectionSizeTier,
+  CollectionWorkSize,
+} from "@/data/collections";
+import { cheapestTier, collectionPriceBand } from "@/lib/collection-tiers";
 import type { ArtistWork, SizePricing } from "@/data/artists";
 
 interface DbWorkRow {
@@ -53,6 +58,22 @@ export async function GET(
     const workSizes: CollectionWorkSize[] = Array.isArray(row.work_sizes)
       ? row.work_sizes
       : [];
+    const sizeTiers: CollectionSizeTier[] = Array.isArray(row.size_tiers)
+      ? row.size_tiers
+      : [];
+
+    // The page opens on the cheapest tier, so the sizes resolved below have to
+    // be that tier's, not `work_sizes`. On a tiered collection `work_sizes` is
+    // a leftover from before the artist added tiers and would show a size the
+    // selected tier does not include.
+    //
+    // Only the DEFAULT view is resolved here. Every other tier is priced on the
+    // client from each work's own `pricing` array, which this route already
+    // returns in full, so switching tiers costs no round trip.
+    const defaultTier = cheapestTier(sizeTiers);
+    const defaultSizes: CollectionWorkSize[] = defaultTier
+      ? defaultTier.workSizes
+      : workSizes;
 
     let works: (ArtistWork & { selectedSize?: string; selectedSizePrice?: number })[] = [];
     if (workIds.length > 0) {
@@ -65,7 +86,7 @@ export async function GET(
       for (const w of (workRows || []) as DbWorkRow[]) byId.set(w.id, w);
 
       const sizeByWork = new Map<string, string>();
-      for (const ws of workSizes) sizeByWork.set(ws.workId, ws.sizeLabel);
+      for (const ws of defaultSizes) sizeByWork.set(ws.workId, ws.sizeLabel);
 
       works = workIds
         .map((wid) => {
@@ -73,9 +94,16 @@ export async function GET(
           if (!w) return null;
           const selectedSize = sizeByWork.get(wid);
           const pricing = w.pricing || [];
-          const sizeEntry = selectedSize
-            ? pricing.find((p) => p.label === selectedSize)
-            : pricing[0];
+          // A pinned label that no longer matches any of the work's sizes is
+          // treated the same as no pin at all: fall back to the work's first
+          // size. The route already did this for an unpinned work, and the
+          // half that was missing rendered a size the work does not sell, with
+          // no price beside it. The artist renaming a size after building the
+          // collection is the ordinary way to get here, and it costs nothing,
+          // because a tier's price is typed rather than summed from these.
+          const sizeEntry =
+            (selectedSize ? pricing.find((p) => p.label === selectedSize) : undefined) ??
+            pricing[0];
           const work: ArtistWork & { selectedSize?: string; selectedSizePrice?: number } = {
             id: w.id,
             title: w.title,
@@ -116,8 +144,11 @@ export async function GET(
       description: row.description || undefined,
       workIds,
       workSizes,
-      bundlePrice: row.bundle_price || 0,
-      bundlePriceBand: row.bundle_price ? `£${row.bundle_price}` : "",
+      sizeTiers,
+      // The trigger in migration 138 keeps bundle_price on the cheapest tier,
+      // but the tiers are the truth if a row ever drifts.
+      bundlePrice: defaultTier?.price ?? row.bundle_price ?? 0,
+      bundlePriceBand: collectionPriceBand(row.bundle_price, sizeTiers) ?? "",
       thumbnail,
       bannerImage,
       coverImage,

@@ -1984,3 +1984,199 @@ describe("POST /api/checkout carries the buyer's identity to the order", () => {
     expect(res.status).toBe(200);
   });
 });
+
+// ── Collection size tiers (2026-09-05) ──────────────────────────────────────
+//
+// A collection can be sold in several sizes, each with its own price. The cart
+// line names the tier it wants; the server prices from that tier's row.
+//
+// The rule this block exists to pin: a tiered collection NEVER falls back to
+// bundle_price. bundle_price on a tiered row is the CHEAPEST tier, kept in sync
+// by the migration 138 trigger so cards can show "From £120". Falling back to
+// it would let a buyer select the £480 tier, send a label the server cannot
+// match, and be charged £120.
+describe("POST /api/checkout collection size tiers", () => {
+  const TIERS = [
+    { label: "Small", price: 120, workSizes: [{ workId: "w-1", sizeLabel: "A4" }] },
+    { label: "Large", price: 480, workSizes: [{ workId: "w-1", sizeLabel: "A2" }] },
+  ];
+
+  beforeEach(() => {
+    setupDefaultDbMock();
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_collections") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => ({
+                id,
+                available: true,
+                // The cheapest tier, as the trigger maintains it.
+                bundle_price: 120,
+                name: "Bundle",
+                size_tiers: TIERS,
+              })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return base(table);
+    });
+  });
+
+  const sentLineItems = () =>
+    (stripeCreate.mock.calls as unknown as Array<
+      [{ line_items?: Array<{ price_data?: { unit_amount?: number } }> }]
+    >)[0]?.[0]?.line_items ?? [];
+
+  const tierItem = (over: Record<string, unknown> = {}) => ({
+    ...baseItem,
+    title: "Bundle",
+    type: "collection",
+    collectionId: "c-1",
+    ...over,
+  });
+
+  it("charges the selected tier's price, not the client's number", async () => {
+    const res = await POST(
+      req({
+        items: [tierItem({ collectionTierLabel: "Large", size: "Large · 3 works", price: 0.01 })],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(48000);
+  });
+
+  it("charges the selected tier rather than the cheapest one", async () => {
+    // The whole point: bundle_price is 120 here, and picking Large must not
+    // quietly bill the buyer the from-price.
+    const res = await POST(
+      req({
+        items: [tierItem({ collectionTierLabel: "Large", size: "Large · 3 works", price: 480 })],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).not.toBe(12000);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(48000);
+  });
+
+  it("writes the corrected tier price into the cart the webhook books from", async () => {
+    await POST(
+      req({
+        items: [tierItem({ collectionTierLabel: "Large", size: "Large · 3 works", price: 0.01 })],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    const saved = (saveCartSessionMock.mock.calls as unknown as Array<
+      [{ cart: Array<{ price: number }> }]
+    >)[0][0];
+    expect(saved.cart[0].price).toBe(480);
+  });
+
+  it("matches the tier label case-insensitively", async () => {
+    // Same tolerance as the size matching on the works path: a cosmetic casing
+    // difference should never be the reason a sale fails.
+    const res = await POST(
+      req({
+        items: [tierItem({ collectionTierLabel: "  lArGe  ", size: "Large · 3 works", price: 480 })],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(48000);
+  });
+
+  it("refuses a tier label the collection does not carry, instead of falling back", async () => {
+    const res = await POST(
+      req({
+        items: [tierItem({ collectionTierLabel: "Enormous", size: "Enormous · 3 works", price: 480 })],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("collection_tier_unavailable");
+    expect(stripeCreate, "an unmatched tier reached Stripe").not.toHaveBeenCalled();
+  });
+
+  it("refuses a tiered collection line that names no tier at all", async () => {
+    // A cart saved before the artist added tiers. Same answer as every other
+    // stale-cart case in this route: re-add the item.
+    const res = await POST(
+      req({
+        items: [tierItem({ price: 480 })],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("collection_tier_unavailable");
+    expect(stripeCreate).not.toHaveBeenCalled();
+  });
+
+  it("still prices an untiered collection from bundle_price", async () => {
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_collections") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => ({
+                id,
+                available: true,
+                bundle_price: 100,
+                name: "Bundle",
+                size_tiers: [],
+              })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return base(table);
+    });
+    const res = await POST(
+      req({
+        items: [tierItem({ price: 0.01 })],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(10000);
+  });
+
+  it("ignores a stale tier label once the artist removes every tier", async () => {
+    // Going back to a single price cannot undercharge: bundle_price is then the
+    // artist's own number again, not a from-price.
+    const base = fromMock.getMockImplementation()!;
+    fromMock.mockImplementation((table: string) => {
+      if (table === "artist_collections") {
+        return {
+          select: () => ({
+            in: async (_col: string, ids: string[]) => ({
+              data: ids.map((id) => ({
+                id,
+                available: true,
+                bundle_price: 100,
+                name: "Bundle",
+                size_tiers: [],
+              })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      return base(table);
+    });
+    const res = await POST(
+      req({
+        items: [tierItem({ collectionTierLabel: "Large", price: 480 })],
+        shipping: { ...baseShipping, country: "GB" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(sentLineItems()[0]?.price_data?.unit_amount).toBe(10000);
+  });
+});

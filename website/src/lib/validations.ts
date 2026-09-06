@@ -355,6 +355,11 @@ const checkoutItemSchema = z.object({
   type: z.enum(["work", "collection"]).optional(),
   workId: optionalString(200),
   collectionId: optionalString(200),
+  // Which size of a tiered collection this line buys. Optional, because an
+  // untiered collection has no tiers to name. On a TIERED collection the
+  // server refuses a line without it rather than falling back to
+  // bundle_price, which is the cheapest tier: see api/checkout.
+  collectionTierLabel: optionalString(80),
   // T9 (N2a). Per-line fulfilment: absent means "follow the order-level
   // choice". `collect_venue` lines name the placement they collect against;
   // the server re-validates BOTH against the live placements table
