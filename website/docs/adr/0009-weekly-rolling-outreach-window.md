@@ -1,6 +1,6 @@
 # ADR 0009 - Rolling weekly outreach allowance, counted on an immutable column
 
-**Status:** Accepted
+**Status:** Accepted, amended 2026-09-03 (see the amendment below)
 **Date:** 2026-08-28
 **Amends:** [ADR 0003](0003-outreach-cap-aggregates.md), which stands on cross-surface aggregation and is superseded only on the window, the limits, and the counting column.
 
@@ -61,3 +61,30 @@ The badge renders nothing while the lookup is in flight, for a viewer with no ar
 - Cross-surface aggregation, the reason ADR 0003 exists, is untouched: placements, first-contact messages and artwork-request responses still share one pool.
 - Replies into a thread the artist already opened inside the window are still exempt, via `exemptConversationId`.
 - Venues are not capped.
+
+---
+
+## Amendment (2026-09-03): the limits are 7 / 15 / 30, not 3 / 6 / 15
+
+**The numbers in the Decision section above are superseded.** An owner decision
+on 2026-09-03 raised the rolling-weekly allowance to:
+
+| Plan | Was (this ADR, 2026-08-28) | Is (`OUTREACH_WEEKLY_LIMIT`) |
+|---|---|---|
+| Core | 3 | **7** |
+| Premium | 6 | **15** |
+| Pro | 15 | **30** |
+
+`src/lib/outreach-cap.ts` is the source of truth and carries the change in its
+header. Nothing else in this ADR moves: the window is still rolling and still 7
+days, the counting column is still the immutable `placements.created_by_user_id`
+from migration 122, counter-offers and in-thread replies are still free, the 429
+shape still comes from `outreachCapPayload()`, and the number is still shown
+before it bites on all four surfaces.
+
+This note exists because the ADR was left reading as Accepted with the old
+figures for three days, which makes it a trap: anyone reading it as the
+authority would have quoted 3 / 6 / 15 to an artist while the platform enforced
+7 / 15 / 30. The general rule this is an instance of: when a constant named in
+an ADR moves, the ADR gets an amendment in the same change, or it stops being
+documentation and becomes misinformation.
