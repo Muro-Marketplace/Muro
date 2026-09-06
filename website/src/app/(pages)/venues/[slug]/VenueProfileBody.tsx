@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ReportContentButton from "@/components/ReportContentButton";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import Link from "next/link";
@@ -351,6 +352,15 @@ export default function VenueProfileBody({ slug }: { slug: string }) {
           <Link href="/spaces" className="inline-flex items-center gap-1 mt-4 text-xs text-accent hover:underline">
             &larr; All spaces
           </Link>
+          {/* A venue profile could not be reported either. Same gap as the
+              artist profile and the artwork, closed the same way. */}
+          <div className="mt-6">
+            <ReportContentButton
+              entityType="venue_profile"
+              entityId={slug}
+              entityLabel={(venue.name as string) || undefined}
+            />
+          </div>
         </aside>
       </div>
     </div>

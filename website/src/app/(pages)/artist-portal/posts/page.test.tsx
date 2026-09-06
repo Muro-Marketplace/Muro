@@ -35,12 +35,18 @@ vi.mock("@/components/social/InstagramPostGenerator", () => ({
 }));
 
 import ArtistPostsPage from "./page";
+import { clearPortalGetCache } from "@/lib/portal-get";
 
+// A real Response always carries `ok`, and the page's read now goes through
+// portalGet, which rejects a non-2xx rather than handing back the error body.
 function placementsReply(placements: unknown[]) {
-  return { json: async () => ({ placements }) } as unknown as Response;
+  return { ok: true, status: 200, json: async () => ({ placements }) } as unknown as Response;
 }
 
 beforeEach(() => {
+  // portalGet holds a resolved response briefly so a click can join the
+  // request the sidebar hover started; it must not carry between tests.
+  clearPortalGetCache();
   vi.clearAllMocks();
   generatorProps.last = null;
   artistState.works = [{ id: "w1", title: "Vietnamese Village", image: "https://cdn/a.png", pricing: [] }];

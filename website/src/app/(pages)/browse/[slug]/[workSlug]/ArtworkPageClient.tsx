@@ -7,6 +7,7 @@ import type { ArtistWork } from "@/data/artists";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import SaveButton from "@/components/SaveButton";
+import ReportContentButton from "@/components/ReportContentButton";
 import SamplePill from "@/components/SamplePill";
 import { useToast } from "@/context/ToastContext";
 import WallVisualiser from "@/components/WallVisualiser";
@@ -700,6 +701,14 @@ export default function ArtworkPageClient({
         >
           Message the artist <span className="ml-0.5">→</span>
         </button>
+      </div>
+
+      {/* Reporting an artwork had no path at all: `conversation_reports` covered
+          messages and the marketplace's own images covered nothing. Kept
+          deliberately quiet, below the buying controls rather than beside
+          them. */}
+      <div className="mt-4 text-center">
+        <ReportContentButton entityType="artist_work" entityId={work.id} entityLabel={work.title} />
       </div>
 
       <MakeOfferModal

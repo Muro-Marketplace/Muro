@@ -11,6 +11,7 @@ import { useAuth } from "@/context/AuthContext";
 import { mutate, ApiError } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import SaveButton from "@/components/SaveButton";
+import ReportContentButton from "@/components/ReportContentButton";
 import ArtworkThumb from "@/components/ArtworkThumb";
 import MakeOfferModal from "@/components/offers/MakeOfferModal";
 import { saveQrContext } from "@/lib/qr-context";
@@ -1277,6 +1278,7 @@ export default function ArtistProfileClient({
                               senderEmail: data.get("senderEmail") || user?.email || "",
                               artistSlug,
                               workTitle: currentWork?.title || null,
+                              workId: currentWork?.id || null,
                               enquiryType,
                               message: data.get("message"),
                             }),
@@ -1290,6 +1292,7 @@ export default function ArtistProfileClient({
                             senderEmail: (data.get("senderEmail") as string) || user?.email || "",
                             artistSlug,
                             workTitle: currentWork?.title || null,
+                            workId: currentWork?.id || null,
                             enquiryType,
                             message: data.get("message"),
                           }),
@@ -1322,6 +1325,17 @@ export default function ArtistProfileClient({
           </div>
         </div>
       )}
+
+      {/* Reporting a profile had no path: only conversations could be flagged.
+          A profile impersonating a real gallery, or one whose work is not the
+          artist's own, could be seen by everyone and reported by nobody. */}
+      <div className="max-w-6xl mx-auto px-4 pb-10 text-center">
+        <ReportContentButton
+          entityType="artist_profile"
+          entityId={artistSlug}
+          entityLabel={artistName}
+        />
+      </div>
     </div>
   );
 }

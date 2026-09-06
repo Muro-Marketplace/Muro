@@ -13,6 +13,10 @@ vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; chil
 vi.mock("@/components/VenueWallCard", () => ({ default: () => null }));
 vi.mock("@/components/Breadcrumbs", () => ({ default: () => null }));
 vi.mock("@/components/VenueProfileApplyCta", () => ({ default: () => null }));
+// Stubbed like its sibling child components above: it pulls in AuthContext,
+// which builds a Supabase client at module load. Its own behaviour is covered
+// by src/components/ReportContentButton.test.tsx.
+vi.mock("@/components/ReportContentButton", () => ({ default: () => null }));
 
 import VenueProfileBody from "./VenueProfileBody";
 

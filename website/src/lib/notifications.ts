@@ -17,6 +17,14 @@ interface CreateNotificationInput {
    * key keep today's behaviour (no dedup).
    */
   idempotencyKey?: string;
+  /**
+   * The artwork this bell is about, so the drawer can show it instead of a
+   * generic kind icon. Optional: most notifications are not about a specific
+   * piece. Pass the image itself rather than a work id, matching
+   * placements.work_image, so the drawer renders without a join and an old
+   * bell keeps showing the picture the work had at the time.
+   */
+  workImage?: string | null;
 }
 
 /**
@@ -44,6 +52,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
       title: input.title,
       body: input.body || "",
       link: input.link || "",
+      work_image: input.workImage?.trim() || null,
       idempotency_key: input.idempotencyKey || null,
     });
     if (error) {

@@ -9,9 +9,10 @@ import LabelThemePicker from "@/components/labels/LabelThemePicker";
 import type { LabelData } from "@/components/labels/LabelSheet";
 import { LABEL_SIZES, LABEL_STYLES, type LabelSize, type LabelStyle } from "@/components/labels/QRLabel";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch, mutate, apiErrorMessage } from "@/lib/api-client";
+import { mutate, apiErrorMessage } from "@/lib/api-client";
 import { useToast } from "@/context/ToastContext";
 import { DEFAULT_LABEL_THEME, getLabelTheme, type LabelThemeId } from "@/lib/profile-themes";
+import { portalGet } from "@/lib/portal-get";
 
 interface LabelOptions {
   showMedium: boolean;
@@ -150,8 +151,9 @@ export default function LabelsPage() {
 
   // Fetch unique venue names from placements
   useEffect(() => {
-    authFetch("/api/placements")
-      .then((r) => r.json())
+    // portalGet rejects a non-2xx rather than handing the error body to the
+    // mapper below; the catch already covers that. Warmed on hover.
+    portalGet<{ placements?: Parameters<typeof buildVenueOptions>[0] }>("/api/placements")
       .then((data) => {
         if (data.placements) {
           setVenues(buildVenueOptions(data.placements));

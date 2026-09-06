@@ -490,15 +490,52 @@ describe("Artwork of the Week control (owner decision 2 September)", () => {
   });
 });
 
-describe("Add work jumps to the top of the page (owner-reported 2 September)", () => {
-  it("scrolls to the top when the add form opens", async () => {
-    artistState.works = [WORK];
+describe("opening a work form brings it into view (owner-reported 2 September, 6 September)", () => {
+  // 2 September: from a long grid the artist could not see the form open at all.
+  // That was fixed by scrolling the WINDOW to zero, which was right while this
+  // editor WAS the portfolio page. 6 September: the profile page now mounts the
+  // same editor as section 6 of 7, so scrolling the window threw the artist to
+  // the top of Edit Profile, above every profile field, rather than to the form.
+  // Scrolling the form itself is what both hosts actually want.
+  // No fake frame here. scrollFormIntoView defers to requestAnimationFrame on
+  // purpose, so React has committed the form and the ref points at something.
+  // Running the callback synchronously would find formRef.current still null
+  // and prove nothing, so this waits for the real frame instead.
+  function trackScrolls() {
     const scrollTo = vi.fn();
+    const scrollIntoView = vi.fn();
     Object.defineProperty(window, "scrollTo", { value: scrollTo, writable: true, configurable: true });
+    Object.defineProperty(Element.prototype, "scrollIntoView", { value: scrollIntoView, writable: true, configurable: true });
+    return { scrollTo, scrollIntoView };
+  }
+
+  it("scrolls the FORM into view, not the window to the top", async () => {
+    artistState.works = [WORK];
+    const { scrollTo, scrollIntoView } = trackScrolls();
     render(<PortfolioPage />);
     const [addButton] = await screen.findAllByRole("button", { name: /add new work|add your first work/i });
     fireEvent.click(addButton);
-    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+
+    await waitFor(() =>
+      expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: "start" })),
+    );
+    // The window must be left alone: on the profile page that is the whole bug.
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("does the same when EDITING an existing work, which is how it was reported", async () => {
+    artistState.works = [WORK];
+    const { scrollTo, scrollIntoView } = trackScrolls();
+    render(<PortfolioPage />);
+    // Edit only renders while the card is hovered.
+    fireEvent.mouseEnter(await screen.findByTestId(`work-card-${WORK.id}`));
+    const [editButton] = await screen.findAllByRole("button", { name: /^edit$/i });
+    fireEvent.click(editButton);
+
+    await waitFor(() =>
+      expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: "start" })),
+    );
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 });
 

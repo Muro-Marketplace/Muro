@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import InstagramPostGenerator from "@/components/social/InstagramPostGenerator";
 import { useCurrentArtist } from "@/hooks/useCurrentArtist";
-import { authFetch } from "@/lib/api-client";
+import { portalGet } from "@/lib/portal-get";
 
 interface ActivePlacement {
   workTitle?: string;
@@ -22,8 +22,7 @@ export default function ArtistPostsPage() {
   const [activePlacements, setActivePlacements] = useState<ActivePlacement[]>([]);
 
   useEffect(() => {
-    authFetch("/api/placements?status=active")
-      .then((r) => r.json())
+    portalGet<{ placements?: ActivePlacement[] }>("/api/placements?status=active")
       // D25: the route ignores ?status= (it reads only `archived`), so this
       // returns placements in EVERY state. Without the filter a pending,
       // declined or completed placement produced a "Now showing at" line for

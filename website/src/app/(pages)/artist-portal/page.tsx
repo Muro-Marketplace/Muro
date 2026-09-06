@@ -9,6 +9,17 @@ import { useAuth } from "@/context/AuthContext";
 import { authFetch } from "@/lib/api-client";
 import { formatPounds } from "@/lib/format-currency";
 import { artistPayoutPounds } from "@/lib/finance/order-money";
+import WorkThumb from "@/components/WorkThumb";
+import { portalGet } from "@/lib/portal-get";
+
+/**
+ * GET /api/dashboard, as loosely as the old untyped `.json()` had it. Naming
+ * every field this page reads would be a real improvement, but it is a separate
+ * job from moving the read onto portalGet, and doing it here would have made a
+ * behaviour-preserving change look like a rewrite.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DashboardPayload = Record<string, any>;
 
 interface ActivityItem {
   id: string;
@@ -17,6 +28,14 @@ interface ActivityItem {
   sortTime: number;
   type: "enquiry" | "sale" | "placement" | "message" | "view";
   link?: string;
+  /**
+   * The piece the row is about, where there is one. Shown in place of the
+   * activity-type icon: the icon repeats what the label and the text already
+   * say ("PLACEMENT", "Placement request: ..."), while nothing showed WHICH
+   * work. Undefined for rows that are not about a specific piece (a refund, a
+   * profile view), which keep the icon.
+   */
+  workImage?: string | null;
 }
 
 const activityTypes: Record<string, { label: string; bg: string; text: string; icon: React.ReactNode }> = {
@@ -116,7 +135,8 @@ export default function ArtistPortalPage() {
     // which is stored the moment onboarding STARTS.
     async function loadDashboard() {
       const [data, connect] = await Promise.all([
-        authFetch("/api/dashboard").then((r) => r.json()).catch(() => ({})),
+        // Warmed by the sidebar on hover; the catch already absorbs a failure.
+        portalGet<DashboardPayload>("/api/dashboard").catch(() => ({} as DashboardPayload)),
         authFetch("/api/stripe-connect/status")
           .then((r) => r.json())
           .catch(() => ({} as { onboardingComplete?: boolean })),
@@ -219,13 +239,16 @@ export default function ArtistPortalPage() {
         paid_at?: string;
         artist_revenue?: number | null;
         total?: number | null;
-        items?: Array<{ title?: string }>;
+        // `image` is what the stored order item has always carried; the
+        // activity row shows the piece that sold, not a generic sale icon.
+        items?: Array<{ title?: string; image?: string | null }>;
         status?: string;
       };
       for (const o of (orders as DashboardOrder[]).slice(0, 10)) {
         const time = o.paid_at || o.created_at;
         if (!time) continue;
         const firstTitle = o.items?.[0]?.title || "Artwork";
+        const firstImage = o.items?.[0]?.image || null;
         // K6: fourth copy of the payout rule, now one owner.
         const payout = artistPayoutPounds(o);
         activityItems.push({
@@ -235,6 +258,7 @@ export default function ArtistPortalPage() {
           sortTime: new Date(time).getTime(),
           type: "sale",
           link: o.id ? `/artist-portal/orders?id=${encodeURIComponent(o.id)}` : "/artist-portal/orders",
+          workImage: firstImage,
         });
       }
 
@@ -247,15 +271,15 @@ export default function ArtistPortalPage() {
         const requesterId = p.requester_user_id ?? p.proposed_by_user_id;
         const iAmRequester = requesterId && requesterId === myUserId;
         if (p.status === "pending" && !iAmRequester) {
-          activityItems.push({ id: "p-" + p.id, text: `Placement request: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
+          activityItems.push({ id: "p-" + p.id, text: `Placement request: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink, workImage: (p.work_image as string | null) ?? null });
         } else if (p.status === "active" && iAmRequester) {
           // Artist hears back when their request was accepted.
-          activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
+          activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink, workImage: (p.work_image as string | null) ?? null });
         } else if (p.status === "active" && !iAmRequester) {
           // Artist accepted an incoming venue request, surface the success quietly.
-          activityItems.push({ id: "pa-" + p.id, text: `Placement live: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
+          activityItems.push({ id: "pa-" + p.id, text: `Placement live: ${p.work_title || "Artwork"} at ${venueName}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink, workImage: (p.work_image as string | null) ?? null });
         } else if (p.status === "declined" && iAmRequester) {
-          activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${p.work_title || "Artwork"}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink });
+          activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${p.work_title || "Artwork"}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: placementLink, workImage: (p.work_image as string | null) ?? null });
         }
       }
 
@@ -467,9 +491,13 @@ export default function ArtistPortalPage() {
                 const t = activityTypes[item.type] || activityTypes.view;
                 const Row = (
                   <>
-                    <div className={`w-8 h-8 rounded-full ${t.bg} ${t.text} flex items-center justify-center shrink-0`}>
-                      {t.icon}
-                    </div>
+                    {item.workImage ? (
+                      <WorkThumb src={item.workImage} alt={item.text} size="sm" />
+                    ) : (
+                      <div className={`w-8 h-8 rounded-full ${t.bg} ${t.text} flex items-center justify-center shrink-0`}>
+                        {t.icon}
+                      </div>
+                    )}
                     <span className={`w-20 shrink-0 text-[11px] font-medium ${t.text} uppercase tracking-wider hidden sm:block`}>
                       {t.label}
                     </span>
