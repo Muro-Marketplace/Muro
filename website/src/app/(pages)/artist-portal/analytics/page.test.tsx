@@ -15,6 +15,7 @@ vi.mock("@/components/ArtistPortalLayout", () => ({ default: ({ children }: { ch
 vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a> }));
 
 import AnalyticsPage from "./page";
+import { clearPortalGetCache } from "@/lib/portal-get";
 
 const ANALYTICS = {
   totals: { profile_views: 12, artwork_views: 7, qr_scans: 3, enquiries: 1, venue_views: 0 },
@@ -57,6 +58,9 @@ afterEach(() => cleanup());
 // Block body on purpose: mockReset() returns the mock, and vitest calls a
 // function returned from beforeEach as a teardown, i.e. authFetch() with no URL.
 beforeEach(() => {
+  // portalGet holds a resolved response briefly so a click can join the
+  // request the sidebar hover started; it must not carry between tests.
+  clearPortalGetCache();
   authFetchMock.mockReset();
 });
 

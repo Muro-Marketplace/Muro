@@ -1,6 +1,7 @@
 "use client";
 
 import { authFetch } from "@/lib/api-client";
+import { prefetchUrlsFor } from "@/lib/portal-nav";
 
 /**
  * Shared reads for portal pages, so a click lands on a request that is already
@@ -97,4 +98,25 @@ export function clearPortalGetCache(): void {
 /** Test seam. */
 export function portalGetCacheSize(): number {
   return entries.size;
+}
+
+/**
+ * Sidebar link props that start the destination's data request on hover and on
+ * keyboard focus.
+ *
+ * Both portal sidebars spread this onto their links. Focus is here alongside
+ * hover because keyboard users never hover, and they would otherwise be the
+ * only ones still paying the full round trip on every click.
+ *
+ * A href with nothing to warm yields handlers that do nothing, which is
+ * cheaper than asking each call site to check first.
+ */
+export function warmOnIntent(href: string): {
+  onMouseEnter: () => void;
+  onFocus: () => void;
+} {
+  const warm = () => {
+    for (const url of prefetchUrlsFor(href)) prefetchPortalGet(url);
+  };
+  return { onMouseEnter: warm, onFocus: warm };
 }

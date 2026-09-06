@@ -10,6 +10,7 @@ import { authFetch } from "@/lib/api-client";
 import { venueRevenueEarned } from "@/lib/finance/venue-earnings";
 import { formatPounds } from "@/lib/format-currency";
 import { PROGRAMME_LADDER } from "@/lib/curation-tiers";
+import WorkThumb from "@/components/WorkThumb";
 
 interface OnboardingItem {
   key: string;
@@ -25,6 +26,13 @@ interface ActivityItem {
   sortTime: number;
   type: "placement" | "placement_accepted" | "placement_declined" | "message" | "enquiry" | "order" | "view";
   link?: string;
+  /**
+   * The piece the row is about, shown in place of the activity-type icon. The
+   * icon repeats the label beside it ("PLACEMENT", "Placement request: ..."),
+   * while nothing showed which work. Undefined for rows not about a specific
+   * piece, which keep the icon.
+   */
+  workImage?: string | null;
 }
 
 const activityTypes: Record<string, { label: string; bg: string; text: string; icon: React.ReactNode }> = {
@@ -221,6 +229,8 @@ export default function VenueDashboardPage() {
         if (!time) continue;
         const artistName = formatName(p.artist_slug || "");
         const workTitle = p.work_title || "Artwork";
+        // placements denormalises work_image beside work_title.
+        const workImage = (p.work_image as string | null) ?? null;
         // Only surface placement activity that requires attention, skip
         // pending requests the venue sent (they already know) and
         // accepted/declined responses to inbound requests the venue
@@ -230,11 +240,11 @@ export default function VenueDashboardPage() {
         const requesterId = p.requester_user_id ?? p.proposed_by_user_id;
         const iAmRequester = requesterId && requesterId === myUserId;
         if (p.status === "pending" && !iAmRequester) {
-          activityItems.push({ id: "p-" + p.id, text: `Placement request: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: `/placements/${encodeURIComponent(p.id as string)}` });
+          activityItems.push({ id: "p-" + p.id, text: `Placement request: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement", link: `/placements/${encodeURIComponent(p.id as string)}`, workImage });
         } else if (p.status === "active" && iAmRequester) {
-          activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_accepted", link: `/placements/${encodeURIComponent(p.id as string)}` });
+          activityItems.push({ id: "pa-" + p.id, text: `Placement accepted: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_accepted", link: `/placements/${encodeURIComponent(p.id as string)}`, workImage });
         } else if (p.status === "declined" && iAmRequester) {
-          activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_declined", link: `/placements/${encodeURIComponent(p.id as string)}` });
+          activityItems.push({ id: "pd-" + p.id, text: `Placement declined: ${workTitle}${artistName ? `, ${artistName}` : ""}`, time: formatRelativeTime(time), sortTime: new Date(time).getTime(), type: "placement_declined", link: `/placements/${encodeURIComponent(p.id as string)}`, workImage });
         }
       }
 
@@ -567,9 +577,13 @@ export default function VenueDashboardPage() {
               const t = activityTypes[item.type] || activityTypes.view;
               const Row = (
                 <>
-                  <div className={`w-8 h-8 rounded-full ${t.bg} ${t.text} flex items-center justify-center shrink-0`}>
-                    {t.icon}
-                  </div>
+                  {item.workImage ? (
+                    <WorkThumb src={item.workImage} alt={item.text} size="sm" />
+                  ) : (
+                    <div className={`w-8 h-8 rounded-full ${t.bg} ${t.text} flex items-center justify-center shrink-0`}>
+                      {t.icon}
+                    </div>
+                  )}
                   <span className={`w-20 shrink-0 text-[11px] font-medium ${t.text} uppercase tracking-wider hidden sm:block`}>
                     {t.label}
                   </span>

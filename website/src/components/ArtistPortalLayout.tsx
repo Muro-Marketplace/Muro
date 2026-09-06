@@ -14,11 +14,10 @@ import {
   navGroupKey,
   navItemOwnsPath,
   navPageFor,
-  prefetchUrlsFor,
   sectionTabsFor,
   type PortalNavItem,
 } from "@/lib/portal-nav";
-import { prefetchPortalGet } from "@/lib/portal-get";
+import { warmOnIntent } from "@/lib/portal-get";
 import PortalSectionTabs from "./PortalSectionTabs";
 
 // H6: the nav lists moved to src/lib/portal-nav.ts. The header's portal
@@ -46,24 +45,6 @@ function rowClass(active: boolean): string {
   return `${ROW_BASE} ${active ? ROW_ACTIVE : ROW_IDLE}`;
 }
 
-/**
- * Start the destination's data request on hover and on keyboard focus.
- *
- * The chrome survives a navigation now and the functions sit beside the
- * database, but a page's own request still did not begin until the page
- * mounted, so the content area waited a full round trip after every click.
- * A pointer spends a couple of hundred milliseconds between hovering a link and
- * clicking it, which is most of that round trip. lib/portal-get.ts makes the
- * click join whatever this started.
- *
- * Spread onto the link, so focus covers keyboard users, who never hover.
- */
-function warmOnIntent(href: string) {
-  const warm = () => {
-    for (const url of prefetchUrlsFor(href)) prefetchPortalGet(url);
-  };
-  return { onMouseEnter: warm, onFocus: warm };
-}
 
 // A group remembers whether it is expanded under this prefix, one key per
 // group. Every read and write is wrapped: the accessor itself throws where
