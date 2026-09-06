@@ -149,8 +149,6 @@ export interface Artist {
    *  this file by default at the merge boundary in merged-data.ts;
    *  individual rows don't need to declare it. */
   isSeedArtist?: boolean;
-  /** Walls the artist has built in their Showroom and shown on their profile. */
-  showroomWallCount?: number;
   /** Phase 2.5 B4: surfaced from artist_profiles.subscription_status
    *  for DB-backed artists so the gating filter can include
    *  active / trialing rows. Undefined on static seed entries. */

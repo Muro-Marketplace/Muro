@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   const walls = await listWallsByUser(auth.user!.id);
 
   // Enrich uploaded walls with a short-lived signed URL so the
-  // showroom / walls list cards can show the actual photo as the
+  // walls list cards can show the actual photo as the
   // thumbnail rather than a flat colour swatch. The wall-photos
   // bucket is private, so we mint signed URLs server-side via the
   // admin client. 1h expiry matches what /api/walls/upload-photo

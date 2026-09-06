@@ -2,8 +2,8 @@
 /**
  * A picture you can move around in: drag to pan, wheel or pinch to zoom,
  * double-click to zoom in, with +, - and reset controls. Used to "enter"
- * a saved wall picture (showroom or venue wall) without saving anything;
- * the view is temporary and lives only on screen.
+ * a saved wall picture (a venue wall, or any lightboxed image) without
+ * saving anything; the view is temporary and lives only on screen.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 

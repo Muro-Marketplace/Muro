@@ -269,7 +269,7 @@ describe("consumeQuota, burst limit", () => {
     }
   });
 
-  it("does NOT apply burst limit to showroom_publish", async () => {
+  it("does NOT apply burst limit to a non-render, non-upload action", async () => {
     const db = buildMockSupabase({ tables: premiumArtistTables([]) });
     let burstCalls = 0;
     const burstSpy = async () => {
@@ -277,7 +277,7 @@ describe("consumeQuota, burst limit", () => {
       return new Response("blocked", { status: 429 });
     };
     await consumeQuota(
-      { userId: "u1", action: "showroom_publish", ownerTypeHint: "artist" },
+      { userId: "u1", action: "refund", ownerTypeHint: "artist" },
       { db, now: fakeNow, burstCheck: burstSpy },
     );
     expect(burstCalls).toBe(0);

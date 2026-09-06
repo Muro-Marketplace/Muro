@@ -1,9 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { PublicShowroomWall } from "@/lib/artists/showroom";
-import { safeHexBackground } from "@/lib/hex-color";
-import ImageLightbox from "@/components/ImageLightbox";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -36,8 +33,6 @@ interface ArtistProfileClientProps {
   profileTheme?: string;
   /** Subscription tier, drives the Premium+ theming gate. */
   subscriptionPlan?: string;
-  /** Walls from the artist's Showroom that they chose to show here. */
-  showroomWalls?: PublicShowroomWall[];
 }
 
 export default function ArtistProfileClient({
@@ -48,14 +43,12 @@ export default function ArtistProfileClient({
   works,
   profileTheme,
   subscriptionPlan,
-  showroomWalls = [],
 }: ArtistProfileClientProps) {
   const router = useRouter();
   const { addItem } = useCart();
   const { user, displayName: authDisplayName, userType } = useAuth();
   const { showToast } = useToast();
   const [activeTheme, setActiveTheme] = useState("All");
-  const [showroomView, setShowroomView] = useState<PublicShowroomWall | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
   // Column count for the row-major masonry. CSS `columns` gave us a
   // pretty layout but filled column-1 top-to-bottom before starting
@@ -760,67 +753,6 @@ export default function ArtistProfileClient({
       </section>
 
       {/* Extended bio */}
-      {/* Showroom: walls the artist built and chose to show, each with the
-          picture they saved from Preview, so it reads exactly as their
-          editor did. Anchored so the browse card's View showroom lands here. */}
-      {showroomWalls.length > 0 && (
-        <section id="showroom" className="py-10 lg:py-14 border-t border-border scroll-mt-24">
-          <div className="max-w-[1200px] mx-auto px-6">
-            <div className="flex items-end justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-2xl mb-1">Showroom</h2>
-                <p className="text-sm text-muted">How {artistName}&rsquo;s work looks on a wall, laid out by the artist.</p>
-              </div>
-              <Link
-                href={`/browse/${artistSlug}/showroom`}
-                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors"
-              >
-                Enter showroom
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {showroomWalls.map((wall) => {
-                const picture = wall.preview_image_url ?? wall.source_image_url;
-                return (
-                  <figure key={wall.id} className="rounded-sm overflow-hidden border border-border bg-white">
-                    <div
-                      className={`aspect-[4/3] bg-stone-100 relative ${picture ? "cursor-zoom-in" : ""}`}
-                      role={picture ? "button" : undefined}
-                      tabIndex={picture ? 0 : undefined}
-                      aria-label={picture ? `View ${wall.name} full size` : undefined}
-                      onClick={picture ? () => setShowroomView(wall) : undefined}
-                      onKeyDown={picture ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowroomView(wall); } } : undefined}
-                    >
-                      {picture ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={picture} alt={`${wall.name}, ${wall.width_cm} by ${wall.height_cm} cm`} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
-                      ) : (
-                        <div className="absolute inset-0" style={{ backgroundColor: safeHexBackground(wall.wall_color_hex, "#E5E1DA") }} />
-                      )}
-                    </div>
-                    <figcaption className="px-4 py-3 flex items-baseline justify-between gap-3">
-                      <span className="text-sm font-medium text-foreground truncate">{wall.name}</span>
-                      <span className="text-xs text-muted tabular-nums shrink-0">{wall.width_cm} × {wall.height_cm} cm</span>
-                    </figcaption>
-                  </figure>
-                );
-              })}
-            </div>
-          </div>
-          {showroomView && (showroomView.preview_image_url ?? showroomView.source_image_url) && (
-            <ImageLightbox
-              open
-              onClose={() => setShowroomView(null)}
-              src={(showroomView.preview_image_url ?? showroomView.source_image_url) as string}
-              alt={`${showroomView.name}, ${showroomView.width_cm} by ${showroomView.height_cm} cm`}
-              title={showroomView.name}
-              subtitle={`${showroomView.width_cm} × ${showroomView.height_cm} cm`}
-            />
-          )}
-        </section>
-      )}
-
       <section className="py-10 lg:py-14 border-t border-border">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="max-w-2xl">

@@ -21,7 +21,6 @@ import type { Metadata } from "next";
 import { artistTotals } from "@/lib/analytics/artist-totals";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isFlagOn } from "@/lib/feature-flags";
-import { getPublicShowroomWalls } from "@/lib/artists/showroom";
 
 // Static params for seed artists, database artists use dynamic fallback
 export async function generateStaticParams() {
@@ -205,22 +204,6 @@ export default async function ArtistProfilePage({
   });
   const hasStats =
     liveTotals.placements > 0 || liveTotals.sales > 0 || liveTotals.views > 0;
-
-  // The artist's public showroom walls, by their auth user id (the merged
-  // artist shape carries no user id). Nothing on failure: a public page must
-  // not 500 because a wall lookup did.
-  const showroomWalls = await (async () => {
-    try {
-      const { data } = await getSupabaseAdmin()
-        .from("artist_profiles")
-        .select("user_id")
-        .eq("slug", artist.slug)
-        .maybeSingle<{ user_id: string | null }>();
-      return await getPublicShowroomWalls(data?.user_id ?? null);
-    } catch {
-      return [];
-    }
-  })();
 
   return (
     <div className="bg-background">
@@ -613,7 +596,6 @@ export default async function ArtistProfilePage({
         }
         profileTheme={artist.profileTheme}
         subscriptionPlan={artist.subscriptionPlan}
-        showroomWalls={showroomWalls}
       />
 
       {/* Collections, pulled from the DB by artist slug. The seed

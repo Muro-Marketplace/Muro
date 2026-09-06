@@ -33,7 +33,6 @@ beforeEach(() => {
       wall_uploads_daily: 0,
       saved_walls: 0,
       saved_layouts_per_wall: 0,
-      can_publish_showroom: false,
     },
     daily_used: 0,
     monthly_used: 0,

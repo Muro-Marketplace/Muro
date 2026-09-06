@@ -1,7 +1,13 @@
 # ADR 0005 - Five intentionally separate role navigation sets
 
-**Status:** Accepted  
+**Status:** Accepted, inventory amended 2026-09-06  
 **Date:** 2026-06-15
+
+> **Amended 2026-09-06.** The artist Showroom was removed from the product, so
+> the Showroom entries in the artist nav inventories below (and the reference to
+> it under "Artist portal" in the rationale) no longer exist. The My Portfolio
+> group is now Works and Collections. The decision this ADR records, five
+> intentionally separate nav sets, is unchanged.
 
 ---
 

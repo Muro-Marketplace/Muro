@@ -55,9 +55,9 @@ export const FLAGS: Record<FeatureFlag, FlagDef> = {
     prodDefault: true,
     description:
       "Phase 1 wall visualizer (preset walls, customer + venue flows, " +
-      "non-AI render, plus artist showroom + mockup-attach). On in " +
-      "prod by default, set NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1=0 in " +
-      "Vercel to kill-switch if it misbehaves.",
+      "non-AI render, plus mockup-attach). On in prod by default, set " +
+      "NEXT_PUBLIC_FLAG_WALL_VISUALIZER_V1=0 in Vercel to kill-switch " +
+      "if it misbehaves.",
   },
   OAUTH_GOOGLE_APPLE: {
     envKey: "NEXT_PUBLIC_FLAG_OAUTH_GOOGLE_APPLE",

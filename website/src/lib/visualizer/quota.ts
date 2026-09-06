@@ -2,7 +2,7 @@
  * Wall Visualizer, quota service.
  *
  * The single chokepoint that decides whether an expensive visualizer
- * action (render, wall upload, showroom publish) is allowed for a user.
+ * action (render, wall upload) is allowed for a user.
  * Every API route that performs a billable action MUST go through
  * `consumeQuota()` before doing the work, and `refundQuota()` if the
  * underlying action fails.
@@ -211,7 +211,6 @@ export async function consumeQuota(
   const limits = getTierLimits(tier);
 
   // Burst limit applies to expensive actions only, wall_upload + render*.
-  // showroom_publish is rare enough that we skip burst on it.
   const burstApplicable =
     input.action === "render_standard" ||
     input.action === "render_hd" ||

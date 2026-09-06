@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { ARRANGEMENT_LABEL } from "@/lib/arrangement-labels";
 import Image from "next/image";
 import Link from "next/link";
@@ -43,8 +42,6 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
   if (artist.offersOriginals) formats.push("Originals");
   if (artist.offersPrints) formats.push("Prints");
   if (artist.offersFramed) formats.push("Framed");
-  const hasShowroom = (artist.showroomWallCount ?? 0) > 0;
-  const router = useRouter();
 
   return (
     <Link href={`/browse/${artist.slug}`} className="group block">
@@ -185,37 +182,16 @@ export default function BrowseArtistCard({ artist, distance }: BrowseArtistCardP
               {artist.revenueSharePercent}% Revenue Share
             </p>
           )}
-          {(formats.length > 0 || hasShowroom) && (
-            <div className="flex items-center justify-between gap-2 mt-2.5">
-              <div className="flex flex-wrap gap-1">
-                {formats.map((f) => (
-                  <span
-                    key={f}
-                    className="text-[10px] text-muted/80 px-1.5 py-0.5 border border-border/70 rounded-sm"
-                  >
-                    {f}
-                  </span>
-                ))}
-              </div>
-              {hasShowroom && (
-                // The card is one link, so this is a button that navigates:
-                // a nested anchor is not valid HTML.
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    router.push(`/browse/${artist.slug}/showroom`);
-                  }}
-                  className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium text-accent px-1.5 py-0.5 rounded-sm border border-accent/50 hover:bg-accent/5 transition-colors"
+          {formats.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2.5">
+              {formats.map((f) => (
+                <span
+                  key={f}
+                  className="text-[10px] text-muted/80 px-1.5 py-0.5 border border-border/70 rounded-sm"
                 >
-                  View showroom
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                    <polyline points="12 5 19 12 12 19" />
-                  </svg>
-                </button>
-              )}
+                  {f}
+                </span>
+              ))}
             </div>
           )}
         </div>

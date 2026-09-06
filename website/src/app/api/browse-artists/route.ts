@@ -2,19 +2,18 @@ import { NextResponse } from "next/server";
 import { getAllArtists } from "@/lib/db/merged-data";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { toPublicArtist } from "@/lib/db/public-artist";
-import { getShowroomWallCountsBySlug } from "@/lib/artists/showroom";
 
 // GET: return all artists (static + database) for the browse page
 export async function GET(request: Request) {
   const limited = await checkRateLimit(request, 60, 60000);
   if (limited) return limited;
   try {
-    const [artists, showroomCounts] = await Promise.all([getAllArtists(), getShowroomWallCountsBySlug()]);
+    const artists = await getAllArtists();
     // Bug 1 / G-A. This endpoint is anonymous, so it gets the public projection:
     // no postcode, and coordinates coarsened rather than the exact fix geocoded
     // from the artist's postcode.
     return NextResponse.json({
-      artists: artists.map((a) => toPublicArtist({ ...a, showroomWallCount: showroomCounts[a.slug] ?? 0 })),
+      artists: artists.map((a) => toPublicArtist(a)),
     });
   } catch (err) {
     console.error("Browse artists error:", err);

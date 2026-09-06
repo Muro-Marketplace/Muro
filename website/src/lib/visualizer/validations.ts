@@ -135,7 +135,7 @@ export const updateLayoutSchema = z.object({
 
 // ── Render ──────────────────────────────────────────────────────────────
 
-export const renderKindSchema = z.enum(["standard", "hd", "showroom"]);
+export const renderKindSchema = z.enum(["standard", "hd"]);
 
 /**
  * Body for POST /api/walls/[id]/layouts/[lid]/render.

@@ -197,7 +197,7 @@ export interface RenderableLayout {
 
 // ── Render ──────────────────────────────────────────────────────────────
 
-export type RenderKind = "standard" | "hd" | "showroom";
+export type RenderKind = "standard" | "hd";
 
 export interface WallRender {
   id: string;
@@ -247,7 +247,6 @@ export type VisualizerAction =
   | "render_standard"
   | "render_hd"
   | "wall_upload"
-  | "showroom_publish"
   | "refund";
 
 export interface TierLimits {
@@ -261,8 +260,6 @@ export interface TierLimits {
   saved_walls: number;
   /** Max saved layouts per wall. -1 = unlimited. 0 = saving disabled. */
   saved_layouts_per_wall: number;
-  /** Whether this tier can publish a Pro showroom. Phase 3+. */
-  can_publish_showroom: boolean;
 }
 
 export interface QuotaStatus {
@@ -300,7 +297,6 @@ export type VisualizerMode =
   | "venue_my_walls"
   | "customer_artwork_page"
   | "artist_mockup"
-  | "artist_showroom"
   /** An artist laying their own works out on a venue's public wall to send
       with a placement request. The wall is locked (no size, colour or photo
       controls), nothing is persisted until Send, which stores the capture

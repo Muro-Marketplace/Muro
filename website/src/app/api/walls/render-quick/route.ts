@@ -15,7 +15,7 @@
  *   - `work_id`, the artwork to place.
  *   - Optional `placement`, explicit position/size/frame; otherwise
  *     centred at a sensible default.
- *   - `kind`, "standard" | "hd" | "showroom" (default: standard).
+ *   - `kind`, "standard" | "hd" (default: standard).
  *
  * Response: same shape as the saved-layout render endpoint:
  *   { render, publicUrl, cached, cost_units, meta? }
