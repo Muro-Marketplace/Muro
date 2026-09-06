@@ -247,6 +247,30 @@ export default function WorksEditor({ title, headerActions }: WorksEditorProps) 
   const [works, setWorks] = useState<ArtistWork[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  /**
+   * The add/edit form, so opening it can bring itself into view.
+   *
+   * Opening the form used to scroll the WINDOW to zero, which was right while
+   * this editor was the portfolio page and the form sat at the top of it. The
+   * profile page mounts the same editor as section 6 of 7 (2026-09-06), so
+   * there that same call threw the artist to the top of Edit Profile, above
+   * every profile field, instead of to the form they had just opened.
+   * Owner-reported. Scrolling the form itself is right in both hosts.
+   */
+  const formRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Bring the add/edit form into view once React has laid it out.
+   *
+   * `block: "start"` matches how the placements and orders pages scroll their
+   * own panels. Deferred a frame so the showForm=true layout pass has happened
+   * and the element has somewhere to scroll to.
+   */
+  function scrollFormIntoView() {
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
   const [form, setForm] = useState<WorkFormState>(emptyWork);
   const [hoveredWork, setHoveredWork] = useState<number | null>(null);
   // Drag-reorder state. We track the source index (work being dragged)
@@ -1476,9 +1500,9 @@ export default function WorksEditor({ title, headerActions }: WorksEditorProps) 
     initialFormJson.current = JSON.stringify(fresh);
     setEditingIndex(null);
     setShowForm(true);
-    // The form renders at the top of the page; from a long grid the
-    // artist could not see it open (owner-reported 2 September).
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // From a long grid the artist could not see the form open at all
+    // (owner-reported 2 September).
+    scrollFormIntoView();
   }
 
   /**
@@ -1643,9 +1667,7 @@ export default function WorksEditor({ title, headerActions }: WorksEditorProps) 
     // y-position, the artist sees no visible change. Defer to the
     // next frame so React has finished the showForm=true layout
     // pass before we scroll.
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
+    scrollFormIntoView();
 
     // Detect ratio from existing image for size suggestions
     if (w.image) {
@@ -2111,7 +2133,7 @@ export default function WorksEditor({ title, headerActions }: WorksEditorProps) 
 
       {/* Add/Edit Form */}
       {showForm && (
-        <div className="bg-surface border border-border rounded-sm p-6 mb-6">
+        <div ref={formRef} className="bg-surface border border-border rounded-sm p-6 mb-6 scroll-mt-20">
           {/* Sticky form header, title on the left, Cancel + primary
               save on the right. The save button used to live only at
               the very bottom of a long form; on mobile + on works

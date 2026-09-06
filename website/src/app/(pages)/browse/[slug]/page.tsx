@@ -230,7 +230,7 @@ export default async function ArtistProfilePage({
       {/* Owner find (2026-08-28): pb-2 left the terms pills pressed against
           the section edge while the portfolio below over-padded the top.
           The breathing room now sits on the correct side of the boundary. */}
-      <section className="pt-6 lg:pt-12 pb-10 lg:pb-12">
+      <section className="pt-6 lg:pt-8 pb-8 lg:pb-10">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
           <Breadcrumbs
             items={[
@@ -465,7 +465,7 @@ export default async function ArtistProfilePage({
               <h1 className="font-serif text-4xl lg:text-5xl text-foreground leading-tight tracking-tight mb-2">
                 {artist.name}
               </h1>
-              <div className="flex flex-wrap items-center gap-3 mb-6">
+              <div className="flex flex-wrap items-center gap-3 mb-4">
                 <p className="text-muted text-sm">{artist.location}</p>
                 {artist.instagram && (
                   <>
@@ -484,7 +484,7 @@ export default async function ArtistProfilePage({
               </div>
 
               {(artist.subStyles && artist.subStyles.length > 0) && (
-                <div className="flex flex-wrap gap-1.5 mb-6">
+                <div className="flex flex-wrap gap-1.5 mb-4">
                   {artist.subStyles.slice(0, 6).map((s) => (
                     <span
                       key={s}
@@ -496,12 +496,12 @@ export default async function ArtistProfilePage({
                 </div>
               )}
 
-              <p className="text-foreground/85 leading-relaxed text-[15px] max-w-2xl mb-6">
+              <p className="text-foreground/85 leading-relaxed text-[15px] max-w-2xl mb-4">
                 {artist.shortBio}
               </p>
 
               {artist.styleTags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-6">
+                <div className="flex flex-wrap gap-1.5 mb-4">
                   {artist.styleTags.map((tag) => (
                     <span
                       key={tag}
@@ -520,8 +520,8 @@ export default async function ArtistProfilePage({
                 facts so a buyer scanning for "would this work in my
                 space" can see everything in one column without
                 scrolling past the bio. Hairlines separate each group. */}
-            <aside className="space-y-4">
-              <div className="grid grid-cols-1 gap-y-3">
+            <aside className="space-y-3">
+              <div className="grid grid-cols-1 gap-y-2.5">
                 <div>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Location</p>
                   <p className="text-sm font-medium text-foreground">{artist.location || "-"}</p>
