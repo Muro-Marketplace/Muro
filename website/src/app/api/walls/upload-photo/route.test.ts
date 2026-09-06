@@ -104,7 +104,6 @@ beforeEach(() => {
     wall_uploads_daily: 3,
     saved_walls: 5,
     saved_layouts_per_wall: 10,
-    can_publish_showroom: false,
   });
   withRateLimitMock.mockResolvedValue(null);
   uploadMock.mockResolvedValue({ data: { path: "u-real/x.jpg" }, error: null });
@@ -150,7 +149,6 @@ describe("POST /api/walls/upload-photo enforces wall_uploads_daily (H28)", () =>
       wall_uploads_daily: 0,
       saved_walls: 0,
       saved_layouts_per_wall: 0,
-      can_publish_showroom: false,
     });
 
     const res = await POST(uploadRequest());
@@ -190,7 +188,6 @@ describe("POST /api/walls/upload-photo enforces wall_uploads_daily (H28)", () =>
       wall_uploads_daily: -1,
       saved_walls: -1,
       saved_layouts_per_wall: -1,
-      can_publish_showroom: true,
     });
     setUploadsToday(500);
 

@@ -64,7 +64,6 @@ export function artistPortalNav(): PortalNav {
       group("My Portfolio", [
         { label: "Works", flatLabel: "My Portfolio", href: "/artist-portal/portfolio" },
         { label: "Collections", href: "/artist-portal/collections" },
-        { label: "Showroom", href: "/artist-portal/showroom" },
       ]),
       // Everything that is the artist dealing with a venue or a buyer.
       group("Venues & Buyers", [
@@ -244,18 +243,19 @@ export function navGroupKey(group: PortalNavItem): string {
  * Routes that render their own full-bleed surface and must NOT be wrapped in
  * the portal chrome.
  *
- * Both are single-scene visualiser editors that size themselves against the
- * viewport (`h-[calc(100vh-3.5rem)]`) and carry their own top bar and back
+ * The venue wall editor is a single-scene visualiser that sizes itself against
+ * the viewport (`h-[calc(100vh-3.5rem)]`) and carries its own top bar and back
  * link. A sidebar would eat 14rem of that width and the height maths would be
- * wrong. They were the only two portal pages that never rendered the chrome
- * while every sibling did, and moving the chrome into layout.tsx would
- * otherwise have handed it to them for the first time.
+ * wrong. It was one of only two portal pages that never rendered the chrome
+ * while every sibling did (the artist showroom editor was the other, before
+ * that feature was removed), and moving the chrome into layout.tsx would
+ * otherwise have handed it the chrome for the first time.
  *
- * `/showroom/new` and `/walls/new` are static sibling routes with their own
- * pages, and both DO take the chrome, so the id segment is matched by
- * exclusion rather than by a bare `[^/]+`.
+ * `/walls/new` is a static sibling route with its own page and it DOES take
+ * the chrome, so the id segment is matched by exclusion rather than by a bare
+ * `[^/]+`.
  */
-const FULL_BLEED_PARENTS = ["/artist-portal/showroom", "/venue-portal/walls"] as const;
+const FULL_BLEED_PARENTS = ["/venue-portal/walls"] as const;
 
 /** Segments under a full-bleed parent that are real sibling routes, not ids. */
 const FULL_BLEED_RESERVED = new Set(["new"]);

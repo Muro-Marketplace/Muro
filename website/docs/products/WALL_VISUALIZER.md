@@ -2,6 +2,13 @@
 
 > Status: **DRAFT for review** — no code written yet. Read end-to-end, then sign off (or request changes) on the MVP scope in §M before I begin Phase 1.
 > Author: Claude · Date: 2026-04-25
+>
+> **Superseded in part, 2026-09-06.** The artist showroom described throughout this
+> plan was built and has since been removed: the portal pages, the public showroom
+> surfaces, the `artist_showroom` editor mode, the `can_publish_showroom` tier flag,
+> the `showroom_publish` quota action and the `showroom` render kind are all gone.
+> The customer and venue flows, and the mockup-attach path, remain. Read every
+> showroom section here as history.
 
 ---
 

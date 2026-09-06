@@ -6,7 +6,7 @@
 // grid card on /browse and the most visible place a seed artist's name
 // appears. This covers that card directly.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import type { Artist } from "@/data/artists";
 
 vi.mock("next/image", () => ({ default: () => null }));
@@ -18,8 +18,6 @@ vi.mock("next/link", () => ({
 vi.mock("@/components/SaveButton", () => ({ default: () => null }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ userType: null }) }));
 
-const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, replace: vi.fn(), prefetch: vi.fn() }) }));
 import BrowseArtistCard from "./BrowseArtistCard";
 
 afterEach(() => cleanup());
@@ -94,23 +92,5 @@ describe("<BrowseArtistCard /> Featured chip", () => {
     const premiumArtist = { ...baseArtist, subscriptionPlan: "premium" } as unknown as Artist;
     render(<BrowseArtistCard artist={premiumArtist} distance={null} />);
     expect(screen.queryByText("Featured")).toBeNull();
-  });
-});
-
-
-describe("View showroom", () => {
-  it("shows a button for artists with public showroom walls that opens their showroom section", () => {
-    pushMock.mockReset();
-    const artist = { ...baseArtist, showroomWallCount: 2 } as unknown as Artist;
-    render(<BrowseArtistCard artist={artist} distance={null} />);
-    const button = screen.getByRole("button", { name: "View showroom" });
-    fireEvent.click(button);
-    expect(pushMock).toHaveBeenCalledWith(`/browse/${baseArtist.slug}/showroom`);
-  });
-
-  it("shows nothing when the artist has no public showroom walls", () => {
-    const artist = { ...baseArtist, showroomWallCount: 0 } as unknown as Artist;
-    render(<BrowseArtistCard artist={artist} distance={null} />);
-    expect(screen.queryByRole("button", { name: "View showroom" })).toBeNull();
   });
 });

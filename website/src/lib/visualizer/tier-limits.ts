@@ -7,15 +7,15 @@
  *
  * Approved values (see WALL_VISUALIZER.md §F1):
  *
- *   Tier              Daily  Monthly  Uploads/d  Saved walls  Layouts/wall  Showroom
- *   ──────────────────────────────────────────────────────────────────────────────
- *   guest               0       0        0           0             0           no
- *   customer            2      30        1           1             0           no
- *   artist_core         3      50        1           2             0           no
- *   artist_premium     10     200        3           5            10           no
- *   artist_pro         25     500        5         ∞ (-1)        ∞ (-1)        yes
- *   venue_standard      5     100        2           3            10           no
- *   venue_premium      20     400        5         ∞ (-1)        ∞ (-1)        no
+ *   Tier              Daily  Monthly  Uploads/d  Saved walls  Layouts/wall
+ *   ────────────────────────────────────────────────────────────────────
+ *   guest               0       0        0           0             0
+ *   customer            2      30        1           1             0
+ *   artist_core         3      50        1           2             0
+ *   artist_premium     10     200        3           5            10
+ *   artist_pro         25     500        5         ∞ (-1)        ∞ (-1)
+ *   venue_standard      5     100        2           3            10
+ *   venue_premium      20     400        5         ∞ (-1)        ∞ (-1)
  *
  * Environment overrides:
  *   These limits can be overridden by env vars without a redeploy of code,
@@ -40,7 +40,6 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     wall_uploads_daily: 0,
     saved_walls: 0,
     saved_layouts_per_wall: 0,
-    can_publish_showroom: false,
   },
   customer: {
     daily: 2,
@@ -48,19 +47,17 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     wall_uploads_daily: 1,
     saved_walls: 1,
     saved_layouts_per_wall: 0,
-    can_publish_showroom: false,
   },
   artist_core: {
     daily: 3,
     monthly: 50,
     wall_uploads_daily: 1,
     saved_walls: 2,
-    // Bumped 0 → 1 so the showroom is actually usable on the free
+    // Bumped 0 → 1 so wall scenes are actually usable on the free
     // tier, saving the layout is a basic expectation when you've
     // composed a scene. Multiple competing layouts per wall is the
     // upsell that pushes artists to artist_premium (10) / pro (∞).
     saved_layouts_per_wall: 1,
-    can_publish_showroom: false,
   },
   artist_premium: {
     daily: 10,
@@ -68,7 +65,6 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     wall_uploads_daily: 3,
     saved_walls: 5,
     saved_layouts_per_wall: 10,
-    can_publish_showroom: false,
   },
   artist_pro: {
     // Pro tier, unlimited artworks rendered per day. -1 here is the
@@ -78,7 +74,6 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     wall_uploads_daily: 5,
     saved_walls: -1,
     saved_layouts_per_wall: -1,
-    can_publish_showroom: true,
   },
   venue_standard: {
     daily: 5,
@@ -86,7 +81,6 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     wall_uploads_daily: 2,
     saved_walls: 6,
     saved_layouts_per_wall: 10,
-    can_publish_showroom: false,
   },
   venue_premium: {
     // Venue Premium, unlimited artworks rendered per day.
@@ -95,7 +89,6 @@ const DEFAULTS: Record<VisualizerTier, TierLimits> = {
     wall_uploads_daily: 5,
     saved_walls: -1,
     saved_layouts_per_wall: -1,
-    can_publish_showroom: false,
   },
 };
 
@@ -182,7 +175,6 @@ export const ACTION_COSTS = {
   render_standard: 1,
   render_hd: 2,
   wall_upload: 1,
-  showroom_publish: 1,
   /** Refund is the inverse, set per-call by the consumer. */
   refund: 0,
 } as const;

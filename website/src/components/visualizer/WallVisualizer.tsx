@@ -440,7 +440,6 @@ function WallVisualizerInner(props: ExtendedProps) {
 
     if (
       props.mode === "artist_mockup" ||
-      props.mode === "artist_showroom" ||
       props.mode === "artist_venue_wall"
     ) {
       let cancelled = false;
@@ -1304,24 +1303,19 @@ function WallVisualizerInner(props: ExtendedProps) {
                 label:
                   props.mode === "venue_my_walls"
                     ? "Save this preview to my wall"
-                    : props.mode === "artist_showroom"
-                      ? "Save this preview to my showroom"
-                      : "Save to wall",
+                    : "Save to wall",
                 savedLabel: "Saved",
                 hint:
                   props.mode === "venue_my_walls"
                     ? "It becomes this wall's picture on My Walls and, when the wall is shown on your public profile, there too."
-                    : props.mode === "artist_showroom"
-                      ? "It becomes this wall's picture in your Showroom and, when the wall is shown on your profile, there too."
-                      : "It becomes this wall's picture in your wall list.",
+                    : "It becomes this wall's picture in your wall list.",
               }
             : undefined
         }
         // The mockup path stores the capture first (the same upload as
         // Save to wall), then attaches it, so it only needs a saved wall.
         saveToArtwork={
-          (props.mode === "artist_mockup" ||
-            props.mode === "artist_showroom") &&
+          props.mode === "artist_mockup" &&
           canPersist &&
           works.length > 0
             ? {

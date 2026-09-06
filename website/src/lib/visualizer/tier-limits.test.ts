@@ -2,7 +2,6 @@
 //   - the approved table values are returned for each tier
 //   - env overrides take precedence
 //   - unknown tiers fail closed (guest limits)
-//   - Pro is the only showroom-eligible tier
 //   - sentinel values (-1 = unlimited) are preserved
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -23,7 +22,6 @@ describe("getTierLimits, approved values", () => {
       wall_uploads_daily: 0,
       saved_walls: 0,
       saved_layouts_per_wall: 0,
-      can_publish_showroom: false,
     });
   });
 
@@ -32,7 +30,6 @@ describe("getTierLimits, approved values", () => {
     expect(l.daily).toBe(2);
     expect(l.monthly).toBe(30);
     expect(l.saved_walls).toBe(1);
-    expect(l.can_publish_showroom).toBe(false);
   });
 
   it("artist_core = 3/50, 2 saved walls", () => {
@@ -49,7 +46,7 @@ describe("getTierLimits, approved values", () => {
     expect(l.saved_walls).toBe(5);
   });
 
-  it("artist_pro = unlimited daily/monthly + walls + showroom", () => {
+  it("artist_pro = unlimited daily/monthly + walls", () => {
     const l = getTierLimits("artist_pro");
     // Switched to per-artwork in 5334417, Pro now bypasses the daily/
     // monthly cap entirely (sentinel -1).
@@ -57,7 +54,6 @@ describe("getTierLimits, approved values", () => {
     expect(l.monthly).toBe(-1);
     expect(l.saved_walls).toBe(-1);
     expect(l.saved_layouts_per_wall).toBe(-1);
-    expect(l.can_publish_showroom).toBe(true);
   });
 
   it("venue_standard = 5/100", () => {
@@ -67,14 +63,13 @@ describe("getTierLimits, approved values", () => {
     expect(l.saved_walls).toBe(6);
   });
 
-  it("venue_premium = unlimited daily/monthly + walls (no showroom)", () => {
+  it("venue_premium = unlimited daily/monthly + walls", () => {
     const l = getTierLimits("venue_premium");
     // Switched to per-artwork in 5334417, Venue Premium now bypasses
     // the daily/monthly cap entirely (sentinel -1).
     expect(l.daily).toBe(-1);
     expect(l.monthly).toBe(-1);
     expect(l.saved_walls).toBe(-1);
-    expect(l.can_publish_showroom).toBe(false);
   });
 });
 
@@ -115,7 +110,6 @@ describe("unknown tier handling", () => {
     // Cast, runtime can hand us anything if a stale token survives a deploy.
     const limits = getTierLimits("ghost" as unknown as VisualizerTier);
     expect(limits.daily).toBe(0);
-    expect(limits.can_publish_showroom).toBe(false);
   });
 });
 

@@ -1,30 +1,28 @@
 // The chrome moved from the 50 portal pages into each portal's layout.tsx.
-// Two pages never had it and must not gain it: the artist showroom scene
-// editor and the venue wall editor, both full-bleed visualiser surfaces that
-// size against the viewport and carry their own top bar.
+// One page never had it and must not gain it: the venue wall editor, a
+// full-bleed visualiser surface that sizes against the viewport and carries
+// its own top bar. The artist showroom scene editor was the other, until the
+// showroom was removed.
 import { describe, it, expect } from "vitest";
 import { isFullBleedPortalPath } from "./portal-nav";
 
 describe("isFullBleedPortalPath", () => {
-  it("matches the two scene editors", () => {
-    expect(isFullBleedPortalPath("/artist-portal/showroom/abc-123")).toBe(true);
+  it("matches the scene editor", () => {
     expect(isFullBleedPortalPath("/venue-portal/walls/wall-9")).toBe(true);
   });
 
-  it("does not match the listing above them", () => {
-    expect(isFullBleedPortalPath("/artist-portal/showroom")).toBe(false);
+  it("does not match the listing above it", () => {
     expect(isFullBleedPortalPath("/venue-portal/walls")).toBe(false);
   });
 
   it("does not match the static `new` sibling, which keeps the chrome", () => {
-    expect(isFullBleedPortalPath("/artist-portal/showroom/new")).toBe(false);
     expect(isFullBleedPortalPath("/venue-portal/walls/new")).toBe(false);
   });
 
   it("ignores query strings, hashes and trailing slashes", () => {
-    expect(isFullBleedPortalPath("/artist-portal/showroom/abc?tab=works")).toBe(true);
+    expect(isFullBleedPortalPath("/venue-portal/walls/w1?tab=works")).toBe(true);
     expect(isFullBleedPortalPath("/venue-portal/walls/w1/")).toBe(true);
-    expect(isFullBleedPortalPath("/artist-portal/showroom/new/")).toBe(false);
+    expect(isFullBleedPortalPath("/venue-portal/walls/new/")).toBe(false);
   });
 
   it("leaves every other portal route alone", () => {
@@ -41,6 +39,12 @@ describe("isFullBleedPortalPath", () => {
   });
 
   it("does not match deeper than one id segment", () => {
-    expect(isFullBleedPortalPath("/artist-portal/showroom/abc/edit")).toBe(false);
+    expect(isFullBleedPortalPath("/venue-portal/walls/w1/edit")).toBe(false);
+  });
+
+  // The showroom is gone: its editor path must not resolve to a full-bleed
+  // surface, or the removed route would still be special-cased by the layout.
+  it("no longer treats the removed showroom editor as full-bleed", () => {
+    expect(isFullBleedPortalPath("/artist-portal/showroom/abc-123")).toBe(false);
   });
 });

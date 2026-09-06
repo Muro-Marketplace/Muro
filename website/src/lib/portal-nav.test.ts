@@ -63,11 +63,10 @@ describe("artist sidebar groups", () => {
     ]);
   });
 
-  it("puts Works, Collections and Showroom under My Portfolio, Works first", () => {
+  it("puts Works and Collections under My Portfolio, Works first", () => {
     expect(artistGroup("My Portfolio").children).toEqual([
       { label: "Works", flatLabel: "My Portfolio", href: "/artist-portal/portfolio" },
       { label: "Collections", href: "/artist-portal/collections" },
-      { label: "Showroom", href: "/artist-portal/showroom" },
     ]);
   });
 
@@ -117,7 +116,6 @@ describe("artist sidebar groups", () => {
       "/placements",
       "/offers",
       "/collections",
-      "/showroom",
       "/saved",
       "/orders",
       "/labels",
@@ -129,7 +127,7 @@ describe("artist sidebar groups", () => {
     ]) {
       expect(hrefs).toContain(`/artist-portal${page}`);
     }
-    expect(hrefs).toHaveLength(17);
+    expect(hrefs).toHaveLength(16);
   });
 
   it("keeps the venue and customer navs flat and unchanged", () => {
@@ -155,7 +153,6 @@ describe("flat list for the header", () => {
       "Edit Profile",
       "My Portfolio",
       "Collections",
-      "Showroom",
       "Messages",
       "Enquiries",
       "Placements",
@@ -324,7 +321,7 @@ describe("activeGroupFor and sectionTabsFor", () => {
       "Offers",
       "Orders",
     ]);
-    expect(labelsOf(sectionTabsFor(nav, "/artist-portal/portfolio"))).toEqual(["Works", "Collections", "Showroom"]);
+    expect(labelsOf(sectionTabsFor(nav, "/artist-portal/portfolio"))).toEqual(["Works", "Collections"]);
     expect(labelsOf(sectionTabsFor(nav, "/artist-portal/blogs"))).toEqual(["Posts", "Blogs"]);
   });
 

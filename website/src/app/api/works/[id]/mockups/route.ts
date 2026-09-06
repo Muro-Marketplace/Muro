@@ -11,7 +11,7 @@
  * Wire flow:
  *   1. Render produced via /api/walls/render-quick or
  *      /api/walls/[id]/layouts/[lid]/render (already persisted with
- *      kind in {standard,hd,showroom}).
+ *      kind in {standard,hd}).
  *   2. Editor surfaces the latest render.id to the artist.
  *   3. Artist clicks "Save to artwork" → POST { render_id } here.
  *   4. We append an `ArtistWorkMockup` to artist_works.mockups (JSONB)

@@ -82,7 +82,6 @@ beforeEach(() => {
     wall_uploads_daily: 3,
     saved_walls: 5,
     saved_layouts_per_wall: 10,
-    can_publish_showroom: false,
   });
   countWallsByUserMock.mockResolvedValue(0);
   listWallsByUserMock.mockResolvedValue([]);
@@ -211,7 +210,6 @@ describe("POST /api/walls, tier caps", () => {
       wall_uploads_daily: 0,
       saved_walls: 0,
       saved_layouts_per_wall: 0,
-      can_publish_showroom: false,
     });
     const { POST } = await import("./route");
     const res = await POST(
@@ -234,7 +232,6 @@ describe("POST /api/walls, tier caps", () => {
       wall_uploads_daily: 3,
       saved_walls: 2,
       saved_layouts_per_wall: 10,
-      can_publish_showroom: false,
     });
     countWallsByUserMock.mockResolvedValue(2); // at the cap
     const { POST } = await import("./route");
@@ -259,7 +256,6 @@ describe("POST /api/walls, tier caps", () => {
       wall_uploads_daily: 5,
       saved_walls: -1,
       saved_layouts_per_wall: -1,
-      can_publish_showroom: true,
     });
     countWallsByUserMock.mockResolvedValue(9999); // would block any positive cap
     createPresetWallMock.mockResolvedValue({ id: "w-pro" });
